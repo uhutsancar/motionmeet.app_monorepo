@@ -1,5 +1,6 @@
 // API service for MotionMeet Mobile
 // Uses configuration from shared package
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
 
@@ -20,14 +21,42 @@ const apiConfig = {
   },
 };
 
+// Token management utilities
+const tokenManager = {
+  async getToken() {
+    try {
+      return await AsyncStorage.getItem('authToken');
+    } catch {
+      return null;
+    }
+  },
+  async setToken(token) {
+    try {
+      await AsyncStorage.setItem('authToken', token);
+    } catch (error) {
+      console.error('Failed to save token:', error);
+    }
+  },
+  async removeToken() {
+    try {
+      await AsyncStorage.removeItem('authToken');
+    } catch (error) {
+      console.error('Failed to remove token:', error);
+    }
+  },
+};
+
 // Simple fetch-based API client for React Native
 const apiClient = {
   async get(endpoint, options = {}) {
     const url = `${apiConfig.baseURL}${endpoint}`;
+    const token = await tokenManager.getToken();
+    
     const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
         ...options.headers,
       },
       ...options,
@@ -40,10 +69,13 @@ const apiClient = {
 
   async post(endpoint, data, options = {}) {
     const url = `${apiConfig.baseURL}${endpoint}`;
+    const token = await tokenManager.getToken();
+    
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
         ...options.headers,
       },
       body: JSON.stringify(data),
@@ -57,10 +89,13 @@ const apiClient = {
 
   async put(endpoint, data, options = {}) {
     const url = `${apiConfig.baseURL}${endpoint}`;
+    const token = await tokenManager.getToken();
+    
     const response = await fetch(url, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
         ...options.headers,
       },
       body: JSON.stringify(data),
@@ -74,10 +109,13 @@ const apiClient = {
 
   async delete(endpoint, options = {}) {
     const url = `${apiConfig.baseURL}${endpoint}`;
+    const token = await tokenManager.getToken();
+    
     const response = await fetch(url, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
         ...options.headers,
       },
       ...options,
@@ -124,5 +162,5 @@ export const api = {
   sendMessage: (data) => apiClient.post(apiConfig.endpoints.messages, data),
 };
 
-export { apiConfig, apiClient };
+export { apiConfig, apiClient, tokenManager };
 export default api;
