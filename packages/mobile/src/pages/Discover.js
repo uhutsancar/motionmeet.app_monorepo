@@ -28,7 +28,7 @@ const Discover = () => {
                 user.bio?.toLowerCase().includes(input.toLowerCase()) ||
                 user.location?.toLowerCase().includes(input.toLowerCase())
             );
-            setUsers(filtered.length > 0 ? filtered : dummyConnectionsData);
+            setUsers(filtered);
             setLoading(false);
         }, 500);
     };

@@ -23,7 +23,7 @@ const Feed = ({ navigation }) => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
-    const fetchFeeds = async () => {
+    const fetchFeeds = () => {
         // Simulating API call
         setFeeds(dummyPostsData);
         setStories(dummyStoriesData);
@@ -31,9 +31,9 @@ const Feed = ({ navigation }) => {
         setLoading(false);
     };
 
-    const onRefresh = async () => {
+    const onRefresh = () => {
         setRefreshing(true);
-        await fetchFeeds();
+        fetchFeeds();
         setRefreshing(false);
     };
 

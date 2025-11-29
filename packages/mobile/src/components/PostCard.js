@@ -15,7 +15,7 @@ const PostCard = ({ post }) => {
     const currentUser = useSelector((state) => state.user.value);
     const [likes, setLikes] = useState(post.likes_count || []);
 
-    const handleLike = async () => {
+    const handleLike = () => {
         // Toggle like
         if (likes.includes(currentUser?._id)) {
             setLikes(likes.filter(id => id !== currentUser?._id));

@@ -17,7 +17,7 @@ const CreatePost = ({ navigation }) => {
     const [images, setImages] = useState([]);
     const [loading, setLoading] = useState(false);
 
-    const handleSubmit = async () => {
+    const handleSubmit = () => {
         if (!content.trim() && images.length === 0) {
             Alert.alert('Error', 'Please add some content or images');
             return;

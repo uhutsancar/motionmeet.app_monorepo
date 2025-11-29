@@ -13,12 +13,12 @@ const UserCard = ({ user }) => {
     const navigation = useNavigation();
     const currentUser = useSelector((state) => state.user.value);
 
-    const handleFollow = async () => {
+    const handleFollow = () => {
         // Follow logic would go here
         console.log('Follow user:', user._id);
     };
 
-    const handleConnectionRequest = async () => {
+    const handleConnectionRequest = () => {
         // Connection request logic would go here
         console.log('Connection request to:', user._id);
     };

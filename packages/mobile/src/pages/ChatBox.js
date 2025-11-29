@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { 
     View, 
     Text, 
@@ -44,8 +44,9 @@ const ChatBox = ({ route, navigation }) => {
         setText('');
     };
 
-    const sortedMessages = [...messages].sort(
-        (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+    const sortedMessages = useMemo(() => 
+        [...messages].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)),
+        [messages]
     );
 
     const renderMessage = ({ item }) => {

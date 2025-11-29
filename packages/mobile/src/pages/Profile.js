@@ -27,7 +27,7 @@ const Profile = ({ route, navigation }) => {
     useEffect(() => {
         // Fetch user profile
         // For demo, using current user data
-        const fetchProfile = async () => {
+        const fetchProfile = () => {
             setLoading(true);
             // Simulate API call
             setTimeout(() => {
