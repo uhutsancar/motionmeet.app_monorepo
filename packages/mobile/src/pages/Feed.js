@@ -1,17 +1,94 @@
-import React from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  ScrollView, 
+  TouchableOpacity,
+  Alert,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import StoriesBar from '../components/StoriesBar';
+import PostCard from '../components/PostCard';
+import { dummyStoriesData, dummyPostsData } from '../assets/dummyData';
 
 const Feed = () => {
+  const [stories, setStories] = useState(dummyStoriesData);
+  const [posts, setPosts] = useState(dummyPostsData);
+
+  const handleCreateStory = () => {
+    Alert.alert('Create Story', 'Story creation feature coming soon!');
+  };
+
+  const handleStoryPress = (story) => {
+    Alert.alert('Story Viewer', `Viewing story by ${story.user.username}`);
+  };
+
+  const handleLike = (postId) => {
+    setPosts(prevPosts => 
+      prevPosts.map(post => {
+        if (post._id === postId) {
+          const isLiked = post.likes_count.includes('current_user');
+          return {
+            ...post,
+            likes_count: isLiked 
+              ? post.likes_count.filter(id => id !== 'current_user')
+              : [...post.likes_count, 'current_user']
+          };
+        }
+        return post;
+      })
+    );
+  };
+
+  const handleComment = (postId) => {
+    Alert.alert('Comments', 'Comment feature coming soon!');
+  };
+
+  const handleShare = (post) => {
+    Alert.alert('Share', `Share post by ${post.user.username}`);
+  };
+
+  const handleUserPress = (user) => {
+    Alert.alert('Profile', `View profile of ${user.username}`);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Feed</Text>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>MotionMeet</Text>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.headerButton}>
+            <Ionicons name="search" size={24} color="#111827" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerButton}>
+            <Ionicons name="notifications-outline" size={24} color="#111827" />
+          </TouchableOpacity>
         </View>
-        <View style={styles.content}>
-          <Text style={styles.subtitle}>Your personalized feed will appear here</Text>
-          <Text style={styles.text}>Posts, stories, and updates from your connections</Text>
+      </View>
+
+      <ScrollView style={styles.scrollView}>
+        {/* Stories Bar */}
+        <StoriesBar 
+          stories={stories}
+          onCreateStory={handleCreateStory}
+          onStoryPress={handleStoryPress}
+        />
+
+        {/* Posts Feed */}
+        <View style={styles.postsContainer}>
+          {posts.map((post) => (
+            <PostCard 
+              key={post._id}
+              post={post}
+              onLike={handleLike}
+              onComment={handleComment}
+              onShare={handleShare}
+              onUserPress={handleUserPress}
+            />
+          ))}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -21,32 +98,35 @@ const Feed = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#fff',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    backgroundColor: '#fff',
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#4f46e5',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  headerButton: {
+    padding: 4,
   },
   scrollView: {
     flex: 1,
   },
-  header: {
-    backgroundColor: '#0f172a',
-    padding: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  content: {
-    padding: 16,
-  },
-  subtitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: 8,
-  },
-  text: {
-    fontSize: 14,
-    color: '#64748b',
+  postsContainer: {
+    paddingTop: 8,
   },
 });
 
