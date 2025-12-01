@@ -1,5 +1,6 @@
 {
   "name": "@motionmeet/shared",
+  "type": "module",
   "version": "1.0.0",
   "description": "Shared utilities and configurations for MotionMeet",
   "main": "index.js",

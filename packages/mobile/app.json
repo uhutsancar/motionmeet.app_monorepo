@@ -1,32 +1,27 @@
 {
   "expo": {
-    "name": "MotionMeet",
-    "slug": "motionmeet",
+    "name": "mobile",
+    "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
+      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.motionmeet.app"
+      "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      },
-      "package": "com.motionmeet.app"
-    },
-    "plugins": [],
-    "extra": {
-      "eas": {
-        "projectId": ""
       }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
     }
   }
 }

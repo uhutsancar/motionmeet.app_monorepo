@@ -1,7 +1,4 @@
-// Shared package entry point
-module.exports = {
-  config: require('./config'),
-  api: require('./api'),
-  database: require('./database'),
-};
+
+// Empty export to prevent require errors in React Native/Hermes
+export default {};
 
