@@ -1,17 +1,30 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-// Pages (will be created)
+// Pages
 import Feed from '../pages/Feed';
 import Videos from '../pages/Videos';
 import Messages from '../pages/Messages';
+import ChatBox from '../pages/ChatBox';
 import Discover from '../pages/Discover';
 import Profile from '../pages/Profile';
 
 const Tab = createBottomTabNavigator();
+const Stack = createNativeStackNavigator();
+
+// Messages Stack Navigator
+const MessagesStack = () => {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="MessagesList" component={Messages} />
+      <Stack.Screen name="ChatBox" component={ChatBox} />
+    </Stack.Navigator>
+  );
+};
 
 const AppNavigator = () => {
   return (
@@ -51,7 +64,7 @@ const AppNavigator = () => {
         >
           <Tab.Screen name="Home" component={Feed} />
           <Tab.Screen name="Videos" component={Videos} />
-          <Tab.Screen name="Messages" component={Messages} />
+          <Tab.Screen name="Messages" component={MessagesStack} />
           <Tab.Screen name="Discover" component={Discover} />
           <Tab.Screen name="Profile" component={Profile} />
         </Tab.Navigator>

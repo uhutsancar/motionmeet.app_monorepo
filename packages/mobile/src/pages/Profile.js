@@ -1,17 +1,176 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  ScrollView, 
+  Image,
+  TouchableOpacity,
+  Alert,
+  Dimensions,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import UserProfileInfo from '../components/UserProfileInfo';
+import PostCard from '../components/PostCard';
+import { dummyUserData, dummyPostsData } from '../assets/dummyData';
+import moment from 'moment';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const Profile = () => {
+  const [user, setUser] = useState(dummyUserData);
+  const [posts, setPosts] = useState(dummyPostsData.filter(post => post.user._id === dummyUserData._id));
+  const [activeTab, setActiveTab] = useState('post');
+
+  const handleEditProfile = () => {
+    Alert.alert('Edit Profile', 'Profile editing feature coming soon!');
+  };
+
+  const handleLike = (postId) => {
+    setPosts(prevPosts => 
+      prevPosts.map(post => {
+        if (post._id === postId) {
+          const isLiked = post.likes_count.includes('current_user');
+          return {
+            ...post,
+            likes_count: isLiked 
+              ? post.likes_count.filter(id => id !== 'current_user')
+              : [...post.likes_count, 'current_user']
+          };
+        }
+        return post;
+      })
+    );
+  };
+
+  const handleComment = (postId) => {
+    Alert.alert('Comments', 'Comment feature coming soon!');
+  };
+
+  const handleShare = (post) => {
+    Alert.alert('Share', `Share post by ${post.user.username}`);
+  };
+
+  const handleUserPress = (user) => {
+    Alert.alert('Profile', `View profile of ${user.username}`);
+  };
+
+  // Get all images from posts
+  const allImages = posts
+    .filter(post => post.image_urls && post.image_urls.length > 0)
+    .flatMap(post => 
+      post.image_urls.map(url => ({
+        url,
+        postDate: post.createdAt
+      }))
+    );
+
+  const imageSize = (SCREEN_WIDTH - 48) / 3;
+
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Profile</Text>
-      </View>
-      <View style={styles.content}>
-        <Text style={styles.subtitle}>Your profile</Text>
-        <Text style={styles.text}>View and edit your information</Text>
-      </View>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Cover Photo */}
+        <View style={styles.coverContainer}>
+          {user.cover_photo ? (
+            <Image 
+              source={{ uri: user.cover_photo }}
+              style={styles.coverImage}
+            />
+          ) : (
+            <View style={styles.coverGradient} />
+          )}
+        </View>
+
+        {/* User Profile Info */}
+        <UserProfileInfo 
+          user={user}
+          posts={posts}
+          isOwnProfile={true}
+          onEditPress={handleEditProfile}
+        />
+
+        {/* Tabs */}
+        <View style={styles.tabsContainer}>
+          <View style={styles.tabsWrapper}>
+            {['post', 'media', 'likes'].map((tab) => (
+              <TouchableOpacity
+                key={tab}
+                style={[
+                  styles.tab,
+                  activeTab === tab && styles.activeTab
+                ]}
+                onPress={() => setActiveTab(tab)}
+              >
+                <Text style={[
+                  styles.tabText,
+                  activeTab === tab && styles.activeTabText
+                ]}>
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Tab Content */}
+        <View style={styles.contentContainer}>
+          {/* Posts Tab */}
+          {activeTab === 'post' && (
+            <View style={styles.postsContainer}>
+              {posts.length > 0 ? (
+                posts.map((post) => (
+                  <PostCard 
+                    key={post._id}
+                    post={post}
+                    onLike={handleLike}
+                    onComment={handleComment}
+                    onShare={handleShare}
+                    onUserPress={handleUserPress}
+                  />
+                ))
+              ) : (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyText}>No posts yet</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Media Tab */}
+          {activeTab === 'media' && (
+            <View style={styles.mediaGrid}>
+              {allImages.length > 0 ? (
+                allImages.map((item, index) => (
+                  <View key={index} style={[styles.mediaItem, { width: imageSize, height: imageSize }]}>
+                    <Image 
+                      source={{ uri: item.url }}
+                      style={styles.mediaImage}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.mediaOverlay}>
+                      <Text style={styles.mediaDate}>
+                        {moment(item.postDate).fromNow()}
+                      </Text>
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyText}>No media yet</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Likes Tab */}
+          {activeTab === 'likes' && (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>Liked posts will appear here</Text>
+            </View>
+          )}
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -19,29 +178,90 @@ const Profile = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#f9fafb',
   },
-  header: {
-    backgroundColor: '#0f172a',
-    padding: 16,
+  coverContainer: {
+    height: 160,
+    backgroundColor: '#e5e7eb',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#ffffff',
+  coverImage: {
+    width: '100%',
+    height: '100%',
   },
-  content: {
-    padding: 16,
+  coverGradient: {
+    flex: 1,
+    backgroundColor: '#a78bfa',
   },
-  subtitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: 8,
+  tabsContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    backgroundColor: '#fff',
   },
-  text: {
+  tabsWrapper: {
+    flexDirection: 'row',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 12,
+    padding: 4,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  activeTab: {
+    backgroundColor: '#4f46e5',
+  },
+  tabText: {
     fontSize: 14,
-    color: '#64748b',
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  activeTabText: {
+    color: '#fff',
+  },
+  contentContainer: {
+    marginTop: 16,
+  },
+  postsContainer: {
+    gap: 8,
+  },
+  mediaGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 12,
+    gap: 4,
+  },
+  mediaItem: {
+    position: 'relative',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  mediaImage: {
+    width: '100%',
+    height: '100%',
+  },
+  mediaOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderTopLeftRadius: 4,
+  },
+  mediaDate: {
+    fontSize: 10,
+    color: '#fff',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#9ca3af',
   },
 });
 
