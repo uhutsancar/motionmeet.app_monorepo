@@ -74,14 +74,14 @@ export const getUserRecentMessages = async (token) => {
 
 // ============= POST APIs =============
 export const getPosts = async (token) => {
-  const { data } = await api.get('/api/post/get', {
+  const { data } = await api.get('/api/post/feed', {
     headers: { Authorization: `Bearer ${token}` },
   });
   return data;
 };
 
 export const createPost = async (postData, token) => {
-  const { data } = await api.post('/api/post/create', postData, {
+  const { data } = await api.post('/api/post/add', postData, {
     headers: { 
       Authorization: `Bearer ${token}`,
       'Content-Type': 'multipart/form-data',
@@ -106,7 +106,7 @@ export const deletePost = async (postId, token) => {
 
 // ============= MESSAGE APIs =============
 export const getMessages = async (receiverId, token) => {
-  const { data } = await api.get(`/api/message/get/${receiverId}`, {
+  const { data } = await api.post('/api/message/get', { receiverId }, {
     headers: { Authorization: `Bearer ${token}` },
   });
   return data;

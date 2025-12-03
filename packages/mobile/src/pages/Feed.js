@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -9,15 +9,23 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchPosts } from '../features/posts/postsSlice';
+import { fetchStories } from '../features/stories/storiesSlice';
 import StoriesBar from '../components/StoriesBar';
 import PostCard from '../components/PostCard';
 import CreatePostModal from '../components/CreatePostModal';
-import { dummyStoriesData, dummyPostsData } from '../assets/dummyData';
 
 const Feed = () => {
-  const [stories, setStories] = useState(dummyStoriesData);
-  const [posts, setPosts] = useState(dummyPostsData);
+  const dispatch = useDispatch();
+  const stories = useSelector((state) => state.stories.stories);
+  const posts = useSelector((state) => state.posts.posts);
   const [showCreatePost, setShowCreatePost] = useState(false);
+
+  useEffect(() => {
+    dispatch(fetchStories());
+    dispatch(fetchPosts());
+  }, [dispatch]);
 
   const handleCreateStory = () => {
     Alert.alert('Create Story', 'Story creation feature coming soon!');
@@ -28,20 +36,7 @@ const Feed = () => {
   };
 
   const handleLike = (postId) => {
-    setPosts(prevPosts => 
-      prevPosts.map(post => {
-        if (post._id === postId) {
-          const isLiked = post.likes_count.includes('current_user');
-          return {
-            ...post,
-            likes_count: isLiked 
-              ? post.likes_count.filter(id => id !== 'current_user')
-              : [...post.likes_count, 'current_user']
-          };
-        }
-        return post;
-      })
-    );
+    console.log('Like post:', postId);
   };
 
   const handleComment = (postId) => {

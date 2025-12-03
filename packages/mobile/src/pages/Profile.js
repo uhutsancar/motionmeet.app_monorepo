@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -11,20 +11,29 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
+import { useSelector, useDispatch } from 'react-redux';
+import { fetchPosts } from '../features/posts/postsSlice';
 import UserProfileInfo from '../components/UserProfileInfo';
 import PostCard from '../components/PostCard';
 import ProfileEditModal from '../components/ProfileEditModal';
-import { dummyUserData, dummyPostsData } from '../assets/dummyData';
 import moment from 'moment';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const Profile = () => {
   const { signOut } = useAuth();
-  const [user, setUser] = useState(dummyUserData);
-  const [posts, setPosts] = useState(dummyPostsData.filter(post => post.user._id === dummyUserData._id));
+  const dispatch = useDispatch();
+  const user = useSelector((state) => state.user.value);
+  const allPosts = useSelector((state) => state.posts.posts);
   const [activeTab, setActiveTab] = useState('post');
   const [showEditModal, setShowEditModal] = useState(false);
+
+  // Filter posts for current user
+  const posts = allPosts.filter(post => post.user?._id === user?._id);
+
+  useEffect(() => {
+    dispatch(fetchPosts());
+  }, [dispatch]);
 
   const handleEditProfile = () => {
     setShowEditModal(true);
@@ -56,20 +65,7 @@ const Profile = () => {
   };
 
   const handleLike = (postId) => {
-    setPosts(prevPosts => 
-      prevPosts.map(post => {
-        if (post._id === postId) {
-          const isLiked = post.likes_count.includes('current_user');
-          return {
-            ...post,
-            likes_count: isLiked 
-              ? post.likes_count.filter(id => id !== 'current_user')
-              : [...post.likes_count, 'current_user']
-          };
-        }
-        return post;
-      })
-    );
+    console.log('Like post:', postId);
   };
 
   const handleComment = (postId) => {

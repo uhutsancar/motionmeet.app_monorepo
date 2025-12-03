@@ -22,13 +22,27 @@ const ProfileEditModal = ({ visible, onClose }) => {
   const [loading, setLoading] = useState(false);
 
   const [editForm, setEditForm] = useState({
-    full_name: user?.full_name || '',
-    username: user?.username || '',
-    bio: user?.bio || '',
-    location: user?.location || '',
+    full_name: '',
+    username: '',
+    bio: '',
+    location: '',
     profile_picture: null,
     cover_photo: null,
   });
+
+  // Update form when user data changes or modal opens
+  React.useEffect(() => {
+    if (visible && user) {
+      setEditForm({
+        full_name: user.full_name || '',
+        username: user.username || '',
+        bio: user.bio || '',
+        location: user.location || '',
+        profile_picture: null,
+        cover_photo: null,
+      });
+    }
+  }, [visible, user]);
 
   const pickImage = async (type) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
