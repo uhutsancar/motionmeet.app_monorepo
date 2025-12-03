@@ -4,7 +4,9 @@
   "description": "MotionMeet - Social media app for athletes",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/backend",
+    "packages/web",
+    "packages/shared"
   ],
   "scripts": {
     "dev:backend": "npm run dev --workspace=@motionmeet/backend",

@@ -10,20 +10,49 @@ import {
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '@clerk/clerk-expo';
 import UserProfileInfo from '../components/UserProfileInfo';
 import PostCard from '../components/PostCard';
+import ProfileEditModal from '../components/ProfileEditModal';
 import { dummyUserData, dummyPostsData } from '../assets/dummyData';
 import moment from 'moment';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const Profile = () => {
+  const { signOut } = useAuth();
   const [user, setUser] = useState(dummyUserData);
   const [posts, setPosts] = useState(dummyPostsData.filter(post => post.user._id === dummyUserData._id));
   const [activeTab, setActiveTab] = useState('post');
+  const [showEditModal, setShowEditModal] = useState(false);
 
   const handleEditProfile = () => {
-    Alert.alert('Edit Profile', 'Profile editing feature coming soon!');
+    setShowEditModal(true);
+  };
+
+  const handleSignOut = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await signOut();
+            } catch (error) {
+              console.error('Sign out error:', error);
+              Alert.alert('Error', 'Failed to sign out. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleLike = (postId) => {
@@ -111,6 +140,14 @@ const Profile = () => {
               </TouchableOpacity>
             ))}
           </View>
+
+          {/* Sign Out Button */}
+          <TouchableOpacity 
+            style={styles.signOutButton}
+            onPress={handleSignOut}
+          >
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Tab Content */}
@@ -171,6 +208,12 @@ const Profile = () => {
           )}
         </View>
       </ScrollView>
+
+      {/* Edit Profile Modal */}
+      <ProfileEditModal 
+        visible={showEditModal}
+        onClose={() => setShowEditModal(false)}
+      />
     </SafeAreaView>
   );
 };
@@ -262,6 +305,20 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: '#9ca3af',
+  },
+  signOutButton: {
+    marginTop: 16,
+    backgroundColor: '#fee2e2',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  signOutText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#dc2626',
   },
 });
 

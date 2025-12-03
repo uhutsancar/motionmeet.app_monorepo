@@ -1,25 +1,37 @@
 import axios from 'axios';
 
 const BASE_URL = __DEV__ 
-  ? 'http://localhost:3000' // Development
-  : 'https://your-production-url.com'; // Production
+  ? 'http://localhost:4000' // Development
+  : 'https://motionmeet-app.vercel.app'; // Production
 
 const api = axios.create({
   baseURL: BASE_URL,
-  timeout: 10000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
+// Store token setter function
+let authToken = null;
+
+export const setAuthToken = (token) => {
+  authToken = token;
+};
+
 // Request interceptor for adding auth token
 api.interceptors.request.use(
-  (config) => {
-    // Token will be added here when auth is implemented
-    // const token = await getToken();
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`;
-    // }
+  async (config) => {
+    // Add Clerk auth token if available
+    if (authToken) {
+      config.headers.Authorization = `Bearer ${authToken}`;
+    }
+    
+    // Handle multipart/form-data
+    if (config.data instanceof FormData) {
+      config.headers['Content-Type'] = 'multipart/form-data';
+    }
+    
     return config;
   },
   (error) => {

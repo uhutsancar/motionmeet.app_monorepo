@@ -11,11 +11,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import StoriesBar from '../components/StoriesBar';
 import PostCard from '../components/PostCard';
+import CreatePostModal from '../components/CreatePostModal';
 import { dummyStoriesData, dummyPostsData } from '../assets/dummyData';
 
 const Feed = () => {
   const [stories, setStories] = useState(dummyStoriesData);
   const [posts, setPosts] = useState(dummyPostsData);
+  const [showCreatePost, setShowCreatePost] = useState(false);
 
   const handleCreateStory = () => {
     Alert.alert('Create Story', 'Story creation feature coming soon!');
@@ -60,6 +62,12 @@ const Feed = () => {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>MotionMeet</Text>
         <View style={styles.headerActions}>
+          <TouchableOpacity 
+            style={styles.headerButton}
+            onPress={() => setShowCreatePost(true)}
+          >
+            <Ionicons name="add-circle-outline" size={24} color="#111827" />
+          </TouchableOpacity>
           <TouchableOpacity style={styles.headerButton}>
             <Ionicons name="search" size={24} color="#111827" />
           </TouchableOpacity>
@@ -91,6 +99,12 @@ const Feed = () => {
           ))}
         </View>
       </ScrollView>
+
+      {/* Create Post Modal */}
+      <CreatePostModal 
+        visible={showCreatePost}
+        onClose={() => setShowCreatePost(false)}
+      />
     </SafeAreaView>
   );
 };
