@@ -10,18 +10,54 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { dummyMessagesData, dummyUserData } from '../assets/dummyData';
+import { useAuth } from '@clerk/clerk-expo';
+import { useDispatch, useSelector } from 'react-redux';
+import { getMessages, sendMessage as sendMessageAPI } from '../api/endpoints';
+import { setMessages, addMessage } from '../features/messages/messagesSlice';
 
 const ChatBox = ({ route, navigation }) => {
-  const { user } = route.params;
-  const [messages, setMessages] = useState(dummyMessagesData);
+  const { userId, user: routeUser } = route.params;
+  const { getToken } = useAuth();
+  const dispatch = useDispatch();
+  const currentUser = useSelector((state) => state.user.value);
+  const connections = useSelector((state) => state.connections.connections);
+  const { messages } = useSelector((state) => state.messages);
+  
   const [text, setText] = useState('');
   const [image, setImage] = useState(null);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [user, setUser] = useState(routeUser);
   const flatListRef = useRef(null);
+
+  useEffect(() => {
+    // Find user from connections if not provided
+    if (!user && connections.length > 0) {
+      const foundUser = connections.find((conn) => conn._id === userId);
+      setUser(foundUser);
+    }
+  }, [connections, userId, user]);
+
+  useEffect(() => {
+    const initialLoad = async () => {
+      await loadMessages();
+      setInitialLoading(false);
+    };
+    initialLoad();
+
+    // Poll for new messages every 3 seconds
+    const pollInterval = setInterval(() => {
+      loadMessages();
+    }, 3000);
+
+    return () => {
+      clearInterval(pollInterval);
+    };
+  }, [userId]);
 
   useEffect(() => {
     // Auto scroll to bottom when messages change
@@ -29,6 +65,19 @@ const ChatBox = ({ route, navigation }) => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
   }, [messages]);
+
+  const loadMessages = async () => {
+    try {
+      const token = await getToken();
+      const data = await getMessages(userId, token);
+      if (data.success) {
+        dispatch(setMessages(data.messages));
+      }
+    } catch (error) {
+      // Silent fail for polling
+      console.error('Failed to load messages:', error);
+    }
+  };
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -39,7 +88,7 @@ const ChatBox = ({ route, navigation }) => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.8,
@@ -50,30 +99,38 @@ const ChatBox = ({ route, navigation }) => {
     }
   };
 
-  const sendMessage = () => {
+  const sendMessageHandler = async () => {
     if (!text.trim() && !image) return;
 
-    const newMessage = {
-      _id: `msg_${Date.now()}`,
-      from_user_id: dummyUserData._id,
-      to_user_id: user._id,
-      text: text.trim(),
-      message_type: image ? 'image' : 'text',
-      media_url: image ? image.uri : '',
-      createdAt: new Date().toISOString(),
-      seen: false,
-    };
+    try {
+      const token = await getToken();
+      const formData = new FormData();
+      formData.append('to_user_id', userId);
+      formData.append('text', text.trim());
+      
+      if (image) {
+        formData.append('image', {
+          uri: image.uri,
+          type: 'image/jpeg',
+          name: 'message_image.jpg',
+        });
+      }
 
-    setMessages([...messages, newMessage]);
-    setText('');
-    setImage(null);
+      const data = await sendMessageAPI(formData, token);
+      if (data.success) {
+        dispatch(addMessage(data.message));
+        setText('');
+        setImage(null);
+      } else {
+        Alert.alert('Error', data.message);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to send message');
+    }
   };
 
-  const renderMessage = ({ item: message, index }) => {
-    const isSentByMe = message.from_user_id === dummyUserData._id;
-    const sortedMessages = [...messages].sort((a, b) => 
-      new Date(a.createdAt) - new Date(b.createdAt)
-    );
+  const renderMessage = ({ item: message }) => {
+    const isSentByMe = message.to_user_id === userId;
 
     return (
       <View 
@@ -108,12 +165,16 @@ const ChatBox = ({ route, navigation }) => {
     );
   };
 
-  const sortedMessages = [...messages].sort((a, b) => 
-    new Date(a.createdAt) - new Date(b.createdAt)
-  );
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ActivityIndicator size="large" color="#4f46e5" />
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity 
@@ -129,21 +190,27 @@ const ChatBox = ({ route, navigation }) => {
         />
         
         <View style={styles.headerInfo}>
-          <Text style={styles.headerName}>{user.full_name}</Text>
-          <Text style={styles.headerUsername}>@{user.username}</Text>
+          <Text style={styles.headerName} numberOfLines={1}>{user.full_name}</Text>
+          <Text style={styles.headerUsername} numberOfLines={1}>@{user.username}</Text>
         </View>
       </View>
 
       {/* Messages List */}
-      <FlatList
-        ref={flatListRef}
-        data={sortedMessages}
-        renderItem={renderMessage}
-        keyExtractor={(item, index) => item._id || index.toString()}
-        contentContainerStyle={styles.messagesList}
-        showsVerticalScrollIndicator={false}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-      />
+      {initialLoading && messages.length === 0 ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#4f46e5" />
+        </View>
+      ) : (
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          renderItem={renderMessage}
+          keyExtractor={(item, index) => item._id || index.toString()}
+          contentContainerStyle={styles.messagesList}
+          showsVerticalScrollIndicator={false}
+          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+        />
+      )}
 
       {/* Input Area */}
       <KeyboardAvoidingView
@@ -181,7 +248,7 @@ const ChatBox = ({ route, navigation }) => {
                 styles.sendButton,
                 (!text.trim() && !image) && styles.sendButtonDisabled
               ]}
-              onPress={sendMessage}
+              onPress={sendMessageHandler}
               disabled={!text.trim() && !image}
             >
               <Ionicons name="send" size={20} color="#fff" />
@@ -201,23 +268,24 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
     paddingHorizontal: 16,
+    paddingVertical: 14,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
+    minHeight: 64,
   },
   backButton: {
-    marginRight: 8,
+    marginRight: 12,
     padding: 4,
   },
   headerAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
   },
   headerInfo: {
-    marginLeft: 12,
     flex: 1,
   },
   headerName: {
@@ -228,29 +296,31 @@ const styles = StyleSheet.create({
   headerUsername: {
     fontSize: 13,
     color: '#6b7280',
+    marginTop: 2,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   messagesList: {
-    padding: 16,
-    paddingBottom: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   messageContainer: {
-    marginBottom: 12,
-    maxWidth: '75%',
+    marginVertical: 4,
   },
   sentMessage: {
-    alignSelf: 'flex-end',
+    alignItems: 'flex-end',
   },
   receivedMessage: {
-    alignSelf: 'flex-start',
+    alignItems: 'flex-start',
   },
   messageBubble: {
+    maxWidth: '75%',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 16,
-    padding: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-    elevation: 1,
   },
   sentBubble: {
     backgroundColor: '#4f46e5',
@@ -260,19 +330,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#f3f4f6',
     borderBottomLeftRadius: 4,
   },
+  messageImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
   messageText: {
     fontSize: 15,
     lineHeight: 20,
   },
-  messageImage: {
-    width: 200,
-    height: 150,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
   inputContainer: {
-    padding: 12,
-    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
@@ -282,20 +352,19 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     backgroundColor: '#f9fafb',
     borderRadius: 24,
-    paddingLeft: 16,
-    paddingRight: 6,
-    paddingVertical: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     gap: 8,
   },
   textInput: {
     flex: 1,
     fontSize: 15,
-    color: '#374151',
+    color: '#111827',
     maxHeight: 100,
-    paddingVertical: 8,
+    paddingVertical: 4,
   },
   imageButton: {
-    padding: 6,
+    padding: 4,
   },
   selectedImage: {
     width: 32,
@@ -303,15 +372,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#4f46e5',
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
   },
   sendButtonDisabled: {
-    backgroundColor: '#c7d2fe',
+    opacity: 0.5,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

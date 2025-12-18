@@ -1,24 +1,47 @@
+import { useAuth } from "@clerk/clerk-react";
 import { Search } from "lucide-react";
-import React, { useState } from "react";
-import { dummyConnectionsData } from "~/assets/assets";
+import React, { useEffect, useState } from "react";
+import toast from "react-hot-toast";
+import { useDispatch } from "react-redux";
+import api from "~/api/axios";
 import Loading from "~/components/Loading";
 import UserCard from "~/components/UserCard";
+import { fetchUser } from "~/features/user/userSlice";
 
 const Discover = () => {
+  const dispatch = useDispatch();
   const [input, setInput] = useState("");
-  const [users, setUsers] = useState(dummyConnectionsData);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const { getToken } = useAuth();
 
   const handleSearch = async (e) => {
     if (e.key === "Enter") {
-      setUsers([]);
-      setLoading(true);
-      setTimeout(() => {
-        setUsers(dummyConnectionsData);
+      try {
+        setUsers([]);
+        setLoading(true);
+        const { data } = await api.post(
+          "/api/user/discover",
+          { input },
+          {
+            headers: { Authorization: `Bearer ${await getToken()}` },
+          }
+        );
+        data.success ? setUsers(data.users) : toast.error(data.message);
         setLoading(false);
-      }, 1000);
+        setInput("");
+      } catch (error) {
+        toast.error(error.message);
+      }
+      setLoading(false);
     }
   };
+
+  useEffect(() => {
+    getToken().then((token) => {
+      dispatch(fetchUser(token));
+    });
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
@@ -41,7 +64,7 @@ const Discover = () => {
                 type="text"
                 className="pl-10 sm:pl-12 py-2 w-full border border-gray-300 rounded-md max-sm:text-sm"
                 placeholder="Search people by name, username,bio,or location..."
-                onClick={(e) => setInput(e.target.value)}
+                onChange={(e) => setInput(e.target.value)}
                 value={input}
                 onKeyUp={handleSearch}
               />

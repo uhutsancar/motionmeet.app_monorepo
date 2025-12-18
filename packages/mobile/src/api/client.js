@@ -1,8 +1,6 @@
 import axios from 'axios';
 
-const BASE_URL = __DEV__ 
-  ? 'http://192.168.1.124:4000' // Development - Use your computer's IP
-  : 'https://motionmeet-app.vercel.app'; // Production
+const BASE_URL = 'http://192.168.1.124:4000';
 
 const api = axios.create({
   baseURL: BASE_URL,

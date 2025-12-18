@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import api from "../../api/client.js";
+import { getUserData } from "../../api/endpoints";
 
 const initialState = {
   value: null,
@@ -7,15 +7,16 @@ const initialState = {
   error: null,
 };
 
-export const fetchUser = createAsyncThunk("user/fetchUser", async () => {
-  const { data } = await api.get("/api/user/data");
+export const fetchUser = createAsyncThunk("user/fetchUser", async (token) => {
+  const data = await getUserData(token);
   return data.success ? data.user : null;
 });
 
 export const updateUser = createAsyncThunk(
   "user/update",
-  async ({ userData }) => {
-    const { data } = await api.post("/api/user/update", userData);
+  async ({ userData, token }) => {
+    const { updateUserProfile } = await import("../../api/endpoints");
+    const data = await updateUserProfile(userData, token);
     if (data.success) {
       return data.user;
     } else {

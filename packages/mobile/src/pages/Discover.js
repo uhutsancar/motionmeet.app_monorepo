@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -7,56 +7,78 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '@clerk/clerk-expo';
+import { useDispatch } from 'react-redux';
 import UserCard from '../components/UserCard';
-import { dummyConnectionsData } from '../assets/dummyData';
+import { discoverUsers } from '../api/endpoints';
+import { fetchUser } from '../features/user/userSlice';
 
 const Discover = ({ navigation }) => {
+  const { getToken } = useAuth();
+  const dispatch = useDispatch();
   const [searchQuery, setSearchQuery] = useState('');
-  const [users, setUsers] = useState(dummyConnectionsData);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const handleSearch = () => {
-    if (searchQuery.trim()) {
-      setLoading(true);
-      // Simulate search
-      setTimeout(() => {
-        setUsers(dummyConnectionsData);
-        setLoading(false);
-      }, 1000);
+  useEffect(() => {
+    loadUser();
+  }, []);
+
+  const loadUser = async () => {
+    try {
+      const token = await getToken();
+      dispatch(fetchUser(token));
+    } catch (error) {
+      console.error('Error loading user:', error);
     }
   };
 
-  const handleFollow = (user) => {
-    Alert.alert('Follow', `Following ${user.username}`);
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      Alert.alert('Error', 'Please enter a search query');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const token = await getToken();
+      const data = await discoverUsers(searchQuery, token);
+      if (data.success) {
+        setUsers(data.users);
+      } else {
+        Alert.alert('Error', data.message);
+      }
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleMessage = (user) => {
-    navigation.navigate('Messages', {
-      screen: 'ChatBox',
-      params: { userId: user._id, user }
-    });
+  const handleUserPress = (user) => {
+    navigation.navigate('Profile', { userId: user._id });
   };
 
-  const handleConnect = (user) => {
-    Alert.alert('Connect', `Sending connection request to ${user.username}`);
+  const handleMessagePress = (user) => {
+    navigation.navigate('ChatBox', { userId: user._id, user });
   };
 
   const renderUserCard = ({ item }) => (
     <View style={styles.cardWrapper}>
       <UserCard 
         user={item}
-        onFollow={handleFollow}
-        onMessage={handleMessage}
-        onConnect={handleConnect}
+        onPress={() => handleUserPress(item)}
+        onMessagePress={() => handleMessagePress(item)}
       />
     </View>
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Discover People</Text>
@@ -78,6 +100,11 @@ const Discover = ({ navigation }) => {
             onSubmitEditing={handleSearch}
             returnKeyType="search"
           />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={20} color="#9ca3af" />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -85,18 +112,36 @@ const Discover = ({ navigation }) => {
       {loading && (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4f46e5" />
+          <Text style={styles.loadingText}>Searching...</Text>
+        </View>
+      )}
+
+      {/* Empty State */}
+      {!loading && users.length === 0 && searchQuery.length > 0 && (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="search-outline" size={64} color="#cbd5e1" />
+          <Text style={styles.emptyText}>No users found</Text>
+          <Text style={styles.emptySubtext}>Try a different search term</Text>
+        </View>
+      )}
+
+      {/* Initial State */}
+      {!loading && users.length === 0 && searchQuery.length === 0 && (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="people-outline" size={64} color="#cbd5e1" />
+          <Text style={styles.emptyText}>Discover new connections</Text>
+          <Text style={styles.emptySubtext}>Search for people to connect with</Text>
         </View>
       )}
 
       {/* Users Grid */}
-      {!loading && (
+      {!loading && users.length > 0 && (
         <FlatList
           data={users}
           renderItem={renderUserCard}
           keyExtractor={(item) => item._id}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          numColumns={1}
         />
       )}
     </SafeAreaView>
@@ -109,11 +154,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   header: {
-    padding: 20,
-    paddingBottom: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: '#e5e7eb',
+    minHeight: 80,
   },
   headerTitle: {
     fontSize: 28,
@@ -132,39 +178,55 @@ const styles = StyleSheet.create({
   searchWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f9fafb',
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderWidth: 1,
     borderColor: '#e5e7eb',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
   },
   searchIcon: {
     marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
-    color: '#111827',
-    paddingVertical: 12,
+    fontSize: 14,
+    color: '#0f172a',
   },
   loadingContainer: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#64748b',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#64748b',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#94a3b8',
+    marginTop: 8,
+    textAlign: 'center',
   },
   listContent: {
     padding: 16,
-    alignItems: 'center',
-    gap: 16,
   },
   cardWrapper: {
-    marginBottom: 4,
+    marginBottom: 16,
   },
 });
 

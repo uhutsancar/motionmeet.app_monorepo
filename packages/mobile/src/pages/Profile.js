@@ -8,32 +8,86 @@ import {
   TouchableOpacity,
   Alert,
   Dimensions,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
 import { useSelector, useDispatch } from 'react-redux';
+import { useNavigation } from '@react-navigation/native';
+import { fetchUser } from '../features/user/userSlice';
 import { fetchPosts } from '../features/posts/postsSlice';
+import { fetchConnections } from '../features/connections/connectionsSlice';
 import UserProfileInfo from '../components/UserProfileInfo';
 import PostCard from '../components/PostCard';
 import ProfileEditModal from '../components/ProfileEditModal';
+import Loading from '../components/Loading';
+import { likePost, deletePost } from '../api/endpoints';
 import moment from 'moment';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const Profile = () => {
-  const { signOut } = useAuth();
+const Profile = ({ route }) => {
+  const { signOut, getToken } = useAuth();
   const dispatch = useDispatch();
-  const user = useSelector((state) => state.user.value);
+  const navigation = useNavigation();
+  const currentUser = useSelector((state) => state.user.value);
   const allPosts = useSelector((state) => state.posts.posts);
+  const loading = useSelector((state) => state.posts.loading);
   const [activeTab, setActiveTab] = useState('post');
   const [showEditModal, setShowEditModal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [likedPosts, setLikedPosts] = useState([]);
+  const [profileUser, setProfileUser] = useState(null);
+  const [profilePosts, setProfilePosts] = useState([]);
+  
+  const userId = route?.params?.userId;
+  const isOwnProfile = !userId || userId === currentUser?._id;
+  const user = isOwnProfile ? currentUser : profileUser;
+  const posts = isOwnProfile 
+    ? allPosts.filter(post => post.user?._id === currentUser?._id)
+    : profilePosts;
 
-  // Filter posts for current user
-  const posts = allPosts.filter(post => post.user?._id === user?._id);
+  // Show loading if user data is not loaded yet
+  if (!user && !loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Loading />
+      </SafeAreaView>
+    );
+  }
 
   useEffect(() => {
-    dispatch(fetchPosts());
-  }, [dispatch]);
+    loadData();
+  }, [userId]);
+
+  const loadData = async () => {
+    const token = await getToken();
+    
+    if (isOwnProfile) {
+      dispatch(fetchUser(token));
+      dispatch(fetchPosts(token));
+      dispatch(fetchConnections(token));
+    } else {
+      // Load other user's profile
+      try {
+        const { getUserProfile } = await import('../api/endpoints');
+        const data = await getUserProfile(userId);
+        if (data.success) {
+          setProfileUser(data.profile);
+          setProfilePosts(data.posts);
+        }
+      } catch (error) {
+        Alert.alert('Error', 'Failed to load profile');
+      }
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
 
   const handleEditProfile = () => {
     setShowEditModal(true);
@@ -64,8 +118,25 @@ const Profile = () => {
     );
   };
 
-  const handleLike = (postId) => {
-    console.log('Like post:', postId);
+  const handleLike = async (postId) => {
+    try {
+      const token = await getToken();
+      const data = await likePost(postId, token);
+      
+      if (data.success) {
+        dispatch(fetchPosts(token));
+        
+        // Update liked posts list
+        if (likedPosts.includes(postId)) {
+          setLikedPosts(likedPosts.filter(id => id !== postId));
+        } else {
+          setLikedPosts([...likedPosts, postId]);
+        }
+      }
+    } catch (error) {
+      console.error('Like error:', error);
+      Alert.alert('Error', 'Failed to like post');
+    }
   };
 
   const handleComment = (postId) => {
@@ -73,11 +144,39 @@ const Profile = () => {
   };
 
   const handleShare = (post) => {
-    Alert.alert('Share', `Share post by ${post.user.username}`);
+    Alert.alert('Share', `Share post by ${post.user.full_name}`);
   };
 
-  const handleUserPress = (user) => {
-    Alert.alert('Profile', `View profile of ${user.username}`);
+  const handleUserPress = (userId) => {
+    navigation.navigate('Profile', { userId });
+  };
+
+  const handleDeletePost = async (postId) => {
+    Alert.alert(
+      'Delete Post',
+      'Are you sure you want to delete this post?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const token = await getToken();
+              const data = await deletePost(postId, token);
+              
+              if (data.success) {
+                dispatch(fetchPosts(token));
+                Alert.alert('Success', 'Post deleted successfully');
+              }
+            } catch (error) {
+              console.error('Delete error:', error);
+              Alert.alert('Error', 'Failed to delete post');
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Get all images from posts
@@ -92,12 +191,21 @@ const Profile = () => {
 
   const imageSize = (SCREEN_WIDTH - 48) / 3;
 
+  if (loading && !refreshing) {
+    return <Loading />;
+  }
+
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         {/* Cover Photo */}
         <View style={styles.coverContainer}>
-          {user.cover_photo ? (
+          {user?.cover_photo ? (
             <Image 
               source={{ uri: user.cover_photo }}
               style={styles.coverImage}
@@ -111,8 +219,9 @@ const Profile = () => {
         <UserProfileInfo 
           user={user}
           posts={posts}
-          isOwnProfile={true}
+          isOwnProfile={isOwnProfile}
           onEditPress={handleEditProfile}
+          onConnectionsPress={() => navigation.navigate('Connections')}
         />
 
         {/* Tabs */}
@@ -138,12 +247,14 @@ const Profile = () => {
           </View>
 
           {/* Sign Out Button */}
-          <TouchableOpacity 
-            style={styles.signOutButton}
-            onPress={handleSignOut}
-          >
-            <Text style={styles.signOutText}>Sign Out</Text>
-          </TouchableOpacity>
+          {isOwnProfile && (
+            <TouchableOpacity 
+              style={styles.signOutButton}
+              onPress={handleSignOut}
+            >
+              <Text style={styles.signOutText}>Sign Out</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Tab Content */}
@@ -152,19 +263,24 @@ const Profile = () => {
           {activeTab === 'post' && (
             <View style={styles.postsContainer}>
               {posts.length > 0 ? (
-                posts.map((post) => (
-                  <PostCard 
-                    key={post._id}
-                    post={post}
-                    onLike={handleLike}
-                    onComment={handleComment}
-                    onShare={handleShare}
-                    onUserPress={handleUserPress}
-                  />
-                ))
+                posts
+                  .filter(post => post && post._id && post.user && post.user._id)
+                  .map((post) => (
+                    <PostCard 
+                      key={post._id}
+                      post={post}
+                      onLike={handleLike}
+                      onComment={handleComment}
+                      onShare={handleShare}
+                      onDelete={handleDeletePost}
+                      showDelete={true}
+                    />
+                  ))
               ) : (
                 <View style={styles.emptyState}>
+                  <Ionicons name="document-text-outline" size={48} color="#d1d5db" />
                   <Text style={styles.emptyText}>No posts yet</Text>
+                  <Text style={styles.emptySubtext}>Start sharing your thoughts!</Text>
                 </View>
               )}
             </View>
@@ -175,7 +291,10 @@ const Profile = () => {
             <View style={styles.mediaGrid}>
               {allImages.length > 0 ? (
                 allImages.map((item, index) => (
-                  <View key={index} style={[styles.mediaItem, { width: imageSize, height: imageSize }]}>
+                  <TouchableOpacity 
+                    key={index} 
+                    style={[styles.mediaItem, { width: imageSize, height: imageSize }]}
+                  >
                     <Image 
                       source={{ uri: item.url }}
                       style={styles.mediaImage}
@@ -186,11 +305,13 @@ const Profile = () => {
                         {moment(item.postDate).fromNow()}
                       </Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 ))
               ) : (
                 <View style={styles.emptyState}>
+                  <Ionicons name="images-outline" size={48} color="#d1d5db" />
                   <Text style={styles.emptyText}>No media yet</Text>
+                  <Text style={styles.emptySubtext}>Your photos and videos will appear here</Text>
                 </View>
               )}
             </View>
@@ -198,18 +319,39 @@ const Profile = () => {
 
           {/* Likes Tab */}
           {activeTab === 'likes' && (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>Liked posts will appear here</Text>
+            <View style={styles.postsContainer}>
+              {likedPosts.length > 0 ? (
+                allPosts
+                  .filter(post => post && post._id && post.user && post.user._id && likedPosts.includes(post._id))
+                  .map((post) => (
+                    <PostCard 
+                      key={post._id}
+                      post={post}
+                      onLike={handleLike}
+                      onComment={handleComment}
+                      onShare={handleShare}
+                      onUserPress={handleUserPress}
+                    />
+                  ))
+              ) : (
+                <View style={styles.emptyState}>
+                  <Ionicons name="heart-outline" size={48} color="#d1d5db" />
+                  <Text style={styles.emptyText}>No liked posts yet</Text>
+                  <Text style={styles.emptySubtext}>Posts you like will appear here</Text>
+                </View>
+              )}
             </View>
           )}
         </View>
       </ScrollView>
 
       {/* Edit Profile Modal */}
-      <ProfileEditModal 
-        visible={showEditModal}
-        onClose={() => setShowEditModal(false)}
-      />
+      {isOwnProfile && (
+        <ProfileEditModal 
+          visible={showEditModal}
+          onClose={() => setShowEditModal(false)}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -268,7 +410,29 @@ const styles = StyleSheet.create({
   mediaGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    padding: 12,
+    paddingHorizontal: 20,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginTop: 12,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#9ca3af',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  mediaGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 16,
     gap: 4,
   },
   mediaItem: {
@@ -297,10 +461,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 60,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#9ca3af',
   },
   signOutButton: {
     marginTop: 16,

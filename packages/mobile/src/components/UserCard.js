@@ -1,12 +1,57 @@
-import React from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, Image, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { useSelector, useDispatch } from 'react-redux';
+import { useAuth } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
-import { dummyUserData } from '../assets/dummyData';
+import { followUser, unfollowUser, sendConnectionRequest } from '../api/endpoints';
+import { fetchUser } from '../features/user/userSlice';
 
-const UserCard = ({ user, onFollow, onMessage, onConnect }) => {
-  const currentUser = dummyUserData;
-  const isFollowing = currentUser.following?.includes(user._id);
-  const isConnected = currentUser.connections?.includes(user._id);
+const UserCard = ({ user, onPress, onMessagePress }) => {
+  const dispatch = useDispatch();
+  const currentUser = useSelector((state) => state.user.value);
+  const { connections } = useSelector((state) => state.connections);
+  const { getToken } = useAuth();
+  const [processing, setProcessing] = useState(false);
+
+  const isFollowing = currentUser?.following?.includes(user._id);
+  const isConnected = connections?.some(conn => conn._id === user._id);
+
+  const handleFollow = async () => {
+    if (processing) return;
+    
+    try {
+      setProcessing(true);
+      const token = await getToken();
+      
+      if (isFollowing) {
+        await unfollowUser(user._id, token);
+      } else {
+        await followUser(user._id, token);
+      }
+      
+      // Reload user data to update following list
+      dispatch(fetchUser(token));
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update follow status');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleConnect = async () => {
+    if (processing) return;
+    
+    try {
+      setProcessing(true);
+      const token = await getToken();
+      await sendConnectionRequest(user._id, token);
+      Alert.alert('Success', 'Connection request sent');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to send connection request');
+    } finally {
+      setProcessing(false);
+    }
+  };
 
   return (
     <View style={styles.card}>
@@ -45,7 +90,8 @@ const UserCard = ({ user, onFollow, onMessage, onConnect }) => {
             styles.followButton,
             isFollowing && styles.followingButton
           ]}
-          onPress={() => onFollow(user)}
+          onPress={handleFollow}
+          disabled={processing}
         >
           <Ionicons 
             name={isFollowing ? "checkmark" : "person-add-outline"} 
@@ -57,16 +103,29 @@ const UserCard = ({ user, onFollow, onMessage, onConnect }) => {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.iconButton}
-          onPress={() => isConnected ? onMessage(user) : onConnect(user)}
-        >
-          <Ionicons 
-            name={isConnected ? "chatbubble-outline" : "add"} 
-            size={20} 
-            color="#6b7280" 
-          />
-        </TouchableOpacity>
+        {isFollowing ? (
+          <TouchableOpacity 
+            style={styles.iconButton}
+            onPress={() => onMessagePress?.(user)}
+          >
+            <Ionicons 
+              name="chatbubble-outline"
+              size={20} 
+              color="#6b7280" 
+            />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity 
+            style={styles.iconButton}
+            onPress={() => onPress?.(user)}
+          >
+            <Ionicons 
+              name="eye-outline"
+              size={20} 
+              color="#6b7280" 
+            />
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );

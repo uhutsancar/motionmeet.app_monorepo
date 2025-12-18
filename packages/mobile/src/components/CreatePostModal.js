@@ -14,10 +14,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useDispatch, useSelector } from 'react-redux';
+import { useAuth } from '@clerk/clerk-expo';
 import { createNewPost } from '../features/posts/postsSlice';
 
-const CreatePostModal = ({ visible, onClose }) => {
+const CreatePostModal = ({ visible, onClose, onSuccess }) => {
   const dispatch = useDispatch();
+  const { getToken } = useAuth();
   const user = useSelector((state) => state.user.value);
   const [content, setContent] = useState('');
   const [images, setImages] = useState([]);
@@ -32,7 +34,7 @@ const CreatePostModal = ({ visible, onClose }) => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: false,
       allowsMultipleSelection: true,
       quality: 0.8,
@@ -48,6 +50,11 @@ const CreatePostModal = ({ visible, onClose }) => {
   };
 
   const handlePublish = async () => {
+    if (!user) {
+      Alert.alert('Error', 'User data not loaded. Please try again.');
+      return;
+    }
+
     if (!content.trim() && images.length === 0) {
       Alert.alert('Error', 'Please add some content or images');
       return;
@@ -58,6 +65,15 @@ const CreatePostModal = ({ visible, onClose }) => {
       
       const formData = new FormData();
       formData.append('content', content);
+      
+      // Determine post type
+      let postType = 'text';
+      if (images.length > 0 && content.trim()) {
+        postType = 'text_with_image';
+      } else if (images.length > 0) {
+        postType = 'image';
+      }
+      formData.append('post_type', postType);
 
       images.forEach((image, index) => {
         const uriParts = image.uri.split('.');
@@ -70,18 +86,30 @@ const CreatePostModal = ({ visible, onClose }) => {
         });
       });
 
-      // await dispatch(createNewPost({ postData: formData })).unwrap();
+      const token = await getToken();
+      await dispatch(createNewPost({ postData: formData, token })).unwrap();
       
       Alert.alert('Success', 'Post published successfully!');
       setContent('');
       setImages([]);
-      onClose();
+      
+      // Call onSuccess to reload posts
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        onClose();
+      }
     } catch (error) {
       Alert.alert('Error', error.message || 'Failed to publish post');
     } finally {
       setLoading(false);
     }
   };
+
+  // Don't render modal content if user is not loaded
+  if (!visible || !user) {
+    return null;
+  }
 
   return (
     <Modal
@@ -104,12 +132,12 @@ const CreatePostModal = ({ visible, onClose }) => {
           {/* User Info */}
           <View style={styles.userSection}>
             <Image
-              source={{ uri: user?.profile_picture }}
+              source={{ uri: user.profile_picture }}
               style={styles.avatar}
             />
             <View>
-              <Text style={styles.userName}>{user?.full_name}</Text>
-              <Text style={styles.username}>@{user?.username}</Text>
+              <Text style={styles.userName}>{user.full_name}</Text>
+              <Text style={styles.username}>@{user.username}</Text>
             </View>
           </View>
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { Provider } from 'react-redux';
 import { ClerkProvider } from '@clerk/clerk-expo';
 import * as SecureStore from 'expo-secure-store';
+import Toast from 'react-native-toast-message';
 import { store } from './src/store/store';
 import AuthNavigator from './src/navigation/AuthNavigator';
 import { StatusBar } from 'expo-status-bar';
@@ -34,6 +35,7 @@ export default function App() {
       <Provider store={store}>
         <AuthNavigator />
         <StatusBar style="light" />
+        <Toast />
       </Provider>
     </ClerkProvider>
   );

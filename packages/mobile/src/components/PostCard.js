@@ -1,15 +1,53 @@
-import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions, Alert } from 'react-native';
+import { useSelector } from 'react-redux';
+import { useAuth } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
+import { likePost } from '../api/endpoints';
 import moment from 'moment';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const POST_PADDING = 16;
 const IMAGE_CONTAINER_WIDTH = SCREEN_WIDTH - (POST_PADDING * 2);
 
-const PostCard = ({ post, onLike, onComment, onShare, onUserPress }) => {
-  const isLiked = Array.isArray(post.likes_count) && post.likes_count.length > 0;
-  const likesCount = Array.isArray(post.likes_count) ? post.likes_count.length : 0;
+const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete, showDelete = false }) => {
+  const currentUser = useSelector((state) => state.user.value);
+  const { getToken } = useAuth();
+  const [likes, setLikes] = useState(post.likes_count || []);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Don't render if post or post.user is invalid
+  if (!post || !post.user || !post.user._id) {
+    return null;
+  }
+
+  const isLiked = likes.includes(currentUser?._id);
+  const likesCount = likes.length;
+
+  const handleLike = async () => {
+    if (isProcessing) return;
+    
+    try {
+      setIsProcessing(true);
+      const token = await getToken();
+      const data = await likePost(post._id, token);
+      
+      if (data.success) {
+        setLikes(prevLikes => {
+          if (prevLikes.includes(currentUser._id)) {
+            return prevLikes.filter(id => id !== currentUser._id);
+          } else {
+            return [...prevLikes, currentUser._id];
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Like error:', error);
+      Alert.alert('Error', 'Failed to like post');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   // Process content to highlight hashtags
   const renderContent = () => {
@@ -112,7 +150,7 @@ const PostCard = ({ post, onLike, onComment, onShare, onUserPress }) => {
       {/* User Info */}
       <TouchableOpacity 
         style={styles.userSection}
-        onPress={() => onUserPress(post.user)}
+        onPress={() => onUserPress?.(post.user._id)}
       >
         <Image 
           source={{ uri: post.user.profile_picture }}
@@ -146,7 +184,8 @@ const PostCard = ({ post, onLike, onComment, onShare, onUserPress }) => {
       <View style={styles.actionsBar}>
         <TouchableOpacity 
           style={styles.actionButton}
-          onPress={() => onLike(post._id)}
+          onPress={handleLike}
+          disabled={isProcessing}
         >
           <Ionicons 
             name={isLiked ? "heart" : "heart-outline"} 
@@ -160,7 +199,7 @@ const PostCard = ({ post, onLike, onComment, onShare, onUserPress }) => {
 
         <TouchableOpacity 
           style={styles.actionButton}
-          onPress={() => onComment(post._id)}
+          onPress={() => onComment?.(post._id)}
         >
           <Ionicons name="chatbubble-outline" size={20} color="#6b7280" />
           <Text style={styles.actionText}>0</Text>
@@ -168,7 +207,7 @@ const PostCard = ({ post, onLike, onComment, onShare, onUserPress }) => {
 
         <TouchableOpacity 
           style={styles.actionButton}
-          onPress={() => onShare(post)}
+          onPress={() => onShare?.(post)}
         >
           <Ionicons name="share-outline" size={20} color="#6b7280" />
           <Text style={styles.actionText}>Share</Text>

@@ -105,8 +105,8 @@ export const deletePost = async (postId, token) => {
 };
 
 // ============= MESSAGE APIs =============
-export const getMessages = async (receiverId, token) => {
-  const { data } = await api.post('/api/message/get', { receiverId }, {
+export const getMessages = async (userId, token) => {
+  const { data } = await api.post('/api/message/get', { to_user_id: userId }, {
     headers: { Authorization: `Bearer ${token}` },
   });
   return data;

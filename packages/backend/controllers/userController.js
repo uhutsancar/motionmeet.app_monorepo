@@ -70,7 +70,6 @@ export const updateUserData = async (req, res) => {
     //Cover Image Upload
     if (cover) {
       const buffer = fs.readFileSync(cover.path);
-      // DÜZELTME: Burada 'profile.originalname' yerine 'cover.originalname' kullanıldı.
       const response = await imagekit.upload({
         file: buffer,
         fileName: cover.originalname,
@@ -112,7 +111,9 @@ export const discoverUsers = async (req, res) => {
       ],
     });
 
-    const filteredUsers = allUsers.filter((user) => user._id !== userId);
+    const filteredUsers = allUsers.filter(
+      (user) => user._id.toString() !== userId
+    );
 
     res.json({ success: true, users: filteredUsers });
   } catch (error) {
@@ -160,7 +161,8 @@ export const unfollowUser = async (req, res) => {
     user.following = user.following.filter((user) => user !== id);
     await user.save();
 
-    const toUser = await User.findById(userId);
+    // Burada userId yerine id olmalı
+    const toUser = await User.findById(id);
     toUser.followers = toUser.followers.filter((user) => user !== userId);
     await toUser.save();
 
@@ -175,7 +177,6 @@ export const unfollowUser = async (req, res) => {
 };
 
 //Send Connection Request
-
 export const sendConnectionRequest = async (req, res) => {
   try {
     const { userId } = req.auth();
@@ -198,22 +199,21 @@ export const sendConnectionRequest = async (req, res) => {
     //Check if users are already connect
     const connection = await Connection.findOne({
       $or: [
-        //burası rom olabılır
         { from_user_id: userId, to_user_id: id },
         { from_user_id: id, to_user_id: userId },
       ],
     });
 
     if (!connection) {
-   const newConnection = await Connection.create({
+      const newConnection = await Connection.create({
         from_user_id: userId,
         to_user_id: id,
       });
 
-     await inngest.send({
-      name: 'app/connection-request',
-      data: {connectionId: newConnection._id}
-     })
+      await inngest.send({
+        name: "app/connection-request",
+        data: { connectionId: newConnection._id },
+      });
 
       return res.json({
         success: true,
@@ -243,11 +243,16 @@ export const getUserConnection = async (req, res) => {
     const user = await User.findById(userId).populate(
       "connections followers following"
     );
+
+    if (!user) {
+      return res.json({ success: false, message: "User not found" });
+    }
+
     const connections = user.connections;
     const followers = user.followers;
     const following = user.following;
 
-    const pendinConnections = (
+    const pendingConnections = (
       await Connection.find({ to_user_id: userId, status: "pending" }).populate(
         "from_user_id"
       )
@@ -258,7 +263,7 @@ export const getUserConnection = async (req, res) => {
       connections,
       followers,
       following,
-      pendinConnections,
+      pendingConnections,
     });
   } catch (error) {
     console.log(error);

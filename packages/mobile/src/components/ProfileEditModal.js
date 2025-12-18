@@ -14,10 +14,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useDispatch, useSelector } from 'react-redux';
+import { useAuth } from '@clerk/clerk-expo';
 import { updateUser } from '../features/user/userSlice';
 
 const ProfileEditModal = ({ visible, onClose }) => {
   const dispatch = useDispatch();
+  const { getToken } = useAuth();
   const user = useSelector((state) => state.user.value);
   const [loading, setLoading] = useState(false);
 
@@ -53,7 +55,7 @@ const ProfileEditModal = ({ visible, onClose }) => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: type === 'profile' ? [1, 1] : [16, 9],
       quality: 0.8,
@@ -100,7 +102,8 @@ const ProfileEditModal = ({ visible, onClose }) => {
         });
       }
 
-      await dispatch(updateUser({ userData: formData })).unwrap();
+      const token = await getToken();
+      await dispatch(updateUser({ userData: formData, token })).unwrap();
       
       Alert.alert('Success', 'Profile updated successfully!');
       onClose();

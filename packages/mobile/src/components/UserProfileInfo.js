@@ -1,9 +1,25 @@
 import React from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import { useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import moment from 'moment';
 
-const UserProfileInfo = ({ user, posts, isOwnProfile, onEditPress }) => {
+const UserProfileInfo = ({ 
+  user, 
+  posts, 
+  isOwnProfile, 
+  onEditPress,
+  onConnectionsPress 
+}) => {
+  // Don't render if user is not loaded
+  if (!user) {
+    return null;
+  }
+
+  const connections = useSelector((state) => state.connections);
+  const followers = connections.followers?.length || user.followers?.length || 0;
+  const following = connections.following?.length || user.following?.length || 0;
+
   return (
     <View style={styles.container}>
       {/* Profile Picture - Positioned over cover */}
@@ -64,20 +80,26 @@ const UserProfileInfo = ({ user, posts, isOwnProfile, onEditPress }) => {
 
         {/* Stats */}
         <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
+          <TouchableOpacity style={styles.statItem}>
             <Text style={styles.statNumber}>{posts.length}</Text>
             <Text style={styles.statLabel}>Posts</Text>
-          </View>
+          </TouchableOpacity>
           <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{user.followers?.length || 0}</Text>
+          <TouchableOpacity 
+            style={styles.statItem}
+            onPress={onConnectionsPress}
+          >
+            <Text style={styles.statNumber}>{followers}</Text>
             <Text style={styles.statLabel}>Followers</Text>
-          </View>
+          </TouchableOpacity>
           <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{user.following?.length || 0}</Text>
+          <TouchableOpacity 
+            style={styles.statItem}
+            onPress={onConnectionsPress}
+          >
+            <Text style={styles.statNumber}>{following}</Text>
             <Text style={styles.statLabel}>Following</Text>
-          </View>
+          </TouchableOpacity>
         </View>
       </View>
     </View>
