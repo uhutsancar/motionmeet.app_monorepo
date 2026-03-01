@@ -169,13 +169,23 @@ const Profile = ({ route, navigation }) => {
 
         {/* Statistics Chart Card */}
         <View style={[styles.chartCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <View style={styles.chartHeaderInfo}>
-             <Text style={[styles.chartTitle, { color: theme.text }]}>{t('profile.weekly_activity', 'Weekly Activity')}</Text>
-             <Text style={[styles.chartValue, { color: theme.primary }]}>
-                {chartData ? chartData.datasets[0].data[chartData.datasets[0].data.length - 1] : 0} 
-                <Text style={{ fontSize: 12, color: theme.textMuted }}> {activeStatTab === 'duration' ? t('common.min', 'min') : activeStatTab === 'volume' ? t('common.kg', 'kg') : t('routines.reps', 'Tekrar')}</Text>
-             </Text>
-          </View>
+          <TouchableOpacity 
+            style={styles.chartHeaderInfo}
+            onPress={() => navigation.navigate('Statistics')}
+          >
+             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+               <Text style={[styles.chartTitle, { color: theme.text }]}>{t('profile.weekly_activity', 'Weekly Activity')}</Text>
+               <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
+             </View>
+             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+               <Text style={[styles.chartValue, { color: theme.primary, fontSize: 32, fontWeight: '900' }]}>
+                  {chartData ? chartData.datasets[0].data[chartData.datasets[0].data.length - 1] : 0} 
+               </Text>
+               <Text style={{ fontSize: 13, color: theme.textMuted, fontWeight: '700', textTransform: 'uppercase' }}>
+                  {activeStatTab === 'duration' ? t('common.min', 'min') : activeStatTab === 'volume' ? t('common.kg', 'kg') : t('routines.reps', 'Reps')}
+               </Text>
+             </View>
+          </TouchableOpacity>
 
           {chartData && chartData.datasets[0].data.some(d => d > 0) ? (
             <View style={{ paddingVertical: 8 }}>
@@ -219,13 +229,19 @@ const Profile = ({ route, navigation }) => {
         <View style={styles.sectionContainer}>
           <Text style={[styles.sectionTitle, { color: theme.textMuted }]}>{t('profile.insights', 'INSIGHTS').toUpperCase()}</Text>
           <View style={styles.panoGrid}>
-            <TouchableOpacity style={[styles.panoItem, { backgroundColor: theme.surface }]}>
+            <TouchableOpacity 
+              style={[styles.panoItem, { backgroundColor: theme.surface }]}
+              onPress={() => navigation.navigate('Statistics')}
+            >
               <View style={[styles.iconBox, { backgroundColor: theme.surfaceLight }]}>
                   <Ionicons name="trending-up" size={18} color={theme.primary} />
               </View>
               <Text style={[styles.panoItemText, { color: theme.text }]}>{t('profile.statistics', 'Stats')}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.panoItem, { backgroundColor: theme.surface }]}>
+            <TouchableOpacity 
+              style={[styles.panoItem, { backgroundColor: theme.surface }]}
+              onPress={() => navigation.navigate('Exercises')}
+            >
               <View style={[styles.iconBox, { backgroundColor: theme.surfaceLight }]}>
                   <Ionicons name="barbell" size={18} color={theme.primary} />
               </View>

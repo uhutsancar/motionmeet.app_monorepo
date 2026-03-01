@@ -3,6 +3,7 @@
         "error": "Hata",
         "saving": "Kaydediliyor...",
         "success": "Başarılı",
+        "no_data": "Henüz veri yok",
         "minutes_short": "dk",
         "kg": "kg",
         "user_not_found": "Kullanıcı verisi yüklenemedi. Lütfen tekrar deneyin.",
@@ -16,10 +17,30 @@
     },
     "menu": {
         "feed": "Keşfet",
+        "messages": "Mesajlar",
         "routines": "Antrenman",
         "exercises": "Egzersizler",
+        "statistics": "İstatistikler",
         "profile": "Profil",
         "settings": "Ayarlar"
+    },
+    "tabs": {
+        "feed": "Keşfet",
+        "routines": "Antrenman",
+        "exercises": "Egzersizler",
+        "messages": "Mesajlar",
+        "profile": "Profil",
+        "settings": "Ayarlar"
+    },
+    "messages": {
+        "title": "Mesajlar",
+        "search": "Ara...",
+        "no_conversations": "Henüz konuşma yok",
+        "select_conversation": "Bir konuşma seç",
+        "select_hint": "Sol taraftan bir konuşma seçerek sohbet başlat.",
+        "start_conversation": "Konuşmayı başlat!",
+        "type_message": "Mesaj yaz...",
+        "online": "Çevrimiçi"
     },
     "landing": {
         "log_workouts": "Antrenman Kaydet,",
@@ -294,10 +315,33 @@
         "muscle": "Kas Grubu",
         "all": "Tüm Egzersizler",
         "not_found": "Egzersiz bulunamadı.",
-        "personal_record": "Kişisel Rekor",
-        "total_sessions": "Toplam Seans",
         "all_muscles": "Tüm Kaslar",
-        "all_equipment": "Tüm Ekipmanlar"
+        "all_equipment": "Tüm Ekipmanlar",
+        "available": "mevcut",
+        "more_sessions_needed": "Trendler için daha fazla seans gerekli",
+        "progress_history": "İlerleme Geçmişi"
+    },
+    "statistics": {
+        "title": "İstatistikler",
+        "subtitle": "Fitness yolculuğunuz sayılar ve trendlerle.",
+        "week": "Hafta",
+        "month": "Ay",
+        "year": "Yıl",
+        "progress_trends": "İlerleme Trendleri",
+        "volume": "Hacim",
+        "duration": "Süre",
+        "total_volume": "Toplam Hacim",
+        "total_duration": "Toplam Süre",
+        "calories_burned": "Yakılan Kalori",
+        "workouts": "Antrenman",
+        "best_performance": "En İyi Performans",
+        "reached_milestones": "Ulaşılan Hedefler",
+        "max_volume": "Maksimum Hacim",
+        "intense_session": "Yoğun Seans",
+        "streak": "Antrenman Serisi",
+        "view_records": "Tüm Rekorları Gör",
+        "per_session": "ort./seans",
+        "top_exercises": "En İyi Egzersizler"
     },
     "settings": {
         "title": "Ayarlar",

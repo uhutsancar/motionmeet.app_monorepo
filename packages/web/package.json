@@ -26,6 +26,7 @@
     "react-router-dom": "^7.9.4",
     "recharts": "^3.7.0",
     "set-cookie-parser": "^2.7.2",
+    "socket.io-client": "^4.8.3",
     "tailwindcss": "^4.1.14"
   },
   "devDependencies": {

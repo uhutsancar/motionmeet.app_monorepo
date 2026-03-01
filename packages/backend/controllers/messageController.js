@@ -2,41 +2,33 @@ import fs from "fs";
 import imagekit from "../configs/imageKit.js";
 import Message from "../models/Message.js";
 
-const connections = {};
-
-export const sseController = (req, res) => {
-  const { userId } = req.params;
-
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("Access-Control-Allow-Origin", "*");
-
-  if (!connections[userId]) {
-    connections[userId] = [];
+// Lazily imported to avoid circular deps — server exports io after modules load
+let _io, _userSockets;
+const getIO = async () => {
+  if (!_io) {
+    const mod = await import("../server.js");
+    _io = mod.io;
+    _userSockets = mod.userSockets;
   }
-
-  connections[userId].push(res);
-
-  res.write(`data: ${JSON.stringify({ type: "connected" })}\n\n`);
-
-  const heartbeat = setInterval(() => {
-    res.write(":ping\n\n");
-  }, 15000);
-
-  req.on("close", () => {
-    clearInterval(heartbeat);
-
-    connections[userId] = connections[userId].filter(
-      (conn) => conn !== res
-    );
-
-    if (connections[userId].length === 0) {
-      delete connections[userId];
-    }
-  });
+  return { io: _io, userSockets: _userSockets };
 };
 
+// Helper: push a message to the recipient's open sockets
+const notifyRecipient = async (toUserId, message) => {
+  try {
+    const { io, userSockets } = await getIO();
+    const recipientSockets = userSockets.get(toUserId);
+    if (recipientSockets) {
+      recipientSockets.forEach((sid) => {
+        io.to(sid).emit("message_received", message);
+      });
+    }
+  } catch (err) {
+    console.error("notifyRecipient error:", err.message);
+  }
+};
+
+// ── HTTP: send message (supports images via multipart) ──────────────────────
 export const sendMessage = async (req, res) => {
   try {
     const { userId } = req.auth();
@@ -48,19 +40,13 @@ export const sendMessage = async (req, res) => {
 
     if (image) {
       const fileBuffer = fs.readFileSync(image.path);
-
       const uploadRes = await imagekit.upload({
         file: fileBuffer,
         fileName: image.originalname,
       });
-
       media_url = imagekit.url({
         path: uploadRes.filePath,
-        transformation: [
-          { quality: "auto" },
-          { format: "webp" },
-          { width: "1280" },
-        ],
+        transformation: [{ quality: "auto" }, { format: "webp" }, { width: "1280" }],
       });
     }
 
@@ -75,22 +61,15 @@ export const sendMessage = async (req, res) => {
 
     res.json({ success: true, message });
 
-    const messageWithUserData = await Message.findById(
-      message._id
-    ).populate("from_user_id");
-
-    if (connections[to_user_id]) {
-      connections[to_user_id].forEach((conn) => {
-        conn.write(
-          `data: ${JSON.stringify(messageWithUserData)}\n\n`
-        );
-      });
-    }
+    // Emit to recipient via socket (non-blocking)
+    const populated = await Message.findById(message._id).populate("from_user_id");
+    await notifyRecipient(to_user_id, populated);
   } catch (error) {
     res.json({ success: false, message: error.message });
   }
 };
 
+// ── HTTP: get messages between two users ────────────────────────────────────
 export const getChatMessages = async (req, res) => {
   try {
     const { userId } = req.auth();
@@ -101,10 +80,13 @@ export const getChatMessages = async (req, res) => {
         { from_user_id: userId, to_user_id },
         { from_user_id: to_user_id, to_user_id: userId },
       ],
-    }).sort({ created_at: 1 });
+    })
+      .populate("from_user_id", "full_name username profile_picture")
+      .sort({ created_at: 1 });
 
+    // Mark received messages as seen
     await Message.updateMany(
-      { from_user_id: to_user_id, to_user_id: userId },
+      { from_user_id: to_user_id, to_user_id: userId, seen: false },
       { seen: true }
     );
 
@@ -114,17 +96,85 @@ export const getChatMessages = async (req, res) => {
   }
 };
 
+// ── HTTP: get recent conversations list ─────────────────────────────────────
+export const getUserConversations = async (req, res) => {
+  try {
+    const { userId } = req.auth();
+
+    // Get all messages involving this user
+    const messages = await Message.find({
+      $or: [{ from_user_id: userId }, { to_user_id: userId }],
+    })
+      .populate("from_user_id", "full_name username profile_picture")
+      .populate("to_user_id", "full_name username profile_picture")
+      .sort({ createdAt: -1 });
+
+    // Group by conversation partner, keep latest message per conversation
+    const conversationMap = new Map();
+    messages.forEach((msg) => {
+      // Use the String IDs directly from the message object if populated structure differs
+      const fromId = msg.from_user_id?._id || msg.from_user_id;
+      const toId = msg.to_user_id?._id || msg.to_user_id;
+
+      const partnerId = fromId.toString() === userId ? toId.toString() : fromId.toString();
+
+      if (!partnerId || conversationMap.has(partnerId)) return;
+
+      const partner = fromId.toString() === userId ? msg.to_user_id : msg.from_user_id;
+
+      conversationMap.set(partnerId, {
+        partner,
+        lastMessage: msg,
+        unreadCount: 0,
+      });
+    });
+
+    // Count unread messages per partner
+    const unreadCounts = await Message.aggregate([
+      { $match: { to_user_id: userId, seen: false } },
+      { $group: { _id: "$from_user_id", count: { $sum: 1 } } },
+    ]);
+    unreadCounts.forEach(({ _id, count }) => {
+      const id = _id.toString();
+      if (conversationMap.has(id)) {
+        conversationMap.get(id).unreadCount = count;
+      }
+    });
+
+    const conversations = Array.from(conversationMap.values());
+    res.json({ success: true, conversations });
+  } catch (error) {
+    res.json({ success: false, message: error.message });
+  }
+};
+
+// ── Legacy: get messages received by user (kept for compatibility) ───────────
 export const getUserRecentMessages = async (req, res) => {
   try {
     const { userId } = req.auth();
 
-    const messages = await Message.find({
-      to_user_id: userId,
-    })
+    const messages = await Message.find({ to_user_id: userId })
       .populate("from_user_id to_user_id")
-      .sort({ created_at: -1 });
+      .sort({ createdAt: -1 });
 
     res.json({ success: true, messages });
+  } catch (error) {
+    res.json({ success: false, message: error.message });
+  }
+};
+
+// ── Mark messages as seen ────────────────────────────────────────────────────
+export const markSeen = async (req, res) => {
+  try {
+    const { userId } = req.auth();
+    const { from_user_id } = req.body;
+
+    await Message.updateMany(
+      { from_user_id, to_user_id: userId, seen: false },
+      { seen: true }
+    );
+
+    res.json({ success: true });
   } catch (error) {
     res.json({ success: false, message: error.message });
   }

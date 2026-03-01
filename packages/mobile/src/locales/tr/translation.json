@@ -18,7 +18,9 @@
         "feed": "Keşfet",
         "routines": "Antrenman",
         "exercises": "Egzersizler",
-        "profile": "Profil"
+        "profile": "Profil",
+        "messages": "Mesajlar",
+        "settings": "Ayarlar"
     },
     "routines": {
         "title": "Antrenman",
@@ -143,25 +145,59 @@
         "title": "Ayarlar",
         "appearance": "GÖRÜNÜM",
         "theme": "Tema",
-        "light": "Aydınlık",
-        "dark": "Karanlık",
+        "light": "Açık",
+        "dark": "Koyu",
         "language": "Dil",
         "logout": "Çıkış Yap",
         "turkish": "Türkçe",
-        "english": "İngilizce"
+        "english": "İngilizce",
+        "account": "Hesap",
+        "account_sub": "Profil, Güvenlik",
+        "notifications": "Bildirimler",
+        "privacy": "Gizlilik",
+        "privacy_sub": "E-posta, Anlık",
+        "support": "Destek"
     },
     "messages": {
         "title": "Mesajlar",
         "subtitle": "Arkadaşların ve ailenle konuş",
         "no_message": "Mesaj yok",
         "no_connections": "Henüz bağlantı yok",
-        "connect_to_start": "Mesajlaşmaya başlamak için insanlarla bağlantı kurun"
+        "connect_to_start": "Mesajlaşmaya başlamak için insanlarla bağlantı kurun",
+        "search": "Ara...",
+        "online": "Çevrimiçi",
+        "type_message": "Mesaj yaz...",
+        "send_failed": "Mesaj gönderilemedi",
+        "no_messages": "Henüz mesaj yok",
+        "connect_hint": "Sporcularla bağlantı kurarak sohbet başlat"
+    },
+    "statistics": {
+        "title": "İstatistikler",
+        "progress": "Aylık İlerleme",
+        "week": "Hafta",
+        "month": "Ay",
+        "year": "Yıl",
+        "volume": "Hacim",
+        "duration": "Süre",
+        "total_volume": "Toplam Hacim",
+        "calories": "Yakılan Kalori",
+        "per_session": "ort./seans",
+        "workouts": "antrenman",
+        "top_exercises": "En İyi Egzersizler",
+        "best_performance": "En İyi Performans",
+        "recent_record": "Güncel Rekord",
+        "daily_avg": "Günlük ort."
     },
     "menu": {
         "exercises": "Egzersizler",
         "routines": "Antrenman",
         "profile": "Profil",
         "feed": "Keşfet",
-        "settings": "Ayarlar"
+        "settings": "Ayarlar",
+        "messages": "Mesajlar"
+    },
+    "status": {
+        "online": "Çevrimiçi",
+        "offline": "Çevrimdışı"
     }
 }

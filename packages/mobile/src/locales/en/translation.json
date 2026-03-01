@@ -18,7 +18,9 @@
         "feed": "Feed",
         "routines": "Routines",
         "exercises": "Exercises",
-        "profile": "Profile"
+        "profile": "Profile",
+        "messages": "Messages",
+        "settings": "Settings"
     },
     "routines": {
         "title": "Routines",
@@ -143,25 +145,59 @@
         "title": "Settings",
         "language": "Language",
         "theme": "Theme",
-        "logout": "Logout",
+        "logout": "Sign Out",
         "appearance": "APPEARANCE",
         "dark": "Dark",
         "light": "Light",
         "turkish": "Turkish",
-        "english": "English"
+        "english": "English",
+        "account": "Account",
+        "account_sub": "Profile, Security",
+        "notifications": "Notifications",
+        "privacy": "Privacy",
+        "privacy_sub": "Email, Instant",
+        "support": "Support"
     },
     "messages": {
         "title": "Messages",
         "subtitle": "Talk to your friends and family",
         "no_message": "No message",
         "no_connections": "No connections yet",
-        "connect_to_start": "Connect with people to start messaging"
+        "connect_to_start": "Connect with people to start messaging",
+        "search": "Search...",
+        "online": "Online",
+        "type_message": "Message...",
+        "send_failed": "Failed to send message",
+        "no_messages": "No messages yet",
+        "connect_hint": "Connect with athletes to start chatting"
+    },
+    "statistics": {
+        "title": "Statistics",
+        "progress": "Monthly Progress",
+        "week": "Week",
+        "month": "Month",
+        "year": "Year",
+        "volume": "Volume",
+        "duration": "Duration",
+        "total_volume": "Total Volume",
+        "calories": "Calories Burned",
+        "per_session": "avg/session",
+        "workouts": "workouts",
+        "top_exercises": "Top Exercises",
+        "best_performance": "Best Performance",
+        "recent_record": "Recent Record",
+        "daily_avg": "Daily avg."
     },
     "menu": {
         "exercises": "Exercises",
         "routines": "Routines",
         "profile": "Profile",
         "feed": "Feed",
-        "settings": "Settings"
+        "settings": "Settings",
+        "messages": "Messages"
+    },
+    "status": {
+        "online": "Online",
+        "offline": "Offline"
     }
 }

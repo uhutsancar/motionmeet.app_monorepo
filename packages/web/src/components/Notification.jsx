@@ -7,32 +7,37 @@ const Notification = ({ t, message }) => {
 
   return (
     <div
-      className={`max-w-md w-full bg-white shadow-lg rounded-lg flex border border-gray-300 hover:scale-105 transition`}
+      className={`max-w-md w-full bg-surface glass shadow-2xl rounded-2xl flex border border-border-subtle overflow-hidden transform transition-all duration-300 hover:scale-[1.02]`}
     >
       <div className="flex-1 p-4">
-        <div className="flex items-center">
-          <img
-            src={message.from_user_id.profile_picture}
-            alt=""
-            className="h-10 w-10 rounded-full flex-shrink-0 mt-0.5"
-          />
-          <div className="ml-3 flex-1">
-            <p className="text-sm font-medium text-gray-900">
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <img
+              src={message.from_user_id.profile_picture}
+              alt=""
+              className="h-12 w-12 rounded-full object-cover border-2 border-accent-primary"
+            />
+            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-surface animate-pulse" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-text-primary truncate">
               {message.from_user_id.full_name}
             </p>
-            <p className="text-sm text-gray-500">{message.text.slice(0, 50)}</p>
+            <p className="text-sm text-text-muted truncate italic">
+              "{message.text.slice(0, 50)}{message.text.length > 50 ? "..." : ""}"
+            </p>
           </div>
         </div>
       </div>
-      <div className="flex border-1 border-gray-200">
+      <div className="flex border-l border-border-subtle bg-surface-light/50">
         <button
           onClick={() => {
             navigate(`/messages/${message.from_user_id._id}`);
             toast.dismiss(t.id);
           }}
-          className="p-4 text-indigo-600 font-semibold"
+          className="px-6 text-accent-primary font-black text-xs uppercase tracking-widest hover:bg-accent-primary hover:text-white transition-colors h-full"
         >
-          Reply
+          {t("messages.reply", "Reply")}
         </button>
       </div>
     </div>

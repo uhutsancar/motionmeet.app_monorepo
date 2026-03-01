@@ -1,391 +1,380 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList, 
-  Image,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-  ActivityIndicator,
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, FlatList, Image, TextInput,
+  TouchableOpacity, KeyboardAvoidingView, Platform,
+  Alert, ActivityIndicator, StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useAuth } from '@clerk/clerk-expo';
+import { useAuth, useUser } from '@clerk/clerk-expo';
 import { useDispatch, useSelector } from 'react-redux';
-import { getMessages, sendMessage as sendMessageAPI } from '../api/endpoints';
+import { useTranslation } from 'react-i18next';
+import { useTheme } from '../context/ThemeContext';
+import { useSocket } from '../hooks/useSocket';
+import { getMessages, sendMessage as sendMessageHTTP } from '../api/endpoints';
 import { setMessages, addMessage } from '../features/messages/messagesSlice';
+import moment from 'moment';
 
 const ChatBox = ({ route, navigation }) => {
   const { userId, user: routeUser } = route.params;
   const { getToken } = useAuth();
+  const { user: clerkUser } = useUser();
   const dispatch = useDispatch();
+  const { theme, isDark } = useTheme();
+  const { t } = useTranslation();
+  const s = getStyles(theme);
+
   const currentUser = useSelector((state) => state.user.value);
   const connections = useSelector((state) => state.connections.connections);
   const { messages } = useSelector((state) => state.messages);
-  
+
+  const { socketRef, connected, onlineUsers, sendMessage: socketSend, emitTypingStart, emitTypingStop } = useSocket();
+
   const [text, setText] = useState('');
   const [image, setImage] = useState(null);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [partnerTyping, setPartnerTyping] = useState(false);
   const [user, setUser] = useState(routeUser);
-  const flatListRef = useRef(null);
 
+  const flatListRef = useRef(null);
+  const typingRef = useRef(null);
+
+  // Resolve user from connections if not directly provided
   useEffect(() => {
-    // Find user from connections if not provided
     if (!user && connections.length > 0) {
-      const foundUser = connections.find((conn) => conn._id === userId);
-      setUser(foundUser);
+      setUser(connections.find(c => c._id === userId));
     }
   }, [connections, userId, user]);
 
+  // Initial load
   useEffect(() => {
-    const initialLoad = async () => {
-      await loadMessages();
-      setInitialLoading(false);
-    };
-    initialLoad();
-
-    // Poll for new messages every 3 seconds
-    const pollInterval = setInterval(() => {
-      loadMessages();
-    }, 3000);
-
-    return () => {
-      clearInterval(pollInterval);
-    };
-  }, [userId]);
-
-  useEffect(() => {
-    // Auto scroll to bottom when messages change
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, 100);
-  }, [messages]);
-
-  const loadMessages = async () => {
-    try {
+    const load = async () => {
       const token = await getToken();
       const data = await getMessages(userId, token);
-      if (data.success) {
-        dispatch(setMessages(data.messages));
+      if (data.success) dispatch(setMessages(data.messages));
+      setInitialLoading(false);
+    };
+    load();
+  }, [userId]);
+
+  // Socket.io listeners
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket) return;
+
+    const onMsg = (msg) => {
+      const fromId = msg.from_user_id?._id || msg.from_user_id;
+      if (fromId === userId) {
+        dispatch(addMessage(msg));
+        setPartnerTyping(false);
       }
-    } catch (error) {
-      // Silent fail for polling
-      console.error('Failed to load messages:', error);
+    };
+
+    const onSent = (msg) => { dispatch(addMessage(msg)); };
+
+    const onTypStart = ({ from_user_id }) => { if (from_user_id === userId) setPartnerTyping(true); };
+    const onTypStop = ({ from_user_id }) => { if (from_user_id === userId) setPartnerTyping(false); };
+
+    socket.on('message_received', onMsg);
+    socket.on('message_sent', onSent);
+    socket.on('typing_start', onTypStart);
+    socket.on('typing_stop', onTypStop);
+
+    return () => {
+      socket.off('message_received', onMsg);
+      socket.off('message_sent', onSent);
+      socket.off('typing_start', onTypStart);
+      socket.off('typing_stop', onTypStop);
+    };
+  }, [socketRef.current, userId]);
+
+  // Scroll to end when messages change
+  useEffect(() => {
+    if (messages.length > 0) {
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     }
+  }, [messages, partnerTyping]);
+
+  const handleTextChange = (val) => {
+    setText(val);
+    emitTypingStart(userId);
+    clearTimeout(typingRef.current);
+    typingRef.current = setTimeout(() => emitTypingStop(userId), 1500);
   };
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
-    if (status !== 'granted') {
-      Alert.alert('Permission required', 'We need permission to access your photos');
+    if (status !== 'granted') { Alert.alert('Permission required'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'], allowsEditing: true, aspect: [4, 3], quality: 0.8,
+    });
+    if (!result.canceled) setImage(result.assets[0]);
+  };
+
+  const handleSend = useCallback(async () => {
+    if (!text.trim() && !image) return;
+    emitTypingStop(userId);
+
+    if (!image && connected) {
+      // Use Socket.io for text-only messages
+      socketSend(userId, text.trim());
+      setText('');
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.8,
-    });
-
-    if (!result.canceled) {
-      setImage(result.assets[0]);
-    }
-  };
-
-  const sendMessageHandler = async () => {
-    if (!text.trim() && !image) return;
-
+    // HTTP for image messages
     try {
       const token = await getToken();
       const formData = new FormData();
       formData.append('to_user_id', userId);
       formData.append('text', text.trim());
-      
       if (image) {
-        formData.append('image', {
-          uri: image.uri,
-          type: 'image/jpeg',
-          name: 'message_image.jpg',
-        });
+        formData.append('image', { uri: image.uri, type: 'image/jpeg', name: 'msg.jpg' });
       }
-
-      const data = await sendMessageAPI(formData, token);
+      const data = await sendMessageHTTP(formData, token);
       if (data.success) {
         dispatch(addMessage(data.message));
         setText('');
         setImage(null);
-      } else {
-        Alert.alert('Error', data.message);
       }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to send message');
+    } catch {
+      Alert.alert(t('common.error', 'Error'), t('messages.send_failed', 'Failed to send message'));
     }
+  }, [text, image, connected, userId, socketSend]);
+
+  const isMine = (msg) => {
+    const fromId = msg.from_user_id?._id || msg.from_user_id;
+    return fromId === clerkUser?.id || fromId !== userId;
   };
 
-  const renderMessage = ({ item: message }) => {
-    const isSentByMe = message.to_user_id === userId;
+  const renderMessage = ({ item: msg, index }) => {
+    const mine = isMine(msg);
+    const prevMsg = messages[index - 1];
+    const showAvatar = !mine && (!prevMsg || isMine(prevMsg));
 
     return (
-      <View 
-        style={[
-          styles.messageContainer,
-          isSentByMe ? styles.sentMessage : styles.receivedMessage
-        ]}
-      >
-        <View 
-          style={[
-            styles.messageBubble,
-            isSentByMe ? styles.sentBubble : styles.receivedBubble
-          ]}
-        >
-          {message.message_type === 'image' && message.media_url && (
-            <Image 
-              source={{ uri: message.media_url }}
-              style={styles.messageImage}
-              resizeMode="cover"
-            />
+      <View style={[s.msgRow, mine ? s.msgRowRight : s.msgRowLeft]}>
+        {!mine && (
+          <View style={{ width: 28, marginRight: 6 }}>
+            {showAvatar && user?.profile_picture
+              ? <Image source={{ uri: user.profile_picture }} style={s.miniAvatar} />
+              : <View style={{ width: 28 }} />
+            }
+          </View>
+        )}
+        <View style={{ maxWidth: '75%' }}>
+          {msg.message_type === 'image' && msg.media_url && (
+            <Image source={{ uri: msg.media_url }} style={s.msgImage} resizeMode="cover" />
           )}
-          {message.text ? (
-            <Text style={[
-              styles.messageText,
-              { color: isSentByMe ? '#fff' : '#374151' }
-            ]}>
-              {message.text}
-            </Text>
+          {msg.text ? (
+            <View style={[s.bubble, mine ? s.bubbleMine : s.bubbleTheirs]}>
+              <Text style={[s.bubbleText, { color: mine ? '#fff' : theme.text }]}>{msg.text}</Text>
+            </View>
           ) : null}
+          <Text style={[s.msgTime, { textAlign: mine ? 'right' : 'left' }]}>
+            {moment(msg.createdAt).format('HH:mm')}
+            {mine && (msg.seen ? '  ✓✓' : '  ✓')}
+          </Text>
         </View>
       </View>
     );
   };
 
-  if (!user) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <ActivityIndicator size="large" color="#4f46e5" />
-      </SafeAreaView>
-    );
-  }
+  const renderTyping = () => (
+    <View style={[s.msgRow, s.msgRowLeft]}>
+      <View style={{ width: 28, marginRight: 6 }}>
+        {user?.profile_picture && <Image source={{ uri: user.profile_picture }} style={s.miniAvatar} />}
+      </View>
+      <View style={[s.bubble, s.bubbleTheirs, { paddingVertical: 10 }]}>
+        <View style={{ flexDirection: 'row', gap: 4 }}>
+          {[0, 1, 2].map(i => (
+            <View key={i} style={[s.typingDot, { opacity: 0.5 + i * 0.2 }]} />
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+
+  if (!user) return <SafeAreaView style={s.container}><ActivityIndicator color={theme.primary} /></SafeAreaView>;
+
+  const isOnline = onlineUsers.has(userId);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={s.container} edges={['top', 'bottom']}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#111827" />
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
+          <Ionicons name="arrow-back" size={22} color={theme.text} />
         </TouchableOpacity>
-        
-        <Image 
-          source={{ uri: user.profile_picture }}
-          style={styles.headerAvatar}
-        />
-        
-        <View style={styles.headerInfo}>
-          <Text style={styles.headerName} numberOfLines={1}>{user.full_name}</Text>
-          <Text style={styles.headerUsername} numberOfLines={1}>@{user.username}</Text>
+        <View style={s.headerAvContainer}>
+          {user.profile_picture
+            ? <Image source={{ uri: user.profile_picture }} style={s.headerAvatar} />
+            : <View style={[s.headerAvatar, { backgroundColor: theme.primary, justifyContent: 'center', alignItems: 'center' }]}>
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>{user.full_name?.charAt(0)}</Text>
+              </View>
+          }
+          {isOnline && <View style={s.onlineDot} />}
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.headerName} numberOfLines={1}>{user.full_name}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <View style={[s.statusDot, { backgroundColor: isOnline ? '#22c55e' : '#94a3b8' }]} />
+            <Text style={s.headerStatus}>
+              {isOnline ? t('status.online') : t('status.offline')}
+            </Text>
+          </View>
+        </View>
+        <View style={[s.connBadge, { backgroundColor: connected ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)' }]}>
+          <View style={[s.connDot, { backgroundColor: connected ? '#22c55e' : '#ef4444' }]} />
+          <Text style={[s.connText, { color: connected ? '#22c55e' : '#ef4444' }]}>
+            {connected ? 'LIVE' : 'OFF'}
+          </Text>
         </View>
       </View>
 
-      {/* Messages List */}
-      {initialLoading && messages.length === 0 ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#4f46e5" />
-        </View>
+      {/* Messages */}
+      {initialLoading ? (
+        <View style={s.loader}><ActivityIndicator color={theme.primary} /></View>
       ) : (
         <FlatList
           ref={flatListRef}
           data={messages}
           renderItem={renderMessage}
-          keyExtractor={(item, index) => item._id || index.toString()}
-          contentContainerStyle={styles.messagesList}
+          keyExtractor={(item, i) => item._id || String(i)}
+          contentContainerStyle={s.msgList}
           showsVerticalScrollIndicator={false}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+          ListFooterComponent={partnerTyping ? renderTyping : null}
         />
       )}
 
-      {/* Input Area */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      {/* Input */}
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        style={{ backgroundColor: theme.surface }}
       >
-        <View style={styles.inputContainer}>
-          <View style={styles.inputWrapper}>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Type a message..."
-              placeholderTextColor="#9ca3af"
-              value={text}
-              onChangeText={setText}
-              multiline
-              maxLength={500}
-            />
-            
-            <TouchableOpacity 
-              style={styles.imageButton}
-              onPress={pickImage}
-            >
-              {image ? (
-                <Image 
-                  source={{ uri: image.uri }}
-                  style={styles.selectedImage}
-                />
-              ) : (
-                <Ionicons name="image-outline" size={24} color="#6b7280" />
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[
-                styles.sendButton,
-                (!text.trim() && !image) && styles.sendButtonDisabled
-              ]}
-              onPress={sendMessageHandler}
-              disabled={!text.trim() && !image}
-            >
-              <Ionicons name="send" size={20} color="#fff" />
+        {image && (
+          <View style={s.imagePreview}>
+            <Image source={{ uri: image.uri }} style={s.previewImg} />
+            <TouchableOpacity onPress={() => setImage(null)} style={s.removeImg}>
+              <Ionicons name="close-circle" size={24} color="#ef4444" />
             </TouchableOpacity>
           </View>
+        )}
+        <View style={s.inputBar}>
+          <TouchableOpacity onPress={pickImage} style={s.attachBtn}>
+            <Ionicons name="image-outline" size={24} color={theme.textMuted} />
+          </TouchableOpacity>
+          <TextInput
+            style={s.input}
+            placeholder={t('messages.type_message', 'Message...')}
+            placeholderTextColor={theme.textMuted}
+            value={text}
+            onChangeText={handleTextChange}
+            multiline
+            maxLength={1000}
+          />
+          <TouchableOpacity
+            onPress={handleSend}
+            disabled={!text.trim() && !image}
+            style={[s.sendBtn, (!text.trim() && !image) && { opacity: 0.4 }]}
+          >
+            <Ionicons name="send" size={20} color="#fff" />
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
+const getStyles = (theme) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    minHeight: 64,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 14,
+    backgroundColor: theme.surface,
+    borderBottomWidth: 1, borderBottomColor: theme.border,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05, shadowRadius: 3, elevation: 2,
   },
-  backButton: {
-    marginRight: 12,
-    padding: 4,
+  backBtn: { padding: 4, marginRight: 8 },
+  headerAvContainer: { position: 'relative', marginRight: 12 },
+  headerAvatar: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, borderColor: theme.border },
+  onlineDot: {
+    position: 'absolute', bottom: 1, right: 1,
+    width: 12, height: 12, borderRadius: 6,
+    borderWidth: 2, borderColor: theme.surface,
   },
-  headerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
+  statusDot: {
+    width: 6, height: 6, borderRadius: 3,
   },
-  headerInfo: {
-    flex: 1,
+  headerName: { fontSize: 17, fontWeight: '800', color: theme.text, letterSpacing: -0.5 },
+  headerStatus: { fontSize: 12, color: theme.textMuted, marginTop: 1, fontWeight: '500' },
+  connBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10,
   },
-  headerName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
+  connDot: { width: 7, height: 7, borderRadius: 3.5 },
+  connText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
+  loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  msgList: { paddingHorizontal: 16, paddingVertical: 20, flexGrow: 1 },
+  msgRow: { marginBottom: 12, flexDirection: 'row', alignItems: 'flex-end' },
+  msgRowRight: { justifyContent: 'flex-end' },
+  msgRowLeft: { justifyContent: 'flex-start' },
+  miniAvatar: { width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: theme.border },
+  bubble: {
+    paddingHorizontal: 16, paddingVertical: 12,
+    borderRadius: 22, maxWidth: '100%',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05, shadowRadius: 2, elevation: 1,
   },
-  headerUsername: {
-    fontSize: 13,
-    color: '#6b7280',
-    marginTop: 2,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  messagesList: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  messageContainer: {
-    marginVertical: 4,
-  },
-  sentMessage: {
-    alignItems: 'flex-end',
-  },
-  receivedMessage: {
-    alignItems: 'flex-start',
-  },
-  messageBubble: {
-    maxWidth: '75%',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-  },
-  sentBubble: {
-    backgroundColor: '#4f46e5',
+  bubbleMine: {
+    backgroundColor: theme.primary,
     borderBottomRightRadius: 4,
   },
-  receivedBubble: {
-    backgroundColor: '#f3f4f6',
+  bubbleTheirs: {
+    backgroundColor: theme.surface,
+    borderWidth: 1, borderColor: theme.border,
     borderBottomLeftRadius: 4,
   },
-  messageImage: {
-    width: 200,
-    height: 200,
-    borderRadius: 8,
-    marginBottom: 4,
+  bubbleText: { fontSize: 16, lineHeight: 22, fontWeight: '500' },
+  msgTime: { fontSize: 10, color: theme.textMuted, marginTop: 4, fontWeight: '600', paddingHorizontal: 8 },
+  msgImage: { width: 220, height: 200, borderRadius: 18, marginBottom: 6 },
+  typingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.textMuted, marginHorizontal: 2 },
+  imagePreview: {
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, py: 12,
+    backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border,
   },
-  messageText: {
-    fontSize: 15,
-    lineHeight: 20,
+  previewImg: { width: 60, height: 60, borderRadius: 12 },
+  removeImg: { position: 'absolute', top: -10, right: -10, backgroundColor: '#fff', borderRadius: 12 },
+  inputBar: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 12,
+    backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border,
+    gap: 12, paddingBottom: Platform.OS === 'ios' ? 24 : 12,
   },
-  inputContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+  attachBtn: { 
+    width: 44, height: 44, borderRadius: 22, 
+    backgroundColor: theme.background, 
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1, borderColor: theme.border
   },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    backgroundColor: '#f9fafb',
-    borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    gap: 8,
+  input: {
+    flex: 1, fontSize: 16, color: theme.text,
+    backgroundColor: theme.background,
+    borderRadius: 24, paddingHorizontal: 18, paddingVertical: 12,
+    maxHeight: 120, borderWidth: 1, borderColor: theme.border,
+    fontWeight: '500'
   },
-  textInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#111827',
-    maxHeight: 100,
-    paddingVertical: 4,
-  },
-  imageButton: {
-    padding: 4,
-  },
-  selectedImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-  },
-  sendButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#4f46e5',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sendButtonDisabled: {
-    opacity: 0.5,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  sendBtn: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: theme.primary, justifyContent: 'center', alignItems: 'center',
+    shadowColor: theme.primary, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 6, elevation: 4,
   },
 });
 

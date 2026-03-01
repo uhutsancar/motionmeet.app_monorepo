@@ -3,6 +3,7 @@
         "error": "Error",
         "saving": "Saving...",
         "success": "Success",
+        "no_data": "No data yet",
         "minutes_short": "min",
         "kg": "kg",
         "user_not_found": "User data not loaded. Please try again.",
@@ -16,10 +17,30 @@
     },
     "menu": {
         "feed": "Feed",
+        "messages": "Messages",
         "routines": "Routines",
         "exercises": "Exercises",
+        "statistics": "Statistics",
         "profile": "Profile",
         "settings": "Settings"
+    },
+    "tabs": {
+        "feed": "Feed",
+        "routines": "Routines",
+        "exercises": "Exercises",
+        "messages": "Messages",
+        "profile": "Profile",
+        "settings": "Settings"
+    },
+    "messages": {
+        "title": "Messages",
+        "search": "Search...",
+        "no_conversations": "No conversations yet",
+        "select_conversation": "Select a conversation",
+        "select_hint": "Choose from your conversations to start chatting.",
+        "start_conversation": "Start the conversation!",
+        "type_message": "Type a message...",
+        "online": "Online"
     },
     "landing": {
         "log_workouts": "Log Workouts,",
@@ -294,10 +315,33 @@
         "muscle": "Muscle",
         "all": "All Exercises",
         "not_found": "No exercises found.",
-        "personal_record": "Personal Record",
-        "total_sessions": "Total Sessions",
         "all_muscles": "All Muscles",
-        "all_equipment": "All Equipment"
+        "all_equipment": "All Equipment",
+        "available": "available",
+        "more_sessions_needed": "Need more sessions for trends",
+        "progress_history": "Progress History"
+    },
+    "statistics": {
+        "title": "Statistics",
+        "subtitle": "Your fitness journey in numbers and trends.",
+        "week": "Week",
+        "month": "Month",
+        "year": "Year",
+        "progress_trends": "Progress Trends",
+        "volume": "Volume",
+        "duration": "Duration",
+        "total_volume": "Total Volume",
+        "total_duration": "Total Duration",
+        "calories_burned": "Calories Burned",
+        "workouts": "Workouts",
+        "best_performance": "Best Performance",
+        "reached_milestones": "Reached Milestones",
+        "max_volume": "Max Volume",
+        "intense_session": "Intense Session",
+        "streak": "Workout Streak",
+        "view_records": "View All Records",
+        "per_session": "avg./session",
+        "top_exercises": "Top Exercises"
     },
     "settings": {
         "title": "Settings",
