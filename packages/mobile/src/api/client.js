@@ -1,5 +1,6 @@
 import axios from 'axios';
 
+// Ensure this matches your local IP address where the backend is running
 const BASE_URL = 'http://192.168.1.124:4000';
 
 const api = axios.create({

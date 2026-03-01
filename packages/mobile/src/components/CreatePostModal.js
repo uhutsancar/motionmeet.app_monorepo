@@ -17,7 +17,13 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useAuth } from '@clerk/clerk-expo';
 import { createNewPost } from '../features/posts/postsSlice';
 
+import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
+
 const CreatePostModal = ({ visible, onClose, onSuccess }) => {
+  const { theme } = useTheme();
+  const { t } = useTranslation();
+  const styles = getStyles(theme);
   const dispatch = useDispatch();
   const { getToken } = useAuth();
   const user = useSelector((state) => state.user.value);
@@ -29,7 +35,7 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (status !== 'granted') {
-      Alert.alert('Permission required', 'We need permission to access your photos');
+      Alert.alert(t('common.error'), t('feed.permission_required'));
       return;
     }
 
@@ -51,12 +57,12 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
 
   const handlePublish = async () => {
     if (!user) {
-      Alert.alert('Error', 'User data not loaded. Please try again.');
+      Alert.alert(t('common.error'), t('common.user_not_found'));
       return;
     }
 
     if (!content.trim() && images.length === 0) {
-      Alert.alert('Error', 'Please add some content or images');
+      Alert.alert(t('common.error'), t('feed.add_content_error'));
       return;
     }
 
@@ -66,7 +72,6 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
       const formData = new FormData();
       formData.append('content', content);
       
-      // Determine post type
       let postType = 'text';
       if (images.length > 0 && content.trim()) {
         postType = 'text_with_image';
@@ -86,27 +91,31 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
         });
       });
 
-      const token = await getToken();
+      // Retry once if token is stale on first call
+      let token = await getToken();
+      if (!token) {
+        await new Promise(res => setTimeout(res, 500));
+        token = await getToken();
+      }
+
       await dispatch(createNewPost({ postData: formData, token })).unwrap();
       
-      Alert.alert('Success', 'Post published successfully!');
+      Alert.alert(t('common.success'), t('feed.post_published'));
       setContent('');
       setImages([]);
       
-      // Call onSuccess to reload posts
       if (onSuccess) {
         onSuccess();
       } else {
         onClose();
       }
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to publish post');
+      Alert.alert(t('common.error'), error.message || t('feed.publish_failed'));
     } finally {
       setLoading(false);
     }
   };
 
-  // Don't render modal content if user is not loaded
   if (!visible || !user) {
     return null;
   }
@@ -119,17 +128,15 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
       onRequestClose={onClose}
     >
       <View style={styles.container}>
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={28} color="#111827" />
+            <Ionicons name="close" size={28} color={theme.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create Post</Text>
+          <Text style={styles.headerTitle}>{t('feed.create_post', 'Yeni Gönderi')}</Text>
           <View style={{ width: 28 }} />
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* User Info */}
           <View style={styles.userSection}>
             <Image
               source={{ uri: user.profile_picture }}
@@ -141,18 +148,16 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
             </View>
           </View>
 
-          {/* Text Input */}
           <TextInput
             style={styles.textInput}
-            placeholder="What's happening?"
-            placeholderTextColor="#9ca3af"
+            placeholder={t('feed.whats_on_mind', 'Neler düşünüyorsun?')}
+            placeholderTextColor={theme.textMuted}
             value={content}
             onChangeText={setContent}
             multiline
             maxLength={1000}
           />
 
-          {/* Images */}
           {images.length > 0 && (
             <View style={styles.imagesContainer}>
               {images.map((image, index) => (
@@ -170,24 +175,23 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
           )}
         </ScrollView>
 
-        {/* Bottom Bar */}
         <View style={styles.bottomBar}>
           <TouchableOpacity
             style={styles.imageButton}
             onPress={pickImages}
           >
-            <Ionicons name="image-outline" size={24} color="#6b7280" />
+            <Ionicons name="image-outline" size={24} color={theme.textMuted} />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.publishButton, loading && styles.publishButtonDisabled]}
+            style={[styles.publishButton, { backgroundColor: loading ? theme.primary + '80' : theme.primary }]}
             onPress={handlePublish}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.publishButtonText}>Publish Post</Text>
+              <Text style={styles.publishButtonText}>{t('feed.post_action', 'Paylaş')}</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -196,10 +200,10 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: theme.background,
   },
   header: {
     flexDirection: 'row',
@@ -208,7 +212,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: theme.border,
   },
   closeButton: {
     padding: 4,
@@ -216,7 +220,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#111827',
+    color: theme.text,
   },
   content: {
     flex: 1,
@@ -236,15 +240,15 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: theme.text,
   },
   username: {
     fontSize: 14,
-    color: '#6b7280',
+    color: theme.textMuted,
   },
   textInput: {
     fontSize: 16,
-    color: '#111827',
+    color: theme.text,
     minHeight: 120,
     textAlignVertical: 'top',
   },
@@ -266,7 +270,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -8,
     right: -8,
-    backgroundColor: '#fff',
+    backgroundColor: theme.background,
     borderRadius: 14,
   },
   bottomBar: {
@@ -276,7 +280,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: theme.border,
   },
   imageButton: {
     padding: 8,
@@ -284,16 +288,13 @@ const styles = StyleSheet.create({
   publishButton: {
     paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: '#4f46e5',
-    borderRadius: 8,
-  },
-  publishButtonDisabled: {
-    backgroundColor: '#a5b4fc',
+    borderRadius: 12,
   },
   publishButtonText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '900',
     color: '#fff',
+    textTransform: 'uppercase',
   },
 });
 

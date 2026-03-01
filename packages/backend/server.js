@@ -9,6 +9,9 @@ import userRouter from "./routes/userRoutes.js";
 import postRouter from "./routes/postRoutes.js";
 import storyRouter from "./routes/storyRoutes.js";
 import messageRouter from "./routes/messageRoutes.js";
+import exerciseRouter from "./routes/exerciseRoutes.js";
+import routineRouter from "./routes/routineRoutes.js";
+import workoutRouter from "./routes/workoutRoutes.js";
 
 const app = express();
 
@@ -25,6 +28,9 @@ app.use("/api/user", userRouter);
 app.use("/api/post", postRouter);
 app.use("/api/story", storyRouter);
 app.use("/api/message", messageRouter);
+app.use("/api/exercise", exerciseRouter);
+app.use("/api/routine", routineRouter);
+app.use("/api/workout", workoutRouter);
 
 const PORT = process.env.PORT || 4000;
 

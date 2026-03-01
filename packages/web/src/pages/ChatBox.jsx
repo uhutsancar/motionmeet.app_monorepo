@@ -97,19 +97,17 @@ const ChatBox = () => {
               .toSorted((a, b) => new Date(a.createAt) - new Date(b.createAt))
               .map((message, index) => (
                 <div
-                  className={`flex flex-col ${
-                    message.to_user_id !== user._id
+                  className={`flex flex-col ${message.to_user_id !== user._id
                       ? "items-start"
                       : "items-end"
-                  } `}
+                    } `}
                   key={index}
                 >
                   <div
-                    className={`p-2 text-sm max-w-sm bg-white text-slate-700 rounded-lg shadow ${
-                      message.to_user_id !== user._id
+                    className={`p-2 text-sm max-w-sm bg-white text-slate-700 rounded-lg shadow ${message.to_user_id !== user._id
                         ? "rounded-bl-none"
                         : "rounded-br-none"
-                    }`}
+                      }`}
                   >
                     {message.message_type === "image" && (
                       <img
@@ -131,7 +129,7 @@ const ChatBox = () => {
             <input
               type="text"
               className="flex-1 outline-none text-slate-700"
-              placeholder="Type a message..."
+              placeholder={t('chat.type_message', 'Type a message...')}
               onKeyDown={(e) => e.key === "Enter" && sendMessage()}
               onChange={(e) => setText(e.target.value)}
               value={text}

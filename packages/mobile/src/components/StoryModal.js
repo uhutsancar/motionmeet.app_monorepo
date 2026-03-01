@@ -16,7 +16,13 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@clerk/clerk-expo';
 import { createStory } from '../api/endpoints';
 
+import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
+
 const StoryModal = ({ visible, onClose, onSuccess }) => {
+  const { theme } = useTheme();
+  const { t } = useTranslation();
+  const styles = getStyles(theme);
   const { getToken } = useAuth();
   const [mode, setMode] = useState('text');
   const [text, setText] = useState('');
@@ -38,7 +44,7 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (status !== 'granted') {
-      Alert.alert('Permission required', 'We need permission to access your media');
+      Alert.alert(t('common.error'), t('feed.permission_required_media'));
       return;
     }
 
@@ -64,7 +70,7 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
       : 'text';
 
     if (mediaType === 'text' && !text) {
-      Alert.alert('Error', 'Please enter some text');
+      Alert.alert(t('common.error'), t('feed.add_text_error'));
       return;
     }
 
@@ -83,18 +89,23 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
         });
       }
 
-      const token = await getToken();
+      // Retry once on null token (Clerk cold start)
+      let token = await getToken();
+      if (!token) {
+        await new Promise(res => setTimeout(res, 500));
+        token = await getToken();
+      }
       const data = await createStory(formData, token);
 
       if (data.success) {
-        Alert.alert('Success', 'Story created successfully');
+        Alert.alert(t('common.success'), t('feed.story_created'));
         onSuccess?.();
         onClose();
       } else {
-        Alert.alert('Error', data.message);
+        Alert.alert(t('common.error'), data.message);
       }
     } catch (error) {
-      Alert.alert('Error', error.message);
+      Alert.alert(t('common.error'), error.message);
     } finally {
       setLoading(false);
     }
@@ -108,65 +119,60 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
       onRequestClose={onClose}
     >
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#111827" />
+            <Ionicons name="arrow-back" size={24} color={theme.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create Story</Text>
+          <Text style={styles.headerTitle}>{t('feed.create_story')}</Text>
           <TouchableOpacity onPress={handleCreateStory} disabled={loading} style={styles.postButtonWrapper}>
-            <Text style={[styles.postButton, loading && styles.postButtonDisabled]}>
-              {loading ? 'Posting...' : 'Post'}
+            <Text style={[styles.postButton, { color: loading ? theme.primary + '80' : theme.primary }]}>
+              {loading ? t('common.saving') : t('feed.post_action')}
             </Text>
           </TouchableOpacity>
         </View>
 
         <ScrollView style={styles.content}>
-          {/* Mode Selector */}
           <View style={styles.modeSelector}>
             <TouchableOpacity
-              style={[styles.modeButton, mode === 'text' && styles.activeModeButton]}
+              style={[styles.modeButton, { backgroundColor: mode === 'text' ? theme.surface + '80' : theme.surface }]}
               onPress={() => {
                 setMode('text');
                 setMedia(null);
               }}
             >
-              <Ionicons name="text" size={20} color={mode === 'text' ? '#4f46e5' : '#6b7280'} />
-              <Text style={[styles.modeText, mode === 'text' && styles.activeModeText]}>Text</Text>
+              <Ionicons name="text" size={20} color={mode === 'text' ? theme.primary : theme.textMuted} />
+              <Text style={[styles.modeText, { color: mode === 'text' ? theme.primary : theme.textMuted }]}>{t('feed.text')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.modeButton, mode === 'media' && styles.activeModeButton]}
+              style={[styles.modeButton, { backgroundColor: mode === 'media' ? theme.surface + '80' : theme.surface }]}
               onPress={() => pickMedia('image')}
             >
-              <Ionicons name="image" size={20} color={mode === 'media' ? '#4f46e5' : '#6b7280'} />
-              <Text style={[styles.modeText, mode === 'media' && styles.activeModeText]}>Media</Text>
+              <Ionicons name="image" size={20} color={mode === 'media' ? theme.primary : theme.textMuted} />
+              <Text style={[styles.modeText, { color: mode === 'media' ? theme.primary : theme.textMuted }]}>{t('feed.media')}</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Preview */}
           <View style={[styles.preview, { backgroundColor: mode === 'text' ? background : '#000' }]}>
             {mode === 'media' && media ? (
               <Image source={{ uri: media.uri }} style={styles.mediaPreview} />
             ) : (
-              <Text style={styles.previewText}>{text || 'Your story text...'}</Text>
+              <Text style={styles.previewText}>{text || t('feed.story_text_placeholder')}</Text>
             )}
           </View>
 
-          {/* Text Input */}
           {mode === 'text' && (
             <>
               <TextInput
                 style={styles.textInput}
-                placeholder="What's on your mind?"
-                placeholderTextColor="#9ca3af"
+                placeholder={t('feed.whats_on_mind')}
+                placeholderTextColor={theme.textMuted}
                 value={text}
                 onChangeText={setText}
                 multiline
                 maxLength={200}
               />
 
-              {/* Background Colors */}
-              <Text style={styles.sectionTitle}>Background Color</Text>
+              <Text style={styles.sectionTitle}>{t('feed.background_color')}</Text>
               <View style={styles.colorPicker}>
                 {bgColors.map((color) => (
                   <TouchableOpacity
@@ -188,10 +194,10 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: theme.background,
   },
   header: {
     flexDirection: 'row',
@@ -201,7 +207,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     minHeight: 64,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: theme.border,
   },
   backButton: {
     padding: 8,
@@ -213,16 +219,13 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
+    fontWeight: 'bold',
+    color: theme.text,
   },
   postButton: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#4f46e5',
-  },
-  postButtonDisabled: {
-    opacity: 0.5,
+    fontWeight: '900',
+    textTransform: 'uppercase',
   },
   content: {
     flex: 1,
@@ -240,27 +243,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#f3f4f6',
-  },
-  activeModeButton: {
-    backgroundColor: '#eef2ff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: theme.border,
   },
   modeText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#6b7280',
-  },
-  activeModeText: {
-    color: '#4f46e5',
+    fontWeight: 'bold',
   },
   preview: {
     height: 400,
-    borderRadius: 12,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: theme.border,
   },
   mediaPreview: {
     width: '100%',
@@ -276,40 +275,39 @@ const styles = StyleSheet.create({
   },
   textInput: {
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
-    padding: 12,
+    borderColor: theme.border,
+    borderRadius: 16,
+    padding: 16,
     fontSize: 16,
-    color: '#111827',
+    color: theme.text,
     minHeight: 100,
     textAlignVertical: 'top',
     marginBottom: 20,
+    backgroundColor: theme.surface,
   },
   sectionTitle: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
+    fontWeight: 'bold',
+    color: theme.text,
     marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   colorPicker: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
+    paddingBottom: 40,
   },
   colorButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 3,
     borderColor: 'transparent',
   },
   selectedColor: {
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    borderColor: theme.text,
   },
 });
 

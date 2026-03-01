@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,35 +7,80 @@ import {
   TouchableOpacity,
   Image,
   Dimensions,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import moment from 'moment';
+import 'moment/locale/tr';
 
 const { width, height } = Dimensions.get('window');
+const STORY_DURATION = 5000; // 5 seconds per story
 
-const StoryViewer = ({ visible, story, onClose }) => {
+/**
+ * Instagram-style StoryViewer
+ * Props:
+ *   visible: boolean
+ *   stories: array of story objects from same user (or all stories)
+ *   startIndex: which index to start from
+ *   onClose: () => void
+ */
+const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }) => {
+  const [currentIndex, setCurrentIndex] = useState(startIndex);
   const [progress, setProgress] = useState(0);
+  const intervalRef = useRef(null);
 
+  const currentStory = stories[currentIndex];
+
+  // Reset when opening
   useEffect(() => {
-    if (!visible) return;
+    if (visible) {
+      setCurrentIndex(startIndex);
+      setProgress(0);
+    }
+  }, [visible, startIndex]);
 
-    const timer = setInterval(() => {
-      setProgress((prev) => {
+  const goNext = useCallback(() => {
+    if (currentIndex < stories.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+      setProgress(0);
+    } else {
+      // All stories done
+      onClose();
+    }
+  }, [currentIndex, stories.length, onClose]);
+
+  const goPrev = useCallback(() => {
+    if (currentIndex > 0) {
+      setCurrentIndex(prev => prev - 1);
+      setProgress(0);
+    }
+  }, [currentIndex]);
+
+  // Progress timer per story
+  useEffect(() => {
+    if (!visible || !currentStory) return;
+
+    setProgress(0);
+    clearInterval(intervalRef.current);
+
+    const step = 100 / (STORY_DURATION / 50); // how much to increment each 50ms
+    intervalRef.current = setInterval(() => {
+      setProgress(prev => {
         if (prev >= 100) {
-          clearInterval(timer);
-          onClose();
-          return 100;
+          clearInterval(intervalRef.current);
+          goNext();
+          return 0;
         }
-        return prev + 1;
+        return prev + step;
       });
-    }, 50); // 5 seconds total (100 * 50ms)
+    }, 50);
 
-    return () => clearInterval(timer);
-  }, [visible, onClose]);
+    return () => clearInterval(intervalRef.current);
+  }, [visible, currentIndex, currentStory]);
 
-  if (!story) return null;
+  if (!visible || !currentStory) return null;
 
-  const backgroundColor = story.background_color || '#4f46e5';
+  const backgroundColor = currentStory.background_color || '#4f46e5';
 
   return (
     <Modal
@@ -45,40 +90,56 @@ const StoryViewer = ({ visible, story, onClose }) => {
       onRequestClose={onClose}
     >
       <View style={styles.container}>
-        {/* Story Content */}
+        {/* Story Background / Media */}
         <View style={[styles.storyContent, { backgroundColor }]}>
-          {story.media_type === 'image' && story.media_url && (
+          {currentStory.media_type === 'image' && currentStory.media_url && (
             <Image
-              source={{ uri: story.media_url }}
+              source={{ uri: currentStory.media_url }}
               style={styles.mediaImage}
               resizeMode="cover"
             />
           )}
-          {story.media_type === 'video' && story.media_url && (
+          {currentStory.media_type === 'video' && currentStory.media_url && (
             <View style={styles.videoPlaceholder}>
-              <Ionicons name="play-circle" size={64} color="#fff" />
+              <Ionicons name="play-circle" size={72} color="#fff" />
             </View>
           )}
-          {story.media_type === 'text' && (
-            <Text style={styles.storyText}>{story.content}</Text>
+          {(currentStory.media_type === 'text' || !currentStory.media_url) && currentStory.content && (
+            <Text style={styles.storyText}>{currentStory.content}</Text>
           )}
         </View>
 
-        {/* Progress Bar */}
-        <View style={styles.progressBarContainer}>
-          <View style={[styles.progressBar, { width: `${progress}%` }]} />
+        {/* Progress Bars — one per story */}
+        <View style={styles.progressBarsRow}>
+          {stories.map((_, i) => (
+            <View key={i} style={[styles.progressBarBg, { flex: 1 }]}>
+              <View
+                style={[
+                  styles.progressBarFill,
+                  {
+                    width:
+                      i < currentIndex
+                        ? '100%'
+                        : i === currentIndex
+                        ? `${Math.min(progress, 100)}%`
+                        : '0%',
+                  },
+                ]}
+              />
+            </View>
+          ))}
         </View>
 
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.userInfo}>
             <Image
-              source={{ uri: story.user.profile_picture }}
+              source={{ uri: currentStory.user?.profile_picture }}
               style={styles.avatar}
             />
             <View>
-              <Text style={styles.userName}>{story.user.full_name}</Text>
-              <Text style={styles.timeAgo}>{moment(story.createdAt).fromNow()}</Text>
+              <Text style={styles.userName}>{currentStory.user?.full_name}</Text>
+              <Text style={styles.timeAgo}>{moment(currentStory.createdAt).fromNow()}</Text>
             </View>
           </View>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -86,16 +147,16 @@ const StoryViewer = ({ visible, story, onClose }) => {
           </TouchableOpacity>
         </View>
 
-        {/* Tap to Close/Navigate */}
-        <View style={styles.tapAreas}>
+        {/* Tap Areas: left = prev, right = next */}
+        <View style={styles.tapAreas} pointerEvents="box-none">
           <TouchableOpacity
             style={styles.tapLeft}
-            onPress={onClose}
+            onPress={goPrev}
             activeOpacity={1}
           />
           <TouchableOpacity
             style={styles.tapRight}
-            onPress={onClose}
+            onPress={goNext}
             activeOpacity={1}
           />
         </View>
@@ -124,41 +185,50 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   storyText: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: 'bold',
     color: '#fff',
     textAlign: 'center',
-    paddingHorizontal: 40,
+    paddingHorizontal: 36,
+    lineHeight: 42,
   },
-  progressBarContainer: {
+  // Progress bars row
+  progressBarsRow: {
     position: 'absolute',
-    top: 60,
-    left: 0,
-    right: 0,
-    height: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    marginHorizontal: 8,
-    borderRadius: 2,
+    top: 56,
+    left: 8,
+    right: 8,
+    flexDirection: 'row',
+    gap: 4,
+    zIndex: 10,
   },
-  progressBar: {
+  progressBarBg: {
+    height: 2.5,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
     height: '100%',
     backgroundColor: '#fff',
     borderRadius: 2,
   },
+  // Header
   header: {
     position: 'absolute',
-    top: 70,
+    top: 68,
     left: 0,
     right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
+    zIndex: 10,
   },
   userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   avatar: {
     width: 40,
@@ -168,17 +238,18 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
   },
   userName: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: '#fff',
   },
   timeAgo: {
     fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: 'rgba(255,255,255,0.75)',
   },
   closeButton: {
-    padding: 4,
+    padding: 6,
   },
+  // Tap areas
   tapAreas: {
     position: 'absolute',
     top: 0,
@@ -186,12 +257,15 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     flexDirection: 'row',
+    zIndex: 5,
   },
   tapLeft: {
-    flex: 1,
+    width: '35%',
+    height: '100%',
   },
   tapRight: {
     flex: 1,
+    height: '100%',
   },
 });
 

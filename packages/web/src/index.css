@@ -1,11 +1,94 @@
-@import url("https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Outfit:wght@100..900&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Outfit:wght@100..900&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap");
 @import "tailwindcss";
+
+@theme {
+  --color-background: var(--bg-base);
+  --color-surface: var(--bg-surface);
+  --color-surface-light: var(--bg-surface-light);
+  --color-border-subtle: var(--border-subtle);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+
+  --color-accent-primary: var(--accent-primary);
+  --color-accent-hover: var(--accent-hover);
+  --color-glass: var(--glass-bg);
+  --color-glass-border: var(--glass-border);
+}
+
+:root {
+  /* LIGHT MODE - Premium Soft Palette */
+  --bg-base: #F9FAFB;
+  --bg-surface: #FFFFFF;
+  --bg-surface-light: #F3F4F6;
+  --border-subtle: #E5E7EB;
+
+  --text-primary: #111827;
+  --text-secondary: #4B5563;
+  --text-muted: #9CA3AF;
+
+  --accent-primary: #3B82F6;
+  --accent-hover: #2563EB;
+
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(229, 231, 235, 0.6);
+}
+
+.dark {
+  /* DARK MODE - Premium Deep Palette */
+  --bg-base: #0C0C0E;
+  --bg-surface: #141417;
+  --bg-surface-light: #1F1F23;
+  --border-subtle: #252529;
+
+  --text-primary: #F3F4F6;
+  --text-secondary: #9CA3AF;
+  --text-muted: #4B5563;
+
+  --accent-primary: #60A5FA;
+  --accent-hover: #93C5FD;
+
+  --glass-bg: rgba(20, 20, 23, 0.7);
+  --glass-border: rgba(37, 37, 41, 0.6);
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  margin: 0;
+  padding: 0;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
 
 * {
   font-family: "Outfit", sans-serif;
+  border-color: var(--border-subtle);
 }
-.no-scrollbar::-webkit-scrollbar{
+
+.no-scrollbar::-webkit-scrollbar {
   display: none;
 }
 
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+}
 
+.animate-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

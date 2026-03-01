@@ -13,13 +13,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { useAuth } from '@clerk/clerk-expo';
+import { useTranslation } from 'react-i18next';
+import { useTheme } from '../context/ThemeContext';
 import { fetchConnections } from '../features/connections/connectionsSlice';
 import { getUserRecentMessages } from '../api/endpoints';
 import moment from 'moment';
+import 'moment/locale/tr';
 
 const Messages = ({ navigation }) => {
   const dispatch = useDispatch();
   const { getToken } = useAuth();
+  const { t } = useTranslation();
+  const { theme, isDark } = useTheme();
+  const styles = getStyles(theme);
   const { connections, loading } = useSelector((state) => state.connections);
   const [recentMessages, setRecentMessages] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -105,7 +111,7 @@ const Messages = ({ navigation }) => {
           <Text style={styles.timestamp}>{moment(message.createdAt).fromNow()}</Text>
         </View>
         <Text style={styles.messagePreview} numberOfLines={1}>
-          {message.text || message.image_url ? '📷 Photo' : 'No message'}
+          {message.text || (message.image_url ? `📷 ${t('common.photo', 'Photo')}` : t('messages.no_message', 'No message'))}
         </Text>
       </View>
 
@@ -155,17 +161,17 @@ const Messages = ({ navigation }) => {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerTitle}>Messages</Text>
-          <Text style={styles.headerSubtitle}>Talk to your friends and family</Text>
+          <Text style={styles.headerTitle}>{t('messages.title', 'Messages')}</Text>
+          <Text style={styles.headerSubtitle}>{t('messages.subtitle', 'Talk to your friends and family')}</Text>
         </View>
       </View>
 
       {/* Empty State */}
       {!loading && connections.length === 0 && (
         <View style={styles.emptyContainer}>
-          <Ionicons name="chatbubbles-outline" size={64} color="#cbd5e1" />
-          <Text style={styles.emptyText}>No connections yet</Text>
-          <Text style={styles.emptySubtext}>Connect with people to start messaging</Text>
+          <Ionicons name="chatbubbles-outline" size={64} color={theme.border} />
+          <Text style={styles.emptyText}>{t('messages.no_connections', 'No connections yet')}</Text>
+          <Text style={styles.emptySubtext}>{t('messages.connect_to_start', 'Connect with people to start messaging')}</Text>
         </View>
       )}
 
@@ -183,28 +189,28 @@ const Messages = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: theme.background,
   },
   header: {
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: '#fff',
+    backgroundColor: theme.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: theme.border,
     minHeight: 80,
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#0f172a',
+    color: theme.text,
     marginBottom: 4,
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#64748b',
+    color: theme.textMuted,
   },
   emptyContainer: {
     flex: 1,
@@ -215,13 +221,13 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#64748b',
+    color: theme.text,
     marginTop: 16,
     textAlign: 'center',
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#94a3b8',
+    color: theme.textMuted,
     marginTop: 8,
     textAlign: 'center',
   },
@@ -233,13 +239,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: theme.surface,
     borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: theme.border,
   },
   avatar: {
     width: 48,
@@ -252,47 +260,72 @@ const styles = StyleSheet.create({
   },
   fullName: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#334155',
-    marginBottom: 2,
+    fontWeight: 'bold',
+    color: theme.text,
   },
   username: {
     fontSize: 14,
-    color: '#64748b',
-    marginBottom: 4,
+    color: theme.textMuted,
+    marginTop: 2,
   },
   bio: {
-    fontSize: 13,
-    color: '#94a3b8',
-    lineHeight: 18,
+    fontSize: 12,
+    color: theme.textMuted,
+    marginTop: 4,
   },
   actions: {
+    flexDirection: 'row',
     gap: 8,
   },
   actionButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: theme.background,
     justifyContent: 'center',
-    backgroundColor: '#eef2ff',
-    borderRadius: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.border,
   },
-  emptyContainer: {
+  messageCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: theme.surface,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  messageInfo: {
     flex: 1,
+    marginLeft: 12,
+    marginRight: 8,
+  },
+  messageHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
+    marginBottom: 4,
   },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#64748b',
-    marginTop: 16,
+  timestamp: {
+    fontSize: 12,
+    color: theme.textMuted,
   },
-  emptySubtext: {
+  messagePreview: {
     fontSize: 14,
-    color: '#94a3b8',
-    marginTop: 8,
+    color: theme.textMuted,
+  },
+  unreadBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: theme.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  unreadText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: 'bold',
   },
 });
 

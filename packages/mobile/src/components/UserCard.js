@@ -5,8 +5,13 @@ import { useAuth } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
 import { followUser, unfollowUser, sendConnectionRequest } from '../api/endpoints';
 import { fetchUser } from '../features/user/userSlice';
+import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 const UserCard = ({ user, onPress, onMessagePress }) => {
+  const { theme } = useTheme();
+  const { t } = useTranslation();
+  const styles = getStyles(theme);
   const dispatch = useDispatch();
   const currentUser = useSelector((state) => state.user.value);
   const { connections } = useSelector((state) => state.connections);
@@ -29,25 +34,9 @@ const UserCard = ({ user, onPress, onMessagePress }) => {
         await followUser(user._id, token);
       }
       
-      // Reload user data to update following list
       dispatch(fetchUser(token));
     } catch (error) {
-      Alert.alert('Error', 'Failed to update follow status');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleConnect = async () => {
-    if (processing) return;
-    
-    try {
-      setProcessing(true);
-      const token = await getToken();
-      await sendConnectionRequest(user._id, token);
-      Alert.alert('Success', 'Connection request sent');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to send connection request');
+      Alert.alert(t('common.error'), t('feed.follow_failed'));
     } finally {
       setProcessing(false);
     }
@@ -55,7 +44,6 @@ const UserCard = ({ user, onPress, onMessagePress }) => {
 
   return (
     <View style={styles.card}>
-      {/* User Info */}
       <View style={styles.infoSection}>
         <Image 
           source={{ uri: user.profile_picture }}
@@ -66,132 +54,100 @@ const UserCard = ({ user, onPress, onMessagePress }) => {
           <Text style={styles.username}>@{user.username}</Text>
         )}
         {user.bio && (
-          <Text style={styles.bio} numberOfLines={2}>{user.bio}</Text>
+          <Text style={styles.bio} numberOfLines={1}>{user.bio}</Text>
         )}
       </View>
 
-      {/* Meta Info */}
       <View style={styles.metaContainer}>
-        {user.location && (
-          <View style={styles.metaBadge}>
-            <Ionicons name="location-outline" size={14} color="#6b7280" />
-            <Text style={styles.metaText}>{user.location}</Text>
-          </View>
-        )}
-        <View style={styles.metaBadge}>
-          <Text style={styles.metaText}>{user.followers?.length || 0} Followers</Text>
+        <View style={[styles.metaBadge, { borderColor: theme.border }]}>
+          <Text style={styles.metaText}>{user.followers?.length || 0} {t('feed.followers')}</Text>
         </View>
       </View>
 
-      {/* Action Buttons */}
       <View style={styles.actionsContainer}>
         <TouchableOpacity 
           style={[
             styles.followButton,
-            isFollowing && styles.followingButton
+            { backgroundColor: isFollowing ? theme.surfaceLight : theme.primary }
           ]}
           onPress={handleFollow}
           disabled={processing}
         >
-          <Ionicons 
-            name={isFollowing ? "checkmark" : "person-add-outline"} 
-            size={16} 
-            color="#fff" 
-          />
-          <Text style={styles.followButtonText}>
-            {isFollowing ? 'Following' : 'Follow'}
+          <Text style={[styles.followButtonText, { color: isFollowing ? theme.text : '#fff' }]}>
+            {isFollowing ? t('feed.following_status') : t('feed.follow')}
           </Text>
         </TouchableOpacity>
 
-        {isFollowing ? (
-          <TouchableOpacity 
-            style={styles.iconButton}
-            onPress={() => onMessagePress?.(user)}
-          >
-            <Ionicons 
-              name="chatbubble-outline"
-              size={20} 
-              color="#6b7280" 
-            />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity 
-            style={styles.iconButton}
-            onPress={() => onPress?.(user)}
-          >
-            <Ionicons 
-              name="eye-outline"
-              size={20} 
-              color="#6b7280" 
-            />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity 
+          style={[styles.iconButton, { borderColor: theme.border }]}
+          onPress={() => onPress?.(user)}
+        >
+          <Ionicons 
+            name="eye-outline"
+            size={18} 
+            color={theme.textMuted} 
+          />
+        </TouchableOpacity>
       </View>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   card: {
-    width: 280,
+    width: 200,
     padding: 16,
-    paddingTop: 20,
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: theme.surface,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    borderColor: theme.border,
+    marginRight: 12,
   },
   infoSection: {
     alignItems: 'center',
   },
   avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    marginBottom: 12,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginBottom: 10,
+    borderWidth: 2,
+    borderColor: theme.background,
   },
   fullName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 2,
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: theme.text,
+    textAlign: 'center',
   },
   username: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 8,
+    fontSize: 12,
+    color: theme.textMuted,
+    fontWeight: '600',
+    marginBottom: 4,
   },
   bio: {
-    fontSize: 13,
-    color: '#6b7280',
+    fontSize: 11,
+    color: theme.textMuted,
     textAlign: 'center',
-    paddingHorizontal: 12,
+    marginBottom: 8,
   },
   metaContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 8,
-    marginTop: 12,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   metaBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 16,
+    borderRadius: 12,
   },
   metaText: {
-    fontSize: 12,
-    color: '#6b7280',
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: theme.textMuted,
+    textTransform: 'uppercase',
   },
   actionsContainer: {
     flexDirection: 'row',
@@ -199,29 +155,22 @@ const styles = StyleSheet.create({
   },
   followButton: {
     flex: 1,
-    flexDirection: 'row',
+    height: 36,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    backgroundColor: '#4f46e5',
-    borderRadius: 8,
-  },
-  followingButton: {
-    backgroundColor: '#6366f1',
   },
   followButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   iconButton: {
-    width: 48,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
+    borderRadius: 12,
   },
 });
 

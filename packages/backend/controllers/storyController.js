@@ -33,10 +33,14 @@ export const addUserStory = async (req, res) => {
     });
 
     // schedule story deletion after 24 hours
-    await inngest.send({
+    try {
+      await inngest.send({
         name: 'app/story.delete',
-        data: {storyId: story._id}
-    })
+        data: { storyId: story._id }
+      });
+    } catch (inngestError) {
+      console.error("Inngest error (Ignoring for story creation):", inngestError.message);
+    }
 
     res.json({ success: true });
   } catch (error) {

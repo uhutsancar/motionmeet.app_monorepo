@@ -7,15 +7,19 @@ import Loading from "~/components/Loading";
 import PostCard from "~/components/PostCard";
 import RecentMessages from "~/components/RecentMessages";
 import StoriesBar from "~/components/StoriesBar";
+import QuickProfile from "~/components/QuickProfile";
+import SuggestedAthletes from "~/components/SuggestedAthletes";
+import { useTranslation } from "react-i18next";
+import CreatePost from "./CreatePost";
 
 const Feed = () => {
+  const { t } = useTranslation();
   const [feeds, setFeeds] = useState([]);
   const [loading, setLoading] = useState(true);
   const { getToken } = useAuth();
 
   const fetchFeeds = async () => {
     try {
-      setLoading(true);
       const { data } = await api.get("/api/post/feed", {
         headers: {
           Authorization: `Bearer ${await getToken()}`,
@@ -30,42 +34,37 @@ const Feed = () => {
     } catch (error) {
       toast.error(error.message);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
-    fetchFeeds();
+    const init = async () => {
+      setLoading(true);
+      await fetchFeeds();
+      setLoading(false);
+    };
+    init();
   }, []);
 
   return !loading ? (
     <div className="h-full overflow-y-scroll no-scrollbar py-10 xl:pr-5 flex items-start justify-center xl:gap-8">
-      {/* Stories and post list */}
-
-      <div className="">
+      <div className="w-full max-w-2xl px-4">
         <StoriesBar />
-        <div className="p-4 space-y-6">
-          {feeds.map((post) => (
-            <PostCard key={post._id} post={post} />
-          ))}
+        <CreatePost onSuccess={fetchFeeds} />
+        <div className="space-y-6 mt-6">
+          {feeds.length > 0 ? (
+            feeds.map((post) => <PostCard key={post._id} post={post} />)
+          ) : (
+            <div className="text-center py-20 glass rounded-3xl border border-border-subtle">
+              <p className="text-text-muted font-medium">{t('feed.no_posts')}</p>
+            </div>
+          )}
         </div>
       </div>
 
       {/* right sidebar */}
-
-      <div className="max-xl-hidden sticky top-0">
-        <div className="max-w-xs bg-white text-xs p-4 rounded-md inline-flex flex-col gap-2 shadow">
-          <h3 className="text-slate-800 font-semibold">Sponsored</h3>
-          <img
-            src={assets.sponsored_img}
-            alt="Sponsor Image"
-            className="w-75 h-50 rounded-md"
-          />
-          <p className="text-slate-600">Email marketing</p>
-          <p className="text-slate-400">
-            Supercharge your marketing with a powerful, easy-to-use platform
-            built for results.
-          </p>
-        </div>
+      <div className="max-xl:hidden sticky top-10 flex flex-col gap-6 w-80">
+        <QuickProfile />
+        <SuggestedAthletes />
         <RecentMessages />
       </div>
     </div>

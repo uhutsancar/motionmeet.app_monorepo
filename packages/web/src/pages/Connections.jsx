@@ -16,6 +16,7 @@ import toast from "react-hot-toast";
 const Connections = () => {
   const navigate = useNavigate();
 
+  const { t } = useTranslation();
   const [currentTab, setCurrentTab] = useState("Followers");
 
   const { getToken } = useAuth();
@@ -26,10 +27,10 @@ const Connections = () => {
   );
 
   const dataArray = [
-    { label: "Followers", value: followers, icon: Users },
-    { label: "Following", value: following, icon: UserCheck },
-    { label: "Pending", value: pendingConnections, icon: UserRoundPen },
-    { label: "Connections", value: connections, icon: UserPlus },
+    { label: "Followers", displayName: t('profile.followers'), value: followers, icon: Users },
+    { label: "Following", displayName: t('profile.following'), value: following, icon: UserCheck },
+    { label: "Pending", displayName: t('profile.pending', 'Pending'), value: pendingConnections, icon: UserRoundPen },
+    { label: "Connections", displayName: t('profile.connections', 'Connections'), value: connections, icon: UserPlus },
   ];
 
   const handleUnfollow = async (userId) => {
@@ -84,10 +85,10 @@ const Connections = () => {
         {/* Title */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900 mb-2">
-            Connections
+            {t('profile.connections', 'Connections')}
           </h1>
           <p className="text-slate-600">
-            Manage your network and discover new connections
+            {t('profile.connections_desc', 'Manage your network and discover new connections')}
           </p>
         </div>
 
@@ -99,7 +100,7 @@ const Connections = () => {
               key={index}
             >
               <b>{item.value?.length || 0}</b>
-              <p className="text-slate-600">{item.label}</p>
+              <p className="text-slate-600">{item.displayName}</p>
             </div>
           ))}
         </div>
@@ -111,14 +112,13 @@ const Connections = () => {
               onClick={() => setCurrentTab(tab.label)}
               key={tab.label}
               className={`cursor-pointer flex items-center px-3 py-1 text-sm rounded-md transition-color 
-              ${
-                currentTab === tab.label
+              ${currentTab === tab.label
                   ? "bg-white font-medium text-black"
                   : "text-gray-500 hover:text-black"
-              }`}
+                }`}
             >
               <tab.icon className="w-4 h-4" />
-              <span className="ml-1">{tab.label}</span>
+              <span className="ml-1">{tab.displayName}</span>
               {tab.count != undefined && (
                 <span className="ml-2 text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">
                   {tab.count}
@@ -151,7 +151,7 @@ const Connections = () => {
                     onClick={() => navigate(`/profile/${user._id}`)}
                     className="w-full p-2 text-sm rounded bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 active:scale-95 transition text-white cursor-pointer"
                   >
-                    View Profile
+                    {t('feed.see_profile')}
                   </button>
 
                   {currentTab === "Following" && (
@@ -159,7 +159,7 @@ const Connections = () => {
                       onClick={() => handleUnfollow(user._id)}
                       className="w-full p-2 text-sm rounded bg-slate-100 hover:bg-slate-200 text-black active:scale-95 transition cursor-pointer"
                     >
-                      Unfollow
+                      {t('profile.unfollow', 'Unfollow')}
                     </button>
                   )}
 
@@ -168,13 +168,13 @@ const Connections = () => {
                       onClick={() => acceptConnection(user._id)}
                       className="w-full p-2 text-sm rounded bg-slate-100 hover:bg-slate-200 text-black active:scale-95 transition cursor-pointer"
                     >
-                      Accept
+                      {t('profile.accept', 'Accept')}
                     </button>
                   )}
 
                   {currentTab === "Accept" && (
                     <button className="w-full p-2 text-sm rounded bg-slate-100 hover:bg-slate-200 text-black active:scale-95 transition cursor-pointer">
-                      Pending
+                      {t('profile.pending', 'Pending')}
                     </button>
                   )}
 
@@ -184,7 +184,7 @@ const Connections = () => {
                       className="w-full p-2 text-sm rounded bg-slate-100 hover:bg-slate-200 text-slate-800 active:scale-95 transition cursor-pointer flex items-center justify-center gap-1"
                     >
                       <MessageSquare className="w-4 h-4" />
-                      Message
+                      {t('feed.comment')}
                     </button>
                   )}
                 </div>

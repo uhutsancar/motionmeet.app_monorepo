@@ -1,6 +1,7 @@
 import { useAuth } from "@clerk/clerk-react";
 import { MapPin, MessageCircle, Plus, UserPlus } from "lucide-react";
 import React from "react";
+import { useTranslation } from "react-i18next";
 import toast from "react-hot-toast";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
@@ -8,6 +9,7 @@ import api from "~/api/axios";
 import { fetchUser } from "~/features/user/userSlice";
 
 const UserCard = ({ user }) => {
+  const { t } = useTranslation();
   const currentUser = useSelector((state) => state.user.value);
   const { getToken } = useAuth();
   const dispatch = useDispatch();
@@ -84,7 +86,7 @@ const UserCard = ({ user }) => {
         </div>
 
         <div className="flex items-center gap-1 border border-gray-300 rounded-full px-3 py-1">
-          <span>{user.followers.length}</span> Followers
+          <span>{user.followers.length}</span> {t('profile.followers')}
         </div>
       </div>
 
@@ -96,7 +98,7 @@ const UserCard = ({ user }) => {
           className="w-full py-2 rounded-md flex justify-center items-center gap-2 bg-gradient-to-r from-indigo-700 to-purple-600 hover:from-indigo-600 hover:to-purple-700 active:scale-95 transition text-white cursor-pointer"
         >
           <UserPlus className="w-4 h-4" />
-          {currentUser?.following.includes(user._id) ? "Following" : "Follow"}
+          {currentUser?.following.includes(user._id) ? t('profile.following_status', 'Following') : t('feed.follow')}
         </button>
         {/* Connection Request Button / Message Button */}
         <button

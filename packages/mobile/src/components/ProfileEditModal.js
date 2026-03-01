@@ -16,9 +16,14 @@ import * as ImagePicker from 'expo-image-picker';
 import { useDispatch, useSelector } from 'react-redux';
 import { useAuth } from '@clerk/clerk-expo';
 import { updateUser } from '../features/user/userSlice';
+import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 const ProfileEditModal = ({ visible, onClose }) => {
+  const { theme } = useTheme();
+  const { t } = useTranslation();
   const dispatch = useDispatch();
+
   const { getToken } = useAuth();
   const user = useSelector((state) => state.user.value);
   const [loading, setLoading] = useState(false);
@@ -50,7 +55,7 @@ const ProfileEditModal = ({ visible, onClose }) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (status !== 'granted') {
-      Alert.alert('Permission required', 'We need permission to access your photos');
+      Alert.alert(t('common.error'), t('feed.permission_required'));
       return;
     }
 
@@ -105,10 +110,10 @@ const ProfileEditModal = ({ visible, onClose }) => {
       const token = await getToken();
       await dispatch(updateUser({ userData: formData, token })).unwrap();
       
-      Alert.alert('Success', 'Profile updated successfully!');
+      Alert.alert(t('common.success'), t('profile.profile_updated'));
       onClose();
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to update profile');
+      Alert.alert(t('common.error'), error.message || t('profile.update_failed'));
     } finally {
       setLoading(false);
     }
@@ -121,20 +126,20 @@ const ProfileEditModal = ({ visible, onClose }) => {
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { borderBottomColor: theme.border }]}>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={28} color="#111827" />
+            <Ionicons name="close" size={28} color={theme.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Edit Profile</Text>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>{t('profile.edit_profile')}</Text>
           <View style={{ width: 28 }} />
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           {/* Profile Picture */}
           <View style={styles.section}>
-            <Text style={styles.label}>Profile Picture</Text>
+            <Text style={[styles.label, { color: theme.textMuted }]}>{t('profile.profile_picture', 'Profil Fotoğrafı')}</Text>
             <TouchableOpacity
               style={styles.imageButton}
               onPress={() => pickImage('profile')}
@@ -155,7 +160,7 @@ const ProfileEditModal = ({ visible, onClose }) => {
 
           {/* Cover Photo */}
           <View style={styles.section}>
-            <Text style={styles.label}>Cover Photo</Text>
+            <Text style={[styles.label, { color: theme.textMuted }]}>{t('profile.cover_photo', 'Kapak Fotoğrafı')}</Text>
             <TouchableOpacity
               style={styles.coverButton}
               onPress={() => pickImage('cover')}
@@ -180,40 +185,36 @@ const ProfileEditModal = ({ visible, onClose }) => {
 
           {/* Full Name */}
           <View style={styles.section}>
-            <Text style={styles.label}>Full Name</Text>
+            <Text style={[styles.label, { color: theme.textMuted }]}>{t('profile.full_name', 'Ad Soyad')}</Text>
             <TextInput
-              style={styles.input}
-              placeholder="Enter your full name"
-              placeholderTextColor="#9ca3af"
+              style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.surfaceLight }]}
+              placeholder={t('profile.full_name_placeholder', 'Ad Soyadınızı girin')}
+              placeholderTextColor={theme.textMuted}
               value={editForm.full_name}
-              onChangeText={(text) =>
-                setEditForm({ ...editForm, full_name: text })
-              }
+              onChangeText={(text) => setEditForm({ ...editForm, full_name: text })}
             />
           </View>
 
           {/* Username */}
           <View style={styles.section}>
-            <Text style={styles.label}>Username</Text>
+            <Text style={[styles.label, { color: theme.textMuted }]}>{t('profile.username', 'Kullanıcı Adı')}</Text>
             <TextInput
-              style={styles.input}
-              placeholder="Enter your username"
-              placeholderTextColor="#9ca3af"
+              style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.surfaceLight }]}
+              placeholder={t('profile.username_placeholder', 'Kullanıcı adınızı girin')}
+              placeholderTextColor={theme.textMuted}
               value={editForm.username}
-              onChangeText={(text) =>
-                setEditForm({ ...editForm, username: text })
-              }
+              onChangeText={(text) => setEditForm({ ...editForm, username: text })}
               autoCapitalize="none"
             />
           </View>
 
           {/* Bio */}
           <View style={styles.section}>
-            <Text style={styles.label}>Bio</Text>
+            <Text style={[styles.label, { color: theme.textMuted }]}>{t('profile.bio', 'Bio')}</Text>
             <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Tell us about yourself"
-              placeholderTextColor="#9ca3af"
+              style={[styles.input, styles.textArea, { color: theme.text, borderColor: theme.border, backgroundColor: theme.surfaceLight }]}
+              placeholder={t('profile.bio_placeholder', 'Kendinizden bahsedin')}
+              placeholderTextColor={theme.textMuted}
               value={editForm.bio}
               onChangeText={(text) => setEditForm({ ...editForm, bio: text })}
               multiline
@@ -224,37 +225,35 @@ const ProfileEditModal = ({ visible, onClose }) => {
 
           {/* Location */}
           <View style={styles.section}>
-            <Text style={styles.label}>Location</Text>
+            <Text style={[styles.label, { color: theme.textMuted }]}>{t('profile.location', 'Konum')}</Text>
             <TextInput
-              style={styles.input}
-              placeholder="Enter your location"
-              placeholderTextColor="#9ca3af"
+              style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.surfaceLight }]}
+              placeholder={t('profile.location_placeholder', 'Konumunuzu girin')}
+              placeholderTextColor={theme.textMuted}
               value={editForm.location}
-              onChangeText={(text) =>
-                setEditForm({ ...editForm, location: text })
-              }
+              onChangeText={(text) => setEditForm({ ...editForm, location: text })}
             />
           </View>
 
           {/* Buttons */}
           <View style={styles.buttonsContainer}>
             <TouchableOpacity
-              style={styles.cancelButton}
+              style={[styles.cancelButton, { borderColor: theme.border }]}
               onPress={onClose}
               disabled={loading}
             >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+              <Text style={[styles.cancelButtonText, { color: theme.text }]}>{t('common.cancel')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+              style={[styles.saveButton, { backgroundColor: theme.primary }, loading && styles.saveButtonDisabled]}
               onPress={handleSave}
               disabled={loading}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.saveButtonText}>Save Changes</Text>
+                <Text style={styles.saveButtonText}>{t('profile.save_changes', 'Değişiklikleri Kaydet')}</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -267,7 +266,6 @@ const ProfileEditModal = ({ visible, onClose }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   header: {
     flexDirection: 'row',

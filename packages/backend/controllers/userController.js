@@ -24,7 +24,7 @@ export const getUserData = async (req, res) => {
 export const updateUserData = async (req, res) => {
   try {
     const { userId } = req.auth();
-    let { username, bio, location, full_name } = req.body;
+    let { username, bio, location, full_name, weight, height } = req.body;
 
     const tempUser = await User.findById(userId);
 
@@ -43,6 +43,8 @@ export const updateUserData = async (req, res) => {
       bio,
       location,
       full_name,
+      ...(weight && { weight: Number(weight) }),
+      ...(height && { height: Number(height) }),
     };
 
     const profile = req.files.profile && req.files.profile[0];
@@ -315,6 +317,29 @@ export const getUserProfile = async (req, res) => {
     const posts = await Post.find({ user: profileId }).populate("user");
 
     res.json({ success: true, profile, posts });
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+// Get Suggested Users
+export const getSuggestedUsers = async (req, res) => {
+  try {
+    const { userId } = req.auth();
+    const currentUser = await User.findById(userId);
+
+    if (!currentUser) {
+      return res.json({ success: false, message: "User not found" });
+    }
+
+    // Find users not followed by current user, not current user themselves
+    const excludedIds = [...currentUser.following, userId];
+
+    const suggestedUsers = await User.find({
+      _id: { $nin: excludedIds }
+    }).limit(5);
+
+    res.json({ success: true, users: suggestedUsers });
   } catch (error) {
     console.log(error);
     res.json({ success: false, message: error.message });

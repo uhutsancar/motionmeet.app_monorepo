@@ -6,6 +6,8 @@ import Toast from 'react-native-toast-message';
 import { store } from './src/store/store';
 import AuthNavigator from './src/navigation/AuthNavigator';
 import { StatusBar } from 'expo-status-bar';
+import './src/i18n'; // Initialize i18n
+import { ThemeProvider } from './src/context/ThemeContext';
 
 const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
@@ -33,9 +35,11 @@ export default function App() {
       tokenCache={tokenCache}
     >
       <Provider store={store}>
-        <AuthNavigator />
-        <StatusBar style="light" />
-        <Toast />
+        <ThemeProvider>
+          <AuthNavigator />
+          <StatusBar style="auto" />
+          <Toast />
+        </ThemeProvider>
       </Provider>
     </ClerkProvider>
   );

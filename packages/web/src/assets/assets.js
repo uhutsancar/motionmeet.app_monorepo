@@ -3,7 +3,7 @@ import sample_cover from './motionmeet_logo.svg'
 import sample_profile from './sample_profile.jpg'
 import bgImage from './bgImage.png'
 // import group_users from './group_users.png'
-import { Home, MessageCircle, Search, UserIcon, Users } from 'lucide-react'
+import { Home, Dumbbell, Activity, UserIcon, Settings } from 'lucide-react'
 import sponsored_img from './sponsored_img.png'
 
 export const assets = {
@@ -16,11 +16,11 @@ export const assets = {
 }
 
 export const menuItemsData = [
-    { to: '/', label: 'Feed', Icon: Home },
-    { to: '/messages', label: 'Messages', Icon: MessageCircle },
-    { to: '/connections', label: 'Connections', Icon: Users },
-    { to: '/discover', label: 'Discover', Icon: Search },
+    { to: '/feed', label: 'Feed', Icon: Home },
+    { to: '/routines', label: 'Routines', Icon: Activity },
+    { to: '/exercises', label: 'Exercises', Icon: Dumbbell },
     { to: '/profile', label: 'Profile', Icon: UserIcon },
+    { to: '/settings', label: 'Settings', Icon: Settings },
 ];
 
 export const dummyUserData = {

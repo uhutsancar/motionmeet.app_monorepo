@@ -2,214 +2,217 @@ import React, { useState } from 'react';
 import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
-import moment from 'moment';
+import { useTranslation } from 'react-i18next';
+import { useTheme } from '../context/ThemeContext';
 import StoryViewer from './StoryViewer';
 
 const StoriesBar = ({ onAddStory }) => {
   const { stories } = useSelector((state) => state.stories);
   const user = useSelector((state) => state.user.value);
-  const [selectedStory, setSelectedStory] = useState(null);
+  const { t } = useTranslation();
+  const { theme } = useTheme();
+  const styles = getStyles(theme);
 
-  const handleStoryPress = (story) => {
-    setSelectedStory(story);
+  // viewerStories: all stories of selected user, in chronological order
+  const [viewerStories, setViewerStories] = useState([]);
+  const [viewerVisible, setViewerVisible] = useState(false);
+
+  // Group stories by user — keep all stories per user, show 1 bubble per user
+  const groupedByUser = React.useMemo(() => {
+    const valid = (stories || []).filter(s => s && s._id && s.user && s.user._id);
+    const map = {};
+    for (const story of valid) {
+      const uid = story.user._id;
+      if (!map[uid]) map[uid] = [];
+      map[uid].push(story);
+    }
+    // Sort each user's stories chronologically
+    for (const uid of Object.keys(map)) {
+      map[uid].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    }
+    // Return array of { user, stories }, keep insertion order (most recent post first)
+    const userOrder = [];
+    const seen = {};
+    for (const story of [...valid].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))) {
+      if (!seen[story.user._id]) {
+        seen[story.user._id] = true;
+        userOrder.push({ user: story.user, stories: map[story.user._id] });
+      }
+    }
+    return userOrder;
+  }, [stories]);
+
+  const handleStoryPress = (userStories) => {
+    setViewerStories(userStories);
+    setViewerVisible(true);
+  };
+
+  const handleClose = () => {
+    setViewerVisible(false);
+    setViewerStories([]);
   };
 
   return (
     <>
       <View style={styles.container}>
-        <ScrollView 
-          horizontal 
+        <ScrollView
+          horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
           {/* Create Story Button */}
-          <TouchableOpacity 
-            style={styles.createStoryCard}
+          <TouchableOpacity
+            style={styles.storyContainer}
             onPress={onAddStory}
           >
-            <View style={styles.createStoryImageContainer}>
+            <View style={styles.createStoryRing}>
               {user?.profile_picture ? (
-                <>
-                  <Image 
-                    source={{ uri: user.profile_picture }}
-                    style={styles.createStoryBg}
-                  />
-                  <View style={styles.createStoryOverlay}>
-                    <View style={styles.addButton}>
-                      <Ionicons name="add" size={24} color="#fff" />
-                    </View>
-                  </View>
-                </>
+                <Image
+                  source={{ uri: user.profile_picture }}
+                  style={styles.avatar}
+                />
               ) : (
-                <View style={styles.createStoryOverlay}>
-                  <Ionicons name="add" size={32} color="#fff" />
+                <View style={[styles.avatar, styles.placeholderAvatar]}>
+                  <Text style={styles.placeholderText}>
+                    {user?.full_name?.charAt(0).toUpperCase() || 'U'}
+                  </Text>
                 </View>
               )}
+              <View style={styles.addButton}>
+                <Ionicons name="add" size={16} color="#fff" />
+              </View>
             </View>
-            <Text style={styles.createStoryText}>Your Story</Text>
+            <Text style={styles.usernameText} numberOfLines={1}>
+              {t('feed.your_story', 'Hikayem')}
+            </Text>
           </TouchableOpacity>
 
-          {/* Story Cards */}
-          {stories
-            .filter(story => story && story._id && story.user && story.user._id)
-            .map((story) => (
-            <TouchableOpacity 
-              key={story._id}
-              style={styles.storyCard}
-              onPress={() => handleStoryPress(story)}
+          {/* One bubble per user, contains all their stories */}
+          {groupedByUser.map(({ user: storyUser, stories: userStories }) => (
+            <TouchableOpacity
+              key={storyUser._id}
+              style={styles.storyContainer}
+              onPress={() => handleStoryPress(userStories)}
             >
-              <View style={styles.storyImageContainer}>
-                {story.media_type === 'text' ? (
-                  <View style={[styles.textStory, { backgroundColor: story.background_color }]}>
-                    <Text style={styles.textStoryContent} numberOfLines={3}>
-                      {story.content}
-                    </Text>
+              <View style={[styles.storyRing, { borderColor: '#d946ef' }]}>
+                <Image
+                  source={{ uri: storyUser.profile_picture }}
+                  style={styles.avatar}
+                />
+                {/* Story count badge if > 1 */}
+                {userStories.length > 1 && (
+                  <View style={styles.countBadge}>
+                    <Text style={styles.countText}>{userStories.length}</Text>
                   </View>
-                ) : (
-                  <Image 
-                    source={{ uri: story.media_url }}
-                    style={styles.storyImage}
-                    resizeMode="cover"
-                  />
                 )}
-                
-                {/* User Avatar with Ring */}
-                <View style={styles.avatarRing}>
-                  <Image 
-                    source={{ uri: story.user.profile_picture }}
-                    style={styles.avatar}
-                  />
-                </View>
               </View>
-              
-              {/* Username */}
-              <Text style={styles.username} numberOfLines={1}>
-                {story.user.full_name?.split(' ')[0] || story.user.username}
+              <Text style={styles.usernameText} numberOfLines={1}>
+                {storyUser.full_name?.split(' ')[0] || storyUser.username}
               </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
       </View>
 
-      {/* Story Viewer */}
-      <StoryViewer 
-        visible={!!selectedStory}
-        story={selectedStory}
-        onClose={() => setSelectedStory(null)}
+      {/* Multi-story viewer */}
+      <StoryViewer
+        visible={viewerVisible}
+        stories={viewerStories}
+        startIndex={0}
+        onClose={handleClose}
       />
     </>
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   container: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.background,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: theme.border,
   },
   scrollContent: {
     paddingHorizontal: 12,
-    gap: 12,
-  },
-  createStoryCard: {
-    width: 110,
+    gap: 16,
     alignItems: 'center',
   },
-  createStoryImageContainer: {
-    width: 110,
-    height: 180,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: '#f3f4f6',
-    position: 'relative',
-  },
-  createStoryBg: {
-    width: '100%',
-    height: '100%',
-  },
-  createStoryOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  storyContainer: {
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingBottom: 16,
+    width: 72,
   },
-  addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#4f46e5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#fff',
-  },
-  createStoryText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#374151',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  storyCard: {
-    width: 110,
-    alignItems: 'center',
-  },
-  storyImageContainer: {
-    width: 110,
-    height: 180,
-    borderRadius: 12,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  textStory: {
-    flex: 1,
-    padding: 12,
+  createStoryRing: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+    marginBottom: 6,
   },
-  textStoryContent: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  storyImage: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarRing: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    padding: 3,
-    borderRadius: 22,
-    background: 'linear-gradient(45deg, #f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%)',
-    borderWidth: 2,
-    borderColor: '#4f46e5',
+  storyRing: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    borderWidth: 2.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+    padding: 2,
+    position: 'relative',
   },
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     borderWidth: 2,
-    borderColor: '#3b82f6',
+    borderColor: theme.background,
   },
-  username: {
-    fontSize: 11,
-    color: '#374151',
-    marginTop: 8,
-    textAlign: 'center',
+  placeholderAvatar: {
+    backgroundColor: theme.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  timestamp: {
+  placeholderText: {
+    color: theme.text,
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  addButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: theme.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: theme.background,
+  },
+  countBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#d946ef', // Brand color, keep constant or use theme.secondary
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: theme.background,
+  },
+  countText: {
+    color: '#fff',
     fontSize: 10,
-    color: '#9ca3af',
-    marginTop: 2,
+    fontWeight: 'bold',
+  },
+  usernameText: {
+    fontSize: 11,
+    color: theme.textMuted,
+    textAlign: 'center',
   },
 });
 

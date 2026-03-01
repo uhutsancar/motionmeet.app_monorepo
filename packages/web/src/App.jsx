@@ -1,13 +1,12 @@
 import React, { useEffect, useRef } from "react";
-import { Route, Routes, useLocation } from "react-router-dom";
+import { Route, Routes, useLocation, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
+import Landing from "./pages/Landing";
 import Feed from "./pages/Feed";
-import Messages from "./pages/Messages";
-import ChatBox from "./pages/ChatBox";
-import Connections from "./pages/Connections";
-import Discover from "./pages/Discover";
 import Profile from "./pages/Profile";
-import CreatePost from "./pages/CreatePost";
+import Routines from "./pages/Routines";
+import Exercises from "./pages/Exercises";
+import Settings from "./pages/Settings";
 import { useUser, useAuth } from "@clerk/clerk-react";
 import Layout from "./pages/Layout";
 import toast, { Toaster } from "react-hot-toast";
@@ -80,15 +79,17 @@ const App = () => {
     <>
       <Toaster />
       <Routes>
-        <Route path="/" element={user ? <Layout /> : <Login />}>
-          <Route index element={<Feed />} />
-          <Route path="messages" element={<Messages />} />
-          <Route path="messages/:userId" element={<ChatBox />} />
-          <Route path="connections" element={<Connections />} />
-          <Route path="discover" element={<Discover />} />
-          <Route path="profile" element={<Profile />} />
-          <Route path="profile/:profileId" element={<Profile />} />
-          <Route path="create-post" element={<CreatePost />} />
+        <Route path="/" element={user ? <Navigate to="/feed" replace /> : <Landing />} />
+        <Route path="/login" element={user ? <Navigate to="/feed" replace /> : <Login />} />
+
+        {/* Protected Layout Routes */}
+        <Route element={user ? <Layout /> : <Navigate to="/login" replace />}>
+          <Route path="/feed" element={<Feed />} />
+          <Route path="/routines" element={<Routines />} />
+          <Route path="/exercises" element={<Exercises />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/profile/:profileId" element={<Profile />} />
+          <Route path="/settings" element={<Settings />} />
         </Route>
       </Routes>
     </>
