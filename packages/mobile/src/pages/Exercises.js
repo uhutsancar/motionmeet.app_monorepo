@@ -236,9 +236,11 @@ const getStyles = (theme) => StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 4,
   },
-  exerciseMuscle: {
+  exerciseMeta: {
     color: theme.textMuted,
     fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
   },
 });
 

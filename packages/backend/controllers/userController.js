@@ -24,7 +24,10 @@ export const getUserData = async (req, res) => {
 export const updateUserData = async (req, res) => {
   try {
     const { userId } = req.auth();
-    let { username, bio, location, full_name, weight, height } = req.body;
+
+    // Support both JSON body (mobile) and form-data (web with files)
+    const body = req.body || {};
+    let { username, bio, location, full_name, weight, height } = body;
 
     const tempUser = await User.findById(userId);
 
@@ -47,8 +50,10 @@ export const updateUserData = async (req, res) => {
       ...(height && { height: Number(height) }),
     };
 
-    const profile = req.files.profile && req.files.profile[0];
-    const cover = req.files.cover && req.files.cover[0];
+    // Only try to handle files if multer has parsed them (web form-data)
+    const files = req.files || {};
+    const profile = files.profile && files.profile[0];
+    const cover   = files.cover   && files.cover[0];
 
     //Profile Image Upload
     if (profile) {
@@ -67,6 +72,7 @@ export const updateUserData = async (req, res) => {
         ],
       });
       updatedData.profile_picture = url;
+      try { fs.unlinkSync(profile.path); } catch (e) {}
     }
 
     //Cover Image Upload
@@ -86,6 +92,7 @@ export const updateUserData = async (req, res) => {
         ],
       });
       updatedData.cover_photo = url;
+      try { fs.unlinkSync(cover.path); } catch (e) {}
     }
 
     const user = await User.findByIdAndUpdate(userId, updatedData, {
@@ -97,6 +104,7 @@ export const updateUserData = async (req, res) => {
     res.json({ success: false, message: error.message });
   }
 };
+
 
 //Find Users using username, email, location, name
 export const discoverUsers = async (req, res) => {

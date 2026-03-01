@@ -9,10 +9,11 @@ export const getUserData = async (token) => {
 };
 
 export const updateUserProfile = async (userData, token) => {
+  const isFormData = userData instanceof FormData;
   const { data } = await api.post('/api/user/update', userData, {
     headers: { 
       Authorization: `Bearer ${token}`,
-      'Content-Type': 'multipart/form-data',
+      ...(isFormData ? { 'Content-Type': 'multipart/form-data' } : { 'Content-Type': 'application/json' }),
     },
   });
   return data;
