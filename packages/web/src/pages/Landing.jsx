@@ -1,312 +1,319 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckCircle2, Globe } from 'lucide-react';
-import { assets } from '~/assets/assets';
 import { useTranslation } from 'react-i18next';
+import { CheckCircle2, BarChart3, Users, Zap, ArrowRight, Star } from 'lucide-react';
+import PublicLayout from './PublicLayout';
+import motionmeetLogo from '../assets/motionmeet_logo.svg';
+
+/* ── Inline Stat Card ── */
+const StatCard = ({ value, label }) => (
+    <div className="flex flex-col items-center gap-1">
+        <span className="text-3xl sm:text-4xl font-extrabold text-[var(--accent-primary)]">{value}</span>
+        <span className="text-xs sm:text-sm text-[var(--text-muted)] font-medium uppercase tracking-wider">{label}</span>
+    </div>
+);
+
+/* ── Mini Feature Card ── */
+const MiniFeature = ({ icon: Icon, title, desc }) => (
+    <div className="group relative flex flex-col gap-4 p-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:border-[var(--accent-primary)] transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/5">
+        <div className="w-12 h-12 rounded-xl bg-[var(--accent-primary)]/10 flex items-center justify-center text-[var(--accent-primary)]">
+            <Icon className="w-6 h-6" />
+        </div>
+        <div>
+            <h3 className="font-bold text-[var(--text-primary)] mb-1.5">{title}</h3>
+            <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{desc}</p>
+        </div>
+    </div>
+);
+
+/* ── Testimonial Card ── */
+const TestimonialCard = ({ name, role, text }) => (
+    <div className="p-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] flex flex-col gap-4">
+        <div className="flex gap-0.5 text-amber-400">
+            {Array(5).fill(0).map((_, i) => <Star key={i} className="w-4 h-4 fill-current" />)}
+        </div>
+        <p className="text-[var(--text-secondary)] leading-relaxed text-sm flex-1">"{text}"</p>
+        <div>
+            <p className="font-bold text-sm text-[var(--text-primary)]">{name}</p>
+            <p className="text-xs text-[var(--text-muted)]">{role}</p>
+        </div>
+    </div>
+);
+
+/* ── Phone Mockup ── */
+const PhoneMockup = () => {
+    const sets = [
+        { name: 'Bench Press', set: 'Set 1', value: '80 kg × 8', done: true },
+        { name: 'Bench Press', set: 'Set 2', value: '85 kg × 6', done: true },
+        { name: 'Overhead Press', set: 'Set 1', value: '50 kg × 10', done: false },
+        { name: 'Squat', set: 'Set 1', value: '100 kg × 5', done: false },
+    ];
+    return (
+        <div className="relative mx-auto w-[260px] sm:w-[290px]">
+            {/* Glow */}
+            <div className="absolute inset-0 bg-blue-500 blur-[60px] opacity-20 rounded-full scale-90 -z-10" />
+            {/* Phone frame */}
+            <div className="relative w-full rounded-[36px] border-4 border-[#1a1a2e] bg-[#0d0d1a] shadow-2xl overflow-hidden">
+                {/* Notch */}
+                <div className="w-full h-7 bg-[#0d0d1a] flex justify-center items-start pt-1">
+                    <div className="w-20 h-4 bg-[#1a1a2e] rounded-b-xl" />
+                </div>
+                {/* Screen content */}
+                <div className="p-4 pb-6 space-y-3">
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-1">
+                        <div>
+                            <p className="text-[10px] text-blue-400 font-semibold uppercase tracking-widest">Active Workout</p>
+                            <p className="text-white font-bold text-sm">Push Day A</p>
+                        </div>
+                        <div className="bg-blue-600 text-white text-[10px] font-bold px-3 py-1 rounded-full">Finish</div>
+                    </div>
+                    {/* Timer badge */}
+                    <div className="bg-white/5 rounded-xl px-3 py-2 flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                        <span className="text-green-400 text-xs font-mono font-bold">01:24:08</span>
+                    </div>
+                    {/* Sets */}
+                    {sets.map((s, i) => (
+                        <div key={i} className={`rounded-xl px-3 py-2.5 flex items-center justify-between ${s.done ? 'bg-green-500/15 border border-green-500/30' : 'bg-white/5 border border-white/10'}`}>
+                            <div>
+                                <p className={`text-[11px] font-bold ${s.done ? 'text-green-400' : 'text-white/70'}`}>{s.name}</p>
+                                <p className={`text-[10px] ${s.done ? 'text-green-300/70' : 'text-white/40'}`}>{s.set}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className={`text-[11px] font-bold ${s.done ? 'text-green-300' : 'text-white/60'}`}>{s.value}</span>
+                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${s.done ? 'bg-green-500 border-green-500' : 'border-white/30'}`}>
+                                    {s.done && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    {/* PR Badge */}
+                    <div className="bg-amber-500/15 border border-amber-500/30 rounded-xl px-3 py-2 flex items-center gap-2">
+                        <span className="text-amber-400 text-[10px] font-bold">🏆 NEW PERSONAL RECORD — Bench Press 85 kg</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const Landing = () => {
-    const { t, i18n } = useTranslation();
+    const { t } = useTranslation();
 
-    const toggleLanguage = () => {
-        const newLang = i18n.language.startsWith('en') ? 'tr' : 'en';
-        i18n.changeLanguage(newLang);
-        localStorage.setItem('appLanguage', newLang);
-    };
+    const featureCards = [
+        { icon: Zap, title: t('landing.feature1_title'), desc: t('landing.feature1_desc') },
+        { icon: BarChart3, title: t('landing.feature2_title'), desc: t('landing.feature2_desc') },
+        { icon: Users, title: t('landing.feature3_title'), desc: t('landing.feature3_desc') },
+    ];
+
+    const testimonials = [
+        { name: t('landing.testimonial1_name'), role: t('landing.testimonial1_role'), text: t('landing.testimonial1_text') },
+        { name: t('landing.testimonial2_name'), role: t('landing.testimonial2_role'), text: t('landing.testimonial2_text') },
+        { name: t('landing.testimonial3_name'), role: t('landing.testimonial3_role'), text: t('landing.testimonial3_text') },
+    ];
+
+    const showcaseFeats = [
+        t('landing.showcase_feat1'),
+        t('landing.showcase_feat2'),
+        t('landing.showcase_feat3'),
+        t('landing.showcase_feat4'),
+        t('landing.showcase_feat5'),
+    ];
 
     return (
-        <div className="min-h-screen bg-white text-gray-900 font-sans">
-            {/* Header */}
-            <header className="fixed top-0 w-full bg-white z-50 px-6 py-4 flex justify-between items-center max-w-7xl mx-auto left-0 right-0">
-                <div className="flex items-center gap-2">
-                    {/* Logo Placeholder */}
-                    <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
-                        <div className="w-8 h-8 bg-blue-600 text-white rounded-md flex items-center justify-center">
-                            <span className="leading-none text-2xl -mt-0.5">M</span>
+        <PublicLayout>
+            {/* ── HERO ──────────────────────────────────────────── */}
+            <section className="relative overflow-hidden pt-16 pb-20 sm:pt-24 sm:pb-28 px-4 sm:px-6">
+                {/* Background blobs */}
+                <div className="pointer-events-none absolute -top-40 -right-40 w-[600px] h-[600px] rounded-full bg-blue-600/10 blur-3xl" />
+                <div className="pointer-events-none absolute -bottom-40 -left-40 w-[500px] h-[500px] rounded-full bg-indigo-600/10 blur-3xl" />
+
+                <div className="relative max-w-7xl mx-auto flex flex-col lg:flex-row items-center gap-14 lg:gap-20">
+                    {/* Left */}
+                    <div className="flex-1 text-center lg:text-left space-y-7">
+                        {/* Badge */}
+                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--accent-primary)]/10 border border-[var(--accent-primary)]/20 text-[var(--accent-primary)] text-sm font-semibold">
+                            {t('landing.hero_badge')}
                         </div>
-                        MotionMeet
-                    </div>
-                </div>
 
-                <nav className="hidden md:flex items-center gap-8 font-medium text-gray-600">
-                    <a href="#features" className="hover:text-blue-600 transition">{t('landing.features')}</a>
-                    <a href="#about" className="hover:text-blue-600 transition">{t('landing.about')}</a>
-                </nav>
+                        {/* Headline */}
+                        <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold leading-[1.05] tracking-tight text-[var(--text-primary)]">
+                            {t('landing.hero_headline')}<br />
+                            <span className="text-[var(--accent-primary)]">{t('landing.hero_headline2')}</span>
+                        </h1>
 
-                <div className="flex items-center gap-4">
-                    {/* Language Toggle in Header */}
-                    <button
-                        onClick={toggleLanguage}
-                        className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 transition mr-2"
-                    >
-                        <Globe className="w-5 h-5" />
-                        <span className="text-sm font-bold">{i18n.language.toUpperCase().substring(0, 2)}</span>
-                    </button>
-
-                    <Link to="/login" className="font-semibold text-blue-600 hover:text-blue-700 transition">{t('landing.login')}</Link>
-                    <Link to="/login" className="bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-semibold transition">{t('landing.signup')}</Link>
-                </div>
-            </header>
-
-            {/* Hero Section */}
-            <section className="pt-32 pb-20 px-6 max-w-7xl mx-auto flex flex-col md:flex-row items-center gap-12">
-                <div className="flex-1 space-y-8">
-                    <h1 className="text-5xl md:text-7xl font-extrabold leading-tight text-gray-900 tracking-tight">
-                        {t('landing.log_workouts')}<br />
-                        <span className="text-blue-500">{t('landing.get_stronger')}</span><br />
-                        {t('landing.stay_motivated')}
-                    </h1>
-                    <p className="text-xl text-gray-600 max-w-lg">
-                        {t('landing.description')}
-                    </p>
-
-                    <div className="flex items-center gap-4 pt-4">
-                        {/* App Store Buttons placeholders */}
-                        <div className="bg-black text-white px-4 py-2 rounded-xl flex items-center gap-2 cursor-pointer hover:bg-gray-800 transition">
-                            <div className="w-6 h-6 bg-white rounded-full"></div>
-                            <div className="flex flex-col">
-                                <span className="text-[10px] leading-none text-gray-300">Download on the</span>
-                                <span className="text-sm font-semibold leading-tight">App Store</span>
-                            </div>
-                        </div>
-                        <div className="bg-black text-white px-4 py-2 rounded-xl flex items-center gap-2 cursor-pointer hover:bg-gray-800 transition">
-                            <div className="w-6 h-6 bg-white rounded-full"></div>
-                            <div className="flex flex-col">
-                                <span className="text-[10px] leading-none text-gray-300">GET IT ON</span>
-                                <span className="text-sm font-semibold leading-tight">Google Play</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-4 pt-6">
-                        {/* Ratings */}
-                        <div className="flex -space-x-2">
-                            <div className="w-8 h-8 rounded-full bg-gray-300 border-2 border-white"></div>
-                            <div className="w-8 h-8 rounded-full bg-gray-400 border-2 border-white"></div>
-                            <div className="w-8 h-8 rounded-full bg-gray-500 border-2 border-white"></div>
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium">The #1 workout tracker. Loved by athletes.</p>
-                            <div className="flex items-center gap-1 text-yellow-400 text-sm mt-0.5">
-                                ★★★★★ <span className="text-gray-500 ml-1">4.9 App Store & Google Play</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="flex-1 flex justify-center relative">
-                    {/* Mobile mockup placeholder */}
-                    <div className="w-[300px] h-[600px] bg-white border-8 border-gray-900 rounded-[40px] shadow-2xl overflow-hidden relative z-10">
-                        <div className="absolute top-0 w-full h-6 bg-gray-900 flex justify-center">
-                            <div className="w-32 h-6 bg-gray-900 rounded-b-2xl"></div>
-                        </div>
-                        <div className="p-4 pt-10">
-                            <div className="font-bold text-center mb-6">Log Workout</div>
-                            {/* Dummy Workout items */}
-                            <div className="space-y-4">
-                                <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
-                                    <span className="font-semibold text-blue-600 block mb-2">Bench Press (Barbell)</span>
-                                    <div className="flex justify-between text-sm text-gray-500 mb-1">
-                                        <span>Set 1</span>
-                                        <span>62kg × 7</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm text-gray-500">
-                                        <span>Set 2</span>
-                                        <span>65kg × 8</span>
-                                    </div>
-                                </div>
-                                <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                                    <span className="font-semibold text-gray-800 block mb-2">Overhead Press</span>
-                                    <div className="flex justify-between text-sm text-gray-500">
-                                        <span>Set 1</span>
-                                        <span>40kg × 8</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            {/* Featured On */}
-            <section className="py-12 border-y border-gray-100">
-                <div className="max-w-7xl mx-auto px-6 text-center">
-                    <h3 className="text-xl font-bold text-gray-800 mb-8">Featured on</h3>
-                    <div className="flex flex-wrap justify-center items-center gap-12 md:gap-24 opacity-60 font-bold text-2xl">
-                        <span className="text-red-600">MEN'S JOURNAL</span>
-                        <span className="text-gray-800">FINANCIAL TIMES</span>
-                        <span className="text-red-700 bg-white">Mirror</span>
-                        <span className="text-gray-600 font-serif">THE ECONOMIC TIMES</span>
-                    </div>
-                </div>
-            </section>
-
-            {/* Feature 1 */}
-            <section className="py-24 max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center gap-16">
-                <div className="flex-1 bg-gray-50 rounded-3xl p-12 flex justify-center aspect-square">
-                    <div className="w-64 h-[500px] bg-white border-8 border-gray-900 rounded-[32px] shadow-xl overflow-hidden relative">
-                        <div className="p-4 pt-8">
-                            {/* Dummy routine display */}
-                            <div className="w-full h-8 bg-blue-500 rounded-md mb-4 text-white font-bold flex items-center justify-center text-sm">Finish Workout</div>
-                            <div className="bg-green-100 p-2 rounded mb-2 border border-green-200">
-                                <span className="text-green-700 text-xs font-bold">W 40kg x 7</span>
-                            </div>
-                            <div className="bg-green-100 p-2 rounded border border-green-200">
-                                <span className="text-green-700 text-xs font-bold">1 62kg x 7</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div className="flex-1 space-y-6">
-                    <h2 className="text-4xl md:text-5xl font-bold text-gray-900">Log workouts</h2>
-                    <p className="text-xl text-gray-600">
-                        A workout tracking app that <em>just works</em>. Everything you need to log your workouts and smash your goals.
-                    </p>
-                    <ul className="space-y-4 pt-4">
-                        {[
-                            'Intuitive Workout Logging',
-                            'Advanced Routine Planner',
-                            'Mark Warmup, Drop, and Failure Sets',
-                            'Automatic Rest Timers',
-                            'Add Exercise Notes'
-                        ].map((text, i) => (
-                            <li key={i} className="flex items-center gap-3 text-lg font-medium text-gray-800">
-                                <CheckCircle2 className="text-gray-900 w-6 h-6 fill-current" />
-                                {text}
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            </section>
-
-            {/* Feature 2: Progress */}
-            <section className="py-24 bg-gray-50">
-                <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row-reverse items-center gap-16">
-                    <div className="flex-1 bg-white rounded-3xl p-12 flex justify-center shadow-sm aspect-square relative overflow-hidden">
-                        <div className="w-72 h-[550px] bg-white border border-gray-200 rounded-2xl shadow-xl mt-8 absolute p-4">
-                            <div className="flex items-center gap-4 border-b pb-4 mb-4">
-                                <div className="w-16 h-16 bg-gray-100 rounded flex items-center justify-center">
-                                    <span className="text-4xl text-gray-400">🏋️</span>
-                                </div>
-                                <div className="font-bold text-lg">Bench Press</div>
-                            </div>
-                            {/* Fake Chart */}
-                            <div className="w-full h-40 flex items-end justify-between px-2 pt-10">
-                                <div className="w-2 h-10 bg-blue-200 rounded-t"></div>
-                                <div className="w-2 h-16 bg-blue-300 rounded-t"></div>
-                                <div className="w-2 h-12 bg-blue-300 rounded-t"></div>
-                                <div className="w-2 h-24 bg-blue-400 rounded-t relative">
-                                    <div className="absolute -top-6 -left-3 bg-yellow-400 text-white text-[10px] font-bold px-1 rounded">PR</div>
-                                </div>
-                                <div className="w-2 h-20 bg-blue-400 rounded-t"></div>
-                                <div className="w-2 h-[120px] bg-blue-500 rounded-t"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="flex-1 space-y-6">
-                        <h2 className="text-4xl md:text-5xl font-bold text-gray-900">Measure progress</h2>
-                        <p className="text-xl text-gray-600">
-                            Staying motivated is easier when you can see how far you've come.
+                        <p className="text-lg sm:text-xl text-[var(--text-secondary)] max-w-xl mx-auto lg:mx-0 leading-relaxed">
+                            {t('landing.hero_sub')}
                         </p>
-                        <ul className="space-y-4 pt-4">
-                            {[
-                                'Advanced Exercise Charts',
-                                'Personal Records',
-                                'Calculate One Rep Max',
-                                'High Quality Exercise Videos',
-                                'Create Your Own Custom Exercises',
-                                'Complete Exercise History'
-                            ].map((text, i) => (
-                                <li key={i} className="flex items-center gap-3 text-lg font-medium text-gray-800">
-                                    <CheckCircle2 className="text-gray-900 w-6 h-6 fill-current" />
-                                    {text}
+
+                        {/* CTAs */}
+                        <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
+                            <Link
+                                to="/login"
+                                className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl font-bold text-white bg-[var(--accent-primary)] hover:bg-[var(--accent-hover)] transition-all shadow-lg shadow-blue-500/25 hover:scale-[1.02] active:scale-100"
+                            >
+                                {t('landing.hero_cta_primary')}
+                                <ArrowRight className="w-4 h-4" />
+                            </Link>
+                            <Link
+                                to="/features"
+                                className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl font-bold text-[var(--text-primary)] border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:border-[var(--accent-primary)] transition-all hover:scale-[1.02] active:scale-100"
+                            >
+                                {t('landing.hero_cta_secondary')}
+                            </Link>
+                        </div>
+
+                        {/* Trust */}
+                        <div className="flex items-center justify-center lg:justify-start gap-3 pt-2">
+                            <div className="flex -space-x-2">
+                                {['bg-blue-400', 'bg-violet-400', 'bg-pink-400', 'bg-amber-400'].map((c, i) => (
+                                    <div key={i} className={`w-8 h-8 rounded-full ${c} border-2 border-[var(--bg-base)] flex items-center justify-center text-[10px] font-bold text-white`}>
+                                        {['A', 'S', 'M', 'J'][i]}
+                                    </div>
+                                ))}
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-1 text-amber-400 text-sm">
+                                    {Array(5).fill(0).map((_, i) => <Star key={i} className="w-3.5 h-3.5 fill-current" />)}
+                                    <span className="ml-1 text-xs text-[var(--text-muted)] font-medium">4.9</span>
+                                </div>
+                                <p className="text-xs text-[var(--text-muted)]">{t('landing.hero_trust')}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Right – Phone Mockup */}
+                    <div className="flex-shrink-0 w-full max-w-xs lg:max-w-sm">
+                        <PhoneMockup />
+                    </div>
+                </div>
+            </section>
+
+            {/* ── STATS BAR ─────────────────────────────────────── */}
+            <section className="border-y border-[var(--border-subtle)] py-10 bg-[var(--bg-surface)]">
+                <div className="max-w-3xl mx-auto px-6 grid grid-cols-3 gap-6 divide-x divide-[var(--border-subtle)]">
+                    <StatCard value="50k+" label={t('landing.stat_users')} />
+                    <StatCard value="1M+" label={t('landing.stat_workouts')} />
+                    <StatCard value="4.9★" label={t('landing.stat_rating')} />
+                </div>
+            </section>
+
+            {/* ── MINI FEATURES ─────────────────────────────────── */}
+            <section className="py-20 sm:py-24 px-4 sm:px-6">
+                <div className="max-w-7xl mx-auto">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                        {featureCards.map((f, i) => <MiniFeature key={i} {...f} />)}
+                    </div>
+                </div>
+            </section>
+
+            {/* ── APP SHOWCASE ──────────────────────────────────── */}
+            <section className="py-20 sm:py-24 px-4 sm:px-6 bg-[var(--bg-surface)]">
+                <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center gap-16">
+                    {/* Left: visual */}
+                    <div className="flex-1 relative">
+                        <div className="absolute inset-0 bg-[var(--accent-primary)]/5 rounded-3xl -rotate-1 scale-105" />
+                        <div className="relative bg-[var(--bg-surface-light)] rounded-3xl p-8 sm:p-10">
+                            {/* Fake progress chart */}
+                            <div className="mb-6">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <span className="text-xs font-bold text-[var(--accent-primary)] uppercase tracking-widest px-2 py-1 rounded-md bg-[var(--accent-primary)]/10">
+                                        {t('landing.showcase_badge')}
+                                    </span>
+                                </div>
+                                {/* Chart bars */}
+                                <div className="flex items-end gap-2 h-32 mb-3">
+                                    {[40, 55, 42, 70, 62, 85, 78].map((h, i) => (
+                                        <div key={i} className="flex-1 relative rounded-t-md" style={{ height: `${h}%` }}>
+                                            <div className="absolute inset-0 rounded-t-md bg-gradient-to-t from-blue-600 to-blue-400 opacity-80" />
+                                            {i === 5 && (
+                                                <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-amber-400 text-[9px] font-bold text-white px-1.5 py-0.5 rounded whitespace-nowrap">
+                                                    PR!
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex justify-between text-[10px] text-[var(--text-muted)]">
+                                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
+                                        <span key={d}>{d}</span>
+                                    ))}
+                                </div>
+                            </div>
+                            {/* Stat tiles */}
+                            <div className="grid grid-cols-2 gap-3">
+                                {[
+                                    { label: 'Total Volume', value: '23,500 kg', color: 'text-blue-500' },
+                                    { label: 'Calories Burned', value: '18,400 kcal', color: 'text-green-500' },
+                                ].map(({ label, value, color }) => (
+                                    <div key={label} className="bg-[var(--bg-surface)] rounded-xl p-3 border border-[var(--border-subtle)]">
+                                        <p className="text-xs text-[var(--text-muted)]">{label}</p>
+                                        <p className={`text-base font-extrabold ${color}`}>{value}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Right: text */}
+                    <div className="flex-1 space-y-6">
+                        <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-[var(--text-primary)] leading-tight">
+                            {t('landing.showcase_title')}
+                        </h2>
+                        <ul className="space-y-3">
+                            {showcaseFeats.map((f, i) => (
+                                <li key={i} className="flex items-center gap-3 text-[var(--text-secondary)]">
+                                    <CheckCircle2 className="w-5 h-5 text-[var(--accent-primary)] flex-shrink-0" />
+                                    <span className="font-medium">{f}</span>
                                 </li>
                             ))}
                         </ul>
+                        <Link
+                            to="/features"
+                            className="inline-flex items-center gap-2 text-sm font-bold text-[var(--accent-primary)] hover:gap-3 transition-all"
+                        >
+                            {t('landing.hero_cta_secondary')} <ArrowRight className="w-4 h-4" />
+                        </Link>
                     </div>
                 </div>
             </section>
 
-            {/* Footer */}
-            <footer className="bg-white pt-20 pb-12 border-t border-gray-200">
-                <div className="max-w-7xl mx-auto px-6">
-                    <div className="grid grid-cols-2 md:grid-cols-6 gap-8 mb-16">
-                        {/* Logo & Socials */}
-                        <div className="col-span-2 space-y-6">
-                            <div className="flex items-center gap-2 font-bold text-2xl tracking-tight">
-                                <div className="w-8 h-8 bg-black text-white rounded-md flex items-center justify-center">
-                                    <span className="leading-none text-2xl -mt-0.5">M</span>
-                                </div>
-                                MotionMeet
-                            </div>
-                            <div className="flex gap-4 text-gray-400">
-                                <div className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center hover:bg-gray-50 hover:text-gray-900 cursor-pointer transition">
-                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path fillRule="evenodd" d="M12.315 2c2.43 0 2.784.013 3.808.06 1.064.049 1.791.218 2.427.465a4.902 4.902 0 011.772 1.153 4.902 4.902 0 011.153 1.772c.247.636.416 1.363.465 2.427.048 1.067.06 1.407.06 4.123v.08c0 2.643-.012 2.987-.06 4.043-.049 1.064-.218 1.791-.465 2.427a4.902 4.902 0 01-1.153 1.772 4.902 4.902 0 01-1.772 1.153c-.636.247-1.363.416-2.427.465-1.067.048-1.407.06-4.123.06h-.08c-2.643 0-2.987-.012-4.043-.06-1.064-.049-1.791-.218-2.427-.465a4.902 4.902 0 01-1.772-1.153 4.902 4.902 0 01-1.153-1.772c-.247-.636-.416-1.363-.465-2.427-.047-1.024-.06-1.379-.06-3.808v-.63c0-2.43.013-2.784.06-3.808.049-1.064.218-1.791.465-2.427a4.902 4.902 0 011.153-1.772A4.902 4.902 0 015.45 2.525c.636-.247 1.363-.416 2.427-.465C8.901 2.013 9.256 2 11.685 2h.63zm-.081 1.802h-.468c-2.456 0-2.784.011-3.807.058-.975.045-1.504.207-1.857.344-.467.182-.8.398-1.15.748-.35.35-.566.683-.748 1.15-.137.353-.3.882-.344 1.857-.047 1.023-.058 1.351-.058 3.807v.468c0 2.456.011 2.784.058 3.807.045.975.207 1.504.344 1.857.182.466.399.8.748 1.15.35.35.683.566 1.15.748.353.137.882.3 1.857.344 1.054.048 1.37.058 4.041.058h.08c2.597 0 2.917-.01 3.96-.058.976-.045 1.505-.207 1.858-.344.466-.182.8-.398 1.15-.748.35-.35.566-.683.748-1.15.137-.353.3-.882.344-1.857.048-1.055.058-1.37.058-4.041v-.08c0-2.597-.01-2.917-.058-3.96-.045-.976-.207-1.505-.344-1.858a3.097 3.097 0 00-.748-1.15 3.098 3.098 0 00-1.15-.748c-.353-.137-.882-.3-1.857-.344-1.023-.047-1.351-.058-3.807-.058zM12 6.865a5.135 5.135 0 110 10.27 5.135 5.135 0 010-10.27zm0 1.802a3.333 3.333 0 100 6.666 3.333 3.333 0 000-6.666zm5.338-3.205a1.2 1.2 0 110 2.4 1.2 1.2 0 010-2.4z" clipRule="evenodd" /></svg>
-                                </div>
-                                <div className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center hover:bg-gray-50 hover:text-gray-900 cursor-pointer transition">
-                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84" /></svg>
-                                </div>
-                                <div className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center hover:bg-gray-50 hover:text-gray-900 cursor-pointer transition">
-                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path fillRule="evenodd" d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z" clipRule="evenodd" /></svg>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Product */}
-                        <div className="flex flex-col gap-4">
-                            <span className="font-bold text-gray-900 mb-2">Product</span>
-                            <a href="#" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">Features</a>
-                            <a href="#" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">Reviews</a>
-                            <a href="#" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">Affiliate Program</a>
-                            <a href="#" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">Use Cases</a>
-                            <a href="#" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">Help Center</a>
-                            <a href="#" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">MotionMeet Coach</a>
-                        </div>
-
-                        {/* Company */}
-                        <div className="flex flex-col gap-4">
-                            <span className="font-bold text-gray-900 mb-2">Company</span>
-                            <a href="#" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">About</a>
-                            <a href="#" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">Contact Us</a>
-                            <a href="#" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">Careers</a>
-                            <a href="#" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">Press Center</a>
-                        </div>
-
-                        {/* Resources */}
-                        <div className="flex flex-col gap-4">
-                            <span className="font-bold text-gray-900 mb-2">Resources</span>
-                            <a href="#" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">Blog</a>
-                            <a href="#" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">Guides</a>
-                            <a href="#" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">Exercise Library</a>
-                            <a href="#" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">Workout Splits</a>
-                            <a href="#" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">Public API</a>
-                        </div>
-
-                        {/* Guides */}
-                        <div className="flex flex-col gap-4">
-                            <span className="font-bold text-gray-900 mb-2">Guides</span>
-                            <a href="#" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">3 Day Workout Splits</a>
-                            <a href="#" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">4 Day Workout Splits</a>
-                            <a href="#" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">5 Day Workout Splits</a>
-                            <a href="#" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">Upper / Lower Split</a>
-                            <a href="#" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">Push / Pull / Legs (PPL)</a>
-                            <a href="#" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition">Arnold Split Workout</a>
-                        </div>
-                    </div>
-
-                    <div className="pt-8 border-t border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4">
-                        <div className="flex flex-wrap text-sm gap-4 text-gray-500 font-medium pb-2 md:pb-0">
-                            <a href="#" className="hover:text-gray-900 transition">Terms & Conditions</a>
-                            <a href="#" className="hover:text-gray-900 transition">Privacy Policy</a>
-                            <a href="#" className="hover:text-gray-900 transition">Status</a>
-                            <a href="#" className="hover:text-gray-900 transition">Sitemap</a>
-                        </div>
-                        <p className="text-xs text-gray-400 max-w-lg text-center md:text-left">
-                            Copyright © 2026 MotionMeet Studios. All rights reserved. MotionMeet® is a registered trademark of MotionMeet Studios in the United States as well as certain other jurisdictions.
-                        </p>
+            {/* ── TESTIMONIALS ──────────────────────────────────── */}
+            <section className="py-20 sm:py-24 px-4 sm:px-6">
+                <div className="max-w-7xl mx-auto">
+                    <h2 className="text-3xl sm:text-4xl font-extrabold text-center text-[var(--text-primary)] mb-12">
+                        {t('landing.testimonial_title')}
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {testimonials.map((t, i) => <TestimonialCard key={i} {...t} />)}
                     </div>
                 </div>
-            </footer>
-        </div>
+            </section>
+
+            {/* ── CTA BANNER ────────────────────────────────────── */}
+            <section className="px-4 sm:px-6 pb-20 sm:pb-24">
+                <div className="max-w-4xl mx-auto rounded-3xl bg-gradient-to-br from-blue-600 via-blue-500 to-indigo-600 p-10 sm:p-14 text-center relative overflow-hidden">
+                    {/* Decorative circles */}
+                    <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
+                    <div className="absolute -bottom-10 -left-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
+                    <div className="relative">
+                        <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-4">
+                            {t('landing.cta_title')}
+                        </h2>
+                        <p className="text-blue-100 text-lg mb-8 max-w-xl mx-auto">
+                            {t('landing.cta_sub')}
+                        </p>
+                        <Link
+                            to="/login"
+                            className="inline-flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-blue-600 bg-white hover:bg-blue-50 transition-all shadow-xl hover:scale-[1.02] active:scale-100"
+                        >
+                            {t('landing.cta_btn')} <ArrowRight className="w-4 h-4" />
+                        </Link>
+                    </div>
+                </div>
+            </section>
+        </PublicLayout>
     );
 };
 

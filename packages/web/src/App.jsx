@@ -2,6 +2,9 @@ import React, { useEffect, useRef } from "react";
 import { Route, Routes, useLocation, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Landing from "./pages/Landing";
+import Features from "./pages/Features";
+import Pricing from "./pages/Pricing";
+import About from "./pages/About";
 import Feed from "./pages/Feed";
 import Profile from "./pages/Profile";
 import Routines from "./pages/Routines";
@@ -81,6 +84,9 @@ const App = () => {
       <Routes>
         <Route path="/" element={user ? <Navigate to="/feed" replace /> : <Landing />} />
         <Route path="/login" element={user ? <Navigate to="/feed" replace /> : <Login />} />
+        <Route path="/features" element={<Features />} />
+        <Route path="/pricing" element={<Pricing />} />
+        <Route path="/about" element={<About />} />
 
         {/* Protected Layout Routes */}
         <Route element={user ? <Layout /> : <Navigate to="/login" replace />}>
