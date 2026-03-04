@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Search, Plus, Dumbbell, ChevronDown, Activity, Info } from "lucide-react";
+import { Search, Plus, Dumbbell, ChevronDown, Activity, Info, Zap, Calendar } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@clerk/clerk-react";
 import api from "~/api/axios";
 import CustomExerciseModal from "../components/CustomExerciseModal";
+import { ResponsiveContainer, LineChart, XAxis, YAxis, Tooltip, Line } from "recharts";
+import moment from "moment";
 
 const muscleGroups = ["Chest", "Back", "Legs", "Shoulders", "Arms", "Abs", "Cardio", "Full Body"];
 const equipmentList = ["Dumbbell", "Barbell", "Machine", "Cables", "Bodyweight", "Kettlebell", "Other"];
@@ -43,7 +45,34 @@ const Exercises = () => {
         fetchStats();
     }, [selectedExercise, getToken]);
 
-    // ... (rest of the component)
+    // Fetch exercises logic based on filters
+    useEffect(() => {
+        const fetchExercises = async () => {
+            try {
+                const token = await getToken();
+                const params = new URLSearchParams();
+                if (searchQuery) params.append("search", searchQuery);
+                if (muscleFilter !== "All Muscles") params.append("muscleGroup", muscleFilter);
+                if (equipmentFilter !== "All Equipment") params.append("equipment", equipmentFilter);
+
+                const { data } = await api.get(`/api/exercise?${params.toString()}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+
+                if (data.success) {
+                    setExercises(data.exercises);
+                }
+            } catch (error) {
+                console.error("Error fetching exercises:", error);
+            }
+        };
+
+        const timeoutId = setTimeout(() => {
+            fetchExercises();
+        }, 300); // Debounce search
+
+        return () => clearTimeout(timeoutId);
+    }, [searchQuery, muscleFilter, equipmentFilter, getToken]);
 
     return (
         <div className="w-full h-full min-h-screen pt-4 pb-20 sm:pb-0 text-text-primary flex flex-col md:flex-row bg-background overflow-hidden no-scrollbar">
@@ -186,74 +215,101 @@ const Exercises = () => {
                         />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                        <div className="relative">
+                    {/* Filter Blocks */}
+                    <div className="flex gap-3 mb-6">
+                        <div className="relative flex-1">
                             <select
-                                className="w-full bg-background border border-border-subtle rounded-xl pl-3 pr-8 py-2.5 text-[10px] font-black text-text-muted hover:bg-surface-light focus:outline-none focus:border-accent-primary appearance-none cursor-pointer shadow-inner transition-all uppercase tracking-tighter"
+                                className="w-full bg-surface rounded-xl px-4 py-3.5 text-sm font-bold text-text-primary hover:bg-surface-light focus:outline-none focus:border-accent-primary appearance-none cursor-pointer border border-transparent shadow-sm transition-all"
                                 value={equipmentFilter}
                                 onChange={(e) => setEquipmentFilter(e.target.value)}
                             >
-                                <option value={t('exercises.all_equipment', 'All Equipment')}>{t('exercises.equipment')}</option>
+                                <option value="All Equipment">{t('exercises.all_equipment', 'Tüm Ekipmanlar')}</option>
                                 {equipmentList.map(eq => <option key={eq} value={eq}>{eq}</option>)}
                             </select>
-                            <ChevronDown className="w-3 h-3 text-text-muted absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            <ChevronDown className="w-4 h-4 text-text-muted absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                         </div>
-
-                        <div className="relative">
+                        <div className="relative flex-1">
                             <select
-                                className="w-full bg-background border border-border-subtle rounded-xl pl-3 pr-8 py-2.5 text-[10px] font-black text-text-muted hover:bg-surface-light focus:outline-none focus:border-accent-primary appearance-none cursor-pointer shadow-inner transition-all uppercase tracking-tighter"
+                                className="w-full bg-surface rounded-xl px-4 py-3.5 text-sm font-bold text-text-primary hover:bg-surface-light focus:outline-none focus:border-accent-primary appearance-none cursor-pointer border border-transparent shadow-sm transition-all"
                                 value={muscleFilter}
                                 onChange={(e) => setMuscleFilter(e.target.value)}
                             >
-                                <option value={t('exercises.all_muscles', 'All Muscles')}>{t('exercises.muscle')}</option>
+                                <option value="All Muscles">{t('exercises.all_muscles', 'Tüm Kaslar')}</option>
                                 {muscleGroups.map(mg => <option key={mg} value={mg}>{mg}</option>)}
                             </select>
-                            <ChevronDown className="w-3 h-3 text-text-muted absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            <ChevronDown className="w-4 h-4 text-text-muted absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                         </div>
+                    </div>
+
+                    {/* Exercise List */}
+                    <div className="flex-1 overflow-y-auto no-scrollbar space-y-6 pr-1 pb-4">
+                        {exercises.length > 0 ? (
+                            <>
+                                {/* Son Egzersizler (Recent) Dummy slice for now */}
+                                <div>
+                                    <h3 className="text-sm font-semibold text-text-muted mb-3 px-2">{t('exercises.recent', 'Son Egzersizler')}</h3>
+                                    <div className="flex flex-col border-t border-border-subtle">
+                                        {exercises.slice(0, 4).map((exercise) => (
+                                            <div
+                                                key={`recent-${exercise._id}`}
+                                                onClick={() => setSelectedExercise(exercise)}
+                                                className={`p-3 flex items-center gap-4 cursor-pointer transition-all border-b border-border-subtle hover:bg-surface-light group
+                                        ${selectedExercise?._id === exercise._id ? 'bg-surface-light' : 'bg-background'}`}
+                                            >
+                                                <div className="w-14 h-14 rounded-full flex items-center justify-center shrink-0 bg-surface">
+                                                    <Dumbbell className={`w-6 h-6 ${selectedExercise?._id === exercise._id ? 'text-accent-primary' : 'text-text-muted'}`} />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <h4 className={`font-semibold text-base mb-1 ${selectedExercise?._id === exercise._id ? 'text-accent-primary' : 'text-text-primary'}`}>{exercise.name}</h4>
+                                                    <p className="text-sm text-text-muted">{exercise.muscleGroup} • {exercise.equipment}</p>
+                                                </div>
+                                                <ChevronDown className="w-5 h-5 -rotate-90 text-text-muted opacity-50" />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Tüm Egzersizler (All) */}
+                                <div>
+                                    <h3 className="text-sm font-semibold text-text-muted mb-3 px-2">{t('exercises.all', 'Tüm Egzersizler')}</h3>
+                                    <div className="flex flex-col border-t border-border-subtle">
+                                        {exercises.map((exercise) => (
+                                            <div
+                                                key={`all-${exercise._id}`}
+                                                onClick={() => setSelectedExercise(exercise)}
+                                                className={`p-3 flex items-center gap-4 cursor-pointer transition-all border-b border-border-subtle hover:bg-surface-light group
+                                        ${selectedExercise?._id === exercise._id ? 'bg-surface-light' : 'bg-background'}`}
+                                            >
+                                                <div className="w-14 h-14 rounded-full flex items-center justify-center shrink-0 bg-surface">
+                                                    <Dumbbell className={`w-6 h-6 ${selectedExercise?._id === exercise._id ? 'text-accent-primary' : 'text-text-muted'}`} />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <h4 className={`font-semibold text-base mb-1 ${selectedExercise?._id === exercise._id ? 'text-accent-primary' : 'text-text-primary'}`}>{exercise.name}</h4>
+                                                    <p className="text-sm text-text-muted">{exercise.muscleGroup} • {exercise.equipment}</p>
+                                                </div>
+                                                <ChevronDown className="w-5 h-5 -rotate-90 text-text-muted opacity-50" />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center pt-20 text-center opacity-40">
+                                <Dumbbell className="w-12 h-12 text-text-muted mb-3" />
+                                <p className="text-text-muted text-xs font-bold uppercase tracking-widest leading-loose">{t('exercises.not_found')}</p>
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                <div className="text-[11px] font-black tracking-widest uppercase text-text-muted mb-4 px-1 flex items-center justify-between">
-                    <span>{t('exercises.all')}</span>
-                    <span className="bg-surface-light px-2 py-0.5 rounded-full border border-border-subtle">{exercises.length}</span>
-                </div>
-
-                {/* Exercise List */}
-                <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 pr-1 pb-4">
-                    {exercises.length > 0 ? (
-                        exercises.map((exercise) => (
-                            <div
-                                key={exercise._id}
-                                onClick={() => setSelectedExercise(exercise)}
-                                className={`border rounded-2xl p-4 flex items-center gap-4 cursor-pointer transition-all active:scale-95 group
-                                ${selectedExercise?._id === exercise._id ? 'bg-accent-primary/10 border-accent-primary shadow-sm' : 'bg-background border-border-subtle hover:bg-surface-light'}`}
-                            >
-                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border transition-colors
-                                ${selectedExercise?._id === exercise._id ? 'bg-accent-primary border-accent-primary/30 shadow-md' : 'bg-surface border-border-subtle group-hover:bg-background'}`}>
-                                    <Dumbbell className={`w-6 h-6 ${selectedExercise?._id === exercise._id ? 'text-white' : 'text-accent-primary'}`} />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <h4 className={`font-bold text-sm tracking-tight truncate ${selectedExercise?._id === exercise._id ? 'text-accent-primary' : 'text-text-primary'}`}>{exercise.name}</h4>
-                                    <p className="text-[10px] text-text-muted font-bold truncate tracking-wide uppercase opacity-70">{exercise.muscleGroup} • {exercise.equipment}</p>
-                                </div>
-                            </div>
-                        ))
-                    ) : (
-                        <div className="flex flex-col items-center justify-center pt-20 text-center opacity-40">
-                            <Dumbbell className="w-12 h-12 text-text-muted mb-3" />
-                            <p className="text-text-muted text-xs font-bold uppercase tracking-widest leading-loose">{t('exercises.not_found')}</p>
-                        </div>
-                    )}
-                </div>
+                {/* Modals */}
+                {showModal && (
+                    <CustomExerciseModal
+                        setShowModal={setShowModal}
+                        onExerciseCreated={(newExercise) => setExercises(prev => [newExercise, ...prev])}
+                    />
+                )}
             </div>
-
-            {/* Modals */}
-            {showModal && (
-                <CustomExerciseModal
-                    setShowModal={setShowModal}
-                    onExerciseCreated={(newExercise) => setExercises(prev => [newExercise, ...prev])}
-                />
-            )}
         </div>
     );
 };

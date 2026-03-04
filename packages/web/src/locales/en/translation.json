@@ -385,5 +385,40 @@
         "post_published": "Post published successfully!",
         "publish_failed": "Failed to publish post.",
         "workout_post_content": "Just finished my {{name}} workout! 🏋️‍♂️"
+    },
+    "monthly_report": {
+        "title": "{{month}} Report",
+        "summary": "Summary",
+        "workouts": "Workouts",
+        "duration": "Duration",
+        "volume": "Volume",
+        "sets": "Sets",
+        "workout_days_log": "Workout Days Log",
+        "weekly_streak": "{{count}} Week Streak",
+        "muscle_distribution": "Muscle Distribution",
+        "share": "Share",
+        "days": {
+            "mon": "Mon",
+            "tue": "Tue",
+            "wed": "Wed",
+            "thu": "Thu",
+            "fri": "Fri",
+            "sat": "Sat",
+            "sun": "Sun"
+        },
+        "months_short": {
+            "jan": "J",
+            "feb": "F",
+            "mar": "M",
+            "apr": "A",
+            "may": "M",
+            "jun": "J",
+            "jul": "J",
+            "aug": "A",
+            "sep": "S",
+            "oct": "O",
+            "nov": "N",
+            "dec": "D"
+        }
     }
 }

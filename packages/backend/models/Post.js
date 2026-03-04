@@ -8,7 +8,12 @@ const postSchema = new mongoose.Schema(
     post_type: {
       type: String,
       enum: ["text", "image", "text_with_image", "video", "workout"],
-      required: true,
+      default: "text",
+    },
+    visibility: {
+      type: String,
+      enum: ["public", "followers", "private"],
+      default: "public",
     },
     likes_count: [{ type: String, ref: "User" }],
     comments: [

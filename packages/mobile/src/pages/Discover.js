@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@clerk/clerk-expo';
 import { useDispatch } from 'react-redux';
+import { useTranslation } from 'react-i18next';
 import UserCard from '../components/UserCard';
 import { discoverUsers } from '../api/endpoints';
 import { fetchUser } from '../features/user/userSlice';
@@ -20,6 +21,7 @@ import { fetchUser } from '../features/user/userSlice';
 const Discover = ({ navigation }) => {
   const { getToken } = useAuth();
   const dispatch = useDispatch();
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -39,7 +41,7 @@ const Discover = ({ navigation }) => {
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
-      Alert.alert('Error', 'Please enter a search query');
+      Alert.alert(t('common.error', 'Hata'), t('common.search_query_error', 'Lütfen arama kelimesi girin'));
       return;
     }
 
@@ -50,10 +52,10 @@ const Discover = ({ navigation }) => {
       if (data.success) {
         setUsers(data.users);
       } else {
-        Alert.alert('Error', data.message);
+        Alert.alert(t('common.error', 'Hata'), data.message);
       }
     } catch (error) {
-      Alert.alert('Error', error.message);
+      Alert.alert(t('common.error', 'Hata'), error.message);
     } finally {
       setLoading(false);
     }

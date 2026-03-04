@@ -60,7 +60,7 @@ export const createExercise = async (req, res) => {
 export const getExerciseStats = async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.auth.userId;
+    const { userId } = await req.auth();
     const Workout = (await import("../models/Workout.js")).default;
 
     // Find all workouts that contain this exercise for this user

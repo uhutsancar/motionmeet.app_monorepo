@@ -3,11 +3,11 @@ import imagekit from "../configs/imageKit.js";
 import Post from "../models/Post.js";
 import User from "../models/User.js";
 
-//Add Post
+// Add Post
 export const addPost = async (req, res) => {
   try {
-    const { userId } = req.auth();
-    const { content, post_type, workout } = req.body;
+    const { userId } = await req.auth();
+    const { content, post_type, workout, visibility } = req.body;
     const images = req.files;
 
     let image_urls = [];
@@ -15,27 +15,35 @@ export const addPost = async (req, res) => {
       image_urls = await Promise.all(
         images.map(async (image) => {
           const fileBuffer = fs.readFileSync(image.path);
-
           const response = await imagekit.upload({
             file: fileBuffer,
             fileName: image.originalname,
             folder: "posts",
           });
-
-          // Clean up temp file
           try { fs.unlinkSync(image.path); } catch (e) {}
-
-          // Use the direct URL from ImageKit
           return response.url;
         })
       );
+    }
+
+    // Auto-detect post_type if not provided
+    let resolvedType = post_type;
+    if (!resolvedType) {
+      if (workout) {
+        resolvedType = image_urls.length > 0 ? "workout" : "workout";
+      } else if (image_urls.length > 0) {
+        resolvedType = content ? "text_with_image" : "image";
+      } else {
+        resolvedType = "text";
+      }
     }
 
     await Post.create({
       user: userId,
       content,
       image_urls,
-      post_type,
+      post_type: resolvedType,
+      visibility: visibility || "public",
       workout: workout || undefined,
     });
 
@@ -46,15 +54,31 @@ export const addPost = async (req, res) => {
   }
 };
 
-// Get Posts
+// Get Feed Posts — with visibility filtering
 export const getFeedPost = async (req, res) => {
   try {
-    const { userId } = req.auth();
+    const { userId } = await req.auth();
     const user = await User.findById(userId);
 
-    // User connections and following
-    const userIds = [userId, ...user.connections, ...user.following];
-    const posts = await Post.find({ user: { $in: userIds } })
+    const connections = user.connections || [];
+    const following = user.following || [];
+
+    // Build visibility-aware query
+    // - public posts from anyone in the social graph
+    // - followers posts only from people I'm connected to / following
+    // - private posts only from myself
+    const socialIds = [...new Set([...connections, ...following])];
+
+    const posts = await Post.find({
+      $or: [
+        // My own posts (all visibilities)
+        { user: userId },
+        // Public posts from social graph
+        { user: { $in: socialIds }, visibility: "public" },
+        // Followers-only posts from people I'm connected/following
+        { user: { $in: socialIds }, visibility: "followers" },
+      ]
+    })
       .populate("user")
       .populate({
         path: "workout",
@@ -73,13 +97,14 @@ export const getFeedPost = async (req, res) => {
 // Like Post
 export const likePost = async (req, res) => {
   try {
-    const { userId } = req.auth();
+    const { userId } = await req.auth();
     const { postId } = req.body;
 
     const post = await Post.findById(postId);
+    if (!post) return res.json({ success: false, message: "Post not found" });
 
     if (post.likes_count.includes(userId)) {
-      post.likes_count = post.likes_count.filter((user) => user !== userId);
+      post.likes_count = post.likes_count.filter((u) => u !== userId);
       await post.save();
       res.json({ success: true, message: "Post unliked" });
     } else {
@@ -96,7 +121,7 @@ export const likePost = async (req, res) => {
 // Add Comment
 export const addComment = async (req, res) => {
   try {
-    const { userId } = req.auth();
+    const { userId } = await req.auth();
     const { postId, content } = req.body;
 
     if (!content) {
@@ -108,17 +133,10 @@ export const addComment = async (req, res) => {
       return res.json({ success: false, message: "Post not found" });
     }
 
-    post.comments.push({
-      user: userId,
-      content,
-    });
-
+    post.comments.push({ user: userId, content });
     await post.save();
 
-    // Re-populate and return the whole post or just the comments? 
-    // Usually, returning the updated comment or total comments is sufficient.
     const updatedPost = await Post.findById(postId).populate("comments.user");
-
     res.json({ success: true, comments: updatedPost.comments });
   } catch (error) {
     console.log(error);

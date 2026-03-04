@@ -10,6 +10,8 @@ import {
   Alert,
   ScrollView,
   SafeAreaView,
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -118,6 +120,7 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
       transparent={false}
       onRequestClose={onClose}
     >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.backButton}>
@@ -190,6 +193,7 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
           )}
         </ScrollView>
       </SafeAreaView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };

@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
 import { useAuth } from '@clerk/clerk-expo';
+import { useTranslation } from 'react-i18next';
 import { fetchConnections } from '../features/connections/connectionsSlice';
 import { acceptConnectionRequest, unfollowUser } from '../api/endpoints';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 const Connections = ({ navigation }) => {
   const dispatch = useDispatch();
   const { getToken } = useAuth();
+  const { t } = useTranslation();
   const [currentTab, setCurrentTab] = useState('Followers');
   const [loading, setLoading] = useState(false);
 
@@ -41,7 +43,7 @@ const Connections = ({ navigation }) => {
       const token = await getToken();
       dispatch(fetchConnections(token));
     } catch (error) {
-      Alert.alert('Error', error.message);
+      Alert.alert(t('common.error', 'Hata'), error.message);
     }
   };
 
@@ -51,13 +53,13 @@ const Connections = ({ navigation }) => {
       const token = await getToken();
       const data = await unfollowUser(userId, token);
       if (data.success) {
-        Alert.alert('Success', data.message);
+        Alert.alert(t('common.success', 'Başarılı'), data.message);
         loadConnections();
       } else {
-        Alert.alert('Error', data.message);
+        Alert.alert(t('common.error', 'Hata'), data.message);
       }
     } catch (error) {
-      Alert.alert('Error', error.message);
+      Alert.alert(t('common.error', 'Hata'), error.message);
     } finally {
       setLoading(false);
     }
@@ -69,13 +71,13 @@ const Connections = ({ navigation }) => {
       const token = await getToken();
       const data = await acceptConnectionRequest(userId, token);
       if (data.success) {
-        Alert.alert('Success', data.message);
+        Alert.alert(t('common.success', 'Başarılı'), data.message);
         loadConnections();
       } else {
-        Alert.alert('Error', data.message);
+        Alert.alert(t('common.error', 'Hata'), data.message);
       }
     } catch (error) {
-      Alert.alert('Error', error.message);
+      Alert.alert(t('common.error', 'Hata'), error.message);
     } finally {
       setLoading(false);
     }

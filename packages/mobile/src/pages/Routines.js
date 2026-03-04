@@ -11,20 +11,8 @@ import api from '../api/client';
 import RoutineBuilderModal from '../components/RoutineBuilderModal';
 
 // ── Inline Routine Card with timer ──────────────────────────────────────────
-const RoutineCard = ({ routine, theme }) => {
+const RoutineCard = ({ routine, theme, navigation, styles }) => {
   const { t } = useTranslation();
-  const [active, setActive] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
-  const [saving, setSaving] = useState(false);
-  const [done, setDone] = useState(false);
-  const startTimeRef = useRef(null);
-  const intervalRef = useRef(null);
-
-  const formatTime = (s) => {
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-  };
 
   const totalVolume = routine.exercises.reduce((total, ex) =>
     total + ex.sets.reduce((t, s) => t + (s.weight || 0) * (s.reps || 0), 0), 0
@@ -32,52 +20,7 @@ const RoutineCard = ({ routine, theme }) => {
   const totalSets = routine.exercises.reduce((t, ex) => t + ex.sets.length, 0);
 
   const handleStart = () => {
-    startTimeRef.current = new Date();
-    setElapsed(0);
-    setActive(true);
-    intervalRef.current = setInterval(() => setElapsed(p => p + 1), 1000);
-  };
-
-  const handleFinish = () => {
-    Alert.alert(
-      t('routines.finish', 'Finish Workout?'),
-      `${formatTime(elapsed)} • ${Math.round(totalVolume)} ${t('common.kg', 'kg')}`,
-      [
-        { text: t('common.cancel', 'Cancel'), style: 'cancel' },
-        { text: t('routines.finish', 'Finish'), style: 'destructive', onPress: saveWorkout }
-      ]
-    );
-  };
-
-  const saveWorkout = async () => {
-    clearInterval(intervalRef.current);
-    setSaving(true);
-    try {
-      const endTime = new Date();
-      const durationMinutes = Math.max(1, Math.round(elapsed / 60));
-      const payload = {
-        name: routine.name,
-        startTime: startTimeRef.current,
-        endTime,
-        durationMinutes,
-        volumeKg: Math.round(totalVolume * 10) / 10,
-        exercises: routine.exercises.map(ex => ({
-          exerciseId: ex.exerciseId?._id || ex.exerciseId,
-          sets: ex.sets.map(s => ({ weight: s.weight || 0, reps: s.reps || 0 }))
-        }))
-      };
-      const { data } = await api.post('/api/workout', payload);
-      if (data.success) {
-        setActive(false);
-        setElapsed(0);
-        setDone(true);
-        setTimeout(() => setDone(false), 4000);
-      }
-    } catch (err) {
-      Alert.alert(t('common.error', 'Hata'), err.message);
-    } finally {
-      setSaving(false);
-    }
+    navigation.navigate('ActiveWorkoutScreen', { routine });
   };
 
   return (
@@ -90,12 +33,6 @@ const RoutineCard = ({ routine, theme }) => {
             {totalSets} {t('routines.sets')} • {Math.round(totalVolume)} {t('common.kg', 'kg')} {t('common.total', 'total')}
           </Text>
         </View>
-        {active && (
-          <View style={[styles.timerBadge, { backgroundColor: theme.primary + '20', borderColor: theme.primary + '40' }]}>
-            <Ionicons name="timer-outline" size={14} color={theme.primary} />
-            <Text style={[styles.timerText, { color: theme.primary }]}>{formatTime(elapsed)}</Text>
-          </View>
-        )}
       </View>
 
       {/* Exercise list with sets */}
@@ -113,51 +50,24 @@ const RoutineCard = ({ routine, theme }) => {
         ))}
       </View>
 
-      {/* Success Banner */}
-      {done && (
-        <View style={[styles.successBanner, { backgroundColor: '#22c55e20', borderColor: '#22c55e40' }]}>
-          <Ionicons name="trophy" size={18} color="#22c55e" />
-          <Text style={{ color: '#22c55e', fontWeight: 'bold', marginLeft: 8 }}>
-            {t('routines.workout_started', 'Workout saved! 🏆')}
-          </Text>
-        </View>
-      )}
-
       {/* Button */}
-      {!active ? (
-        <TouchableOpacity
-          style={[styles.startBtn, { backgroundColor: theme.primary }]}
-          onPress={handleStart}
-        >
-          <Ionicons name="play-circle" size={20} color="#fff" />
-          <Text style={styles.startBtnText}>{t('routines.start_routine', 'Start Routine')}</Text>
-        </TouchableOpacity>
-      ) : (
-        <TouchableOpacity
-          style={[styles.finishBtn, { borderColor: '#ef4444', backgroundColor: '#ef444410' }]}
-          onPress={handleFinish}
-          disabled={saving}
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color="#ef4444" />
-          ) : (
-            <>
-              <Ionicons name="checkmark-circle" size={20} color="#ef4444" />
-              <Text style={[styles.finishBtnText, { color: '#ef4444' }]}>
-                {t('routines.finish', 'Finish')} • {formatTime(elapsed)}
-              </Text>
-            </>
-          )}
-        </TouchableOpacity>
-      )}
+      <TouchableOpacity
+        style={[styles.startBtn, { backgroundColor: theme.primary }]}
+        onPress={handleStart}
+      >
+        <Ionicons name="play-circle" size={20} color="#fff" />
+        <Text style={styles.startBtnText}>{t('routines.start_routine', 'Start Routine')}</Text>
+      </TouchableOpacity>
     </View>
   );
 };
 
 // ── Main Routines Page ───────────────────────────────────────────────────────
-const Routines = () => {
+const Routines = ({ navigation }) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
+  // Memoize styles
+  const styles = React.useMemo(() => getStyles(theme), [theme]);
 
   const [routines, setRoutines] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -250,7 +160,7 @@ const Routines = () => {
         ) : (
           <View style={{ gap: 16 }}>
             {routines.map(routine => (
-              <RoutineCard key={routine._id} routine={routine} theme={theme} />
+              <RoutineCard key={routine._id} routine={routine} theme={theme} navigation={navigation} styles={styles} />
             ))}
           </View>
         )}
@@ -270,7 +180,7 @@ const Routines = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -9,7 +9,7 @@ export const getUserData = async (token) => {
 };
 
 export const updateUserProfile = async (userData, token) => {
-  const isFormData = userData instanceof FormData;
+  const isFormData = userData && typeof userData.append === 'function';
   const { data } = await api.post('/api/user/update', userData, {
     headers: { 
       Authorization: `Bearer ${token}`,
@@ -123,6 +123,13 @@ export const sendMessage = async (messageData, token) => {
   return data;
 };
 
+export const deleteMessage = async (messageId, token) => {
+  const { data } = await api.delete(`/api/message/delete/${messageId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
 // ============= STORY APIs =============
 export const getStories = async (token) => {
   const { data } = await api.get('/api/story/get', {
@@ -170,6 +177,7 @@ export default {
   // Message
   getMessages,
   sendMessage,
+  deleteMessage,
   
   // Story
   getStories,

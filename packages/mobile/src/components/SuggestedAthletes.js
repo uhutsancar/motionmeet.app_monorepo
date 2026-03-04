@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, memo } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
@@ -76,4 +76,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default SuggestedAthletes;
+export default memo(SuggestedAthletes);

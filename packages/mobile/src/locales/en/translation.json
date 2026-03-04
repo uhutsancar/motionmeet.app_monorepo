@@ -199,5 +199,78 @@
     "status": {
         "online": "Online",
         "offline": "Offline"
+    },
+    "active_workout": {
+        "active": "Active",
+        "paused": "Paused",
+        "add_set": "+ Add Set",
+        "add_exercise": "Add Exercise",
+        "finish_workout": "Finish Workout"
+    },
+    "workout": {
+        "saved": "Workout saved!",
+        "discard_title": "Discard Workout",
+        "discard_msg": "This workout won't be saved. Are you sure?",
+        "save_workout": "Save Workout",
+        "my_workout": "My Workout",
+        "when": "When",
+        "add_photo_video": "Add a photo / video",
+        "description": "Description",
+        "note_placeholder": "How was your workout? Leave some notes...",
+        "exercises": "Exercises",
+        "delete": "Delete Workout",
+        "add_photo_title": "Add Photo",
+        "take_photo": "Take Photo",
+        "choose_from_gallery": "Choose from Gallery",
+        "camera_permission": "Camera permission is required",
+        "gallery_permission": "Gallery permission is required"
+    },
+    "workout_summary": {
+        "save_workout": "Save Workout",
+        "add_media": "Add Photo or Video",
+        "media_desc": "Immortalize your workout moment",
+        "add_location": "Add Location",
+        "note_placeholder": "How was the workout?",
+        "intensity": "Intensity",
+        "exercises": "Exercises",
+        "visibility": "Who Can See",
+        "everyone": "Everyone",
+        "friends": "Friends Only",
+        "only_me": "Only Me"
+    },
+    "monthly_report": {
+        "title": "{{month}} Report",
+        "summary": "Summary",
+        "workouts": "Workouts",
+        "duration": "Duration",
+        "volume": "Volume",
+        "sets": "Sets",
+        "workout_days_log": "Workout Days Log",
+        "weekly_streak": "{{count}} Week Streak",
+        "muscle_distribution": "Muscle Distribution",
+        "share": "Share",
+        "days": {
+            "mon": "Mon",
+            "tue": "Tue",
+            "wed": "Wed",
+            "thu": "Thu",
+            "fri": "Fri",
+            "sat": "Sat",
+            "sun": "Sun"
+        },
+        "months_short": {
+            "jan": "J",
+            "feb": "F",
+            "mar": "M",
+            "apr": "A",
+            "may": "M",
+            "jun": "J",
+            "jul": "J",
+            "aug": "A",
+            "sep": "S",
+            "oct": "O",
+            "nov": "N",
+            "dec": "D"
+        }
     }
 }

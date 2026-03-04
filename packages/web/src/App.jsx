@@ -1,19 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, lazy, Suspense } from "react";
 import { Route, Routes, useLocation, Navigate } from "react-router-dom";
-import Login from "./pages/Login";
-import Landing from "./pages/Landing";
-import Features from "./pages/Features";
-import Pricing from "./pages/Pricing";
-import About from "./pages/About";
-import Feed from "./pages/Feed";
-import Profile from "./pages/Profile";
-import Routines from "./pages/Routines";
-import Exercises from "./pages/Exercises";
-import Settings from "./pages/Settings";
-import Messages from "./pages/Messages";
-import Statistics from "./pages/Statistics";
 import { useUser, useAuth } from "@clerk/clerk-react";
-import Layout from "./pages/Layout";
 import toast, { Toaster } from "react-hot-toast";
 import { useDispatch } from "react-redux";
 import { fetchUser } from "./features/user/userSlice";
@@ -22,7 +9,36 @@ import { addMessage } from "./features/messages/messagesSlice";
 import Notification from "./components/Notification";
 import { io } from "socket.io-client";
 
+// ── Eager imports (public/auth pages — shown before login, must be fast) ──────
+import Login from "./pages/Login";
+import Landing from "./pages/Landing";
+import Layout from "./pages/Layout";
+
+// ── Lazy imports (only loaded when user navigates to those routes) ─────────────
+const Features = lazy(() => import("./pages/Features"));
+const Pricing = lazy(() => import("./pages/Pricing"));
+const About = lazy(() => import("./pages/About"));
+const Feed = lazy(() => import("./pages/Feed"));
+const Profile = lazy(() => import("./pages/Profile"));
+const Routines = lazy(() => import("./pages/Routines"));
+const Exercises = lazy(() => import("./pages/Exercises"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Messages = lazy(() => import("./pages/Messages"));
+const Statistics = lazy(() => import("./pages/Statistics"));
+const MuscleDistribution = lazy(() => import("./pages/MuscleDistribution"));
+const ActiveWorkout = lazy(() => import("./pages/ActiveWorkout"));
+const WorkoutSummary = lazy(() => import("./pages/WorkoutSummary"));
+const WorkoutShare = lazy(() => import("./pages/WorkoutShare"));
+const MonthlyReport = lazy(() => import("./pages/MonthlyReport"));
+
 const SOCKET_URL = import.meta.env.VITE_BASEURL || "http://localhost:4000";
+
+// ── Minimal page loading spinner ──────────────────────────────────────────────
+const PageLoader = () => (
+  <div className="flex items-center justify-center w-full h-screen bg-background">
+    <div className="w-8 h-8 border-2 border-accent-primary/30 border-t-accent-primary rounded-full animate-spin" />
+  </div>
+);
 
 const App = () => {
   const { user } = useUser();
@@ -35,13 +51,11 @@ const App = () => {
 
   useEffect(() => {
     if (!user) return;
-
     const fetchData = async () => {
       const token = await getToken();
       dispatch(fetchUser(token));
       dispatch(fetchConnections(token));
     };
-
     fetchData();
   }, [user, getToken, dispatch]);
 
@@ -67,12 +81,9 @@ const App = () => {
       socketRef.current = socket;
 
       socket.on("message_received", (message) => {
-        const fromId = message.from_user_id?._id || message.from_user_id;
-
         if (pathnameRef.current === "/messages") {
           dispatch(addMessage(message));
         } else {
-          // Show toast notification when on a different page
           setUnreadCount((c) => c + 1);
           toast.custom(
             (t) => <Notification t={t} message={message} />,
@@ -98,25 +109,34 @@ const App = () => {
   return (
     <>
       <Toaster />
-      <Routes>
-        <Route path="/" element={user ? <Navigate to="/feed" replace /> : <Landing />} />
-        <Route path="/login" element={user ? <Navigate to="/feed" replace /> : <Login />} />
-        <Route path="/features" element={<Features />} />
-        <Route path="/pricing" element={<Pricing />} />
-        <Route path="/about" element={<About />} />
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/" element={user ? <Navigate to="/feed" replace /> : <Landing />} />
+          <Route path="/login" element={user ? <Navigate to="/feed" replace /> : <Login />} />
+          <Route path="/features" element={<Features />} />
+          <Route path="/pricing" element={<Pricing />} />
+          <Route path="/about" element={<About />} />
 
-        {/* Protected Layout Routes */}
-        <Route element={user ? <Layout unreadCount={unreadCount} /> : <Navigate to="/login" replace />}>
-          <Route path="/feed" element={<Feed />} />
-          <Route path="/messages" element={<Messages />} />
-          <Route path="/statistics" element={<Statistics />} />
-          <Route path="/routines" element={<Routines />} />
-          <Route path="/exercises" element={<Exercises />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/profile/:profileId" element={<Profile />} />
-          <Route path="/settings" element={<Settings />} />
-        </Route>
-      </Routes>
+          {/* Protected Layout Routes */}
+          <Route element={user ? <Layout unreadCount={unreadCount} /> : <Navigate to="/login" replace />}>
+            <Route path="/feed" element={<Feed />} />
+            <Route path="/messages" element={<Messages />} />
+            <Route path="/statistics" element={<Statistics />} />
+            <Route path="/statistics/muscle-distribution" element={<MuscleDistribution />} />
+            <Route path="/statistics/history" element={<Statistics />} />
+            <Route path="/statistics/records" element={<Statistics />} />
+            <Route path="/statistics/monthly-report" element={<MonthlyReport />} />
+            <Route path="/active-workout" element={<ActiveWorkout />} />
+            <Route path="/workout-summary" element={<WorkoutSummary />} />
+            <Route path="/workout-share" element={<WorkoutShare />} />
+            <Route path="/routines" element={<Routines />} />
+            <Route path="/exercises" element={<Exercises />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/profile/:profileId" element={<Profile />} />
+            <Route path="/settings" element={<Settings />} />
+          </Route>
+        </Routes>
+      </Suspense>
     </>
   );
 };

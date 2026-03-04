@@ -7,7 +7,7 @@ import { inngest } from "../inngest/index.js";
 // Add User Story
 export const addUserStory = async (req, res) => {
   try {
-    const { userId } = req.auth();
+    const { userId } = await req.auth();
     const { content, media_type, background_color } = req.body;
 
     const media = req.file;
@@ -23,6 +23,7 @@ export const addUserStory = async (req, res) => {
       });
       media_url = response.url;
     }
+
     //create story
     const story = await Story.create({
       user: userId,
@@ -32,7 +33,7 @@ export const addUserStory = async (req, res) => {
       background_color,
     });
 
-    // schedule story deletion after 24 hours
+    // schedule story deletion after 24 hours via inngest
     try {
       await inngest.send({
         name: 'app/story.delete',
@@ -49,16 +50,20 @@ export const addUserStory = async (req, res) => {
   }
 };
 
-// Get User Stories
+// Get User Stories — only return stories created within the last 24 hours
 export const getStories = async (req, res) => {
   try {
-    const { userId } = req.auth();
+    const { userId } = await req.auth();
     const user = await User.findById(userId);
 
-    //User connections and followings
+    // 24h cutoff — any story older than this is expired
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    // User connections and followings
     const userIds = [userId, ...user.connections, ...user.following];
     const stories = await Story.find({
       user: { $in: userIds },
+      createdAt: { $gte: cutoff }, // ← KEY FIX: only stories from the last 24h
     })
       .populate("user")
       .sort({ createdAt: -1 });

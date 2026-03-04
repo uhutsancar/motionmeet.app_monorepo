@@ -31,7 +31,8 @@ const Profile = ({ route, navigation }) => {
   const loading = useSelector((state) => state.user.loading);
   const [activeStatTab, setActiveStatTab] = useState('duration');
   const { theme, isDark } = useTheme();
-  const styles = getStyles(theme);
+  // Memoize styles to prevent recreation on every single render!
+  const styles = React.useMemo(() => getStyles(theme), [theme]);
   const { t, i18n } = useTranslation();
 
   const [workouts, setWorkouts] = useState([]);
@@ -169,7 +170,7 @@ const Profile = ({ route, navigation }) => {
 
         {/* Statistics Chart Card */}
         <View style={[styles.chartCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <TouchableOpacity 
+           <TouchableOpacity 
             style={styles.chartHeaderInfo}
             onPress={() => navigation.navigate('Statistics')}
           >
@@ -177,11 +178,15 @@ const Profile = ({ route, navigation }) => {
                <Text style={[styles.chartTitle, { color: theme.text }]}>{t('profile.weekly_activity', 'Weekly Activity')}</Text>
                <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
              </View>
-             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-               <Text style={[styles.chartValue, { color: theme.primary, fontSize: 32, fontWeight: '900' }]}>
+             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, flexShrink: 1 }}>
+               <Text 
+                 style={[styles.chartValue, { color: theme.primary, fontSize: 32, fontWeight: '900', flexShrink: 1 }]}
+                 adjustsFontSizeToFit={true}
+                 numberOfLines={1}
+               >
                   {chartData ? chartData.datasets[0].data[chartData.datasets[0].data.length - 1] : 0} 
                </Text>
-               <Text style={{ fontSize: 13, color: theme.textMuted, fontWeight: '700', textTransform: 'uppercase' }}>
+               <Text style={{ fontSize: 13, color: theme.textMuted, fontWeight: '700', textTransform: 'uppercase', flexShrink: 0 }}>
                   {activeStatTab === 'duration' ? t('common.min', 'min') : activeStatTab === 'volume' ? t('common.kg', 'kg') : t('routines.reps', 'Reps')}
                </Text>
              </View>
@@ -318,7 +323,7 @@ const getStyles = (theme) => StyleSheet.create({
   avatarContainer: {
     width: 80,
     height: 80,
-    borderRadius: 24,
+    borderRadius: 40,
     backgroundColor: theme.surface,
     marginRight: 16,
     overflow: 'hidden',
@@ -415,6 +420,10 @@ const getStyles = (theme) => StyleSheet.create({
   chartValue: {
       fontSize: 20,
       fontWeight: 'bold',
+  },
+  fab: { // Added fab style
+      position: 'absolute',
+      bottom: 80,
   },
   metricTabs: {
     flexDirection: 'row',

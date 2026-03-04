@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
@@ -216,4 +216,4 @@ const getStyles = (theme) => StyleSheet.create({
   },
 });
 
-export default StoriesBar;
+export default memo(StoriesBar);

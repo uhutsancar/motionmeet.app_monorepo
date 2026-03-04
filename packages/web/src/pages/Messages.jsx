@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth, useUser } from '@clerk/clerk-react';
 import { useSocket } from '../hooks/useSocket';
-import { Send, Search, MessageSquare, ArrowLeft, Check, CheckCheck, X } from 'lucide-react';
+import { Send, Search, MessageSquare, ArrowLeft, Check, CheckCheck, X, Trash2 } from 'lucide-react';
 import moment from 'moment';
 import 'moment/locale/tr';
 
@@ -88,11 +88,15 @@ const WebMessages = () => {
     socket.on('message_sent', onSent);
     socket.on('typing_start', onTypStart);
     socket.on('typing_stop', onTypStop);
+    socket.on('message_deleted', ({ messageId }) => {
+      setMessages(prev => prev.filter(m => m._id !== messageId));
+    });
     return () => {
       socket.off('message_received', onMsg);
       socket.off('message_sent', onSent);
       socket.off('typing_start', onTypStart);
       socket.off('typing_stop', onTypStop);
+      socket.off('message_deleted');
     };
   }, [socketRef.current]);
 
@@ -140,6 +144,22 @@ const WebMessages = () => {
   const isMe = (msg) => {
     const fromId = msg.from_user_id?._id || msg.from_user_id;
     return fromId === clerkUser?.id || fromId !== activeConv?.partner?._id;
+  };
+
+  const handleDeleteMessage = async (msgId) => {
+    if (window.confirm(t('messages.delete_confirm', 'Are you sure you want to delete this message?'))) {
+      try {
+        const tok = tokenRef.current || await getToken();
+        const data = await authedFetch(`/api/message/delete/${msgId}`, tok, { method: 'DELETE' });
+        if (data.success) {
+          setMessages(prev => prev.filter(m => m._id !== msgId));
+        } else {
+          alert(data.message);
+        }
+      } catch (err) {
+        alert(t('messages.delete_failed', 'Failed to delete message'));
+      }
+    }
   };
 
   return (
@@ -237,6 +257,11 @@ const WebMessages = () => {
                       </div>
                     )}
                     <div className={`flex items-center gap-1 mt-0.5 ${mine ? 'justify-end' : 'justify-start'}`}>
+                      {mine && (
+                        <button onClick={() => handleDeleteMessage(msg._id)} className="text-[var(--text-muted)] hover:text-red-500 mr-2 transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <span className="text-[10px] text-[var(--text-muted)]">{moment(msg.createdAt).format('HH:mm')}</span>
                       {mine && (msg.seen ? <CheckCheck className="w-3 h-3 text-blue-400" /> : <Check className="w-3 h-3 text-[var(--text-muted)]" />)}
                     </div>

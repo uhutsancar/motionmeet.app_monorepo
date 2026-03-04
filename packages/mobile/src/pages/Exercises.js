@@ -13,9 +13,19 @@ import moment from 'moment';
 
 const { height, width } = Dimensions.get('window');
 
+const MUSCLE_GROUPS = [
+  "all", "Abdominals", "Abductors", "Adductors", "Biceps", "Calves", "Chest",
+  "Forearms", "Glutes", "Hamstrings", "Lats", "Lower Back", "Middle Back",
+  "Neck", "Quadriceps", "Shoulders", "Traps", "Triceps"
+];
+
+const EQUIPMENT_LIST = [
+  "all", "Barbell", "Dumbbell", "Kettlebell", "Machine", "Cable",
+  "Bodyweight", "Band", "Plate", "Other"
+];
+
 const Exercises = ({ navigation }) => {
   const { theme, isDark } = useTheme();
-  const styles = getStyles(theme);
   const { t } = useTranslation();
 
   const [exercises, setExercises] = useState([]);
@@ -33,16 +43,8 @@ const Exercises = ({ navigation }) => {
   const [statsLoading, setStatsLoading] = useState(false);
   const [filterType, setFilterType] = useState(null); // 'muscle' | 'equipment'
 
-  const muscleGroups = [
-    "all", "Abdominals", "Abductors", "Adductors", "Biceps", "Calves", "Chest",
-    "Forearms", "Glutes", "Hamstrings", "Lats", "Lower Back", "Middle Back",
-    "Neck", "Quadriceps", "Shoulders", "Traps", "Triceps"
-  ];
-
-  const equipmentList = [
-    "all", "Barbell", "Dumbbell", "Kettlebell", "Machine", "Cable",
-    "Bodyweight", "Band", "Plate", "Other"
-  ];
+  // Memoize styles to prevent recreation on every render
+  const styles = React.useMemo(() => getStyles(theme), [theme]);
 
   const fetchExercises = async () => {
     try {
@@ -63,27 +65,34 @@ const Exercises = ({ navigation }) => {
     }
   };
 
-  const fetchExerciseStats = async (exercise) => {
-    setSelectedExercise(exercise);
-    setShowDetailModal(true);
-    setExerciseStats(null);
-    setStatsLoading(true);
-    try {
-      const { data } = await api.get(`/api/exercise/${exercise._id}/stats`);
-      if (data.success) {
-        setExerciseStats(data.stats);
+  const navigateToDetail = async (exercise) => {
+    // Navigate to dedicated detail screen which handles its own stats fetch
+    if (navigation) {
+      navigation.navigate('ExerciseDetail', { exercise });
+    } else {
+      // Fallback: open in-page modal
+      setSelectedExercise(exercise);
+      setShowDetailModal(true);
+      setExerciseStats(null);
+      setStatsLoading(true);
+      try {
+        const { data } = await api.get(`/api/exercise/${exercise._id}/stats`);
+        if (data.success) {
+          setExerciseStats(data.stats);
+        }
+      } catch (error) {
+        console.error("Error fetching exercise stats:", error);
+      } finally {
+        setStatsLoading(false);
       }
-    } catch (error) {
-      console.error("Error fetching exercise stats:", error);
-    } finally {
-      setStatsLoading(false);
     }
   };
 
   useEffect(() => {
+    // Better debouncing: wait 500ms after last keystroke before fetching
     const delayDebounceFn = setTimeout(() => {
       fetchExercises();
-    }, 400);
+    }, 500);
 
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery, muscleFilter, equipmentFilter]);
@@ -148,31 +157,24 @@ const Exercises = ({ navigation }) => {
           )}
         </View>
 
-        {/* Filter Pills */}
+        {/* Filter Buttons */}
         <View style={styles.filtersWrapper}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterPills}>
-            <TouchableOpacity 
-              style={[styles.pill, muscleFilter !== 'all' && styles.pillActive]} 
-              onPress={() => openFilter('muscle')}
-            >
-              <Ionicons name="fitness-outline" size={16} color={muscleFilter !== 'all' ? '#fff' : theme.primary} />
-              <Text style={[styles.pillText, muscleFilter !== 'all' && styles.pillTextActive]}>
-                {muscleFilter === 'all' ? t('exercises.muscle', 'Muscle') : muscleFilter}
-              </Text>
-              <Ionicons name="chevron-down" size={14} color={muscleFilter !== 'all' ? '#fff' : theme.textMuted} />
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.pill, equipmentFilter !== 'all' && styles.pillActive]} 
-              onPress={() => openFilter('equipment')}
-            >
-              <Ionicons name="barbell-outline" size={16} color={equipmentFilter !== 'all' ? '#fff' : theme.primary} />
-              <Text style={[styles.pillText, equipmentFilter !== 'all' && styles.pillTextActive]}>
-                {equipmentFilter === 'all' ? t('exercises.equipment', 'Equipment') : equipmentFilter}
-              </Text>
-              <Ionicons name="chevron-down" size={14} color={equipmentFilter !== 'all' ? '#fff' : theme.textMuted} />
-            </TouchableOpacity>
-          </ScrollView>
+          <TouchableOpacity 
+            style={styles.filterBlockBtn} 
+            onPress={() => openFilter('equipment')}
+          >
+            <Text style={styles.filterBlockText}>
+              {equipmentFilter === 'all' ? t('exercises.all_equipment', 'Tüm Ekipmanlar') : equipmentFilter}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.filterBlockBtn} 
+            onPress={() => openFilter('muscle')}
+          >
+            <Text style={styles.filterBlockText}>
+              {muscleFilter === 'all' ? t('exercises.all_muscles', 'Tüm Kaslar') : muscleFilter}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {loading ? (
@@ -180,42 +182,43 @@ const Exercises = ({ navigation }) => {
             <ActivityIndicator color={theme.primary} size="large" />
           </View>
         ) : (
-          <FlatList
-            data={exercises}
-            keyExtractor={(item) => item._id}
-            showsVerticalScrollIndicator={false}
-            ListHeaderComponent={<Text style={styles.listHeader}>{t('exercises.library', 'Library')}</Text>}
-            renderItem={({ item }) => (
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+            <Text style={styles.listHeader}>{t('exercises.recent', 'Son Egzersizler')}</Text>
+            {exercises.slice(0, 4).map((item) => (
               <TouchableOpacity 
+                key={`recent-${item._id}`}
                 style={styles.exerciseCard}
-                onPress={() => fetchExerciseStats(item)}
+                onPress={() => navigateToDetail(item)}
               >
-                <View style={styles.iconContainer}>
-                  <Ionicons name="barbell" size={24} color={theme.primary} />
+                <View style={[styles.imageCircle, { backgroundColor: theme.surface }]}>
+                  <Ionicons name="body" size={32} color={theme.textMuted} />
                 </View>
                 <View style={styles.cardInfo}>
                   <Text style={styles.exerciseName}>{item.name}</Text>
-                  <View style={styles.badgeRow}>
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText}>{item.muscleGroup}</Text>
-                    </View>
-                    <View style={[styles.badge, { backgroundColor: theme.surfaceLight }]}>
-                      <Text style={[styles.badgeText, { color: theme.textMuted }]}>{item.equipment}</Text>
-                    </View>
-                  </View>
+                  <Text style={styles.exerciseDesc}>{item.muscleGroup} • {item.equipment}</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={theme.border} />
+                <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
               </TouchableOpacity>
-            )}
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <Ionicons name="search-outline" size={64} color={theme.border} />
-                <Text style={styles.emptyTitle}>{t('exercises.not_found', 'No results')}</Text>
-                <Text style={styles.emptySubtitle}>{t('exercises.try_another', 'Try changing your filters or search term.')}</Text>
-              </View>
-            }
-            contentContainerStyle={{ paddingBottom: 40 }}
-          />
+            ))}
+
+            <Text style={[styles.listHeader, { marginTop: 10 }]}>{t('exercises.all', 'Tüm Egzersizler')}</Text>
+            {exercises.map((item) => (
+              <TouchableOpacity 
+                key={`all-${item._id}`}
+                style={styles.exerciseCard}
+                onPress={() => navigateToDetail(item)}
+              >
+                <View style={[styles.imageCircle, { backgroundColor: theme.surface }]}>
+                  <Ionicons name="body" size={32} color={theme.textMuted} />
+                </View>
+                <View style={styles.cardInfo}>
+                  <Text style={styles.exerciseName}>{item.name}</Text>
+                  <Text style={styles.exerciseDesc}>{item.muscleGroup} • {item.equipment}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         )}
       </View>
 
@@ -229,81 +232,14 @@ const Exercises = ({ navigation }) => {
                 {filterType === 'muscle' ? t('exercises.select_muscle', 'Select Muscle Group') : t('exercises.select_equipment', 'Select Equipment')}
               </Text>
             </View>
-            <FlatList
-              data={filterType === 'muscle' ? muscleGroups : equipmentList}
-              renderItem={renderFilterItem}
-              keyExtractor={(item) => item}
-              contentContainerStyle={{ paddingBottom: 40 }}
-            />
+                <FlatList
+                  data={filterType === 'muscle' ? MUSCLE_GROUPS : EQUIPMENT_LIST}
+                  renderItem={renderFilterItem}
+                  keyExtractor={item => item}
+                  showsVerticalScrollIndicator={false}
+                />
           </View>
         </TouchableOpacity>
-      </Modal>
-
-      {/* Detail Modal */}
-      <Modal visible={showDetailModal} transparent animationType="fade" onRequestClose={() => setShowDetailModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.detailCard}>
-             <TouchableOpacity style={styles.closeDetailBtn} onPress={() => setShowDetailModal(false)}>
-                <Ionicons name="close" size={24} color={theme.text} />
-             </TouchableOpacity>
-             
-             <View style={styles.detailHeaderCenter}>
-                <View style={[styles.iconContainer, { width: 70, height: 70, borderRadius: 25, marginBottom: 15 }]}>
-                  <Ionicons name="barbell" size={32} color={theme.primary} />
-                </View>
-                <Text style={styles.detailTitle}>{selectedExercise?.name}</Text>
-                <View style={[styles.badgeRow, { marginTop: 10 }]}>
-                    <View style={styles.badge}><Text style={styles.badgeText}>{selectedExercise?.muscleGroup}</Text></View>
-                    <View style={[styles.badge, { backgroundColor: theme.surfaceLight }]}><Text style={[styles.badgeText, { color: theme.textMuted }]}>{selectedExercise?.equipment}</Text></View>
-                </View>
-             </View>
-
-             <View style={styles.statsGrid}>
-                <View style={styles.statBox}>
-                   <Text style={styles.statLabel}>{t('exercises.personal_record', 'Personal Record')}</Text>
-                   <Text style={styles.statValue}>{exerciseStats?.personalRecord || 0} <Text style={{fontSize: 14, color: theme.textMuted}}>kg</Text></Text>
-                </View>
-                <View style={styles.statBox}>
-                   <Text style={styles.statLabel}>{t('exercises.total_sessions', 'Total Sessions')}</Text>
-                   <Text style={styles.statValue}>{exerciseStats?.totalSessions || 0}</Text>
-                </View>
-             </View>
-
-             <View style={styles.chartSection}>
-                <Text style={styles.chartLabel}>{t('exercises.progress_history', 'Progress History')}</Text>
-                {statsLoading ? (
-                  <ActivityIndicator color={theme.primary} style={{ marginVertical: 30 }} />
-                ) : exerciseStats?.history?.length > 1 ? (
-                  <View style={styles.miniChart}>
-                    <View style={{ height: 80, flexDirection: 'row', alignItems: 'flex-end', gap: 5 }}>
-                      {exerciseStats.history.slice(-10).map((h, i) => (
-                        <View key={i} style={{ 
-                          flex: 1, 
-                          height: `${Math.max(15, (h.maxWeight / Math.max(...exerciseStats.history.map(x => x.maxWeight), 1)) * 100)}%`, 
-                          backgroundColor: theme.primary, 
-                          borderRadius: 6,
-                          opacity: 0.4 + (i * 0.06) 
-                        }} />
-                      ))}
-                    </View>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
-                        <Text style={{ fontSize: 10, color: theme.textMuted }}>{moment(exerciseStats.history[0].date).format("MMM DD")}</Text>
-                        <Text style={{ fontSize: 10, color: theme.textMuted }}>{moment(exerciseStats.history[exerciseStats.history.length-1].date).format("MMM DD")}</Text>
-                    </View>
-                  </View>
-                ) : (
-                  <View style={styles.noDataBox}>
-                    <Ionicons name="analytics-outline" size={32} color={theme.border} />
-                    <Text style={styles.noDataText}>{t('exercises.more_sessions_needed', 'Keep training to see your progress!')}</Text>
-                  </View>
-                )}
-             </View>
-
-             <TouchableOpacity style={styles.doneBtn} onPress={() => setShowDetailModal(false)}>
-                <Text style={styles.doneBtnText}>{t('common.done', 'Done')}</Text>
-             </TouchableOpacity>
-          </View>
-        </View>
       </Modal>
 
       <CustomExerciseModal visible={showCreateModal} onClose={() => setShowCreateModal(false)} onExerciseCreated={(newEx) => setExercises([newEx, ...exercises])} />
@@ -321,20 +257,15 @@ const getStyles = (theme) => StyleSheet.create({
   searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: 18, borderWidth: 1, borderColor: theme.border, paddingHorizontal: 16, height: 54, marginBottom: 16 },
   searchIcon: { marginRight: 10 },
   searchInput: { flex: 1, height: '100%', color: theme.text, fontSize: 16, fontWeight: '500' },
-  filtersWrapper: { marginBottom: 20 },
-  filterPills: { gap: 10 },
-  pill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface, gap: 8 },
-  pillActive: { backgroundColor: theme.primary, borderColor: theme.primary },
-  pillText: { fontSize: 14, fontWeight: '700', color: theme.text },
-  pillTextActive: { color: '#fff' },
-  listHeader: { fontSize: 12, fontWeight: '800', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 16 },
-  exerciseCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, padding: 16, borderRadius: 22, marginBottom: 12, borderWidth: 1, borderColor: theme.border },
-  iconContainer: { width: 52, height: 52, borderRadius: 18, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center', marginRight: 16, borderWidth: 1, borderColor: theme.border },
+  filtersWrapper: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  filterBlockBtn: { flex: 1, backgroundColor: theme.surface, borderRadius: 12, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
+  filterBlockText: { color: theme.text, fontSize: 14, fontWeight: '600' },
+  listHeader: { fontSize: 14, fontWeight: '600', color: theme.textMuted, marginBottom: 8, paddingHorizontal: 4 },
+  exerciseCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.background, paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: theme.border },
+  imageCircle: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', marginRight: 16, overflow: 'hidden' },
   cardInfo: { flex: 1 },
-  exerciseName: { fontSize: 17, fontWeight: 'bold', color: theme.text, marginBottom: 6 },
-  badgeRow: { flexDirection: 'row', gap: 6 },
-  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: theme.primary + '15' },
-  badgeText: { fontSize: 10, fontWeight: '800', color: theme.primary, textTransform: 'uppercase' },
+  exerciseName: { fontSize: 16, fontWeight: '500', color: theme.text, marginBottom: 4 },
+  exerciseDesc: { fontSize: 13, color: theme.textMuted },
   loadingWrapper: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   emptyState: { paddingTop: 60, alignItems: 'center', justifyContent: 'center' },
   emptyTitle: { fontSize: 18, fontWeight: 'bold', color: theme.text, marginTop: 16 },

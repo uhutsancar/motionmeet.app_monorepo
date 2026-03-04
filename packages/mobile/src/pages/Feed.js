@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, 
   Text, 
   StyleSheet, 
-  ScrollView, 
+  FlatList,
   TouchableOpacity,
   RefreshControl,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { useAuth } from '@clerk/clerk-expo';
@@ -28,8 +28,12 @@ import { setAuthToken } from '../api/client';
 
 const Feed = ({ navigation }) => {
   const { theme } = useTheme();
-  const styles = getStyles(theme);
+  // Memoize styles
+  const styles = React.useMemo(() => getStyles(theme), [theme]);
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const TAB_BAR_HEIGHT = 78;
+  const fabBottom = TAB_BAR_HEIGHT + insets.bottom + 16;
   const dispatch = useDispatch();
   const { getToken } = useAuth();
   const { stories, loading: storiesLoading } = useSelector((state) => state.stories);
@@ -64,17 +68,34 @@ const Feed = ({ navigation }) => {
     setRefreshing(false);
   };
 
-  const handleComment = (postId) => {
-    // Shared toast or localized alert
-  };
-
-  const handleShare = (post) => {
-    // Shared toast or localized alert
-  };
-
-  const handleUserPress = (userId) => {
+  const handleComment = useCallback(() => {}, []);
+  const handleShare = useCallback(() => {}, []);
+  const handleUserPress = useCallback((userId) => {
     navigation.navigate('Profile', { userId });
-  };
+  }, [navigation]);
+
+  // Build FlatList data: first 2 posts, then suggested athletes marker, then rest
+  const validPosts = (posts || []).filter(post => post && post._id && post.user && post.user._id);
+  const listData = [
+    ...validPosts.slice(0, 2).map(p => ({ type: 'post', item: p })),
+    ...(validPosts.length > 0 ? [{ type: 'suggested', id: 'suggested' }] : []),
+    ...validPosts.slice(2).map(p => ({ type: 'post', item: p })),
+  ];
+
+  const renderItem = useCallback(({ item: row }) => {
+    if (row.type === 'suggested') {
+      return <SuggestedAthletes navigation={navigation} />;
+    }
+    return (
+      <PostCard
+        post={row.item}
+        onComment={handleComment}
+        onShare={handleShare}
+        onUserPress={handleUserPress}
+        navigation={navigation}
+      />
+    );
+  }, [handleComment, handleShare, handleUserPress, navigation]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -110,66 +131,43 @@ const Feed = ({ navigation }) => {
         </View>
       </View>
 
-      <ScrollView 
-        style={styles.scrollView}
+      <FlatList
+        data={listData}
+        renderItem={renderItem}
+        keyExtractor={(row, i) => row.id || row.item?._id || String(i)}
         showsVerticalScrollIndicator={false}
+        removeClippedSubviews={true}
+        windowSize={5}
+        maxToRenderPerBatch={4}
+        updateCellsBatchingPeriod={50}
+        initialNumToRender={3}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
         }
-      >
-        <View style={{ paddingVertical: 12 }}>
+        ListHeaderComponent={
+          <View style={{ paddingVertical: 12 }}>
             <StoriesBar onAddStory={() => setShowStoryModal(true)} />
-        </View>
-
-        <View style={styles.postsContainer}>
-          {postsLoading && posts.length === 0 ? (
+          </View>
+        }
+        ListEmptyComponent={
+          postsLoading ? (
             <View style={styles.loadingContainer}>
               <Text style={{ color: theme.textMuted }}>{t('common.loading', 'Loading...')}</Text>
             </View>
-          ) : posts.length === 0 ? (
+          ) : (
             <View style={styles.emptyContainer}>
               <Ionicons name="document-text-outline" size={64} color={theme.border} />
               <Text style={[styles.emptyText, { color: theme.text }]}>{t('feed.no_posts', 'No posts yet')}</Text>
             </View>
-          ) : (
-            <>
-              {posts
-                .filter(post => post && post._id && post.user && post.user._id)
-                .slice(0, 2)
-                .map((post) => (
-                  <PostCard 
-                    key={post._id}
-                    post={post}
-                    onComment={handleComment}
-                    onShare={handleShare}
-                    onUserPress={handleUserPress}
-                    navigation={navigation}
-                  />
-                ))}
-              
-              <SuggestedAthletes navigation={navigation} />
-
-              {posts
-                .filter(post => post && post._id && post.user && post.user._id)
-                .slice(2)
-                .map((post) => (
-                  <PostCard 
-                    key={post._id}
-                    post={post}
-                    onComment={handleComment}
-                    onShare={handleShare}
-                    onUserPress={handleUserPress}
-                    navigation={navigation}
-                  />
-                ))}
-            </>
-          )}
-        </View>
-      </ScrollView>
+          )
+        }
+        style={styles.scrollView}
+        contentContainerStyle={{ paddingBottom: 100 }}
+      />
 
       {/* Floating Action Button for Create Post */}
       <TouchableOpacity 
-        style={[styles.fab, { backgroundColor: theme.primary }]}
+        style={[styles.fab, { backgroundColor: theme.primary, bottom: fabBottom }]}
         onPress={() => setShowCreatePost(true)}
       >
         <Ionicons name="add" size={30} color="#fff" />
@@ -268,7 +266,6 @@ const getStyles = (theme) => StyleSheet.create({
   },
   fab: {
       position: 'absolute',
-      bottom: 24,
       right: 24,
       width: 60,
       height: 60,

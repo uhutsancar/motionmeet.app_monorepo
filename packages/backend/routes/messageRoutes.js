@@ -5,6 +5,7 @@ import {
   getUserConversations,
   getUserRecentMessages,
   markSeen,
+  deleteMessage,
 } from "../controllers/messageController.js";
 import { upload } from "../configs/multer.js";
 import { protect } from "../middlewares/auth.js";
@@ -16,5 +17,6 @@ messageRouter.post("/get", protect, getChatMessages);
 messageRouter.get("/conversations", protect, getUserConversations);
 messageRouter.get("/recent", protect, getUserRecentMessages);
 messageRouter.post("/seen", protect, markSeen);
+messageRouter.delete("/delete/:messageId", protect, deleteMessage);
 
 export default messageRouter;

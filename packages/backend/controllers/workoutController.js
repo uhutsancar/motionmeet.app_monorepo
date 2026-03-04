@@ -4,7 +4,7 @@ import User from "../models/User.js";
 // Log a completed workout
 export const logWorkout = async (req, res) => {
   try {
-    const { userId } = req.auth();
+    const { userId } = await req.auth();
     const { name, startTime, endTime, durationMinutes, volumeKg, exercises } = req.body;
 
     const newWorkout = await Workout.create({
@@ -29,7 +29,7 @@ export const logWorkout = async (req, res) => {
 // Get user workouts
 export const getUserWorkouts = async (req, res) => {
   try {
-    const { userId } = req.auth();
+    const { userId } = await req.auth();
     const workouts = await Workout.find({ userId })
       .populate("exercises.exerciseId")
       .sort({ startTime: -1 });
@@ -44,17 +44,25 @@ export const getUserWorkouts = async (req, res) => {
 // Get aggregated workout statistics for charts
 export const getWorkoutStats = async (req, res) => {
   try {
-    const { userId } = req.auth();
+    const { userId } = await req.auth();
     const { period = "month" } = req.query; // "week" | "month" | "year"
 
-    const workouts = await Workout.find({ userId }).sort({ startTime: 1 });
+    // Populate exerciseId to get muscleGroup for radar chart
+    const workouts = await Workout.find({ userId })
+      .populate("exercises.exerciseId")
+      .sort({ startTime: 1 });
+
+    const MUSCLE_GROUPS = ["Chest", "Back", "Legs", "Shoulders", "Arms", "Abs"];
+    const muscleDistribution = {};
+    MUSCLE_GROUPS.forEach((m) => { muscleDistribution[m] = 0; });
 
     if (workouts.length === 0) {
       return res.json({
         success: true,
         stats: { labels: [], volumes: [], durations: [], reps: [] },
         exerciseBreakdown: [],
-        totalVolume: 0, totalDuration: 0, totalWorkouts: 0, totalCalories: 0,
+        muscleDistribution,
+        totalVolume: 0, totalDuration: 0, totalWorkouts: 0, totalCalories: 0, totalSets: 0,
       });
     }
 
@@ -62,6 +70,17 @@ export const getWorkoutStats = async (req, res) => {
     const exerciseTotals = {};
     const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    let totalSets = 0;
+
+    // Muscle group normalization — map DB values → chart labels
+    const muscleMap = {
+      "Chest": "Chest", "chest": "Chest",
+      "Back": "Back", "back": "Back", "Lats": "Back", "Lower Back": "Back",
+      "Legs": "Legs", "legs": "Legs", "Quadriceps": "Legs", "Hamstrings": "Legs", "Calves": "Legs", "Glutes": "Legs",
+      "Shoulders": "Shoulders", "shoulders": "Shoulders",
+      "Arms": "Arms", "arms": "Arms", "Biceps": "Arms", "Triceps": "Arms", "Forearms": "Arms",
+      "Abs": "Abs", "abs": "Abs", "Abdominals": "Abs", "Core": "Abs",
+    };
 
     workouts.forEach((w) => {
       const d = new Date(w.startTime || w.createdAt);
@@ -76,16 +95,35 @@ export const getWorkoutStats = async (req, res) => {
 
       if (w.exercises) {
         w.exercises.forEach((ex) => {
-          const name = ex.name || ex.exerciseId?.name || "Exercise";
+          const exerciseDoc = ex.exerciseId; // populated doc
+          const name = exerciseDoc?.name || ex.name || "Exercise";
+          const rawMuscle = exerciseDoc?.muscleGroup || "";
+          const normalizedMuscle = muscleMap[rawMuscle];
+
           if (!exerciseTotals[name]) exerciseTotals[name] = 0;
+
           if (ex.sets) {
             ex.sets.forEach((s) => {
-              exerciseTotals[name] += (s.reps || 0);
-              grouped[label].reps += (s.reps || 0);
+              const reps = s.reps || 0;
+              const vol = (s.weight || 0) * reps;
+              exerciseTotals[name] += reps;
+              grouped[label].reps += reps;
+              totalSets += 1;
+              // Add volume to the muscle group
+              if (normalizedMuscle && muscleDistribution[normalizedMuscle] !== undefined) {
+                muscleDistribution[normalizedMuscle] += vol;
+              }
             });
           }
         });
       }
+    });
+
+    // Normalize muscleDistribution to 0–1 scale for radar chart
+    const maxMuscleVol = Math.max(...Object.values(muscleDistribution), 1);
+    const muscleDistributionNormalized = {};
+    Object.entries(muscleDistribution).forEach(([k, v]) => {
+      muscleDistributionNormalized[k] = parseFloat((v / maxMuscleVol).toFixed(3));
     });
 
     const labels = Object.keys(grouped);
@@ -106,7 +144,8 @@ export const getWorkoutStats = async (req, res) => {
       success: true,
       stats: { labels, volumes, durations, reps },
       exerciseBreakdown,
-      totalVolume, totalDuration, totalWorkouts, totalCalories,
+      muscleDistribution: muscleDistributionNormalized,
+      totalVolume, totalDuration, totalWorkouts, totalCalories, totalSets,
     });
   } catch (error) {
     console.log(error);

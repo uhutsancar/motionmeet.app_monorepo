@@ -40,7 +40,10 @@
         "select_hint": "Sol taraftan bir konuşma seçerek sohbet başlat.",
         "start_conversation": "Konuşmayı başlat!",
         "type_message": "Mesaj yaz...",
-        "online": "Çevrimiçi"
+        "online": "Çevrimiçi",
+        "delete_title": "Mesajı Sil",
+        "delete_confirm": "Bu mesajı silmek istediğine emin misin?",
+        "delete_failed": "Mesaj silinemedi"
     },
     "landing": {
         "log_workouts": "Antrenman Kaydet,",
@@ -319,7 +322,9 @@
         "all_equipment": "Tüm Ekipmanlar",
         "available": "mevcut",
         "more_sessions_needed": "Trendler için daha fazla seans gerekli",
-        "progress_history": "İlerleme Geçmişi"
+        "progress_history": "İlerleme Geçmişi",
+        "personal_record": "Kişisel Rekor",
+        "total_sessions": "Toplam Seans"
     },
     "statistics": {
         "title": "İstatistikler",
@@ -386,5 +391,40 @@
         "post_published": "Gönderi başarıyla paylaşıldı!",
         "publish_failed": "Gönderi paylaşılamadı.",
         "workout_post_content": "{{name}} antrenmanımı yeni bitirdim! 🏋️‍♂️"
+    },
+    "monthly_report": {
+        "title": "{{month}} Raporu",
+        "summary": "Özet",
+        "workouts": "Antrenmanlar",
+        "duration": "Süre",
+        "volume": "Hacim",
+        "sets": "Set",
+        "workout_days_log": "Antrenman Günleri Kaydı",
+        "weekly_streak": "{{count}} Haftalık Seri",
+        "muscle_distribution": "Kas Dağılımı",
+        "share": "Paylaş",
+        "days": {
+            "mon": "Pzt",
+            "tue": "Sal",
+            "wed": "Çar",
+            "thu": "Per",
+            "fri": "Cum",
+            "sat": "Cts",
+            "sun": "Paz"
+        },
+        "months_short": {
+            "jan": "O",
+            "feb": "Ş",
+            "mar": "M",
+            "apr": "N",
+            "may": "M",
+            "jun": "H",
+            "jul": "T",
+            "aug": "A",
+            "sep": "E",
+            "oct": "E",
+            "nov": "K",
+            "dec": "A"
+        }
     }
 }

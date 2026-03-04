@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Allow: /features
+Allow: /pricing
+Allow: /about
+
+Disallow: /api/
+
+Sitemap: https://motionmeet.app/sitemap.xml

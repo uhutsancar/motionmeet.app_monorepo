@@ -3,15 +3,15 @@ import { ChevronDown, MoreHorizontal, Plus, Folder, FileText, Search, Dumbbell, 
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@clerk/clerk-react";
 import api from "~/api/axios";
+import { useNavigate } from "react-router-dom";
 import RoutineBuilderModal from "../components/RoutineBuilderModal";
-import ActiveWorkoutModal from "../components/ActiveWorkoutModal";
 
 const Routines = () => {
     const { t } = useTranslation();
     const { getToken } = useAuth();
+    const navigate = useNavigate();
     const [routines, setRoutines] = useState([]);
     const [showBuilder, setShowBuilder] = useState(false);
-    const [activeRoutine, setActiveRoutine] = useState(null);
 
     useEffect(() => {
         const fetchRoutines = async () => {
@@ -121,7 +121,7 @@ const Routines = () => {
                                     </div>
 
                                     <button
-                                        onClick={() => setActiveRoutine(routine)}
+                                        onClick={() => navigate('/active-workout', { state: { routine } })}
                                         className="w-full bg-accent-primary hover:bg-accent-hover transition-all font-bold text-white py-3.5 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-accent-primary/10 active:scale-[0.98]">
                                         <PlayCircle className="w-5 h-5" />
                                         {t('routines.start_routine')}
@@ -151,13 +151,6 @@ const Routines = () => {
                 <RoutineBuilderModal
                     setShowModal={setShowBuilder}
                     onRoutineCreated={(r) => setRoutines(prev => [r, ...prev])}
-                />
-            )}
-            {activeRoutine && (
-                <ActiveWorkoutModal
-                    routine={activeRoutine}
-                    onClose={() => setActiveRoutine(null)}
-                    onWorkoutSaved={() => setActiveRoutine(null)}
                 />
             )}
         </div>

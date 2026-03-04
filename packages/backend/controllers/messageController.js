@@ -31,7 +31,7 @@ const notifyRecipient = async (toUserId, message) => {
 // ── HTTP: send message (supports images via multipart) ──────────────────────
 export const sendMessage = async (req, res) => {
   try {
-    const { userId } = req.auth();
+    const { userId } = await req.auth();
     const { to_user_id, text } = req.body;
     const image = req.file;
 
@@ -72,7 +72,7 @@ export const sendMessage = async (req, res) => {
 // ── HTTP: get messages between two users ────────────────────────────────────
 export const getChatMessages = async (req, res) => {
   try {
-    const { userId } = req.auth();
+    const { userId } = await req.auth();
     const { to_user_id } = req.body;
 
     const messages = await Message.find({
@@ -99,7 +99,7 @@ export const getChatMessages = async (req, res) => {
 // ── HTTP: get recent conversations list ─────────────────────────────────────
 export const getUserConversations = async (req, res) => {
   try {
-    const { userId } = req.auth();
+    const { userId } = await req.auth();
 
     // Get all messages involving this user
     const messages = await Message.find({
@@ -151,7 +151,7 @@ export const getUserConversations = async (req, res) => {
 // ── Legacy: get messages received by user (kept for compatibility) ───────────
 export const getUserRecentMessages = async (req, res) => {
   try {
-    const { userId } = req.auth();
+    const { userId } = await req.auth();
 
     const messages = await Message.find({ to_user_id: userId })
       .populate("from_user_id to_user_id")
@@ -175,6 +175,39 @@ export const markSeen = async (req, res) => {
     );
 
     res.json({ success: true });
+  } catch (error) {
+    res.json({ success: false, message: error.message });
+  }
+};
+
+// ── HTTP: delete a specific message ──────────────────────────────────────────
+export const deleteMessage = async (req, res) => {
+  try {
+    const { userId } = req.auth();
+    const { messageId } = req.params;
+
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.json({ success: false, message: "Message not found" });
+    }
+
+    // Only allow sender to delete their messages
+    if (message.from_user_id.toString() !== userId) {
+      return res.json({ success: false, message: "Not authorized to delete this message" });
+    }
+
+    await Message.findByIdAndDelete(messageId);
+
+    // Note: To make it disappear on recipient in real-time, you could emit a delete event here
+    const { io, userSockets } = await getIO();
+    const recipientSockets = userSockets.get(message.to_user_id.toString());
+    if (recipientSockets) {
+      recipientSockets.forEach((sid) => {
+        io.to(sid).emit("message_deleted", { messageId });
+      });
+    }
+
+    res.json({ success: true, messageId });
   } catch (error) {
     res.json({ success: false, message: error.message });
   }

@@ -95,7 +95,16 @@ const StoryViewer = ({ viewStory, setViewStory }) => {
               <span>{viewStory.user?.full_name}</span>
               <BadgeCheck size={16} className="text-accent-primary" />
             </div>
-            <p className="text-[10px] text-white/50 font-bold uppercase tracking-tighter">Just now</p>
+            <p className="text-[10px] text-white/50 font-bold uppercase tracking-tighter">
+              {viewStory.createdAt ? (() => {
+                const diffMs = Date.now() - new Date(viewStory.createdAt).getTime();
+                const diffMins = Math.floor(diffMs / 60000);
+                if (diffMins < 1) return 'Şimdi';
+                if (diffMins < 60) return `${diffMins}dk önce`;
+                const diffHrs = Math.floor(diffMins / 60);
+                return `${diffHrs}s önce`;
+              })() : 'Şimdi'}
+            </p>
           </div>
         </div>
 

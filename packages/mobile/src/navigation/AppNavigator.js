@@ -18,6 +18,12 @@ import Messages from '../pages/Messages';
 import ChatBox from '../pages/ChatBox';
 import Statistics from '../pages/Statistics';
 import Connections from '../pages/Connections';
+import ExerciseDetail from '../pages/ExerciseDetail';
+import MuscleDistribution from '../pages/MuscleDistribution';
+import WorkoutSummaryScreen from '../pages/WorkoutSummaryScreen';
+import WorkoutCompleteShare from '../pages/WorkoutCompleteShare';
+import ActiveWorkoutScreen from '../pages/ActiveWorkoutScreen';
+import MonthlyReportScreen from '../pages/MonthlyReportScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -49,6 +55,12 @@ const MainStack = () => (
     <Stack.Screen name="Statistics" component={Statistics} />
     <Stack.Screen name="ChatBox" component={ChatBox} />
     <Stack.Screen name="Connections" component={Connections} />
+    <Stack.Screen name="ExerciseDetail" component={ExerciseDetail} />
+    <Stack.Screen name="MuscleDistribution" component={MuscleDistribution} />
+    <Stack.Screen name="WorkoutSummaryScreen" component={WorkoutSummaryScreen} />
+    <Stack.Screen name="WorkoutCompleteShare" component={WorkoutCompleteShare} />
+    <Stack.Screen name="ActiveWorkoutScreen" component={ActiveWorkoutScreen} />
+    <Stack.Screen name="MonthlyReportScreen" component={MonthlyReportScreen} />
   </Stack.Navigator>
 );
 
@@ -70,14 +82,14 @@ const TabNavigator = () => {
 
   const iconForRoute = (name, focused) => {
     const map = {
-      Home: [focused ? 'home' : 'home-outline'],
-      Routines: [focused ? 'document-text' : 'document-text-outline'],
-      Exercises: [focused ? 'barbell' : 'barbell-outline'],
-      MessagesTab: [focused ? 'chatbubbles' : 'chatbubbles-outline'],
-      ProfileTab: [focused ? 'person' : 'person-outline'],
-      SettingsTab: [focused ? 'settings' : 'settings-outline'],
+      Home:        focused ? 'home'              : 'home-outline',
+      Routines:    focused ? 'fitness'           : 'fitness-outline',
+      Exercises:   focused ? 'barbell'           : 'barbell-outline',
+      MessagesTab: focused ? 'chatbubbles'       : 'chatbubbles-outline',
+      ProfileTab:  focused ? 'person-circle'     : 'person-circle-outline',
+      SettingsTab: focused ? 'settings'          : 'settings-outline',
     };
-    return (map[name] || ['ellipse-outline'])[0];
+    return map[name] || 'ellipse-outline';
   };
 
   return (
@@ -108,46 +120,45 @@ const TabNavigator = () => {
         },
         tabBarActiveTintColor: theme.primary,
         tabBarInactiveTintColor: theme.textMuted,
-        tabBarShowLabel: false, // Ensure labels are hidden
+        tabBarShowLabel: true,
+        tabBarLabelStyle: { fontSize: 10, fontWeight: '700', marginBottom: 2 },
         tabBarStyle: {
           backgroundColor: theme.surfaceLight,
           borderTopColor: theme.border,
           borderTopWidth: 0.5,
-          height: 65, // Comfortable height for icons only
-          elevation: 0,
-          shadowOpacity: 0,
+          height: 78,
+          elevation: 8,
+          shadowColor: '#000',
+          shadowOpacity: 0.12,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: -3 },
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
-          display: 'flex',
         },
         tabBarItemStyle: {
           justifyContent: 'center',
           alignItems: 'center',
-          paddingVertical: 10,
+          paddingTop: 10,
+          paddingBottom: 8,
         },
         headerShown: false,
       })}
     >
-      <Tab.Screen name="Home" component={Feed} options={{ tabBarLabel: t('tabs.feed') }} />
-      <Tab.Screen name="Routines" component={Routines} options={{ tabBarLabel: t('tabs.routines') }} />
-      <Tab.Screen name="Exercises" component={Exercises} options={{ tabBarLabel: t('tabs.exercises') }} />
+      <Tab.Screen name="Home" component={Feed} options={{ tabBarLabel: t('tabs.feed', 'Keşfet') }} />
+      <Tab.Screen name="Routines" component={Routines} options={{ tabBarLabel: t('tabs.routines', 'Rutinler') }} />
+      <Tab.Screen name="Exercises" component={Exercises} options={{ tabBarLabel: t('tabs.exercises', 'Egzersiz') }} />
       <Tab.Screen
         name="MessagesTab"
         component={MessagesStack}
-        options={{ tabBarLabel: t('tabs.messages') }}
+        options={{ tabBarLabel: t('tabs.messages', 'Mesajlar') }}
         listeners={{ tabPress: () => setUnreadMessages(0) }}
       />
       <Tab.Screen
         name="ProfileTab"
         component={ProfileStack}
-        options={{ tabBarLabel: t('tabs.profile') }}
-      />
-      <Tab.Screen
-        name="SettingsTab"
-        component={Settings}
-        options={{ tabBarLabel: t('tabs.settings') }}
+        options={{ tabBarLabel: t('tabs.profile', 'Profil') }}
       />
     </Tab.Navigator>
   );

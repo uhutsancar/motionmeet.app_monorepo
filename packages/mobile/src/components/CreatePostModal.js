@@ -10,6 +10,8 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -21,7 +23,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 
 const CreatePostModal = ({ visible, onClose, onSuccess }) => {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { t } = useTranslation();
   const styles = getStyles(theme);
   const dispatch = useDispatch();
@@ -127,6 +129,7 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -156,6 +159,7 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
             onChangeText={setContent}
             multiline
             maxLength={1000}
+            keyboardAppearance={isDark ? 'dark' : 'light'}
           />
 
           {images.length > 0 && (
@@ -196,6 +200,7 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
           </TouchableOpacity>
         </View>
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };

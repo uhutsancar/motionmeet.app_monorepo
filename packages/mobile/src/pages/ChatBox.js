@@ -4,7 +4,7 @@ import {
   TouchableOpacity, KeyboardAvoidingView, Platform,
   Alert, ActivityIndicator, StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth, useUser } from '@clerk/clerk-expo';
@@ -12,8 +12,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useSocket } from '../hooks/useSocket';
-import { getMessages, sendMessage as sendMessageHTTP } from '../api/endpoints';
-import { setMessages, addMessage } from '../features/messages/messagesSlice';
+import { getMessages, sendMessage as sendMessageHTTP, deleteMessage } from '../api/endpoints';
+import { setMessages, addMessage, removeMessage } from '../features/messages/messagesSlice';
 import moment from 'moment';
 
 const ChatBox = ({ route, navigation }) => {
@@ -23,7 +23,8 @@ const ChatBox = ({ route, navigation }) => {
   const dispatch = useDispatch();
   const { theme, isDark } = useTheme();
   const { t } = useTranslation();
-  const s = getStyles(theme);
+  const insets = useSafeAreaInsets();
+  const s = getStyles(theme, insets);
 
   const currentUser = useSelector((state) => state.user.value);
   const connections = useSelector((state) => state.connections.connections);
@@ -80,12 +81,16 @@ const ChatBox = ({ route, navigation }) => {
     socket.on('message_sent', onSent);
     socket.on('typing_start', onTypStart);
     socket.on('typing_stop', onTypStop);
+    socket.on('message_deleted', ({ messageId }) => {
+      dispatch(removeMessage(messageId));
+    });
 
     return () => {
       socket.off('message_received', onMsg);
       socket.off('message_sent', onSent);
       socket.off('typing_start', onTypStart);
       socket.off('typing_stop', onTypStop);
+      socket.off('message_deleted');
     };
   }, [socketRef.current, userId]);
 
@@ -105,7 +110,7 @@ const ChatBox = ({ route, navigation }) => {
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('Permission required'); return; }
+    if (status !== 'granted') { Alert.alert(t('common.error', 'Error'), t('feed.permission_required_media', 'We need permission to access your media')); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'], allowsEditing: true, aspect: [4, 3], quality: 0.8,
     });
@@ -148,6 +153,33 @@ const ChatBox = ({ route, navigation }) => {
     return fromId === clerkUser?.id || fromId !== userId;
   };
 
+  const handleDeleteMessage = (msgId) => {
+    Alert.alert(
+      t('messages.delete_title', 'Delete Message'),
+      t('messages.delete_confirm', 'Are you sure you want to delete this message?'),
+      [
+        { text: t('common.cancel', 'Cancel'), style: 'cancel' },
+        { 
+          text: t('common.delete', 'Delete'), 
+          style: 'destructive', 
+          onPress: async () => {
+            try {
+              const token = await getToken();
+              const data = await deleteMessage(msgId, token);
+              if (data.success) {
+                dispatch(removeMessage(msgId));
+              } else {
+                Alert.alert(t('common.error', 'Error'), data.message);
+              }
+            } catch (err) {
+              Alert.alert(t('common.error', 'Error'), t('messages.delete_failed', 'Failed to delete message'));
+            }
+          } 
+        }
+      ]
+    );
+  };
+
   const renderMessage = ({ item: msg, index }) => {
     const mine = isMine(msg);
     const prevMsg = messages[index - 1];
@@ -168,9 +200,13 @@ const ChatBox = ({ route, navigation }) => {
             <Image source={{ uri: msg.media_url }} style={s.msgImage} resizeMode="cover" />
           )}
           {msg.text ? (
-            <View style={[s.bubble, mine ? s.bubbleMine : s.bubbleTheirs]}>
+            <TouchableOpacity 
+              style={[s.bubble, mine ? s.bubbleMine : s.bubbleTheirs]}
+              onLongPress={() => mine && handleDeleteMessage(msg._id)}
+              activeOpacity={0.8}
+            >
               <Text style={[s.bubbleText, { color: mine ? '#fff' : theme.text }]}>{msg.text}</Text>
-            </View>
+            </TouchableOpacity>
           ) : null}
           <Text style={[s.msgTime, { textAlign: mine ? 'right' : 'left' }]}>
             {moment(msg.createdAt).format('HH:mm')}
@@ -277,6 +313,7 @@ const ChatBox = ({ route, navigation }) => {
             onChangeText={handleTextChange}
             multiline
             maxLength={1000}
+            keyboardAppearance={isDark ? 'dark' : 'light'}
           />
           <TouchableOpacity
             onPress={handleSend}
@@ -291,7 +328,7 @@ const ChatBox = ({ route, navigation }) => {
   );
 };
 
-const getStyles = (theme) => StyleSheet.create({
+const getStyles = (theme, insets) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
   header: {
     flexDirection: 'row', alignItems: 'center',
@@ -355,7 +392,7 @@ const getStyles = (theme) => StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 16, paddingVertical: 12,
     backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border,
-    gap: 12, paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+    gap: 12, paddingBottom: Platform.OS === 'ios' ? 24 : (insets?.bottom || 0) + 12,
   },
   attachBtn: { 
     width: 44, height: 44, borderRadius: 22, 

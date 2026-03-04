@@ -9,16 +9,19 @@ import {
   KeyboardAvoidingView, 
   Platform,
   ScrollView,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
-import api from '../api/client';
+import { useAuth } from '@clerk/clerk-expo';
+import api, { setAuthToken } from '../api/client';
 
 const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
+  const { getToken } = useAuth();
   const styles = getStyles(theme);
   
   const [name, setName] = useState("");
@@ -40,17 +43,24 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
 
   const handleSubmit = async () => {
     if (!name.trim()) {
-      alert(t('common.error') + ': Exercise name is required');
+      Alert.alert(t('common.error'), t('exercises.missing_name', 'Exercise name is required'));
       return;
     }
     
     if (!muscleGroup || !equipment) {
-      alert(t('common.error') + ': Please select muscle group and equipment');
+      Alert.alert(t('common.error'), t('exercises.missing_fields', 'Please select muscle group and equipment'));
       return;
     }
 
     try {
       setSaving(true);
+
+      // Always fetch a fresh token to avoid stale/expired token issues
+      const freshToken = await getToken();
+      if (freshToken) {
+        setAuthToken(freshToken);
+      }
+
       const { data } = await api.post("/api/exercise", {
         name: name.trim(),
         muscleGroup,
@@ -61,10 +71,14 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
         if (onExerciseCreated) onExerciseCreated(data.exercise);
         handleClose();
       } else {
-        alert(data.message);
+        Alert.alert(t('common.error'), data.message || t('exercises.create_failed', 'Failed to create exercise'));
       }
     } catch (error) {
-       alert(error.message);
+      console.error('Exercise creation error:', error.response?.data || error.message);
+      Alert.alert(
+        t('common.error'), 
+        error.response?.data?.message || error.message || t('common.error', 'An error occurred')
+      );
     } finally {
       setSaving(false);
     }

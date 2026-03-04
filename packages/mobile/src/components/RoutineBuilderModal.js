@@ -9,17 +9,19 @@ import {
   ScrollView, 
   KeyboardAvoidingView, 
   Platform,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
-import api from '../api/client';
-import Toast from 'react-native-toast-message';
+import { useAuth } from '@clerk/clerk-expo';
+import api, { setAuthToken } from '../api/client';
 
 const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
+  const { getToken } = useAuth();
   const styles = getStyles(theme);
 
   const [name, setName] = useState("");
@@ -30,27 +32,24 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
   const [loadingEx, setLoadingEx] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Load all exercises when modal opens; filter when user types
   useEffect(() => {
-    if (searchQuery.length > 2) {
-      const fetchEx = async () => {
-        try {
-          setLoadingEx(true);
-          const { data } = await api.get(`/api/exercise?search=${searchQuery}`);
-          if (data.success) {
-            setExercisesData(data.exercises);
-          }
-        } catch (error) {
-          console.error("Search error:", error);
-        } finally {
-          setLoadingEx(false);
-        }
-      };
-      const delay = setTimeout(fetchEx, 500);
-      return () => clearTimeout(delay);
-    } else {
-      setExercisesData([]);
-    }
-  }, [searchQuery]);
+    if (!visible) return;
+    const fetchEx = async () => {
+      try {
+        setLoadingEx(true);
+        const params = searchQuery.trim().length > 0 ? `?search=${searchQuery}` : '';
+        const { data } = await api.get(`/api/exercise${params}`);
+        if (data.success) setExercisesData(data.exercises);
+      } catch (error) {
+        console.error('Exercise search error:', error);
+      } finally {
+        setLoadingEx(false);
+      }
+    };
+    const delay = searchQuery.trim().length > 0 ? setTimeout(fetchEx, 400) : (fetchEx(), undefined);
+    return () => clearTimeout(delay);
+  }, [searchQuery, visible]);
 
   const addExercise = (ex) => {
     if (selectedExercises.find(e => e.exerciseId._id === ex._id)) {
@@ -83,18 +82,23 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
 
   const handleSubmit = async () => {
     if (!name.trim()) {
-      Toast.show({ type: 'error', text1: t('common.error'), text2: t('routines.name_required', 'Rutin adı gerekli') });
+      Alert.alert(t('common.error'), t('routines.name_required', 'Rutin adı gerekli'));
       return;
     }
     if (selectedExercises.length === 0) {
-      Toast.show({ type: 'error', text1: t('common.error'), text2: t('routines.add_exercises_first', 'Önce egzersiz ekle') });
+      Alert.alert(t('common.error'), t('routines.add_exercises_first', 'Önce egzersiz ekle'));
       return;
     }
 
     try {
       setSaving(true);
+
+      // Always fetch a fresh Clerk token before saving
+      const freshToken = await getToken();
+      if (freshToken) setAuthToken(freshToken);
+
       const payload = {
-        name,
+        name: name.trim(),
         folder,
         exercises: selectedExercises.map(e => ({
           exerciseId: e.exerciseId._id,
@@ -104,14 +108,15 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
 
       const { data } = await api.post('/api/routine', payload);
       if (data.success) {
-        Toast.show({ type: 'success', text1: t('common.success'), text2: t('routines.routine_created', 'Rutin oluşturuldu!') });
+        Alert.alert(t('common.success', 'Başarılı'), t('routines.routine_created', 'Rutin oluşturuldu!'));
         onRoutineCreated(data.routine);
         handleClose();
       } else {
-        Toast.show({ type: 'error', text1: t('common.error'), text2: data.message });
+        Alert.alert(t('common.error'), data.message || t('common.error', 'Bir hata oluştu'));
       }
     } catch (error) {
-      Toast.show({ type: 'error', text1: t('common.error'), text2: error.message });
+      console.error('Routine save error:', error.response?.data || error.message);
+      Alert.alert(t('common.error'), error.response?.data?.message || error.message || t('common.error', 'Bir hata oluştu'));
     } finally {
       setSaving(false);
     }
@@ -163,18 +168,26 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
                 />
               </View>
 
-              {searchQuery.length > 2 && (
-                <View style={styles.searchResults}>
-                  {loadingEx ? <ActivityIndicator size="small" color={theme.primary} /> : (
-                    exercisesData.map(ex => (
-                      <TouchableOpacity key={ex._id} onPress={() => addExercise(ex)} style={styles.resItem}>
-                        <Text style={{ color: theme.text }}>{ex.name}</Text>
-                        <Ionicons name="add-circle-outline" size={20} color={theme.primary} />
-                      </TouchableOpacity>
-                    ))
-                  )}
-                </View>
-              )}
+            {/* Always show exercise list (search filters it) */}
+              <View style={styles.searchResults}>
+                {loadingEx ? (
+                  <ActivityIndicator size="small" color={theme.primary} style={{ padding: 12 }} />
+                ) : exercisesData.length === 0 ? (
+                  <Text style={{ color: theme.textMuted, padding: 12, textAlign: 'center' }}>
+                    {t('exercises.not_found', 'Egzersiz bulunamadı')}
+                  </Text>
+                ) : (
+                  exercisesData.slice(0, 20).map(ex => (
+                    <TouchableOpacity key={ex._id} onPress={() => addExercise(ex)} style={styles.resItem}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: theme.text, fontWeight: '500' }}>{ex.name}</Text>
+                        <Text style={{ color: theme.textMuted, fontSize: 12 }}>{ex.muscleGroup} • {ex.equipment}</Text>
+                      </View>
+                      <Ionicons name="add-circle-outline" size={22} color={theme.primary} />
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
             </View>
 
             {selectedExercises.map((se, exIndex) => (

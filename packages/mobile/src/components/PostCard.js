@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions, Alert, TextInput } from 'react-native';
+import React, { useState, useEffect, useRef, memo } from 'react';
+import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions, Alert, TextInput, FlatList, ActivityIndicator } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { useAuth } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,57 +7,44 @@ import { likePost, followUser, unfollowUser } from '../api/endpoints';
 import { fetchUser } from '../features/user/userSlice';
 import api from '../api/client';
 import moment from 'moment';
-import 'moment/locale/tr'; // static import required by Metro bundler
+import 'moment/locale/tr';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const POST_PADDING = 16;
-const IMAGE_CONTAINER_WIDTH = SCREEN_WIDTH - (POST_PADDING * 2);
+const CAROUSEL_WIDTH = SCREEN_WIDTH;
 
 const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete, showDelete = false }) => {
   const { t, i18n } = useTranslation();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const currentUser = useSelector((state) => state.user.value);
   const dispatch = useDispatch();
   const { getToken } = useAuth();
+  
   const [likes, setLikes] = useState(post.likes_count || []);
   const [isProcessing, setIsProcessing] = useState(false);
   const [followProcessing, setFollowProcessing] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [comments, setComments] = useState(post.comments || []);
-  const s = styles(theme);
+  const [activeSlide, setActiveSlide] = useState(0);
 
-  // Set moment locale
+  // Memoize styles
+  const s = React.useMemo(() => styles(theme), [theme]);
+
   moment.locale(i18n.language.startsWith('tr') ? 'tr' : 'en');
 
-  // Don't render if post or post.user is invalid
-  if (!post || !post.user || !post.user._id) {
-    return null;
-  }
-
-  const isLiked = likes.includes(currentUser?._id);
-  const likesCount = likes.length;
-  
-  const workoutData = post.workout;
+  if (!post || !post.user || !post.user._id) return null;
 
   const handleLike = async () => {
     if (isProcessing) return;
-    
     try {
       setIsProcessing(true);
       const token = await getToken();
       const data = await likePost(post._id, token);
-      
       if (data.success) {
-        setLikes(prevLikes => {
-          if (prevLikes.includes(currentUser._id)) {
-            return prevLikes.filter(id => id !== currentUser._id);
-          } else {
-            return [...prevLikes, currentUser._id];
-          }
-        });
+        setLikes(prevLikes => prevLikes.includes(currentUser._id) ? prevLikes.filter(id => id !== currentUser._id) : [...prevLikes, currentUser._id]);
       }
     } catch (error) {
       console.error('Like error:', error);
@@ -90,14 +77,9 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
 
   const handleAddComment = async () => {
     if (!commentText.trim() || isProcessing) return;
-    
     try {
       setIsProcessing(true);
-      const { data } = await api.post('/api/post/comment/add', {
-        postId: post._id,
-        content: commentText
-      });
-      
+      const { data } = await api.post('/api/post/comment/add', { postId: post._id, content: commentText });
       if (data.success) {
         setComments(data.comments);
         setCommentText("");
@@ -111,60 +93,78 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
     }
   };
 
-  // Render images/videos in grid layout
-  const renderMedia = (urls) => {
-    if (!urls || urls.length === 0) return null;
+  const hasWorkout = post.post_type === 'workout' && post.workout;
+  const isVideo = post.post_type === 'video';
+  const imageUrls = post.image_urls || [];
+  
+  const carouselData = [];
 
-    const count = urls.length;
+  // 1) Add photos/videos so they appear first
+  if (isVideo && imageUrls.length > 0) {
+    carouselData.push({ type: 'video', url: imageUrls[0] });
+  } else {
+    imageUrls.forEach(url => carouselData.push({ type: 'image', url }));
+  }
 
-    if (count === 1) {
-      return (
-        <Image 
-          source={{ uri: urls[0] }}
-          style={s.singleImage}
-          resizeMode="cover"
-        />
-      );
+  // 2) Append Workout exercise card so it's a swipe away
+  if (hasWorkout) {
+    carouselData.push({ type: 'workout', data: post.workout });
+  }
+
+  const onViewableItemsChanged = useRef(({ viewableItems }) => {
+    if (viewableItems.length > 0) {
+      setActiveSlide(viewableItems[0].index);
     }
+  }).current;
+  
+  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
 
-    if (count === 2) {
+  const renderCarouselItem = ({ item }) => {
+    if (item.type === 'video') {
       return (
-        <View style={s.twoImagesContainer}>
-          {urls.map((url, index) => (
-            <Image 
-              key={index}
-              source={{ uri: url }}
-              style={s.halfImage}
-              resizeMode="cover"
-            />
-          ))}
+        <View style={s.videoContainer}>
+           <Image source={{ uri: item.url }} style={s.carouselSlide} blurRadius={10} />
+           <View style={s.playOverlay}>
+              <Ionicons name="play" size={50} color="#fff" />
+           </View>
         </View>
       );
-    }
-
-    if (count >= 3) {
+    } else if (item.type === 'image') {
       return (
-        <View style={s.threeImagesContainer}>
-          <Image 
-            source={{ uri: urls[0] }}
-            style={s.threeImagesMain}
-            resizeMode="cover"
-          />
-          <View style={s.threeImagesSide}>
-            <Image 
-              source={{ uri: urls[1] }}
-              style={s.threeImagesSideItem}
-              resizeMode="cover"
-            />
-            <Image 
-              source={{ uri: urls[2] }}
-              style={s.threeImagesSideItem}
-              resizeMode="cover"
-            />
-          </View>
-        </View>
+        <Image source={{ uri: item.url }} style={s.carouselSlide} resizeMode="cover" />
+      );
+    } else if (item.type === 'workout') {
+      const exercises = item.data.exercises || [];
+      const displayCount = Math.min(exercises.length, 4);
+      const remainingCount = exercises.length - displayCount;
+      
+      return (
+        <TouchableOpacity 
+          style={s.workoutSlideContainer} 
+          activeOpacity={0.9} 
+          onPress={() => navigation.navigate('WorkoutSummaryScreen', { workoutId: item.data._id || item.data })}
+        >
+           {exercises.slice(0, displayCount).map((ex, idx) => (
+             <View key={idx} style={s.workoutSlideItem}>
+               <View style={s.workoutSlideIcon}>
+                 <Ionicons name="barbell" size={24} color={theme.text} />
+               </View>
+               <View style={s.workoutSlideTextContainer}>
+                 <Text style={s.workoutSlideText} numberOfLines={2}>
+                   {ex.sets?.length || 0} set {ex.exerciseId?.name || t('routines.exercise', 'Egzersiz')}
+                 </Text>
+               </View>
+             </View>
+           ))}
+           {remainingCount > 0 && (
+             <Text style={s.moreExercisesText}>
+               {remainingCount} {t('feed.more_exercises', 'egzersiz daha görün')}
+             </Text>
+           )}
+        </TouchableOpacity>
       );
     }
+    return null;
   };
 
   return (
@@ -178,7 +178,21 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
               <Text style={s.username}>{post.user?.full_name}</Text>
               {post.user?.is_verified && <Ionicons name="checkmark-circle" size={14} color={theme.primary} />}
             </View>
-            <Text style={s.timestamp}>{moment(post.createdAt).fromNow()}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={s.timestamp}>@{post.user?.username} • {moment(post.createdAt).fromNow()}</Text>
+              {post.visibility === 'private' && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                  <Ionicons name="lock-closed" size={10} color={theme.textMuted} />
+                  <Text style={{ fontSize: 10, color: theme.textMuted }}>Sadece siz</Text>
+                </View>
+              )}
+              {post.visibility === 'followers' && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                  <Ionicons name="people" size={10} color={theme.textMuted} />
+                  <Text style={{ fontSize: 10, color: theme.textMuted }}>Takipçiler</Text>
+                </View>
+              )}
+            </View>
           </View>
         </TouchableOpacity>
 
@@ -199,48 +213,57 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
         )}
       </View>
 
-      {/* Content */}
-      {post.content && (
-        <View style={s.contentContainer}>
+      {/* Post Context & Title */}
+      <View style={s.postHeaderTexts}>
+        {hasWorkout && post.workout?.name && (
+          <Text style={s.workoutTitle}>{post.workout.name}</Text>
+        )}
+        {post.content ? (
           <Text style={s.content}>{post.content}</Text>
+        ) : null}
+      </View>
+
+      {/* Workout Stat Row */}
+      {hasWorkout && (
+        <View style={s.statsHeaderRow}>
+          <View style={s.statBox}>
+             <Text style={s.statLabel}>{t('feed.duration', 'Süre')}</Text>
+             <Text style={s.statValue}>
+               {post.workout?.durationMinutes > 0
+                 ? `${Math.floor(post.workout.durationMinutes / 60) > 0 ? `${Math.floor(post.workout.durationMinutes / 60)}s ` : ''}${post.workout.durationMinutes % 60}dk`
+                 : '0min'
+               }
+             </Text>
+          </View>
+          <View style={s.statBox}>
+             <Text style={s.statLabel}>{t('feed.volume', 'Hacim')}</Text>
+             <Text style={s.statValue}>{(post.workout?.volumeKg || 0).toLocaleString()} <Text style={s.statSmall}>kg</Text></Text>
+          </View>
         </View>
       )}
 
-      {/* Workout Info */}
-      {post.type === 'workout' && post.workout_id && (
-        <TouchableOpacity 
-          style={s.workoutContainer}
-          onPress={() => navigation.navigate('WorkoutDetail', { workoutId: post.workout_id._id })}
-        >
-          <View style={s.workoutStatsRow}>
-            <View style={s.workoutStatCol}>
-              <Text style={s.workoutStatLabel}>{t('feed.duration')}</Text>
-              <Text style={s.workoutStatValue}>{post.workout_id.duration || '0'}m</Text>
+      {/* Carousel */}
+      {carouselData.length > 0 && (
+        <View style={s.carouselWrapper}>
+          <FlatList 
+            data={carouselData}
+            renderItem={renderCarouselItem}
+            keyExtractor={(item, idx) => `slide-${idx}`}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={viewabilityConfig}
+          />
+          {carouselData.length > 1 && (
+            <View style={s.dotsContainer}>
+              {carouselData.map((_, idx) => (
+                <View 
+                  key={idx} 
+                  style={[s.dot, activeSlide === idx ? s.dotActive : s.dotInactive]} 
+                />
+              ))}
             </View>
-            <View style={s.workoutStatCol}>
-              <Text style={s.workoutStatLabel}>{t('feed.volume')}</Text>
-              <Text style={s.workoutStatValue}>{post.workout_id.volume || '0'}kg</Text>
-            </View>
-            <View style={s.workoutStatCol}>
-              <Text style={s.workoutStatLabel}>{t('feed.exercises')}</Text>
-              <Text style={s.workoutStatValue}>{post.workout_id.exercises?.length || '0'}</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-      )}
-
-      {/* Media Rendering */}
-      {post.image_urls && post.image_urls.length > 0 && (
-        <View style={s.mediaContainer}>
-          {post.post_type === 'video' ? (
-            <View style={s.videoContainer}>
-               <Image source={{ uri: post.image_urls[0] }} style={s.singleImage} blurRadius={10} />
-               <View style={s.playOverlay}>
-                  <Ionicons name="play" size={50} color="#fff" />
-               </View>
-            </View>
-          ) : (
-            renderMedia(post.image_urls)
           )}
         </View>
       )}
@@ -252,22 +275,19 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
             <Ionicons 
               name={likes.includes(currentUser?._id) ? "heart" : "heart-outline"} 
               size={24} 
-              color={likes.includes(currentUser?._id) ? '#ef4444' : '#fff'} 
+              color={likes.includes(currentUser?._id) ? '#ef4444' : theme.text} 
             />
-            <Text style={s.actionText}>{likes.length}</Text>
+            <Text style={[s.actionText, likes.includes(currentUser?._id) && { color: '#ef4444' }]}>{likes.length}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={s.actionButton} onPress={() => setShowComments(!showComments)}>
-            <Ionicons name="chatbubble-outline" size={24} color="#fff" />
-            <Text style={s.actionText}>{comments.length}</Text>
+            <Ionicons name="chatbubble-outline" size={24} color={theme.text} />
+            <Text style={[s.actionText, showComments && { color: theme.primary }]}>{comments.length}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={s.actionButton} 
-            onPress={() => onShare?.(post)}
-            >
-            <Ionicons name="arrow-redo-outline" size={24} color="#fff" style={{ transform: [{rotateY: '180deg'}] }} />
-            </TouchableOpacity>
+          <TouchableOpacity style={s.actionButton} onPress={() => onShare?.(post)}>
+            <Ionicons name="arrow-redo-outline" size={24} color={theme.text} style={{ transform: [{rotateY: '180deg'}] }} />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -304,6 +324,7 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
               value={commentText}
               onChangeText={setCommentText}
               multiline
+              keyboardAppearance={isDark ? 'dark' : 'light'}
             />
             <TouchableOpacity 
               onPress={handleAddComment}
@@ -331,7 +352,7 @@ const styles = (theme) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: POST_PADDING,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   userInfoLeft: {
     flexDirection: 'row',
@@ -339,9 +360,9 @@ const styles = (theme) => StyleSheet.create({
     flex: 1,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: theme.border,
   },
@@ -355,12 +376,13 @@ const styles = (theme) => StyleSheet.create({
   },
   username: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
     color: theme.text,
   },
   timestamp: {
     fontSize: 12,
     color: theme.textMuted,
+    fontWeight: '600',
     marginTop: 2,
   },
   followBtn: {
@@ -378,143 +400,155 @@ const styles = (theme) => StyleSheet.create({
   followingBtnText: {
     color: theme.textMuted,
   },
-  contentContainer: {
+  postHeaderTexts: {
     paddingHorizontal: POST_PADDING,
     marginBottom: 12,
-  },
-  content: {
-    fontSize: 15,
-    color: theme.text,
-    lineHeight: 22,
+    gap: 6,
   },
   workoutTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: theme.text,
   },
-  workoutContainer: {
-    marginBottom: 12,
+  content: {
+    fontSize: 15,
+    color: theme.textMuted,
+    lineHeight: 22,
   },
-  workoutStatsRow: {
+  statsHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: POST_PADDING,
     marginBottom: 16,
+    gap: 20,
   },
-  workoutStatCol: {
-    marginRight: 24,
+  statBox: {
+    justifyContent: 'center',
   },
-  workoutStatLabel: {
+  statLabel: {
     color: theme.textMuted,
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '600',
     marginBottom: 4,
   },
-  workoutStatValue: {
+  statValue: {
     color: theme.text,
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: 'bold',
   },
-  workoutCenterBlock: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 24,
-    marginBottom: 8,
+  statSmall: {
+    fontSize: 12,
+    fontWeight: 'normal',
+    color: theme.textMuted,
   },
-  workoutCenterIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: theme.surfaceLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
+  carouselWrapper: {
+    position: 'relative',
+    marginBottom: 0,
   },
-  workoutCenterText: {
-    color: theme.textSecondary,
-    fontSize: 14,
-  },
-  singleImage: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_WIDTH * 0.9,
-  },
-  twoImagesContainer: {
-    flexDirection: 'row',
-    gap: 2,
-  },
-  halfImage: {
-    width: (SCREEN_WIDTH - 2) / 2,
-    height: SCREEN_WIDTH * 0.7,
-  },
-  threeImagesContainer: {
-    flexDirection: 'row',
-    gap: 2,
-  },
-  threeImagesMain: {
-    width: (SCREEN_WIDTH - 2) / 2,
-    height: SCREEN_WIDTH * 0.7,
-  },
-  threeImagesSide: {
-    flex: 1,
-    gap: 2,
-  },
-  threeImagesSideItem: {
-    width: '100%',
-    height: (SCREEN_WIDTH * 0.7 - 2) / 2,
-  },
-  actionsBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: POST_PADDING,
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  actionLeftGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 24,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  actionText: {
-    fontSize: 14,
-    color: '#fff',
-    fontWeight: '500',
-  },
-  likedByContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: POST_PADDING,
-    paddingBottom: 16,
-  },
-  likedByAvatars: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  likedByAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: theme.background,
-  },
-  likedByText: {
-    color: theme.textSecondary,
-    fontSize: 13,
-    marginLeft: -8, // compensate for last overlapping avatar
+  carouselSlide: {
+    width: CAROUSEL_WIDTH,
+    height: CAROUSEL_WIDTH * 1.1,
   },
   videoContainer: {
-    position: 'relative',
-    width: SCREEN_WIDTH,
-    height: SCREEN_WIDTH * 0.9,
+    width: CAROUSEL_WIDTH,
+    height: CAROUSEL_WIDTH * 1.1,
     backgroundColor: '#000',
+    justifyContent: 'center',
   },
   playOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  workoutSlideContainer: {
+    width: CAROUSEL_WIDTH,
+    height: CAROUSEL_WIDTH * 1.1,
+    backgroundColor: theme.background, 
+    paddingHorizontal: POST_PADDING,
+    justifyContent: 'center',
+    gap: 20,
+  },
+  workoutSlideItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  workoutSlideIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: theme.surfaceLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  workoutSlideTextContainer: {
+    flex: 1,
+  },
+  workoutSlideText: {
+    color: theme.text,
+    fontSize: 15,
+    fontWeight: '500',
+    lineHeight: 20,
+  },
+  moreExercisesText: {
+    textAlign: 'center',
+    color: theme.textMuted,
+    fontSize: 14,
+    fontWeight: '500',
+    marginTop: 8,
+  },
+  dotsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'absolute',
+    bottom: 12,
+    left: 0,
+    right: 0,
+    gap: 6,
+  },
+  dot: {
+    height: 6,
+    borderRadius: 3,
+  },
+  dotActive: {
+    width: 14,
+    backgroundColor: theme.primary, 
+  },
+  dotInactive: {
+    width: 6,
+    backgroundColor: 'rgba(255,255,255,0.4)',
+  },
+  actionsBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: POST_PADDING,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  actionLeftGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 20,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionText: {
+    fontSize: 15,
+    color: theme.text,
+    fontWeight: '600',
+  },
+  likedByContainer: {
+    paddingHorizontal: POST_PADDING,
+    paddingBottom: 16,
+  },
+  likedByText: {
+    color: theme.textMuted,
+    fontSize: 13,
   },
   commentsSection: {
     paddingHorizontal: POST_PADDING,
@@ -547,18 +581,18 @@ const styles = (theme) => StyleSheet.create({
   },
   commentUser: {
     color: theme.text,
-    fontSize: 12,
-    fontWeight: 'bold',
+    fontSize: 13,
+    fontWeight: '700',
     marginBottom: 2,
   },
   commentText: {
     color: theme.textSecondary,
-    fontSize: 13,
+    fontSize: 14,
     lineHeight: 18,
   },
   commentTime: {
     color: theme.textMuted,
-    fontSize: 10,
+    fontSize: 11,
     marginTop: 4,
     marginLeft: 4,
   },
@@ -593,4 +627,4 @@ const styles = (theme) => StyleSheet.create({
   },
 });
 
-export default PostCard;
+export default memo(PostCard);

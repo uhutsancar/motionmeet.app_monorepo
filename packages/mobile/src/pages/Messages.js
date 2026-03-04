@@ -20,7 +20,8 @@ const Messages = ({ navigation }) => {
   const { getToken } = useAuth();
   const { t, i18n } = useTranslation();
   const { theme, isDark } = useTheme();
-  const s = getStyles(theme);
+  // Memoize styles
+  const s = React.useMemo(() => getStyles(theme), [theme]);
 
   const { connections } = useSelector((state) => state.connections);
   const { socketRef, onlineUsers } = useSocket();

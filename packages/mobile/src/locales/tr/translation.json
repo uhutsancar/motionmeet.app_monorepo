@@ -54,6 +54,7 @@
     "feed": {
         "discover": "Keşfet",
         "following": "Takip",
+        "no_posts": "Henüz gönderi yok.",
         "your_story": "Hikayem",
         "create_story": "Hikaye Oluştur",
         "share_story": "Hikayeyi Paylaş",
@@ -169,7 +170,10 @@
         "type_message": "Mesaj yaz...",
         "send_failed": "Mesaj gönderilemedi",
         "no_messages": "Henüz mesaj yok",
-        "connect_hint": "Sporcularla bağlantı kurarak sohbet başlat"
+        "connect_hint": "Sporcularla bağlantı kurarak sohbet başlat",
+        "delete_title": "Mesajı Sil",
+        "delete_confirm": "Bu mesajı silmek istediğine emin misin?",
+        "delete_failed": "Mesaj silinemedi"
     },
     "statistics": {
         "title": "İstatistikler",
@@ -199,5 +203,78 @@
     "status": {
         "online": "Çevrimiçi",
         "offline": "Çevrimdışı"
+    },
+    "active_workout": {
+        "active": "Aktif",
+        "paused": "Duraklatıldı",
+        "add_set": "+ Set Ekle",
+        "add_exercise": "Egzersiz Ekle",
+        "finish_workout": "Antrenmanı Bitir"
+    },
+    "workout": {
+        "saved": "Antrenman kaydedildi!",
+        "discard_title": "Antrenmanı Sil",
+        "discard_msg": "Bu antrenman kaydedilmeyecek. Emin misin?",
+        "save_workout": "Antrenmanı Kaydet",
+        "my_workout": "Antrenmanım",
+        "when": "Ne Zaman",
+        "add_photo_video": "Bir fotoğraf / video ekle",
+        "description": "Açıklama",
+        "note_placeholder": "Antrenmanınız nasıl geçti? Buraya birkaç not bırakın...",
+        "exercises": "Egzersizler",
+        "delete": "Antrenmanı Sil",
+        "add_photo_title": "Fotoğraf Ekle",
+        "take_photo": "Fotoğraf Çek",
+        "choose_from_gallery": "Galeriden Seç",
+        "camera_permission": "Kamera izni gerekiyor",
+        "gallery_permission": "Galeri izni gerekiyor"
+    },
+    "workout_summary": {
+        "save_workout": "Antrenmanı Kaydet",
+        "add_media": "Fotoğraf veya Video Ekle",
+        "media_desc": "Antrenman anını ölümsüzleştir",
+        "add_location": "Konum Ekle",
+        "note_placeholder": "Antrenman nasıldı?",
+        "intensity": "Yoğunluk",
+        "exercises": "Egzersizler",
+        "visibility": "Kimler Görebilir",
+        "everyone": "Herkes",
+        "friends": "Sadece Arkadaşlar",
+        "only_me": "Sadece Ben"
+    },
+    "monthly_report": {
+        "title": "{{month}} Raporu",
+        "summary": "Özet",
+        "workouts": "Antrenmanlar",
+        "duration": "Süre",
+        "volume": "Hacim",
+        "sets": "Set",
+        "workout_days_log": "Antrenman Günleri Kaydı",
+        "weekly_streak": "{{count}} Haftalık Seri",
+        "muscle_distribution": "Kas Dağılımı",
+        "share": "Paylaş",
+        "days": {
+            "mon": "Pzt",
+            "tue": "Sal",
+            "wed": "Çar",
+            "thu": "Per",
+            "fri": "Cum",
+            "sat": "Cts",
+            "sun": "Paz"
+        },
+        "months_short": {
+            "jan": "O",
+            "feb": "Ş",
+            "mar": "M",
+            "apr": "N",
+            "may": "M",
+            "jun": "H",
+            "jul": "T",
+            "aug": "A",
+            "sep": "E",
+            "oct": "E",
+            "nov": "K",
+            "dec": "A"
+        }
     }
 }

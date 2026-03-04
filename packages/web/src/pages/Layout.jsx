@@ -14,9 +14,9 @@ const Layout = () => {
 
       <SideBar sideBarOpen={sideBarOpen} setSideBarOpen={setSideBarOpen} />
 
-      <div className="flex-1 bg-background overflow-y-auto">
+      <main className="flex-1 bg-background overflow-y-auto" role="main">
         <Outlet />
-      </div>
+      </main>
 
       {sideBarOpen ? (
         <X
