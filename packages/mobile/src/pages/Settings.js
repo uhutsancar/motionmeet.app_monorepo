@@ -64,20 +64,20 @@ const Settings = ({ navigation }) => {
           <SettingRow
             iconName="notifications-outline" iconColor="#f59e0b"
             label={t('settings.notifications', 'Bildirimler')}
-            onPress={() => {}}
+            onPress={() => navigation.navigate('NotificationsScreen')}
             theme={theme}
           />
           <SettingRow
             iconName="lock-closed-outline" iconColor="#10b981"
             label={t('settings.privacy', 'Gizlilik')}
             subtitle={t('settings.privacy_sub', 'E-posta, Anlık')}
-            onPress={() => {}}
+            onPress={() => navigation.navigate('PrivacyScreen')}
             theme={theme}
           />
           <SettingRow
             iconName="help-circle-outline" iconColor="#8b5cf6"
             label={t('settings.support', 'Destek')}
-            onPress={() => {}}
+            onPress={() => navigation.navigate('SupportScreen')}
             isLast
             theme={theme}
           />

@@ -1,4 +1,5 @@
 import Exercise from "../models/Exercise.js";
+import escapeStringRegexp from "escape-string-regexp";
 
 // Get all exercises with optional filtering
 export const getExercises = async (req, res) => {
@@ -7,7 +8,8 @@ export const getExercises = async (req, res) => {
     let query = {};
 
     if (search) {
-      query.name = new RegExp(search, "i");
+      const escapedSearch = escapeStringRegexp(search || "");
+      query.name = new RegExp(escapedSearch, "i");
     }
     if (muscleGroup && muscleGroup !== "All Muscles") {
       query.muscleGroup = muscleGroup;
@@ -42,12 +44,23 @@ export const getExerciseById = async (req, res) => {
 // Create a custom exercise
 export const createExercise = async (req, res) => {
   try {
+    const { userId } = await req.auth();
     const { name, muscleGroup, equipment, gifUrl } = req.body;
+
+    // Basic Input Validation for Global Resource
+    if (!name || typeof name !== "string" || name.length > 50) {
+      return res.json({ success: false, message: "Invalid exercise name" });
+    }
+    
+    // In a fully robust system, you'd check `userId` against an Admin roles table here,
+    // or tag the created exercise with the `userId` to limit its scope.
+    // For now, we enforce strict data types to prevent NoSQL Injection/Data corruption.
+
     const newExercise = await Exercise.create({
-      name,
-      muscleGroup,
-      equipment,
-      gifUrl,
+      name: name.trim(),
+      muscleGroup: String(muscleGroup || "Other").trim(),
+      equipment: String(equipment || "Body Weight").trim(),
+      gifUrl: gifUrl ? String(gifUrl).trim() : undefined,
     });
     res.json({ success: true, exercise: newExercise, message: "Exercise created successfully" });
   } catch (error) {

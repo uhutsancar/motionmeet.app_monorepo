@@ -1,5 +1,7 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import "dotenv/config";
 import { createServer } from "http";
 import { Server } from "socket.io";
@@ -22,9 +24,22 @@ const httpServer = createServer(app);
 
 await connectDB();
 
+// Global Rate Limiting
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200, // Limit each IP to 200 requests per `window` (here, per 15 minutes)
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  message: "Too many requests from this IP, please try again after 15 minutes"
+});
+
+app.use(helmet());
 app.use(express.json());
 app.use(cors());
-app.use(clerkMiddleware());
+
+// Apply rate limiting and auth
+app.use("/api", globalLimiter);
+app.use("/api", clerkMiddleware());
 
 app.get("/", (req, res) => res.send("Server is running"));
 app.use("/api/inngest", serve({ client: inngest, functions }));

@@ -46,7 +46,13 @@ export const updateRoutine = async (req, res) => {
   try {
     const { userId } = await req.auth();
     const { id } = req.params;
-    const updateData = req.body;
+    
+    // Prevent Mass Assignment by extracting only the safe fields
+    const { name, folder, exercises } = req.body;
+    let updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (folder !== undefined) updateData.folder = folder;
+    if (exercises !== undefined) updateData.exercises = exercises;
 
     const routine = await Routine.findOneAndUpdate(
       { _id: id, userId },

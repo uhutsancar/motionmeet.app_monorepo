@@ -7,15 +7,18 @@ import { useAuth } from "@clerk/clerk-react";
 import toast from "react-hot-toast";
 import api from "~/api/axios";
 import { useTranslation } from "react-i18next";
+import DOMPurify from "dompurify";
 
 const PostCard = ({ post }) => {
   const { t, i18n } = useTranslation();
 
-  // Replace hashtags with styled spans
-  const postWithHashtags = post.content ? post.content.replace(
+  // Replace hashtags with styled spans and sanitize the result to prevent XSS
+  const rawHTML = post.content ? post.content.replace(
     /(#\w+)/g,
     '<span class="text-accent-primary cursor-pointer font-semibold">$1</span>'
   ) : "";
+  const postWithHashtags = DOMPurify.sanitize(rawHTML);
+
 
   const [likes, setLikes] = useState(post.likes_count || []);
   const currentUser = useSelector((state) => state.user.value);

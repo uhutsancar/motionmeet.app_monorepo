@@ -30,6 +30,10 @@ const ActiveWorkout = lazy(() => import("./pages/ActiveWorkout"));
 const WorkoutSummary = lazy(() => import("./pages/WorkoutSummary"));
 const WorkoutShare = lazy(() => import("./pages/WorkoutShare"));
 const MonthlyReport = lazy(() => import("./pages/MonthlyReport"));
+const WorkoutsDetail = lazy(() => import("./pages/WorkoutsDetail"));
+const DurationDetail = lazy(() => import("./pages/DurationDetail"));
+const VolumeDetail = lazy(() => import("./pages/VolumeDetail"));
+const SetsDetail = lazy(() => import("./pages/SetsDetail"));
 
 const SOCKET_URL = import.meta.env.VITE_BASEURL || "http://localhost:4000";
 
@@ -126,6 +130,10 @@ const App = () => {
             <Route path="/statistics/history" element={<Statistics />} />
             <Route path="/statistics/records" element={<Statistics />} />
             <Route path="/statistics/monthly-report" element={<MonthlyReport />} />
+            <Route path="/statistics/monthly-report/workouts" element={<WorkoutsDetail />} />
+            <Route path="/statistics/monthly-report/duration" element={<DurationDetail />} />
+            <Route path="/statistics/monthly-report/volume" element={<VolumeDetail />} />
+            <Route path="/statistics/monthly-report/sets" element={<SetsDetail />} />
             <Route path="/active-workout" element={<ActiveWorkout />} />
             <Route path="/workout-summary" element={<WorkoutSummary />} />
             <Route path="/workout-share" element={<WorkoutShare />} />

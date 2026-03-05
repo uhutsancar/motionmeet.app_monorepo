@@ -24,6 +24,13 @@ import WorkoutSummaryScreen from '../pages/WorkoutSummaryScreen';
 import WorkoutCompleteShare from '../pages/WorkoutCompleteShare';
 import ActiveWorkoutScreen from '../pages/ActiveWorkoutScreen';
 import MonthlyReportScreen from '../pages/MonthlyReportScreen';
+import WorkoutsDetailScreen from '../pages/WorkoutsDetailScreen';
+import DurationDetailScreen from '../pages/DurationDetailScreen';
+import VolumeDetailScreen from '../pages/VolumeDetailScreen';
+import SetsDetailScreen from '../pages/SetsDetailScreen';
+import NotificationsScreen from '../pages/NotificationsScreen';
+import PrivacyScreen from '../pages/PrivacyScreen';
+import SupportScreen from '../pages/SupportScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -61,6 +68,13 @@ const MainStack = () => (
     <Stack.Screen name="WorkoutCompleteShare" component={WorkoutCompleteShare} />
     <Stack.Screen name="ActiveWorkoutScreen" component={ActiveWorkoutScreen} />
     <Stack.Screen name="MonthlyReportScreen" component={MonthlyReportScreen} />
+    <Stack.Screen name="WorkoutsDetailScreen" component={WorkoutsDetailScreen} />
+    <Stack.Screen name="DurationDetailScreen" component={DurationDetailScreen} />
+    <Stack.Screen name="VolumeDetailScreen" component={VolumeDetailScreen} />
+    <Stack.Screen name="SetsDetailScreen" component={SetsDetailScreen} />
+    <Stack.Screen name="NotificationsScreen" component={NotificationsScreen} />
+    <Stack.Screen name="PrivacyScreen" component={PrivacyScreen} />
+    <Stack.Screen name="SupportScreen" component={SupportScreen} />
   </Stack.Navigator>
 );
 

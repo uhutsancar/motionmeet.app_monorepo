@@ -106,18 +106,22 @@ export const updateUserData = async (req, res) => {
 };
 
 
+import escapeStringRegexp from "escape-string-regexp";
+
 //Find Users using username, email, location, name
 export const discoverUsers = async (req, res) => {
   try {
     const { userId } = await req.auth();
     const { input } = req.body;
 
+    const escapedInput = escapeStringRegexp(input || "");
+
     const allUsers = await User.find({
       $or: [
-        { username: new RegExp(input, "i") },
-        { email: new RegExp(input, "i") },
-        { full_name: new RegExp(input, "i") },
-        { location: new RegExp(input, "i") },
+        { username: new RegExp(escapedInput, "i") },
+        { email: new RegExp(escapedInput, "i") },
+        { full_name: new RegExp(escapedInput, "i") },
+        { location: new RegExp(escapedInput, "i") },
       ],
     });
 
