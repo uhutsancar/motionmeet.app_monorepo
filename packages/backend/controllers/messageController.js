@@ -64,6 +64,19 @@ export const sendMessage = async (req, res) => {
     // Emit to recipient via socket (non-blocking)
     const populated = await Message.findById(message._id).populate("from_user_id");
     await notifyRecipient(to_user_id, populated);
+
+    // Also notify sender's other devices
+    try {
+      const { io, userSockets } = await getIO();
+      const senderSockets = userSockets.get(userId);
+      if (senderSockets) {
+        senderSockets.forEach((sid) => {
+          io.to(sid).emit("message_sent", populated);
+        });
+      }
+    } catch (err) {
+      console.error("notifySender error:", err.message);
+    }
   } catch (error) {
     res.json({ success: false, message: error.message });
   }

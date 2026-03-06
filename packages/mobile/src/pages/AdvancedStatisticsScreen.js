@@ -59,17 +59,19 @@ const AdvancedStatisticsScreen = ({ navigation }) => {
           </View>
         ) : (
           <View style={styles.card}>
-            {muscleData.map((item, index) => (
+            {muscleData.map((item, index) => {
+              const translatedName = t(`statistics.muscle_${item.name.toLowerCase()}`, item.name);
+              return (
               <View key={index} style={styles.row}>
                 <View style={styles.rowInfo}>
-                  <Text style={styles.muscleName}>{item.name}</Text>
+                  <Text style={styles.muscleName}>{translatedName}</Text>
                   <Text style={styles.muscleValue}>{item.value}%</Text>
                 </View>
                 <View style={styles.barBackground}>
                   <View style={[styles.barFill, { width: `${item.value}%`, backgroundColor: theme.primary }]} />
                 </View>
               </View>
-            ))}
+            )})}
           </View>
         )}
       </ScrollView>

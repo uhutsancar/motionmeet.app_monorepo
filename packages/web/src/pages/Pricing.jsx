@@ -1,8 +1,13 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Check, X, ArrowRight, ChevronDown, ChevronUp, Zap } from 'lucide-react';
+import { Check, X, ArrowRight, ChevronDown, ChevronUp, Zap, Loader2 } from 'lucide-react';
 import PublicLayout from './PublicLayout';
+import api from '~/api/axios.js';
+import { useAuth } from '@clerk/clerk-react';
+import { useSelector, useDispatch } from 'react-redux';
+import { fetchUser } from '../features/user/userSlice';
+import toast from 'react-hot-toast';
 
 /* ── FAQ Item ── */
 const FAQItem = ({ q, a }) => {
@@ -35,7 +40,47 @@ const TC = ({ v }) => v
 
 const Pricing = () => {
     const { t } = useTranslation();
+    const navigate = useNavigate();
     const [yearly, setYearly] = useState(false);
+
+    // API State
+    const { getToken } = useAuth();
+    const { value: currentUser } = useSelector(state => state.user);
+    const dispatch = useDispatch();
+    const [dbPlans, setDbPlans] = useState([]);
+    const [loadingPlan, setLoadingPlan] = useState(null);
+
+    useEffect(() => {
+        api.get('/api/plans')
+            .then(res => {
+                if (res.data.success) setDbPlans(res.data.plans);
+            })
+            .catch(console.error);
+    }, []);
+
+    const handleUpgrade = async (planId) => {
+        if (!currentUser) {
+            navigate('/login');
+            return;
+        }
+        setLoadingPlan(planId);
+        try {
+            const token = await getToken();
+            const res = await api.post('/api/plans/update', { planId }, { headers: { Authorization: `Bearer ${token}` } });
+            if (res.data.success) {
+                toast.success(t('pricing_page.upgrade_success') || "Plan updated successfully!");
+                dispatch(fetchUser(token));
+            } else {
+                toast.error(res.data.message);
+            }
+        } catch (err) {
+            toast.error(t('pricing_page.upgrade_err') || "Failed to upgrade plan.");
+        } finally {
+            setLoadingPlan(null);
+        }
+    };
+
+    const getDbPlan = (name) => dbPlans.find(p => p.name.toLowerCase() === name.toLowerCase());
 
     const plans = [
         {
@@ -159,9 +204,9 @@ const Pricing = () => {
                                     <p className="text-sm text-[var(--text-muted)] mb-4">{plan.desc}</p>
                                     <div className="flex items-end gap-1">
                                         <span className={`text-4xl font-extrabold ${plan.popular ? 'text-[var(--accent-primary)]' : 'text-[var(--text-primary)]'}`}>
-                                            {plan.price}
+                                            {getDbPlan(plan.name) ? (getDbPlan(plan.name).price === 0 ? "Free" : `$${getDbPlan(plan.name).price}`) : plan.price}
                                         </span>
-                                        <span className="text-sm text-[var(--text-muted)] mb-1">{plan.period}</span>
+                                        <span className="text-sm text-[var(--text-muted)] mb-1">/ mo</span>
                                     </div>
                                 </div>
 
@@ -181,15 +226,25 @@ const Pricing = () => {
                                 </ul>
 
                                 {/* CTA */}
-                                <Link
-                                    to="/login"
-                                    className={`w-full py-3 rounded-xl text-center font-bold transition-all text-sm ${plan.popular
-                                        ? 'bg-[var(--accent-primary)] text-white hover:bg-[var(--accent-hover)] shadow-lg shadow-blue-500/30'
-                                        : 'border border-[var(--border-subtle)] text-[var(--text-primary)] hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)]'
-                                        }`}
-                                >
-                                    {plan.cta}
-                                </Link>
+                                {currentUser && currentUser.plan && getDbPlan(plan.name) && currentUser.plan._id === getDbPlan(plan.name)._id ? (
+                                    <button
+                                        disabled
+                                        className="w-full py-3 rounded-xl text-center font-bold transition-all text-sm bg-gray-100 text-gray-400 cursor-not-allowed border outline-none"
+                                    >
+                                        Current Plan
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => getDbPlan(plan.name) ? handleUpgrade(getDbPlan(plan.name)._id) : navigate('/login')}
+                                        disabled={loadingPlan === (getDbPlan(plan.name)?._id)}
+                                        className={`w-full py-3 rounded-xl text-center font-bold transition-all text-sm flex items-center justify-center gap-2 ${plan.popular
+                                            ? 'bg-[var(--accent-primary)] text-white hover:bg-[var(--accent-hover)] shadow-lg shadow-blue-500/30'
+                                            : 'border border-[var(--border-subtle)] text-[var(--text-primary)] hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)]'
+                                            }`}
+                                    >
+                                        {loadingPlan === (getDbPlan(plan.name)?._id) ? <Loader2 className="w-5 h-5 animate-spin" /> : plan.cta}
+                                    </button>
+                                )}
                             </div>
                         </div>
                     ))}

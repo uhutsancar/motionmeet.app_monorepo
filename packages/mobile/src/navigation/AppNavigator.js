@@ -32,6 +32,7 @@ import SetsDetailScreen from '../pages/SetsDetailScreen';
 import NotificationsScreen from '../pages/NotificationsScreen';
 import PrivacyScreen from '../pages/PrivacyScreen';
 import SupportScreen from '../pages/SupportScreen';
+import PricingScreen from '../pages/PricingScreen';
 
 // Missing Statistics Screens
 import AdvancedStatisticsScreen from '../pages/AdvancedStatisticsScreen';
@@ -46,7 +47,6 @@ const Stack = createNativeStackNavigator();
 const MessagesStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="MessagesList" component={Messages} />
-    <Stack.Screen name="ChatBox" component={ChatBox} />
   </Stack.Navigator>
 );
 
@@ -82,6 +82,7 @@ const MainStack = () => (
     <Stack.Screen name="NotificationsScreen" component={NotificationsScreen} />
     <Stack.Screen name="PrivacyScreen" component={PrivacyScreen} />
     <Stack.Screen name="SupportScreen" component={SupportScreen} />
+    <Stack.Screen name="PricingScreen" component={PricingScreen} />
     <Stack.Screen name="AdvancedStatisticsScreen" component={AdvancedStatisticsScreen} />
     <Stack.Screen name="MuscleDistributionBodyScreen" component={MuscleDistributionBodyScreen} />
     <Stack.Screen name="MainExercisesScreen" component={MainExercisesScreen} />

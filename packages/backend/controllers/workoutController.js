@@ -7,6 +7,27 @@ export const logWorkout = async (req, res) => {
     const { userId } = await req.auth();
     const { name, startTime, endTime, durationMinutes, volumeKg, exercises } = req.body;
 
+    // Role-Based Plan Limits
+    if (req.dbUser && req.dbUser.plan) {
+      if (req.dbUser.role !== "superadmin") {
+        const limit = req.dbUser.plan.features.max_workouts_per_month;
+        if (limit !== -1) {
+          const startOfMonth = new Date();
+          startOfMonth.setDate(1);
+          startOfMonth.setHours(0, 0, 0, 0);
+
+          const count = await Workout.countDocuments({ 
+            userId: req.dbUser._id,
+            startTime: { $gte: startOfMonth }
+          });
+          
+          if (count >= limit) {
+            return res.json({ success: false, message: `Monthly workout limit reached (${limit}). Please upgrade your plan to Elite.` });
+          }
+        }
+      }
+    }
+
     const newWorkout = await Workout.create({
       userId, name, startTime, endTime, durationMinutes, volumeKg, exercises
     });

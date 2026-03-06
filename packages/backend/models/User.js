@@ -10,6 +10,8 @@ const userSchema = new mongoose.Schema(
     profile_picture: { type: String, default: "" },
     cover_photo: { type: String, default: "" },
     location: { type: String, default: "" },
+    role: { type: String, enum: ["user", "admin", "superadmin"], default: "user" },
+    plan: { type: mongoose.Schema.Types.ObjectId, ref: "Plan" },
     weight: { type: Number, default: 0 }, // Added for user measurements
     height: { type: Number, default: 0 }, // Added for user measurements
     followers: [{ type: String, ref: "User" }],

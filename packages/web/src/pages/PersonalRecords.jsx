@@ -58,7 +58,7 @@ const PersonalRecords = () => {
                                         </div>
 
                                         <h3 className="text-xl font-black text-[var(--text-primary)] mb-1">{record.name}</h3>
-                                        <p className="text-sm text-[var(--text-secondary)] font-medium">Archived on {record.date}</p>
+                                        <p className="text-sm text-[var(--text-secondary)] font-medium">{t('statistics.archived_on', 'Archived on')} {record.date}</p>
                                     </div>
 
                                     <div className="text-right">
@@ -76,8 +76,8 @@ const PersonalRecords = () => {
                 {records.length === 0 && (
                     <div className="text-center py-20 bg-[var(--surface-color)] rounded-[2rem] border border-[var(--border-color)]">
                         <Award className="w-16 h-16 mx-auto text-[var(--text-secondary)] mb-4 opacity-50" />
-                        <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">No Records Yet</h3>
-                        <p className="text-[var(--text-secondary)]">Log more workouts to see your personal records here.</p>
+                        <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">{t('statistics.no_records_yet', 'No Records Yet')}</h3>
+                        <p className="text-[var(--text-secondary)]">{t('statistics.log_more_workouts', 'Log more workouts to see your personal records here.')}</p>
                     </div>
                 )}
             </div>

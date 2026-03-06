@@ -42,6 +42,7 @@ const WebMessages = () => {
   const { socketRef, connected, onlineUsers, sendMessage: socketSend } = useSocket();
 
   const [conversations, setConversations] = useState([]);
+  const [connections, setConnections] = useState([]);
   const [activeConv, setActiveConv] = useState(null);
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
@@ -74,13 +75,43 @@ const WebMessages = () => {
       if (activeConvRef.current?.partner?._id === partnerId) {
         setMessages(prev => [...prev, msg]);
         getToken().then(tok => authedFetch('/api/message/seen', tok, { method: 'POST', body: JSON.stringify({ from_user_id: partnerId }) }));
-      } else {
-        setConversations(prev => prev.map(c => c.partner?._id === partnerId ? { ...c, lastMessage: msg, unreadCount: (c.unreadCount || 0) + 1 } : c));
       }
-      setConversations(prev => [...prev].sort((a, b) => new Date(b.lastMessage?.createdAt || 0) - new Date(a.lastMessage?.createdAt || 0)));
+      setConversations(prev => {
+        const exists = prev.some(c => c.partner?._id === partnerId);
+        let updated = [];
+        if (exists) {
+          updated = prev.map(c => c.partner?._id === partnerId ? { ...c, lastMessage: msg, unreadCount: activeConvRef.current?.partner?._id === partnerId ? 0 : (c.unreadCount || 0) + 1 } : c);
+        } else {
+          updated = [{ partner: msg.from_user_id, lastMessage: msg, unreadCount: activeConvRef.current?.partner?._id === partnerId ? 0 : 1 }, ...prev];
+        }
+        return updated.sort((a, b) => new Date(b.lastMessage?.createdAt || 0) - new Date(a.lastMessage?.createdAt || 0));
+      });
     };
 
-    const onSent = (msg) => setMessages(prev => [...prev, msg]);
+    const onSent = (msg) => {
+      const partnerId = msg.to_user_id?._id || msg.to_user_id;
+      if (activeConvRef.current?.partner?._id === partnerId) {
+        setMessages(prev => {
+          // Check if message is already in list (could happen if HTTP response came first)
+          if (!prev.some(m => m._id === msg._id)) {
+            return [...prev, msg];
+          }
+          return prev;
+        });
+      }
+      setConversations(prev => {
+        const partnerInfo = activeConvRef.current?.partner?._id === partnerId ? activeConvRef.current.partner : msg.to_user_id;
+        const exists = prev.some(c => c.partner?._id === partnerId);
+        let updated = [];
+        if (exists) {
+          updated = prev.map(c => c.partner?._id === partnerId ? { ...c, lastMessage: msg } : c);
+        } else {
+          updated = [{ partner: partnerInfo, lastMessage: msg, unreadCount: 0 }, ...prev];
+        }
+        return updated.sort((a, b) => new Date(b.lastMessage?.createdAt || 0) - new Date(a.lastMessage?.createdAt || 0));
+      });
+    };
+
     const onTypStart = ({ from_user_id }) => { if (activeConvRef.current?.partner?._id === from_user_id) setPartnerTyping(true); };
     const onTypStop = ({ from_user_id }) => { if (activeConvRef.current?.partner?._id === from_user_id) setPartnerTyping(false); };
 
@@ -103,7 +134,14 @@ const WebMessages = () => {
   const loadConversations = async (token) => {
     try {
       const data = await authedFetch('/api/message/conversations', token);
-      if (data.success) setConversations(data.conversations.sort((a, b) => new Date(b.lastMessage?.createdAt || 0) - new Date(a.lastMessage?.createdAt || 0)));
+      if (data.success) {
+        setConversations(data.conversations.sort((a, b) => new Date(b.lastMessage?.createdAt || 0) - new Date(a.lastMessage?.createdAt || 0)));
+      }
+      // Also fetch connections to start new chats
+      const connData = await authedFetch('/api/user/connections', token);
+      if (connData.success) {
+        setConnections(connData.connections || []);
+      }
     } finally { setLoadingConvs(false); }
   };
 
@@ -137,9 +175,32 @@ const WebMessages = () => {
     typingTimerRef.current = setTimeout(() => socketRef.current?.emit('typing_stop', { to_user_id: activeConv.partner._id }), 1500);
   };
 
-  const filteredConvs = conversations.filter(c =>
-    !searchQuery || c.partner?.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || c.partner?.username?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Determine list of displayed chats/users
+  // If searching, mix in connections that don't have a conversation yet
+  const displayedConvs = React.useMemo(() => {
+    if (!searchQuery) return conversations;
+
+    const lowerQuery = searchQuery.toLowerCase();
+    const filteredConvs = conversations.filter(c =>
+      c.partner?.full_name?.toLowerCase().includes(lowerQuery) || c.partner?.username?.toLowerCase().includes(lowerQuery)
+    );
+
+    // Add connections that match search but aren't in conversations
+    const convPartnerIds = new Set(conversations.map(c => c.partner?._id));
+    const matchingConnections = connections.filter(conn =>
+      !convPartnerIds.has(conn._id) &&
+      (conn.full_name?.toLowerCase().includes(lowerQuery) || conn.username?.toLowerCase().includes(lowerQuery))
+    );
+
+    const connConvs = matchingConnections.map(conn => ({
+      partner: conn,
+      lastMessage: null,
+      unreadCount: 0,
+      isNew: true
+    }));
+
+    return [...filteredConvs, ...connConvs];
+  }, [conversations, connections, searchQuery]);
 
   const isMe = (msg) => {
     const fromId = msg.from_user_id?._id || msg.from_user_id;
@@ -189,12 +250,12 @@ const WebMessages = () => {
                 <div className="flex-1 space-y-2"><div className="h-3 w-24 bg-[var(--bg-surface-light)] rounded" /><div className="h-2.5 w-36 bg-[var(--bg-surface-light)] rounded" /></div>
               </div>
             ))}</div>
-          ) : filteredConvs.length === 0 ? (
+          ) : displayedConvs.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-48 gap-2 text-center px-8">
               <MessageSquare className="w-10 h-10 text-[var(--border-subtle)]" />
-              <p className="text-sm text-[var(--text-muted)]">{t('messages.no_conversations', 'No conversations yet')}</p>
+              <p className="text-sm text-[var(--text-muted)]">{searchQuery ? t('messages.no_results', 'No users found') : t('messages.no_conversations', 'No conversations yet')}</p>
             </div>
-          ) : filteredConvs.map(conv => {
+          ) : displayedConvs.map(conv => {
             const isActive = activeConv?.partner?._id === conv.partner?._id;
             const isOnline = onlineUsers.has(conv.partner?._id);
             const hasUnread = conv.unreadCount > 0;
@@ -211,7 +272,7 @@ const WebMessages = () => {
                   </div>
                   <div className="flex items-center justify-between">
                     <p className={`text-xs truncate max-w-[180px] ${hasUnread ? 'text-[var(--text-primary)] font-medium' : 'text-[var(--text-muted)]'}`}>
-                      {conv.lastMessage?.text || (conv.lastMessage?.message_type === 'image' ? '📷 Photo' : '...')}
+                      {conv.isNew ? t('messages.start_new_chat', 'Start a new chat') : (conv.lastMessage?.text || (conv.lastMessage?.message_type === 'image' ? '📷 Fotoğraf' : '...'))}
                     </p>
                     {hasUnread && <span className="ml-2 min-w-5 h-5 px-1.5 rounded-full bg-[var(--accent-primary)] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">{conv.unreadCount}</span>}
                   </div>

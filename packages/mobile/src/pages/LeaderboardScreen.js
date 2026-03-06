@@ -12,10 +12,10 @@ const LeaderboardScreen = ({ navigation }) => {
   
   // Dummy data to fulfill "no empty screens" requirement with premium aesthetics
   const leaderboards = [
-      { id: 1, name: 'Bench Press', icon: 'barbell', topScore: '145 kg', users: 1240, color: '#3b82f6' },
-      { id: 2, name: 'Squat', icon: 'body', topScore: '210 kg', users: 950, color: '#eab308' },
-      { id: 3, name: 'Deadlift', icon: 'fitness', topScore: '240 kg', users: 1120, color: '#ef4444' },
-      { id: 4, name: 'Pull-up', icon: 'caret-up-circle', topScore: '45 reps', users: 3400, color: '#10b981' }
+      { id: 1, name: t('statistics.ex_bench_press', 'Bench Press'), icon: 'barbell', topScore: '145 kg', users: 1240, color: '#3b82f6' },
+      { id: 2, name: t('statistics.ex_squat', 'Squat'), icon: 'body', topScore: '210 kg', users: 950, color: '#eab308' },
+      { id: 3, name: t('statistics.ex_deadlift', 'Deadlift'), icon: 'fitness', topScore: '240 kg', users: 1120, color: '#ef4444' },
+      { id: 4, name: t('statistics.ex_pullup', 'Pull-up'), icon: 'caret-up-circle', topScore: '45 reps', users: 3400, color: '#10b981' }
   ];
 
   return (
@@ -45,16 +45,16 @@ const LeaderboardScreen = ({ navigation }) => {
                     </View>
                     <View style={styles.cardStats}>
                         <View style={styles.statBox}>
-                            <Text style={styles.statLabel}>Top Score</Text>
+                            <Text style={styles.statLabel}>{t('statistics.top_score', 'Top Score')}</Text>
                             <Text style={styles.statValue}>{item.topScore}</Text>
                         </View>
                         <View style={styles.statBox}>
-                            <Text style={styles.statLabel}>Participants</Text>
+                            <Text style={styles.statLabel}>{t('statistics.participants', 'Participants')}</Text>
                             <Text style={styles.statValue}>{item.users.toLocaleString()}</Text>
                         </View>
                     </View>
                     <TouchableOpacity style={[styles.viewBtn, { backgroundColor: item.color }]} activeOpacity={0.8}>
-                        <Text style={styles.viewBtnText}>View Rankings</Text>
+                        <Text style={styles.viewBtnText}>{t('statistics.view_rankings', 'View Rankings')}</Text>
                     </TouchableOpacity>
                 </View>
              ))}

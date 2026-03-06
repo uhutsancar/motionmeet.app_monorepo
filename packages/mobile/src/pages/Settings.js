@@ -62,6 +62,13 @@ const Settings = ({ navigation }) => {
             theme={theme}
           />
           <SettingRow
+            iconName="star-outline" iconColor="#f43f5e"
+            label={t('settings.plans', 'Plans & Pricing')}
+            subtitle={t('settings.plans_sub', 'Upgrade your experience')}
+            onPress={() => navigation.navigate('PricingScreen')}
+            theme={theme}
+          />
+          <SettingRow
             iconName="notifications-outline" iconColor="#f59e0b"
             label={t('settings.notifications', 'Bildirimler')}
             onPress={() => navigation.navigate('NotificationsScreen')}

@@ -25,6 +25,19 @@ export const createRoutine = async (req, res) => {
       return res.json({ success: false, message: "At least one exercise is required" });
     }
 
+    // Role-Based Plan Limits
+    if (req.dbUser && req.dbUser.plan) {
+      if (req.dbUser.role !== "superadmin") {
+        const limit = req.dbUser.plan.features.max_routines;
+        if (limit !== -1) {
+          const count = await Routine.countDocuments({ userId: req.dbUser._id });
+          if (count >= limit) {
+            return res.json({ success: false, message: `Routine limit reached (${limit}). Please upgrade your plan to Elite.` });
+          }
+        }
+      }
+    }
+
     const newRoutine = await Routine.create({
       userId,
       name: name.trim(),

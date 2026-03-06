@@ -66,15 +66,17 @@ const MuscleDistributionBodyScreen = ({ navigation }) => {
           </View>
         ) : (
           <View style={styles.grid}>
-             {muscleData.map((item, index) => (
+             {muscleData.map((item, index) => {
+                const translatedName = t(`statistics.muscle_${item.name.toLowerCase()}`, item.name);
+                return (
                 <View key={index} style={styles.gridItem}>
                    <View style={[styles.iconBox, { backgroundColor: getIntensityColor(item.value) + '20' }]}>
                       <Ionicons name="fitness-outline" size={28} color={getIntensityColor(item.value)} />
                    </View>
-                   <Text style={styles.itemName}>{item.name}</Text>
-                   <Text style={[styles.itemValue, { color: getIntensityColor(item.value) }]}>{item.value}% Intensity</Text>
+                   <Text style={styles.itemName}>{translatedName}</Text>
+                   <Text style={[styles.itemValue, { color: getIntensityColor(item.value) }]}>{item.value}{t('statistics.intensity_percent', '% Intensity')}</Text>
                 </View>
-             ))}
+             )})}
           </View>
         )}
       </ScrollView>

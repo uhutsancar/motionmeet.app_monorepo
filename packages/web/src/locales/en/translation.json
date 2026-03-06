@@ -349,7 +349,12 @@
         "records": "Personal Records",
         "records_desc": "1RM and best sets",
         "monthly_report": "Monthly Report",
-        "monthly_desc": "Summary of your monthly workouts and stats."
+        "monthly_desc": "Summary of your monthly workouts and stats.",
+        "archived_on": "Archived on",
+        "no_records_yet": "No Records Yet",
+        "log_more_workouts": "Log more workouts to see your personal records here.",
+        "total_uppercase": "(Total)",
+        "mins_uppercase": "(Mins)"
     },
     "settings": {
         "title": "Settings",

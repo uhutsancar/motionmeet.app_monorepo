@@ -1,9 +1,11 @@
 import React from "react";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
-const Notification = ({ t, message }) => {
+const Notification = ({ toastInstance, message }) => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   return (
     <div
@@ -33,7 +35,7 @@ const Notification = ({ t, message }) => {
         <button
           onClick={() => {
             navigate(`/messages/${message.from_user_id._id}`);
-            toast.dismiss(t.id);
+            toast.dismiss(toastInstance.id);
           }}
           className="px-6 text-accent-primary font-black text-xs uppercase tracking-widest hover:bg-accent-primary hover:text-white transition-colors h-full"
         >

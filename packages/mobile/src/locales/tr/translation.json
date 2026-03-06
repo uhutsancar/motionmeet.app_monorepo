@@ -200,7 +200,22 @@
         "main_exercises": "Ana egzersizler",
         "main_ex_desc": "En sık yaptığınız egzersizlerin listesi.",
         "leaderboard": "Lider Tablosu",
-        "leaderboard_desc": "Lider tablosuna uygun egzersizlerin listesi."
+        "leaderboard_desc": "Lider tablosuna uygun egzersizlerin listesi.",
+        "top_score": "En İyi Skor",
+        "participants": "Katılımcı",
+        "view_rankings": "Sıralamayı Gör",
+        "intensity_percent": "% Yoğunluk",
+        "total_reps": "toplam tekrar",
+        "muscle_chest": "Göğüs",
+        "muscle_back": "Sırt",
+        "muscle_legs": "Bacak",
+        "muscle_shoulders": "Omuz",
+        "muscle_arms": "Kol",
+        "muscle_abs": "Karın",
+        "ex_bench_press": "Bench Press",
+        "ex_squat": "Squat",
+        "ex_deadlift": "Deadlift",
+        "ex_pullup": "Barfiks"
     },
     "menu": {
         "exercises": "Egzersizler",

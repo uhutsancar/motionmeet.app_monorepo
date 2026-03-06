@@ -17,6 +17,8 @@ import messageRouter from "./routes/messageRoutes.js";
 import exerciseRouter from "./routes/exerciseRoutes.js";
 import routineRouter from "./routes/routineRoutes.js";
 import workoutRouter from "./routes/workoutRoutes.js";
+import planRouter from "./routes/planRoutes.js";
+import rbacRouter from "./routes/rbacRoutes.js";
 import Message from "./models/Message.js";
 
 const app = express();
@@ -50,6 +52,8 @@ app.use("/api/message", messageRouter);
 app.use("/api/exercise", exerciseRouter);
 app.use("/api/routine", routineRouter);
 app.use("/api/workout", workoutRouter);
+app.use("/api/plans", planRouter);
+app.use("/api/admin", rbacRouter);
 
 // ─── Socket.io Setup ─────────────────────────────────────────────────────────
 const io = new Server(httpServer, {
@@ -116,8 +120,13 @@ io.on("connection", (socket) => {
         });
       }
 
-      // Confirm back to sender
-      socket.emit("message_sent", populated);
+      // Confirm back to sender's sockets (all their devices)
+      const senderSockets = userSockets.get(userId);
+      if (senderSockets) {
+        senderSockets.forEach((sid) => {
+          io.to(sid).emit("message_sent", populated);
+        });
+      }
     } catch (err) {
       socket.emit("error", { msg: err.message });
     }

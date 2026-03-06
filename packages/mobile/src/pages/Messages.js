@@ -57,6 +57,7 @@ const Messages = ({ navigation }) => {
             ...updated[exists],
             lastMessage: msg,
             unread: (updated[exists].unread || 0) + 1,
+            isNew: false
           };
           return [updated[exists], ...updated.filter((_, i) => i !== exists)];
         }
@@ -65,12 +66,40 @@ const Messages = ({ navigation }) => {
           user: msg.from_user_id,
           lastMessage: msg,
           unread: 1,
+          isNew: false
+        }, ...prev];
+      });
+    };
+
+    const onSent = (msg) => {
+      const recipientId = msg.to_user_id?._id || msg.to_user_id;
+      setConversations(prev => {
+        const exists = prev.findIndex(c => c.user?._id === recipientId);
+        if (exists >= 0) {
+          const updated = [...prev];
+          updated[exists] = {
+            ...updated[exists],
+            lastMessage: msg,
+            isNew: false
+          };
+          return [updated[exists], ...updated.filter((_, i) => i !== exists)];
+        }
+        // If it somehow wasn't in conversations (e.g. from a new search tap)
+        return [{
+          user: msg.to_user_id,
+          lastMessage: msg,
+          unread: 0,
+          isNew: false
         }, ...prev];
       });
     };
 
     socket.on('message_received', onMsg);
-    return () => socket.off('message_received', onMsg);
+    socket.on('message_sent', onSent);
+    return () => {
+      socket.off('message_received', onMsg);
+      socket.off('message_sent', onSent);
+    };
   }, [socketRef.current]);
 
   const loadAll = async () => {
@@ -126,12 +155,31 @@ const Messages = ({ navigation }) => {
     navigation.navigate('Connections');
   };
 
-  const filtered = searchQuery
-    ? conversations.filter(c =>
-        c.user?.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.user?.username?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : conversations;
+  const displayedConvs = React.useMemo(() => {
+    if (!searchQuery) return conversations;
+    
+    const lowerQ = searchQuery.toLowerCase();
+    const filtered = conversations.filter(c =>
+      c.user?.full_name?.toLowerCase().includes(lowerQ) ||
+      c.user?.username?.toLowerCase().includes(lowerQ)
+    );
+
+    // Add connections that match search but aren't in conversations
+    const convUserIds = new Set(conversations.map(c => c.user?._id));
+    const matchingConnections = connections.filter(conn => 
+      !convUserIds.has(conn._id) && 
+      (conn.full_name?.toLowerCase().includes(lowerQ) || conn.username?.toLowerCase().includes(lowerQ))
+    );
+    
+    const connConvs = matchingConnections.map(conn => ({
+      user: conn,
+      lastMessage: null,
+      unread: 0,
+      isNew: true
+    }));
+
+    return [...filtered, ...connConvs];
+  }, [conversations, connections, searchQuery]);
 
   const renderConversation = ({ item: conv }) => {
     const isOnline = onlineUsers.has(conv.user?._id);
@@ -161,7 +209,7 @@ const Messages = ({ navigation }) => {
             <Text style={s.convTime}>{timeLabel}</Text>
           </View>
           <Text style={[s.convPreview, hasUnread && { color: theme.text, fontWeight: '500' }]} numberOfLines={1}>
-            {msgText || t('messages.no_message', 'No message yet')}
+            {conv.isNew ? t('messages.start_new_chat', 'Start a new chat') : (msgText || t('messages.no_message', 'No message yet'))}
           </Text>
         </View>
 
@@ -208,7 +256,7 @@ const Messages = ({ navigation }) => {
 
       {/* List */}
       <FlatList
-        data={filtered}
+        data={displayedConvs}
         renderItem={renderConversation}
         keyExtractor={(item, i) => item.user?._id || String(i)}
         showsVerticalScrollIndicator={false}

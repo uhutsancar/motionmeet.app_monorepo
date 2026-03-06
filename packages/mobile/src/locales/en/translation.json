@@ -196,7 +196,22 @@
         "main_exercises": "Main exercises",
         "main_ex_desc": "List of your most frequently performed exercises.",
         "leaderboard": "Leaderboard Exercises",
-        "leaderboard_desc": "List of exercises eligible for the leaderboard."
+        "leaderboard_desc": "List of exercises eligible for the leaderboard.",
+        "top_score": "Top Score",
+        "participants": "Participants",
+        "view_rankings": "View Rankings",
+        "intensity_percent": "% Intensity",
+        "total_reps": "total reps",
+        "muscle_chest": "Chest",
+        "muscle_back": "Back",
+        "muscle_legs": "Legs",
+        "muscle_shoulders": "Shoulders",
+        "muscle_arms": "Arms",
+        "muscle_abs": "Abs",
+        "ex_bench_press": "Bench Press",
+        "ex_squat": "Squat",
+        "ex_deadlift": "Deadlift",
+        "ex_pullup": "Pull-up"
     },
     "menu": {
         "exercises": "Exercises",

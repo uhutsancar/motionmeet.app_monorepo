@@ -105,7 +105,7 @@ const AdvancedStatistics = () => {
                         <div className="bg-[var(--surface-color)] rounded-[2rem] border border-[var(--border-color)] p-6 shadow-sm hover:shadow-lg transition-shadow">
                             <div className="flex items-center gap-2 mb-6">
                                 <TrendingUp className="w-5 h-5 text-[var(--accent-primary)]" />
-                                <h2 className="text-lg font-bold text-[var(--text-primary)]">{t('statistics.volume', 'Hacim')} (Total)</h2>
+                                <h2 className="text-lg font-bold text-[var(--text-primary)]">{t('statistics.volume', 'Hacim')} {t('statistics.total_uppercase', '(Total)')}</h2>
                             </div>
                             <div className="h-[250px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
@@ -131,7 +131,7 @@ const AdvancedStatistics = () => {
                             <div className="bg-[var(--surface-color)] rounded-[2rem] border border-[var(--border-color)] p-6 shadow-sm hover:shadow-lg transition-shadow">
                                 <div className="flex items-center gap-2 mb-6">
                                     <Activity className="w-5 h-5 text-green-500" />
-                                    <h2 className="text-lg font-bold text-[var(--text-primary)]">Reps (Total)</h2>
+                                    <h2 className="text-lg font-bold text-[var(--text-primary)]">Reps {t('statistics.total_uppercase', '(Total)')}</h2>
                                 </div>
                                 <div className="h-[250px] w-full">
                                     <ResponsiveContainer width="100%" height="100%">
@@ -149,7 +149,7 @@ const AdvancedStatistics = () => {
                             <div className="bg-[var(--surface-color)] rounded-[2rem] border border-[var(--border-color)] p-6 shadow-sm hover:shadow-lg transition-shadow">
                                 <div className="flex items-center gap-2 mb-6">
                                     <Clock className="w-5 h-5 text-blue-500" />
-                                    <h2 className="text-lg font-bold text-[var(--text-primary)]">{t('statistics.duration', 'Süre')} (Mins)</h2>
+                                    <h2 className="text-lg font-bold text-[var(--text-primary)]">{t('statistics.duration', 'Süre')} {t('statistics.mins_uppercase', '(Mins)')}</h2>
                                 </div>
                                 <div className="h-[250px] w-full">
                                     <ResponsiveContainer width="100%" height="100%">

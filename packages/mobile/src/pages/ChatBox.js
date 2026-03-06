@@ -237,7 +237,7 @@ const ChatBox = ({ route, navigation }) => {
   const isOnline = onlineUsers.has(userId);
 
   return (
-    <SafeAreaView style={s.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={s.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       {/* Header */}
@@ -271,57 +271,58 @@ const ChatBox = ({ route, navigation }) => {
         </View>
       </View>
 
-      {/* Messages */}
-      {initialLoading ? (
-        <View style={s.loader}><ActivityIndicator color={theme.primary} /></View>
-      ) : (
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          renderItem={renderMessage}
-          keyExtractor={(item, i) => item._id || String(i)}
-          contentContainerStyle={s.msgList}
-          showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-          ListFooterComponent={partnerTyping ? renderTyping : null}
-        />
-      )}
-
-      {/* Input */}
       <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-        style={{ backgroundColor: theme.surface }}
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {image && (
-          <View style={s.imagePreview}>
-            <Image source={{ uri: image.uri }} style={s.previewImg} />
-            <TouchableOpacity onPress={() => setImage(null)} style={s.removeImg}>
-              <Ionicons name="close-circle" size={24} color="#ef4444" />
+        {/* Messages */}
+        {initialLoading ? (
+          <View style={s.loader}><ActivityIndicator color={theme.primary} /></View>
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            renderItem={renderMessage}
+            keyExtractor={(item, i) => item._id || String(i)}
+            contentContainerStyle={s.msgList}
+            showsVerticalScrollIndicator={false}
+            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+            ListFooterComponent={partnerTyping ? renderTyping : null}
+          />
+        )}
+
+        {/* Input */}
+        <View style={{ backgroundColor: theme.surface }}>
+          {image && (
+            <View style={s.imagePreview}>
+              <Image source={{ uri: image.uri }} style={s.previewImg} />
+              <TouchableOpacity onPress={() => setImage(null)} style={s.removeImg}>
+                <Ionicons name="close-circle" size={24} color="#ef4444" />
+              </TouchableOpacity>
+            </View>
+          )}
+          <View style={[s.inputBar, { paddingBottom: Math.max(insets.bottom || 0, 12) }]}>
+            <TouchableOpacity onPress={pickImage} style={s.attachBtn}>
+              <Ionicons name="image-outline" size={24} color={theme.textMuted} />
+            </TouchableOpacity>
+            <TextInput
+              style={s.input}
+              placeholder={t('messages.type_message', 'Message...')}
+              placeholderTextColor={theme.textMuted}
+              value={text}
+              onChangeText={handleTextChange}
+              multiline
+              maxLength={1000}
+              keyboardAppearance={isDark ? 'dark' : 'light'}
+            />
+            <TouchableOpacity
+              onPress={handleSend}
+              disabled={!text.trim() && !image}
+              style={[s.sendBtn, (!text.trim() && !image) && { opacity: 0.4 }]}
+            >
+              <Ionicons name="send" size={20} color="#fff" />
             </TouchableOpacity>
           </View>
-        )}
-        <View style={s.inputBar}>
-          <TouchableOpacity onPress={pickImage} style={s.attachBtn}>
-            <Ionicons name="image-outline" size={24} color={theme.textMuted} />
-          </TouchableOpacity>
-          <TextInput
-            style={s.input}
-            placeholder={t('messages.type_message', 'Message...')}
-            placeholderTextColor={theme.textMuted}
-            value={text}
-            onChangeText={handleTextChange}
-            multiline
-            maxLength={1000}
-            keyboardAppearance={isDark ? 'dark' : 'light'}
-          />
-          <TouchableOpacity
-            onPress={handleSend}
-            disabled={!text.trim() && !image}
-            style={[s.sendBtn, (!text.trim() && !image) && { opacity: 0.4 }]}
-          >
-            <Ionicons name="send" size={20} color="#fff" />
-          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -390,9 +391,9 @@ const getStyles = (theme, insets) => StyleSheet.create({
   removeImg: { position: 'absolute', top: -10, right: -10, backgroundColor: '#fff', borderRadius: 12 },
   inputBar: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 12,
+    paddingHorizontal: 16, paddingTop: 12,
     backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border,
-    gap: 12, paddingBottom: Platform.OS === 'ios' ? 24 : (insets?.bottom || 0) + 12,
+    gap: 12,
   },
   attachBtn: { 
     width: 44, height: 44, borderRadius: 22, 

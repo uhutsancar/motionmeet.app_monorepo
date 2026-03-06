@@ -92,7 +92,7 @@ const App = () => {
         } else {
           setUnreadCount((c) => c + 1);
           toast.custom(
-            (t) => <Notification t={t} message={message} />,
+            (t) => <Notification toastInstance={t} message={message} />,
             { position: "bottom-right" }
           );
         }

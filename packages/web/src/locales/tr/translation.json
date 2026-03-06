@@ -354,7 +354,12 @@
         "records": "Kişisel Rekorlar",
         "records_desc": "1RM ve en iyi setlerin",
         "monthly_report": "Aylık Rapor",
-        "monthly_desc": "Aylık antrenman ve istatistiklerinizin özeti."
+        "monthly_desc": "Aylık antrenman ve istatistiklerinizin özeti.",
+        "archived_on": "Tarih:",
+        "no_records_yet": "Henüz Rekor Yok",
+        "log_more_workouts": "Kişisel rekorlarınızı burada görmek için daha fazla antrenman kaydedin.",
+        "total_uppercase": "(Toplam)",
+        "mins_uppercase": "(Dk)"
     },
     "settings": {
         "title": "Ayarlar",

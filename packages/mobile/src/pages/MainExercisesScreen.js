@@ -56,18 +56,21 @@ const MainExercisesScreen = ({ navigation }) => {
           </View>
         ) : (
           <View style={styles.list}>
-             {exercises.map((item, index) => (
+             {exercises.map((item, index) => {
+                const tKey = item.name.toLowerCase().replace(/[\s-]/g, '_').replace('pull_up', 'pullup');
+                const translatedName = t(`statistics.ex_${tKey}`, item.name);
+                return (
                 <View key={index} style={styles.listItem}>
                     <View style={styles.rankBadge}>
                         <Text style={styles.rankText}>#{index + 1}</Text>
                     </View>
                     <View style={styles.itemInfo}>
-                        <Text style={styles.itemName}>{item.name}</Text>
-                        <Text style={styles.itemValue}>{item.total.toLocaleString()} total reps</Text>
+                        <Text style={styles.itemName}>{translatedName}</Text>
+                        <Text style={styles.itemValue}>{item.total.toLocaleString()} {t('statistics.total_reps', 'total reps')}</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={20} color={theme.border} />
                 </View>
-             ))}
+             )})}
           </View>
         )}
       </ScrollView>
