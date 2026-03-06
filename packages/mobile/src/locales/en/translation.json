@@ -186,7 +186,17 @@
         "top_exercises": "Top Exercises",
         "best_performance": "Best Performance",
         "recent_record": "Recent Record",
-        "daily_avg": "Daily avg."
+        "daily_avg": "Daily avg.",
+        "sets_per_muscle": "Sets per muscle group",
+        "sets_desc": "Number of sets performed for each muscle group.",
+        "muscle_dist_chart": "Muscle distribution (Chart)",
+        "muscle_dist_desc": "Compare your current and previous muscle distributions.",
+        "muscle_dist_body": "Muscle distribution (Body)",
+        "muscle_body_desc": "Weekly heatmap of targeted muscles.",
+        "main_exercises": "Main exercises",
+        "main_ex_desc": "List of your most frequently performed exercises.",
+        "leaderboard": "Leaderboard Exercises",
+        "leaderboard_desc": "List of exercises eligible for the leaderboard."
     },
     "menu": {
         "exercises": "Exercises",

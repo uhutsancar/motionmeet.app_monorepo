@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useSocket } from '../hooks/useSocket';
+import Toast from 'react-native-toast-message';
 
 import Feed from '../pages/Feed';
 import Routines from '../pages/Routines';
@@ -31,6 +32,12 @@ import SetsDetailScreen from '../pages/SetsDetailScreen';
 import NotificationsScreen from '../pages/NotificationsScreen';
 import PrivacyScreen from '../pages/PrivacyScreen';
 import SupportScreen from '../pages/SupportScreen';
+
+// Missing Statistics Screens
+import AdvancedStatisticsScreen from '../pages/AdvancedStatisticsScreen';
+import MuscleDistributionBodyScreen from '../pages/MuscleDistributionBodyScreen';
+import MainExercisesScreen from '../pages/MainExercisesScreen';
+import LeaderboardScreen from '../pages/LeaderboardScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -75,6 +82,10 @@ const MainStack = () => (
     <Stack.Screen name="NotificationsScreen" component={NotificationsScreen} />
     <Stack.Screen name="PrivacyScreen" component={PrivacyScreen} />
     <Stack.Screen name="SupportScreen" component={SupportScreen} />
+    <Stack.Screen name="AdvancedStatisticsScreen" component={AdvancedStatisticsScreen} />
+    <Stack.Screen name="MuscleDistributionBodyScreen" component={MuscleDistributionBodyScreen} />
+    <Stack.Screen name="MainExercisesScreen" component={MainExercisesScreen} />
+    <Stack.Screen name="LeaderboardScreen" component={LeaderboardScreen} />
   </Stack.Navigator>
 );
 
@@ -89,7 +100,17 @@ const TabNavigator = () => {
   useEffect(() => {
     const socket = socketRef.current;
     if (!socket) return;
-    const onMsg = () => setUnreadMessages(prev => prev + 1);
+    const onMsg = (msg) => {
+      setUnreadMessages(prev => prev + 1);
+      Toast.show({
+        type: 'info',
+        text1: msg?.senderName || t('notifications.new_message', 'Yeni Mesaj'),
+        text2: msg?.text || t('notifications.you_have_message', 'Size yeni bir mesaj geldi.'),
+        position: 'top',
+        topOffset: 60,
+        visibilityTime: 4000,
+      });
+    };
     socket.on('message_received', onMsg);
     return () => socket.off('message_received', onMsg);
   }, [socketRef.current]);

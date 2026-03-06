@@ -341,7 +341,15 @@
         "streak": "Workout Streak",
         "view_records": "View All Records",
         "per_session": "avg./session",
-        "top_exercises": "Top Exercises"
+        "top_exercises": "Top Exercises",
+        "advanced": "Advanced Statistics",
+        "advanced_desc": "Volume, Set, Rep details",
+        "muscle_dist": "Muscle Distribution",
+        "muscle_dist_desc": "See which muscles you target",
+        "records": "Personal Records",
+        "records_desc": "1RM and best sets",
+        "monthly_report": "Monthly Report",
+        "monthly_desc": "Summary of your monthly workouts and stats."
     },
     "settings": {
         "title": "Settings",

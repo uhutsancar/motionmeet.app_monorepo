@@ -16,7 +16,7 @@ const StatisticsMenu = ({ navigation }) => {
       title: t('statistics.sets_per_muscle', 'Kas grubu başına set sayısı'),
       subtitle: t('statistics.sets_desc', 'Her kas grubu için yapılan set sayısı.'),
       pro: true,
-      route: null
+      route: 'AdvancedStatisticsScreen'
     },
     {
       icon: 'aperture-outline',
@@ -30,21 +30,21 @@ const StatisticsMenu = ({ navigation }) => {
       title: t('statistics.muscle_dist_body', 'Kas dağılımı (Vücut)'),
       subtitle: t('statistics.muscle_body_desc', 'Çalıştırılan kasların haftalık ısı haritası.'),
       pro: false,
-      route: null
+      route: 'MuscleDistributionBodyScreen'
     },
     {
       icon: 'barbell-outline',
       title: t('statistics.main_exercises', 'Ana egzersizler'),
       subtitle: t('statistics.main_ex_desc', 'En sık yaptığınız egzersizlerin listesi.'),
       pro: false,
-      route: null
+      route: 'MainExercisesScreen'
     },
     {
       icon: 'podium-outline',
       title: t('statistics.leaderboard', 'Lider Tablosu Egzersizleri'),
       subtitle: t('statistics.leaderboard_desc', 'Lider tablosuna uygun egzersizlerin listesi.'),
       pro: false,
-      route: null
+      route: 'LeaderboardScreen'
     },
     {
       icon: 'document-text-outline',

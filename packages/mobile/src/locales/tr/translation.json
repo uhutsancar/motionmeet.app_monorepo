@@ -190,7 +190,17 @@
         "top_exercises": "En İyi Egzersizler",
         "best_performance": "En İyi Performans",
         "recent_record": "Güncel Rekord",
-        "daily_avg": "Günlük ort."
+        "daily_avg": "Günlük ort.",
+        "sets_per_muscle": "Kas grubu başına set sayısı",
+        "sets_desc": "Her kas grubu için yapılan set sayısı.",
+        "muscle_dist_chart": "Kas dağılımı (Grafik)",
+        "muscle_dist_desc": "Mevcut ve önceki kas dağılımlarınızı karşılaştırın.",
+        "muscle_dist_body": "Kas dağılımı (Vücut)",
+        "muscle_body_desc": "Çalıştırılan kasların haftalık ısı haritası.",
+        "main_exercises": "Ana egzersizler",
+        "main_ex_desc": "En sık yaptığınız egzersizlerin listesi.",
+        "leaderboard": "Lider Tablosu",
+        "leaderboard_desc": "Lider tablosuna uygun egzersizlerin listesi."
     },
     "menu": {
         "exercises": "Egzersizler",

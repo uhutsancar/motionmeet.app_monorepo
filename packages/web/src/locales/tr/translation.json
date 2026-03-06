@@ -346,7 +346,15 @@
         "streak": "Antrenman Serisi",
         "view_records": "Tüm Rekorları Gör",
         "per_session": "ort./seans",
-        "top_exercises": "En İyi Egzersizler"
+        "top_exercises": "En İyi Egzersizler",
+        "advanced": "Gelişmiş İstatistikler",
+        "advanced_desc": "Hacim, Set, Rep detayları",
+        "muscle_dist": "Kas Dağılımı",
+        "muscle_dist_desc": "Hangi kasları çalıştırdığını gör",
+        "records": "Kişisel Rekorlar",
+        "records_desc": "1RM ve en iyi setlerin",
+        "monthly_report": "Aylık Rapor",
+        "monthly_desc": "Aylık antrenman ve istatistiklerinizin özeti."
     },
     "settings": {
         "title": "Ayarlar",

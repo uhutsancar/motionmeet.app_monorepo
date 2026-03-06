@@ -25,7 +25,9 @@ const Exercises = lazy(() => import("./pages/Exercises"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Messages = lazy(() => import("./pages/Messages"));
 const Statistics = lazy(() => import("./pages/Statistics"));
+const AdvancedStatistics = lazy(() => import("./pages/AdvancedStatistics"));
 const MuscleDistribution = lazy(() => import("./pages/MuscleDistribution"));
+const PersonalRecords = lazy(() => import("./pages/PersonalRecords"));
 const ActiveWorkout = lazy(() => import("./pages/ActiveWorkout"));
 const WorkoutSummary = lazy(() => import("./pages/WorkoutSummary"));
 const WorkoutShare = lazy(() => import("./pages/WorkoutShare"));
@@ -127,8 +129,8 @@ const App = () => {
             <Route path="/messages" element={<Messages />} />
             <Route path="/statistics" element={<Statistics />} />
             <Route path="/statistics/muscle-distribution" element={<MuscleDistribution />} />
-            <Route path="/statistics/history" element={<Statistics />} />
-            <Route path="/statistics/records" element={<Statistics />} />
+            <Route path="/statistics/history" element={<AdvancedStatistics />} />
+            <Route path="/statistics/records" element={<PersonalRecords />} />
             <Route path="/statistics/monthly-report" element={<MonthlyReport />} />
             <Route path="/statistics/monthly-report/workouts" element={<WorkoutsDetail />} />
             <Route path="/statistics/monthly-report/duration" element={<DurationDetail />} />
