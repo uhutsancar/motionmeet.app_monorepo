@@ -16,6 +16,14 @@ export default defineConfig({
     dedupe: ['react', 'react-dom'],
   },
 
+  server: {
+    host: '0.0.0.0',
+    port: 5173,
+    watch: {
+      usePolling: true,
+    }
+  },
+
   build: {
     target: 'esnext',
     chunkSizeWarningLimit: 2000,

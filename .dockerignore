@@ -1,0 +1,9 @@
+node_modules
+packages/backend/node_modules
+packages/web/node_modules
+packages/mobile/node_modules
+packages/shared/node_modules
+.git
+.env
+dist
+build

@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: packages/backend/Dockerfile
+    ports:
+      - "4000:4000"
+    volumes:
+      # Precise mounting to avoid node_modules and OS platform conflicts in Monorepo
+      - ./packages/backend/server.js:/app/packages/backend/server.js
+      - ./packages/backend/routes:/app/packages/backend/routes
+      - ./packages/backend/models:/app/packages/backend/models
+      - ./packages/backend/controllers:/app/packages/backend/controllers
+      - ./packages/backend/configs:/app/packages/backend/configs
+      - ./packages/backend/middlewares:/app/packages/backend/middlewares
+      - ./packages/backend/inngest:/app/packages/backend/inngest
+      - ./packages/backend/.env:/app/packages/backend/.env
+      - ./packages/shared/api:/app/packages/shared/api
+      - ./packages/shared/config:/app/packages/shared/config
+      - ./packages/shared/database:/app/packages/shared/database
+      - ./packages/shared/index.js:/app/packages/shared/index.js
+    env_file:
+      - path: packages/backend/.env
+        required: false
+
+  web:
+    build:
+      context: .
+      dockerfile: packages/web/Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      # Precise mounting for Web
+      - ./packages/web/src:/app/packages/web/src
+      - ./packages/web/public:/app/packages/web/public
+      - ./packages/web/index.html:/app/packages/web/index.html
+      - ./packages/web/vite.config.js:/app/packages/web/vite.config.js
+      - ./packages/web/eslint.config.js:/app/packages/web/eslint.config.js
+      - ./packages/web/.env:/app/packages/web/.env
+      - ./packages/shared/api:/app/packages/shared/api
+      - ./packages/shared/config:/app/packages/shared/config
+      - ./packages/shared/database:/app/packages/shared/database
+      - ./packages/shared/index.js:/app/packages/shared/index.js
+    environment:
+      - CHOKIDAR_USEPOLLING=true
