@@ -45,3 +45,33 @@ services:
       - ./packages/shared/index.js:/app/packages/shared/index.js
     environment:
       - CHOKIDAR_USEPOLLING=true
+
+  mobile:
+    build:
+      context: .
+      dockerfile: packages/mobile/Dockerfile
+    ports:
+      - "8081:8081"
+      - "19000:19000"
+      - "19001:19001"
+      - "19002:19002"
+    volumes:
+      # Precise mounting for Mobile
+      - ./packages/mobile/src:/app/packages/mobile/src
+      - ./packages/mobile/assets:/app/packages/mobile/assets
+      - ./packages/mobile/App.js:/app/packages/mobile/App.js
+      - ./packages/mobile/app.json:/app/packages/mobile/app.json
+      - ./packages/mobile/index.js:/app/packages/mobile/index.js
+      - ./packages/mobile/babel.config.js:/app/packages/mobile/babel.config.js
+      - ./packages/mobile/metro.config.js:/app/packages/mobile/metro.config.js
+      - ./packages/mobile/tailwind.config.js:/app/packages/mobile/tailwind.config.js
+      - ./packages/mobile/.env:/app/packages/mobile/.env
+      - ./packages/shared/api:/app/packages/shared/api
+      - ./packages/shared/config:/app/packages/shared/config
+      - ./packages/shared/database:/app/packages/shared/database
+      - ./packages/shared/index.js:/app/packages/shared/index.js
+    environment:
+      - EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0
+      - REACT_NATIVE_PACKAGER_HOSTNAME=192.168.1.124
+      - EXPO_USE_METRO_WORKSPACE_ROOT=1
+      - NODE_ENV=development

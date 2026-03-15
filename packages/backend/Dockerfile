@@ -18,5 +18,5 @@ COPY . .
 # Expose backend port
 EXPOSE 4000
 
-# Start backend using workspace command
-CMD ["npm", "--workspace=server", "run", "server"]
+# Start backend using direct npx nodemon for cleaner signals/logs
+CMD ["npx", "nodemon", "-L", "packages/backend/server.js"]
