@@ -1,0 +1,18 @@
+FROM node:20-alpine AS builder
+WORKDIR /app
+# Monorepo bağımlılıkları için root ve ilgili paket dosyalarını kopyala
+COPY package*.json ./
+COPY packages/backend/package.json ./packages/backend/
+COPY packages/shared/package.json ./packages/shared/
+RUN npm install --production
+
+# Tüm kodu içeri kopyala (Artık Volume'a ihtiyaç yok)
+COPY . .
+
+# Çalıştırma aşaması
+FROM node:20-alpine
+WORKDIR /app
+COPY --from=builder /app .
+EXPOSE 4000
+# Nodemon yerine direkt node ile server'ı başlat
+CMD ["node", "packages/backend/server.js"]
