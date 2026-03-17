@@ -12,8 +12,13 @@ export default defineConfig({
   resolve: {
     alias: {
       '~': path.resolve(__dirname, 'src'),
+      '@clerk/clerk-react': path.resolve(__dirname, '../../node_modules/@clerk/clerk-react/dist/index.js'),
     },
     dedupe: ['react', 'react-dom'],
+  },
+  
+  optimizeDeps: {
+    include: ['@clerk/clerk-react'],
   },
 
   server: {
@@ -25,6 +30,9 @@ export default defineConfig({
   },
 
   build: {
+    commonjsOptions: {
+      include: [/@clerk\/clerk-react/, /node_modules/],
+    },
     target: 'esnext',
     chunkSizeWarningLimit: 2000,
     minify: 'terser',
