@@ -1,8 +1,9 @@
 import fs from "fs";
-import imagekit from "../configs/imageKit.js";
 import Story from "../models/Story.js";
 import User from "../models/User.js";
+import imagekit from "../configs/imageKit.js";
 import { inngest } from "../inngest/index.js";
+import { uploadToS3 } from "../utils/s3Utils.js";
 
 // Add User Story
 export const addUserStory = async (req, res) => {
@@ -14,14 +15,18 @@ export const addUserStory = async (req, res) => {
 
     let media_url = "";
 
-    // upload media to imagekit
+    // upload media to S3
     if (media_type === "image" || media_type === "video") {
-      const fileBuffer = fs.readFileSync(media.path);
-      const response = await imagekit.upload({
-        file: fileBuffer,
-        fileName: media.originalname,
+      const stream = fs.createReadStream(media.path);
+      const { key } = await uploadToS3(stream, media.originalname, "stories");
+      
+      try { fs.unlinkSync(media.path); } catch (e) {}
+
+      // ImageKit URL with path as S3 key
+      media_url = imagekit.url({
+        path: key,
+        transformation: [{ quality: "auto" }, { format: "webp" }]
       });
-      media_url = response.url;
     }
 
     //create story

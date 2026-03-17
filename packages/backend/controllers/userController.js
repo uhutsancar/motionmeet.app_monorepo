@@ -1,9 +1,10 @@
-import imagekit from "../configs/imageKit.js";
+import User from "../models/User.js";
+import fs from "fs";
+import { deleteFromS3, extractS3Key, uploadToS3 } from "../utils/s3Utils.js";
 import { inngest } from "../inngest/index.js";
 import Connection from "../models/Connection.js";
 import Post from "../models/Post.js";
-import User from "../models/User.js";
-import fs from "fs";
+import imagekit from "../configs/imageKit.js";
 
 //Get User Data using userId
 export const getUserData = async (req, res) => {
@@ -57,40 +58,42 @@ export const updateUserData = async (req, res) => {
 
     //Profile Image Upload
     if (profile) {
-      const buffer = fs.readFileSync(profile.path);
-      const response = await imagekit.upload({
-        file: buffer,
-        fileName: profile.originalname,
-      });
+      // Delete old profile picture from S3 if it exists
+      if (tempUser.profile_picture) {
+        const oldKey = extractS3Key(tempUser.profile_picture);
+        if (oldKey) await deleteFromS3(oldKey);
+      }
 
+      const stream = fs.createReadStream(profile.path);
+      const { key } = await uploadToS3(stream, profile.originalname, "profiles");
+
+      // ImageKit URL with path as S3 key
       const url = imagekit.url({
-        path: response.filePath,
-        transformation: [
-          { quality: "auto" },
-          { format: "webp" },
-          { width: "512" },
-        ],
+        path: key,
+        transformation: [{ width: "512" }, { quality: "auto" }, { format: "webp" }]
       });
+      
       updatedData.profile_picture = url;
       try { fs.unlinkSync(profile.path); } catch (e) {}
     }
 
     //Cover Image Upload
     if (cover) {
-      const buffer = fs.readFileSync(cover.path);
-      const response = await imagekit.upload({
-        file: buffer,
-        fileName: cover.originalname,
-      });
+      // Delete old cover photo from S3 if it exists
+      if (tempUser.cover_photo) {
+        const oldKey = extractS3Key(tempUser.cover_photo);
+        if (oldKey) await deleteFromS3(oldKey);
+      }
 
+      const stream = fs.createReadStream(cover.path);
+      const { key } = await uploadToS3(stream, cover.originalname, "covers");
+
+      // ImageKit URL with path as S3 key
       const url = imagekit.url({
-        path: response.filePath,
-        transformation: [
-          { quality: "auto" },
-          { format: "webp" },
-          { width: "1280" },
-        ],
+        path: key,
+        transformation: [{ width: "1280" }, { quality: "auto" }, { format: "webp" }]
       });
+      
       updatedData.cover_photo = url;
       try { fs.unlinkSync(cover.path); } catch (e) {}
     }

@@ -1,7 +1,8 @@
 import fs from "fs";
-import imagekit from "../configs/imageKit.js";
 import Post from "../models/Post.js";
 import User from "../models/User.js";
+import imagekit from "../configs/imageKit.js";
+import { deleteFromS3, extractS3Key, uploadToS3 } from "../utils/s3Utils.js";
 
 // Add Post
 export const addPost = async (req, res) => {
@@ -14,14 +15,16 @@ export const addPost = async (req, res) => {
     if (images && images.length) {
       image_urls = await Promise.all(
         images.map(async (image) => {
-          const fileBuffer = fs.readFileSync(image.path);
-          const response = await imagekit.upload({
-            file: fileBuffer,
-            fileName: image.originalname,
-            folder: "posts",
-          });
+          const stream = fs.createReadStream(image.path);
+          const { key } = await uploadToS3(stream, image.originalname, "posts");
+          
           try { fs.unlinkSync(image.path); } catch (e) {}
-          return response.url;
+          
+          // ImageKit URL with path as S3 key
+          return imagekit.url({
+            path: key,
+            transformation: [{ quality: "auto" }, { format: "webp" }]
+          });
         })
       );
     }
@@ -138,6 +141,38 @@ export const addComment = async (req, res) => {
 
     const updatedPost = await Post.findById(postId).populate("comments.user");
     res.json({ success: true, comments: updatedPost.comments });
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+// Delete Post
+export const deletePost = async (req, res) => {
+  try {
+    const { userId } = await req.auth();
+    const { postId } = req.body;
+
+    const post = await Post.findById(postId);
+    if (!post) return res.json({ success: false, message: "Post not found" });
+
+    // Check ownership
+    if (post.user.toString() !== userId) {
+      return res.json({ success: false, message: "Unauthorized to delete this post" });
+    }
+
+    // Delete images from S3
+    if (post.image_urls && post.image_urls.length > 0) {
+      await Promise.all(
+        post.image_urls.map(async (url) => {
+          const key = extractS3Key(url);
+          if (key) await deleteFromS3(key);
+        })
+      );
+    }
+
+    await Post.findByIdAndDelete(postId);
+    res.json({ success: true, message: "Post deleted successfully" });
   } catch (error) {
     console.log(error);
     res.json({ success: false, message: error.message });

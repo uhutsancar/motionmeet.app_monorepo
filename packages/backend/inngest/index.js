@@ -4,6 +4,7 @@ import Connection from "../models/Connection.js";
 import sendEmail from "../configs/nodeMailer.js";
 import Story from "../models/Story.js";
 import Message from "../models/Message.js";
+import { deleteFromS3, extractS3Key } from "../utils/s3Utils.js";
 
 // Create a client to send and receive events
 export const inngest = new Inngest({ id: "motionmeet.app" });
@@ -138,8 +139,13 @@ const deleteStory = inngest.createFunction(
     const in24Hours = new Date(Date.now() + 24 * 60 * 60 * 1000);
     await step.sleepUntil("wait-for-24-hours", in24Hours);
     await step.run("delete-story", async () => {
+      const story = await Story.findById(storyId);
+      if (story && story.media_url) {
+        const key = extractS3Key(story.media_url);
+        if (key) await deleteFromS3(key);
+      }
       await Story.findByIdAndDelete(storyId);
-      return { message: "Story deleted." };
+      return { message: "Story deleted and S3 media purged." };
     });
   }
 );

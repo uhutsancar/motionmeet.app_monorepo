@@ -1,6 +1,7 @@
 import fs from "fs";
-import imagekit from "../configs/imageKit.js";
 import Message from "../models/Message.js";
+import { deleteFromS3, extractS3Key, uploadToS3 } from "../utils/s3Utils.js";
+import imagekit from "../configs/imageKit.js";
 
 // Lazily imported to avoid circular deps — server exports io after modules load
 let _io, _userSockets;
@@ -39,14 +40,15 @@ export const sendMessage = async (req, res) => {
     let message_type = image ? "image" : "text";
 
     if (image) {
-      const fileBuffer = fs.readFileSync(image.path);
-      const uploadRes = await imagekit.upload({
-        file: fileBuffer,
-        fileName: image.originalname,
-      });
+      const stream = fs.createReadStream(image.path);
+      const { key } = await uploadToS3(stream, image.originalname, "messages");
+      
+      try { fs.unlinkSync(image.path); } catch (e) {}
+
+      // ImageKit URL with path as S3 key
       media_url = imagekit.url({
-        path: uploadRes.filePath,
-        transformation: [{ quality: "auto" }, { format: "webp" }, { width: "1280" }],
+        path: key,
+        transformation: [{ quality: "auto" }, { format: "webp" }, { width: "1280" }]
       });
     }
 
@@ -207,6 +209,12 @@ export const deleteMessage = async (req, res) => {
     // Only allow sender to delete their messages
     if (message.from_user_id.toString() !== userId) {
       return res.json({ success: false, message: "Not authorized to delete this message" });
+    }
+
+    // Delete image from S3 if it exists
+    if (message.media_url) {
+      const key = extractS3Key(message.media_url);
+      if (key) await deleteFromS3(key);
     }
 
     await Message.findByIdAndDelete(messageId);
