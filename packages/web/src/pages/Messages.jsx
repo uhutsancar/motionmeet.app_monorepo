@@ -6,7 +6,7 @@ import { Send, Search, MessageSquare, ArrowLeft, Check, CheckCheck, X, Trash2 } 
 import moment from 'moment';
 import 'moment/locale/tr';
 
-const API = import.meta.env.VITE_BASEURL || 'http://localhost:4000';
+const API = import.meta.env.VITE_BASEURL;
 
 const authedFetch = (url, token, opts = {}) =>
   fetch(`${API}${url}`, {

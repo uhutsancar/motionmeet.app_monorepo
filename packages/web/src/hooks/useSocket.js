@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from '@clerk/clerk-react';
 
-const SOCKET_URL = import.meta.env.VITE_BASEURL || 'http://localhost:4000';
+const SOCKET_URL = import.meta.env.VITE_BASEURL;
 
 /**
  * useSocket — manages a Socket.io connection authenticated with Clerk token.

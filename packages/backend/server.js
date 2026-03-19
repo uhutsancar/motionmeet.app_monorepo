@@ -58,8 +58,9 @@ app.use("/api/admin", rbacRouter);
 // ─── Socket.io Setup ─────────────────────────────────────────────────────────
 const io = new Server(httpServer, {
   cors: {
-    origin: "*",
+    origin: process.env.FRONTEND_URL || "*",
     methods: ["GET", "POST"],
+    credentials: true
   },
 });
 

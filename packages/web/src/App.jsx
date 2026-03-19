@@ -37,7 +37,7 @@ const DurationDetail = lazy(() => import("./pages/DurationDetail"));
 const VolumeDetail = lazy(() => import("./pages/VolumeDetail"));
 const SetsDetail = lazy(() => import("./pages/SetsDetail"));
 
-const SOCKET_URL = import.meta.env.VITE_BASEURL || "http://localhost:4000";
+const SOCKET_URL = import.meta.env.VITE_BASEURL;
 
 // ── Minimal page loading spinner ──────────────────────────────────────────────
 const PageLoader = () => (
