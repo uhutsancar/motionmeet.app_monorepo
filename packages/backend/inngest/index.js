@@ -215,7 +215,7 @@ import { deleteFromS3, extractS3Key } from "../utils/s3Utils.js";
 // GÜNCELLEME: Signing Key eklendi. .env dosyasındaki CLERK_WEBHOOK_SECRET'ı kullanır.
 export const inngest = new Inngest({ 
   id: "motionmeet.app",
-  signingKey: process.env.CLERK_WEBHOOK_SECRET 
+  signingKey: process.env.INNGEST_SIGNING_KEY 
 });
 
 // Inngest Function to save user data to a database
