@@ -4,7 +4,7 @@ import { io } from 'socket.io-client';
 import { AppState } from 'react-native';
 
 // Use same IP as the axios client so device can reach the server
-const BASE_URL = 'http://192.168.1.124:4000';
+const BASE_URL = 'http://192.168.1.146:4000';
 
 /**
  * Mobile Socket.io hook — manages connection with Clerk auth token.
