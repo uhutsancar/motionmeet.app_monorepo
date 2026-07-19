@@ -81,10 +81,14 @@ export const useActiveWorkout = (routine) => {
         setSaving(true);
         try {
             const token = await getToken();
+            const endTime = new Date();
+            const startTime = new Date(endTime.getTime() - (elapsed * 1000));
             const payload = {
                 name: routine.name,
-                durationSeconds: elapsed,
-                totalVolume,
+                startTime: startTime.toISOString(),
+                endTime: endTime.toISOString(),
+                durationMinutes: Math.round(elapsed / 60),
+                volumeKg: totalVolume,
                 exercises: exercises.map(ex => ({
                     exerciseId: ex.exerciseId._id || ex.exerciseId,
                     sets: ex.sets.filter(set => set.completed).map(({ weight, reps }) => ({ weight, reps })),

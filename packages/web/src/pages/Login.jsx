@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Box, Button, TextField, Typography, Stack, Alert, Paper, Link as MuiLink } from '@mui/material';
 import { useAuthContext } from '../context/AuthProvider.jsx';
 import { Link, useNavigate } from 'react-router-dom';
@@ -70,7 +70,7 @@ const Login = () => {
 
         <Typography variant="body2" align="center" sx={{ mt: 3 }}>
           Don't have an account?{' '}
-          <MuiLink component={Link} to="/sign-up" underline="hover">
+          <MuiLink component={Link} to="/signup" underline="hover">
             Sign Up
           </MuiLink>
         </Typography>

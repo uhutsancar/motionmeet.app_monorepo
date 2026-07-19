@@ -1,5 +1,5 @@
 import { useAuthContext } from "../context/AuthProvider";
-import { useCallback, useEffect, useMemo, useRef, useState, createContext } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { SocketContext } from "./socketContext";
 import { SOCKET_URL } from "~/config/env";

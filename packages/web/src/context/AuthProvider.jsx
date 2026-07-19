@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { BASEURL } from '~/config/env';
 
@@ -8,6 +8,13 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token') || null);
   const [isLoaded, setIsLoaded] = useState(false);
+
+  const tokenRef = useRef(token);
+  useEffect(() => {
+    tokenRef.current = token;
+  }, [token]);
+
+  const getToken = useCallback(async () => tokenRef.current, []);
 
   useEffect(() => {
     if (token) {
@@ -70,13 +77,14 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoaded, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoaded, login, register, logout, getToken }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
 // Legacy auth hooks to minimize rewrite
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuthContext = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -84,7 +92,7 @@ export const useAuthContext = () => {
   }
   return {
     user: context.user,
-    getToken: () => context.token,
+    getToken: context.getToken,
     isLoaded: context.isLoaded,
     isSignedIn: !!context.user,
     userId: context.user?.id,

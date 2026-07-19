@@ -11,7 +11,7 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 import jwt from "jsonwebtoken";
-import dotenv from "dotenv";
+
 import connectDB, { disconnectDB } from "./configs/db.js";
 import userRouter from "./routes/userRoutes.js";
 import postRouter from "./routes/postRoutes.js";

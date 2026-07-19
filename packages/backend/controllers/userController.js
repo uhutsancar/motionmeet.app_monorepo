@@ -148,7 +148,7 @@ export const sendConnectionRequest = async (req, res, next) => {
     }
     if (connection) return res.json({ success: false, message: "Connection request pending" });
 
-    const newConnection = await userService.createConnection(req.userId, targetId);
+    await userService.createConnection(req.userId, targetId);
     
     const recipient = await userService.getUserById(targetId);
     const sender = await userService.getUserById(req.userId);

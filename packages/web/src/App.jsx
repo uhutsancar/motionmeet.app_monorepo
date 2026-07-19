@@ -82,7 +82,8 @@ const AppContent = () => {
     };
 
     fetchData();
-  }, [dispatch, getToken, user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatch, user]);
 
   useEffect(() => {
     pathnameRef.current = pathname;
@@ -115,6 +116,8 @@ const AppContent = () => {
           <Route path="/" element={user ? <Navigate to="/feed" replace /> : <Landing />} />
           <Route path="/login/*" element={user ? <Navigate to="/feed" replace /> : <Login />} />
           <Route path="/signup/*" element={user ? <Navigate to="/feed" replace /> : <Signup />} />
+          <Route path="/sign-in/*" element={<Navigate to="/login" replace />} />
+          <Route path="/sign-up/*" element={<Navigate to="/signup" replace />} />
           <Route path="/features" element={<Features />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/about" element={<About />} />
