@@ -1,50 +1,46 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import {
-  View, Text, StyleSheet, FlatList, Image, TouchableOpacity,
-  TextInput, RefreshControl, StatusBar,
-} from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { FlatList, StatusBar, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
-import { useAuth } from '@clerk/clerk-expo';
+import { useAuthContext } from "../context/AuthProvider";
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useSocket } from '../hooks/useSocket';
 import { fetchConnections } from '../features/connections/connectionsSlice';
-import { getUserRecentMessages } from '../api/endpoints';
+import { getUserConversations } from '../api/endpoints';
 import moment from 'moment';
 import 'moment/locale/tr';
+import { Appbar, Avatar, Text, Searchbar, TouchableRipple, Badge, useTheme as usePaperTheme, Surface } from 'react-native-paper';
+import { Ionicons } from '@expo/vector-icons';
 
 const Messages = ({ navigation }) => {
   const dispatch = useDispatch();
-  const { getToken } = useAuth();
+  const { getToken } = useAuthContext();
   const { t, i18n } = useTranslation();
   const { theme, isDark } = useTheme();
-  // Memoize styles
-  const s = React.useMemo(() => getStyles(theme), [theme]);
+  const paperTheme = usePaperTheme();
+  const s = React.useMemo(() => getStyles(theme, paperTheme), [theme, paperTheme]);
 
   const { connections } = useSelector((state) => state.connections);
-  const { socketRef, onlineUsers } = useSocket();
+  const { socket, onlineUsers } = useSocket();
 
   const [conversations, setConversations] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const conversationsRef = useRef(conversations);
+  const connectionsRef = useRef(connections);
 
   useEffect(() => {
     moment.locale(i18n.language.startsWith('tr') ? 'tr' : 'en');
   }, [i18n.language]);
 
-  useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
+  useEffect(() => { connectionsRef.current = connections; }, [connections]);
 
   useEffect(() => {
     loadAll();
   }, []);
 
-  // Socket.io: append new message to conversation list
   useEffect(() => {
-    const socket = socketRef.current;
     if (!socket) return;
 
     const onMsg = (msg) => {
@@ -61,7 +57,6 @@ const Messages = ({ navigation }) => {
           };
           return [updated[exists], ...updated.filter((_, i) => i !== exists)];
         }
-        // New conversation
         return [{
           user: msg.from_user_id,
           lastMessage: msg,
@@ -84,9 +79,12 @@ const Messages = ({ navigation }) => {
           };
           return [updated[exists], ...updated.filter((_, i) => i !== exists)];
         }
-        // If it somehow wasn't in conversations (e.g. from a new search tap)
+        const recipient = typeof msg.to_user_id === 'object'
+          ? msg.to_user_id
+          : connectionsRef.current.find((item) => item._id === recipientId);
+        if (!recipient) return prev;
         return [{
-          user: msg.to_user_id,
+          user: recipient,
           lastMessage: msg,
           unread: 0,
           isNew: false
@@ -100,14 +98,16 @@ const Messages = ({ navigation }) => {
       socket.off('message_received', onMsg);
       socket.off('message_sent', onSent);
     };
-  }, [socketRef.current]);
+  }, [socket]);
 
   const loadAll = async () => {
     setLoading(true);
     try {
       const token = await getToken();
-      dispatch(fetchConnections(token));
+      await dispatch(fetchConnections(token));
       await loadConversations(token);
+    } catch (error) {
+      console.warn('Conversation list could not be loaded:', error.message);
     } finally {
       setLoading(false);
     }
@@ -115,43 +115,35 @@ const Messages = ({ navigation }) => {
 
   const loadConversations = async (token) => {
     try {
-      const data = await getUserRecentMessages(token);
+      const data = await getUserConversations(token);
       if (data.success) {
-        // Group by sender, keep latest per sender
-        const grouped = {};
-        data.messages.forEach(msg => {
-          const sid = msg.from_user_id?._id;
-          if (!sid) return;
-          if (!grouped[sid] || new Date(msg.createdAt) > new Date(grouped[sid].createdAt)) {
-            grouped[sid] = msg;
-          }
-        });
-        const convs = Object.values(grouped)
-          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-          .map(msg => ({
-            user: msg.from_user_id,
-            lastMessage: msg,
-            unread: msg.seen ? 0 : 1,
-          }));
+        const convs = (data.conversations || []).map((conversation) => ({
+          user: conversation.partner,
+          lastMessage: conversation.lastMessage,
+          unread: conversation.unreadCount || 0,
+        }));
         setConversations(convs);
       }
-    } catch {}
+    } catch (error) {
+      console.warn('Conversation request failed:', error.message);
+    }
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadAll();
-    setRefreshing(false);
+    try {
+      await loadAll();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleOpen = (conv) => {
-    // Mark as read locally
     setConversations(prev => prev.map(c => c.user?._id === conv.user?._id ? { ...c, unread: 0 } : c));
     navigation.navigate('ChatBox', { userId: conv.user?._id, user: conv.user });
   };
 
   const handleNewChat = () => {
-    // Navigate to Connections / Discover to pick someone
     navigation.navigate('Connections');
   };
 
@@ -164,7 +156,6 @@ const Messages = ({ navigation }) => {
       c.user?.username?.toLowerCase().includes(lowerQ)
     );
 
-    // Add connections that match search but aren't in conversations
     const convUserIds = new Set(conversations.map(c => c.user?._id));
     const matchingConnections = connections.filter(conn => 
       !convUserIds.has(conn._id) && 
@@ -188,38 +179,35 @@ const Messages = ({ navigation }) => {
     const timeLabel = conv.lastMessage?.createdAt ? moment(conv.lastMessage.createdAt).fromNow() : '';
 
     return (
-      <TouchableOpacity style={s.convRow} onPress={() => handleOpen(conv)} activeOpacity={0.7}>
-        {/* Avatar with online dot */}
-        <View style={s.avatarContainer}>
-          {conv.user?.profile_picture
-            ? <Image source={{ uri: conv.user.profile_picture }} style={s.avatar} />
-            : <View style={[s.avatar, s.avatarFallback]}>
-                <Text style={s.avatarText}>{conv.user?.full_name?.charAt(0)?.toUpperCase() || '?'}</Text>
-              </View>
-          }
-          {isOnline && <View style={s.onlineDot} />}
-        </View>
+      <TouchableRipple style={s.convRow} onPress={() => handleOpen(conv)}>
+        <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+          <Surface elevation={0} style={s.avatarContainer}>
+            {conv.user?.profile_picture
+              ? <Avatar.Image source={{ uri: conv.user.profile_picture }} size={52} />
+              : <Avatar.Text label={conv.user?.full_name?.charAt(0)?.toUpperCase() || '?'} size={52} style={{ backgroundColor: theme.primary }} />
+            }
+            {isOnline && <Badge size={13} style={s.onlineDot} />}
+          </Surface>
 
-        {/* Content */}
-        <View style={s.convContent}>
-          <View style={s.convTop}>
-            <Text style={[s.convName, hasUnread && { color: theme.text, fontWeight: '700' }]} numberOfLines={1}>
-              {conv.user?.full_name || conv.user?.username}
+          <Surface elevation={0} style={s.convContent}>
+            <Surface elevation={0} style={s.convTop}>
+              <Text variant="titleMedium" style={[s.convName, hasUnread && { color: theme.text, fontWeight: '700' }]} numberOfLines={1}>
+                {conv.user?.full_name || conv.user?.username}
+              </Text>
+              <Text variant="labelSmall" style={s.convTime}>{timeLabel}</Text>
+            </Surface>
+            <Text variant="bodyMedium" style={[s.convPreview, hasUnread && { color: theme.text, fontWeight: '500' }]} numberOfLines={1}>
+              {conv.isNew ? t('messages.start_new_chat', 'Start a new chat') : (msgText || t('messages.no_message', 'No message yet'))}
             </Text>
-            <Text style={s.convTime}>{timeLabel}</Text>
-          </View>
-          <Text style={[s.convPreview, hasUnread && { color: theme.text, fontWeight: '500' }]} numberOfLines={1}>
-            {conv.isNew ? t('messages.start_new_chat', 'Start a new chat') : (msgText || t('messages.no_message', 'No message yet'))}
-          </Text>
-        </View>
+          </Surface>
 
-        {/* Unread badge */}
-        {hasUnread && (
-          <View style={s.unreadBadge}>
-            <View style={s.unreadDot} />
-          </View>
-        )}
-      </TouchableOpacity>
+          {hasUnread && (
+            <Surface elevation={0} style={s.unreadBadge}>
+              <Badge size={10} style={{ backgroundColor: theme.primary }} />
+            </Surface>
+          )}
+        </Surface>
+      </TouchableRipple>
     );
   };
 
@@ -227,34 +215,25 @@ const Messages = ({ navigation }) => {
     <SafeAreaView style={s.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      {/* Header */}
-      <View style={s.header}>
-        <Text style={s.headerTitle}>{t('messages.title', 'Messages')}</Text>
-        <TouchableOpacity onPress={handleNewChat} style={s.newChatBtn}>
-          <Ionicons name="create-outline" size={22} color={theme.primary} />
-        </TouchableOpacity>
-      </View>
+      <Appbar.Header style={s.header}>
+        <Appbar.Content title={t('messages.title', 'Messages')} titleStyle={s.headerTitle} />
+        <Appbar.Action icon="square-edit-outline" onPress={handleNewChat} color={theme.primary} />
+      </Appbar.Header>
 
-      {/* Search */}
-      <View style={s.searchContainer}>
-        <View style={s.searchBar}>
-          <Ionicons name="search" size={16} color={theme.textMuted} style={{ marginRight: 8 }} />
-          <TextInput
-            style={s.searchInput}
-            placeholder={t('messages.search', 'Ara...')}
-            placeholderTextColor={theme.textMuted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery ? (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={16} color={theme.textMuted} />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-      </View>
+      <Surface elevation={0} style={s.searchContainer}>
+        <Searchbar
+          placeholder={t('messages.search', 'Ara...')}
+          onChangeText={setSearchQuery}
+          value={searchQuery}
+          style={s.searchBar}
+          inputStyle={{ color: theme.text, minHeight: 0 }}
+          iconColor={theme.textMuted}
+          placeholderTextColor={theme.textMuted}
+          elevation={0}
+          theme={{ colors: { background: theme.surface } }}
+        />
+      </Surface>
 
-      {/* List */}
       <FlatList
         data={displayedConvs}
         renderItem={renderConversation}
@@ -263,55 +242,47 @@ const Messages = ({ navigation }) => {
         contentContainerStyle={{ paddingBottom: 12 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
         ListEmptyComponent={
-          <View style={s.emptyState}>
+          <Surface elevation={0} style={s.emptyState}>
             <Ionicons name="chatbubbles-outline" size={52} color={theme.border} />
-            <Text style={s.emptyTitle}>{t('messages.no_messages', 'No messages yet')}</Text>
-            <Text style={s.emptySubtitle}>{t('messages.connect_hint', 'Connect with athletes to start chatting')}</Text>
-          </View>
+            <Text variant="titleMedium" style={s.emptyTitle}>{t('messages.no_messages', 'No messages yet')}</Text>
+            <Text variant="bodyMedium" style={s.emptySubtitle}>{t('messages.connect_hint', 'Connect with athletes to start chatting')}</Text>
+          </Surface>
         }
       />
     </SafeAreaView>
   );
 };
 
-const getStyles = (theme) => StyleSheet.create({
+const getStyles = (theme, paperTheme) => ({
   container: { flex: 1, backgroundColor: theme.background },
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 14,
+    backgroundColor: theme.background,
+    elevation: 0,
   },
   headerTitle: { fontSize: 26, fontWeight: '800', color: theme.text },
-  newChatBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.border },
   searchContainer: { paddingHorizontal: 16, marginBottom: 8 },
   searchBar: {
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10,
     backgroundColor: theme.surface, borderRadius: 14, borderWidth: 1, borderColor: theme.border,
+    height: 48,
   },
-  searchInput: { flex: 1, fontSize: 14, color: theme.text },
   convRow: {
-    flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 16, paddingVertical: 14,
     borderBottomWidth: 0.5, borderBottomColor: theme.border,
   },
   avatarContainer: { position: 'relative', marginRight: 12 },
-  avatar: { width: 52, height: 52, borderRadius: 26 },
-  avatarFallback: { backgroundColor: theme.primary, justifyContent: 'center', alignItems: 'center' },
-  avatarText: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
   onlineDot: {
     position: 'absolute', bottom: 1, right: 1,
-    width: 13, height: 13, borderRadius: 7,
     backgroundColor: '#22c55e', borderWidth: 2, borderColor: theme.background,
   },
-  convContent: { flex: 1, marginRight: 8 },
+  convContent: { flex: 1, marginRight: 8, justifyContent: 'center' },
   convTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  convName: { fontSize: 15, fontWeight: '600', color: theme.textMuted, flex: 1, marginRight: 8 },
-  convTime: { fontSize: 11, color: theme.textMuted, flexShrink: 0 },
-  convPreview: { fontSize: 13, color: theme.textMuted },
+  convName: { fontWeight: '600', color: theme.textMuted, flex: 1, marginRight: 8 },
+  convTime: { color: theme.textMuted, flexShrink: 0 },
+  convPreview: { color: theme.textMuted },
   unreadBadge: { justifyContent: 'center', alignItems: 'center' },
-  unreadDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: theme.primary },
   emptyState: { flex: 1, paddingTop: 80, alignItems: 'center', gap: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: theme.text, marginTop: 8 },
-  emptySubtitle: { fontSize: 13, color: theme.textMuted, textAlign: 'center', maxWidth: 220 },
+  emptyTitle: { fontWeight: '700', color: theme.text, marginTop: 8 },
+  emptySubtitle: { color: theme.textMuted, textAlign: 'center', maxWidth: 220 },
 });
 
 export default Messages;

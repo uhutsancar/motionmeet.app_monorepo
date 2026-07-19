@@ -1,318 +1,388 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Check, X, ArrowRight, ChevronDown, ChevronUp, Zap, Loader2 } from 'lucide-react';
+import { Check, X, ArrowRight, Zap, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import PublicLayout from './PublicLayout';
 import api from '~/api/axios.js';
-import { useAuth } from '@clerk/clerk-react';
+import { useAuthContext } from "../context/AuthProvider";
 import { useSelector, useDispatch } from 'react-redux';
 import { fetchUser } from '../features/user/userSlice';
 import toast from 'react-hot-toast';
+import { Box, Stack, Typography, Button, Container, Grid, Paper, Collapse, Switch, useTheme } from '@mui/material';
 
-/* ── FAQ Item ── */
 const FAQItem = ({ q, a }) => {
-    const [open, setOpen] = useState(false);
-    return (
-        <div
-            className="border border-[var(--border-subtle)] rounded-2xl overflow-hidden cursor-pointer"
-            onClick={() => setOpen(v => !v)}
-        >
-            <div className="flex items-center justify-between px-6 py-4 bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-light)] transition">
-                <span className="font-semibold text-[var(--text-primary)]">{q}</span>
-                {open
-                    ? <ChevronUp className="w-5 h-5 text-[var(--accent-primary)] flex-shrink-0" />
-                    : <ChevronDown className="w-5 h-5 text-[var(--text-muted)] flex-shrink-0" />
-                }
-            </div>
-            {open && (
-                <div className="px-6 py-4 text-[var(--text-secondary)] text-sm leading-relaxed bg-[var(--bg-surface)]">
-                    {a}
-                </div>
-            )}
-        </div>
-    );
+  const [open, setOpen] = useState(false);
+  const theme = useTheme();
+
+  return (
+    <Paper 
+      elevation={0}
+      sx={{ 
+        border: `1px solid ${theme.palette.divider}`, 
+        borderRadius: 4, 
+        overflow: 'hidden',
+        mb: 2,
+        bgcolor: 'background.paper'
+      }}
+    >
+      <Box 
+        onClick={() => setOpen(!open)}
+        sx={{ 
+          px: 3, py: 2, 
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          cursor: 'pointer',
+          '&:hover': { bgcolor: 'action.hover' }
+        }}
+      >
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{q}</Typography>
+        <Box sx={{ color: open ? theme.palette.primary.main : 'text.secondary' }}>
+          {open ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+        </Box>
+      </Box>
+      <Collapse in={open}>
+        <Box sx={{ px: 3, py: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
+          <Typography variant="body2" sx={{ color: 'text.secondary', lineHeight: 1.6 }}>{a}</Typography>
+        </Box>
+      </Collapse>
+    </Paper>
+  );
 };
 
-/* ── Table check/x ── */
-const TC = ({ v }) => v
-    ? <Check className="w-5 h-5 text-green-500 mx-auto" />
-    : <X className="w-4 h-4 text-[var(--text-muted)] mx-auto" />;
+const TC = ({ v }) => v 
+  ? <Check size={20} color="#22c55e" /> 
+  : <X size={16} color="currentColor" style={{ opacity: 0.3 }} />;
 
 const Pricing = () => {
-    const { t } = useTranslation();
-    const navigate = useNavigate();
-    const [yearly, setYearly] = useState(false);
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const theme = useTheme();
+  const [yearly, setYearly] = useState(false);
 
-    // API State
-    const { getToken } = useAuth();
-    const { value: currentUser } = useSelector(state => state.user);
-    const dispatch = useDispatch();
-    const [dbPlans, setDbPlans] = useState([]);
-    const [loadingPlan, setLoadingPlan] = useState(null);
+  // API State
+  const { getToken } = useAuthContext();
+  const { value: currentUser } = useSelector(state => state.user);
+  const dispatch = useDispatch();
+  const [dbPlans, setDbPlans] = useState([]);
+  const [loadingPlan, setLoadingPlan] = useState(null);
 
-    useEffect(() => {
-        api.get('/api/plans')
-            .then(res => {
-                if (res.data.success) setDbPlans(res.data.plans);
-            })
-            .catch(console.error);
-    }, []);
+  useEffect(() => {
+    api.get('/api/plans')
+      .then(res => {
+        if (res.data.success) setDbPlans(res.data.plans);
+      })
+      .catch(console.error);
+  }, []);
 
-    const handleUpgrade = async (planId) => {
-        if (!currentUser) {
-            navigate('/login');
-            return;
-        }
-        setLoadingPlan(planId);
-        try {
-            const token = await getToken();
-            const res = await api.post('/api/plans/update', { planId }, { headers: { Authorization: `Bearer ${token}` } });
-            if (res.data.success) {
-                toast.success(t('pricing_page.upgrade_success') || "Plan updated successfully!");
-                dispatch(fetchUser(token));
-            } else {
-                toast.error(res.data.message);
-            }
-        } catch (err) {
-            toast.error(t('pricing_page.upgrade_err') || "Failed to upgrade plan.");
-        } finally {
-            setLoadingPlan(null);
-        }
-    };
+  const handleUpgrade = async (planId) => {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+    setLoadingPlan(planId);
+    try {
+      const token = await getToken();
+      const res = await api.post('/api/plans/update', { planId }, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.data.success) {
+        toast.success(t('pricing_page.upgrade_success') || "Plan updated successfully!");
+        dispatch(fetchUser(token));
+      } else {
+        toast.error(res.data.message);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || t('pricing_page.upgrade_err') || "Failed to update plan.");
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
 
-    const getDbPlan = (name) => dbPlans.find(p => p.name.toLowerCase() === name.toLowerCase());
+  const getDbPlan = (name) => dbPlans.find(p => p.name.toLowerCase() === name.toLowerCase());
 
-    const plans = [
-        {
-            key: 'free',
-            name: t('pricing_page.free_name'),
-            price: t('pricing_page.free_price'),
-            period: t('pricing_page.free_period'),
-            desc: t('pricing_page.free_desc'),
-            cta: t('pricing_page.free_cta'),
-            popular: false,
-            gradient: 'from-slate-500 to-slate-600',
-            features: [true, true, true, true, false, false, false, false, false, false],
-        },
-        {
-            key: 'pro',
-            name: t('pricing_page.pro_name'),
-            price: yearly ? t('pricing_page.pro_price_yearly') : t('pricing_page.pro_price_monthly'),
-            period: yearly ? t('pricing_page.pro_period_yearly') : t('pricing_page.pro_period_monthly'),
-            desc: t('pricing_page.pro_desc'),
-            cta: t('pricing_page.pro_cta'),
-            popular: true,
-            gradient: 'from-blue-500 to-blue-600',
-            features: [true, true, true, true, true, true, true, true, false, false],
-        },
-        {
-            key: 'elite',
-            name: t('pricing_page.elite_name'),
-            price: yearly ? t('pricing_page.elite_price_yearly') : t('pricing_page.elite_price_monthly'),
-            period: yearly ? t('pricing_page.elite_period_yearly') : t('pricing_page.elite_period_monthly'),
-            desc: t('pricing_page.elite_desc'),
-            cta: t('pricing_page.elite_cta'),
-            popular: false,
-            gradient: 'from-violet-500 to-violet-600',
-            features: [true, true, true, true, true, true, true, true, true, true],
-        },
-    ];
+  const plans = [
+    {
+      key: 'free',
+      dbName: 'Free',
+      name: t('pricing_page.free_name'),
+      price: t('pricing_page.free_price'),
+      period: t('pricing_page.free_period'),
+      desc: t('pricing_page.free_desc'),
+      cta: t('pricing_page.free_cta'),
+      popular: false,
+      color: theme.palette.text.secondary,
+      features: [true, true, true, true, false, false, false, false, false, false],
+    },
+    {
+      key: 'pro',
+      dbName: 'Pro',
+      name: t('pricing_page.pro_name'),
+      price: yearly ? t('pricing_page.pro_price_yearly') : t('pricing_page.pro_price_monthly'),
+      period: yearly ? t('pricing_page.pro_period_yearly') : t('pricing_page.pro_period_monthly'),
+      desc: t('pricing_page.pro_desc'),
+      cta: t('pricing_page.pro_cta'),
+      popular: true,
+      color: theme.palette.primary.main,
+      features: [true, true, true, true, true, true, true, true, false, false],
+    },
+    {
+      key: 'elite',
+      dbName: 'Premium',
+      name: t('pricing_page.elite_name'),
+      price: yearly ? t('pricing_page.elite_price_yearly') : t('pricing_page.elite_price_monthly'),
+      period: yearly ? t('pricing_page.elite_period_yearly') : t('pricing_page.elite_period_monthly'),
+      desc: t('pricing_page.elite_desc'),
+      cta: t('pricing_page.elite_cta'),
+      popular: false,
+      color: '#8b5cf6',
+      features: [true, true, true, true, true, true, true, true, true, true],
+    },
+  ];
 
-    const tableRows = [
-        t('pricing_page.row_logging'),
-        t('pricing_page.row_routines'),
-        t('pricing_page.row_library'),
-        t('pricing_page.row_social'),
-        t('pricing_page.row_charts'),
-        t('pricing_page.row_pr'),
-        t('pricing_page.row_analytics'),
-        t('pricing_page.row_custom'),
-        t('pricing_page.row_coach'),
-        t('pricing_page.row_priority'),
-    ];
+  const tableRows = [
+    t('pricing_page.row_logging'),
+    t('pricing_page.row_routines'),
+    t('pricing_page.row_library'),
+    t('pricing_page.row_social'),
+    t('pricing_page.row_charts'),
+    t('pricing_page.row_pr'),
+    t('pricing_page.row_analytics'),
+    t('pricing_page.row_custom'),
+    t('pricing_page.row_coach'),
+    t('pricing_page.row_priority'),
+  ];
 
-    const faqs = [
-        { q: t('pricing_page.faq1_q'), a: t('pricing_page.faq1_a') },
-        { q: t('pricing_page.faq2_q'), a: t('pricing_page.faq2_a') },
-        { q: t('pricing_page.faq3_q'), a: t('pricing_page.faq3_a') },
-        { q: t('pricing_page.faq4_q'), a: t('pricing_page.faq4_a') },
-    ];
+  const faqs = [
+    { q: t('pricing_page.faq1_q'), a: t('pricing_page.faq1_a') },
+    { q: t('pricing_page.faq2_q'), a: t('pricing_page.faq2_a') },
+    { q: t('pricing_page.faq3_q'), a: t('pricing_page.faq3_a') },
+    { q: t('pricing_page.faq4_q'), a: t('pricing_page.faq4_a') },
+  ];
 
-    return (
-        <PublicLayout>
-            {/* ── Hero ── */}
-            <section className="relative overflow-hidden py-20 sm:py-28 px-4 sm:px-6 text-center">
-                <div className="pointer-events-none absolute -top-32 left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full bg-violet-600/10 blur-3xl" />
-                <div className="relative max-w-2xl mx-auto space-y-5">
-                    <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold text-[var(--accent-primary)] bg-[var(--accent-primary)]/10 border border-[var(--accent-primary)]/20">
-                        {t('pricing_page.hero_badge')}
-                    </span>
-                    <h1 className="text-4xl sm:text-6xl font-extrabold text-[var(--text-primary)] leading-tight">
-                        {t('pricing_page.hero_title')}
-                    </h1>
-                    <p className="text-lg text-[var(--text-secondary)] leading-relaxed">
-                        {t('pricing_page.hero_sub')}
-                    </p>
+  return (
+    <PublicLayout>
+      {/* ── Hero ── */}
+      <Box sx={{ position: 'relative', overflow: 'hidden', py: { xs: 10, sm: 14 }, px: { xs: 2, sm: 3 }, textAlign: 'center' }}>
+        <Box sx={{ position: 'absolute', top: -128, left: '50%', transform: 'translateX(-50%)', width: 600, height: 400, borderRadius: '50%', bgcolor: 'rgba(124, 58, 237, 0.1)', filter: 'blur(80px)', pointerEvents: 'none' }} />
+        
+        <Container maxWidth="md" sx={{ position: 'relative', zIndex: 1 }}>
+          <Stack spacing={3} alignItems="center">
+            <Box sx={{ display: 'inline-flex', alignItems: 'center', px: 2, py: 1, borderRadius: 10, bgcolor: `${theme.palette.primary.main}1A`, border: `1px solid ${theme.palette.primary.main}33` }}>
+              <Typography variant="body2" sx={{ color: theme.palette.primary.main, fontWeight: 'bold' }}>{t('pricing_page.hero_badge')}</Typography>
+            </Box>
+            
+            <Typography variant="h2" sx={{ fontWeight: 800, color: 'text.primary', lineHeight: 1.2, fontSize: { xs: '2.5rem', sm: '3.75rem' } }}>
+              {t('pricing_page.hero_title')}
+            </Typography>
+            
+            <Typography variant="h6" sx={{ color: 'text.secondary', fontWeight: 400, maxWidth: 600, mx: 'auto' }}>
+              {t('pricing_page.hero_sub')}
+            </Typography>
 
-                    {/* Toggle */}
-                    <div className="flex items-center justify-center gap-3 pt-4">
-                        <span className={`text-sm font-semibold ${!yearly ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
-                            {t('pricing_page.monthly')}
-                        </span>
-                        <button
-                            onClick={() => setYearly(v => !v)}
-                            className={`relative w-12 h-6 rounded-full transition-colors ${yearly ? 'bg-[var(--accent-primary)]' : 'bg-[var(--border-subtle)]'}`}
-                        >
-                            <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${yearly ? 'translate-x-7' : 'translate-x-1'}`} />
-                        </button>
-                        <span className={`text-sm font-semibold ${yearly ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
-                            {t('pricing_page.yearly')}
-                        </span>
-                        {yearly && (
-                            <span className="px-2.5 py-1 rounded-full text-xs font-bold text-white bg-green-500">
-                                {t('pricing_page.save')}
-                            </span>
-                        )}
-                    </div>
-                </div>
-            </section>
+            {/* Toggle */}
+            <Stack direction="row" alignItems="center" spacing={2} pt={3}>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: !yearly ? 'text.primary' : 'text.secondary' }}>
+                {t('pricing_page.monthly')}
+              </Typography>
+              <Switch 
+                checked={yearly} 
+                onChange={(e) => setYearly(e.target.checked)} 
+                color="primary" 
+              />
+              <Typography variant="body2" sx={{ fontWeight: 600, color: yearly ? 'text.primary' : 'text.secondary' }}>
+                {t('pricing_page.yearly')}
+              </Typography>
+              {yearly && (
+                <Box sx={{ px: 1.5, py: 0.5, borderRadius: 10, bgcolor: '#22c55e', color: 'white' }}>
+                  <Typography variant="caption" sx={{ fontWeight: 'bold' }}>{t('pricing_page.save')}</Typography>
+                </Box>
+              )}
+            </Stack>
+          </Stack>
+        </Container>
+      </Box>
 
-            {/* ── Plan Cards ── */}
-            <section className="px-4 sm:px-6 pb-16">
-                <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {plans.map(plan => (
-                        <div
-                            key={plan.key}
-                            className={`relative rounded-3xl border flex flex-col overflow-hidden transition-all duration-300 ${plan.popular ? 'border-[var(--accent-primary)] shadow-2xl shadow-blue-500/15 scale-[1.02]' : 'border-[var(--border-subtle)] bg-[var(--bg-surface)]'}`}
-                        >
-                            {plan.popular && (
-                                <>
-                                    {/* Gradient header */}
-                                    <div className={`bg-gradient-to-r ${plan.gradient} p-0.5`} />
-                                    {/* Popular badge */}
-                                    <div className="absolute top-3 right-3">
-                                        <span className="flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold text-white bg-[var(--accent-primary)]">
-                                            <Zap className="w-3 h-3" /> {t('pricing_page.popular')}
-                                        </span>
-                                    </div>
-                                </>
-                            )}
-                            <div className={`p-7 flex-1 flex flex-col ${plan.popular ? 'bg-[var(--bg-surface)]' : ''}`}>
-                                {/* Name + price */}
-                                <div className="mb-6">
-                                    <h3 className="font-extrabold text-xl text-[var(--text-primary)] mb-1">{plan.name}</h3>
-                                    <p className="text-sm text-[var(--text-muted)] mb-4">{plan.desc}</p>
-                                    <div className="flex items-end gap-1">
-                                        <span className={`text-4xl font-extrabold ${plan.popular ? 'text-[var(--accent-primary)]' : 'text-[var(--text-primary)]'}`}>
-                                            {getDbPlan(plan.name) ? (getDbPlan(plan.name).price === 0 ? "Free" : `$${getDbPlan(plan.name).price}`) : plan.price}
-                                        </span>
-                                        <span className="text-sm text-[var(--text-muted)] mb-1">/ mo</span>
-                                    </div>
-                                </div>
+      {/* ── Plan Cards ── */}
+      <Box sx={{ px: { xs: 2, sm: 3 }, pb: 10 }}>
+        <Container maxWidth="lg">
+          <Grid container spacing={4}>
+            {plans.map(plan => {
+              const currentDbPlan = getDbPlan(plan.dbName);
+              const displayPrice = currentDbPlan ? (currentDbPlan.price === 0 ? plan.price : `$${currentDbPlan.price}`) : plan.price;
+              const isCurrent = currentUser?.plan?._id === currentDbPlan?._id;
 
-                                {/* Features mini list */}
-                                <ul className="space-y-2.5 flex-1 mb-7">
-                                    {tableRows.slice(0, 6).map((row, i) => (
-                                        <li key={i} className="flex items-center gap-2.5 text-sm">
-                                            {plan.features[i]
-                                                ? <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
-                                                : <X className="w-4 h-4 text-[var(--border-subtle)] flex-shrink-0" />
-                                            }
-                                            <span className={plan.features[i] ? 'text-[var(--text-secondary)]' : 'text-[var(--text-muted)] line-through'}>
-                                                {row}
-                                            </span>
-                                        </li>
-                                    ))}
-                                </ul>
+              return (
+                <Grid item xs={12} md={4} key={plan.key}>
+                  <Paper 
+                    elevation={plan.popular ? 12 : 0}
+                    sx={{
+                      position: 'relative',
+                      height: '100%',
+                      display: 'flex', flexDirection: 'column',
+                      borderRadius: 6,
+                      border: `1px solid ${plan.popular ? theme.palette.primary.main : theme.palette.divider}`,
+                      bgcolor: plan.popular ? 'background.paper' : 'background.default',
+                      transition: 'transform 0.3s',
+                      transform: plan.popular ? 'scale(1.02)' : 'none',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    {plan.popular && (
+                      <Box sx={{ position: 'absolute', top: 12, right: 12 }}>
+                        <Stack direction="row" alignItems="center" spacing={0.5} sx={{ px: 1.5, py: 0.5, borderRadius: 10, bgcolor: theme.palette.primary.main, color: 'white' }}>
+                          <Zap size={14} />
+                          <Typography variant="caption" sx={{ fontWeight: 'bold' }}>{t('pricing_page.popular')}</Typography>
+                        </Stack>
+                      </Box>
+                    )}
 
-                                {/* CTA */}
-                                {currentUser && currentUser.plan && getDbPlan(plan.name) && currentUser.plan._id === getDbPlan(plan.name)._id ? (
-                                    <button
-                                        disabled
-                                        className="w-full py-3 rounded-xl text-center font-bold transition-all text-sm bg-gray-100 text-gray-400 cursor-not-allowed border outline-none"
-                                    >
-                                        Current Plan
-                                    </button>
-                                ) : (
-                                    <button
-                                        onClick={() => getDbPlan(plan.name) ? handleUpgrade(getDbPlan(plan.name)._id) : navigate('/login')}
-                                        disabled={loadingPlan === (getDbPlan(plan.name)?._id)}
-                                        className={`w-full py-3 rounded-xl text-center font-bold transition-all text-sm flex items-center justify-center gap-2 ${plan.popular
-                                            ? 'bg-[var(--accent-primary)] text-white hover:bg-[var(--accent-hover)] shadow-lg shadow-blue-500/30'
-                                            : 'border border-[var(--border-subtle)] text-[var(--text-primary)] hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)]'
-                                            }`}
-                                    >
-                                        {loadingPlan === (getDbPlan(plan.name)?._id) ? <Loader2 className="w-5 h-5 animate-spin" /> : plan.cta}
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </section>
+                    <Box sx={{ p: { xs: 4, sm: 5 }, flex: 1, display: 'flex', flexDirection: 'column' }}>
+                      <Box mb={4}>
+                        <Typography variant="h5" sx={{ fontWeight: 800, mb: 1 }}>{plan.name}</Typography>
+                        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>{plan.desc}</Typography>
+                        <Stack direction="row" alignItems="flex-end" spacing={0.5}>
+                          <Typography variant="h3" sx={{ fontWeight: 800, color: plan.popular ? theme.palette.primary.main : 'text.primary', lineHeight: 1 }}>
+                            {displayPrice}
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: 'text.secondary', mb: 0.5 }}>/ mo</Typography>
+                        </Stack>
+                      </Box>
 
-            {/* ── Comparison Table ── */}
-            <section className="px-4 sm:px-6 py-16 bg-[var(--bg-surface)]">
-                <div className="max-w-5xl mx-auto">
-                    <h2 className="text-2xl sm:text-3xl font-extrabold text-center text-[var(--text-primary)] mb-10">
-                        {t('pricing_page.compare_title')}
-                    </h2>
-                    <div className="rounded-2xl border border-[var(--border-subtle)] overflow-hidden">
-                        {/* Header */}
-                        <div className="grid grid-cols-4 bg-[var(--bg-surface-light)] border-b border-[var(--border-subtle)]">
-                            <div className="p-4 font-bold text-sm text-[var(--text-muted)] uppercase tracking-wider">
-                                {t('pricing_page.feat_col')}
-                            </div>
-                            {[t('pricing_page.free_col'), t('pricing_page.pro_col'), t('pricing_page.elite_col')].map((c, i) => (
-                                <div key={c} className={`p-4 text-center font-bold text-sm ${i === 1 ? 'text-[var(--accent-primary)]' : 'text-[var(--text-primary)]'}`}>
-                                    {c}
-                                </div>
-                            ))}
-                        </div>
-                        {/* Rows */}
-                        {tableRows.map((row, i) => (
-                            <div key={i} className={`grid grid-cols-4 border-b border-[var(--border-subtle)] last:border-0 ${i % 2 === 0 ? 'bg-[var(--bg-surface)]' : 'bg-[var(--bg-surface-light)]'}`}>
-                                <div className="p-4 text-sm font-medium text-[var(--text-secondary)]">{row}</div>
-                                {plans.map(plan => (
-                                    <div key={plan.key} className="p-4 flex items-center justify-center">
-                                        <TC v={plan.features[i]} />
-                                    </div>
-                                ))}
-                            </div>
+                      <Stack spacing={2} sx={{ flex: 1, mb: 5 }}>
+                        {tableRows.slice(0, 6).map((row, i) => (
+                          <Stack direction="row" alignItems="center" spacing={1.5} key={i}>
+                            {plan.features[i] ? <Check size={20} color="#22c55e" /> : <X size={20} color={theme.palette.divider} />}
+                            <Typography variant="body2" sx={{ 
+                              color: plan.features[i] ? 'text.secondary' : 'text.disabled',
+                              textDecoration: plan.features[i] ? 'none' : 'line-through'
+                            }}>
+                              {row}
+                            </Typography>
+                          </Stack>
                         ))}
-                    </div>
-                </div>
-            </section>
+                      </Stack>
 
-            {/* ── FAQ ── */}
-            <section className="px-4 sm:px-6 py-16 sm:py-20">
-                <div className="max-w-3xl mx-auto">
-                    <h2 className="text-2xl sm:text-3xl font-extrabold text-center text-[var(--text-primary)] mb-10">
-                        {t('pricing_page.faq_title')}
-                    </h2>
-                    <div className="space-y-3">
-                        {faqs.map((f, i) => <FAQItem key={i} q={f.q} a={f.a} />)}
-                    </div>
-                </div>
-            </section>
-
-            {/* ── Bottom CTA ── */}
-            <section className="px-4 sm:px-6 pb-20">
-                <div className="max-w-3xl mx-auto text-center rounded-3xl bg-gradient-to-br from-blue-600 via-blue-500 to-indigo-600 p-12 text-white relative overflow-hidden">
-                    <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/10 blur-xl" />
-                    <div className="relative">
-                        <h2 className="text-2xl sm:text-3xl font-extrabold mb-6">{t('pricing_page.cta_title')}</h2>
-                        <Link
-                            to="/login"
-                            className="inline-flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-blue-600 bg-white hover:bg-blue-50 transition shadow-xl"
+                      {isCurrent ? (
+                        <Button 
+                          variant="outlined" 
+                          disabled 
+                          fullWidth 
+                          sx={{ py: 1.5, borderRadius: 3, fontWeight: 'bold' }}
                         >
-                            {t('pricing_page.cta_btn')} <ArrowRight className="w-4 h-4" />
-                        </Link>
-                    </div>
-                </div>
-            </section>
-        </PublicLayout>
-    );
+                          Current Plan
+                        </Button>
+                      ) : (
+                        <Button
+                          variant={plan.popular ? 'contained' : 'outlined'}
+                          fullWidth
+                          disabled={plan.key !== 'free' || loadingPlan === currentDbPlan?._id}
+                          onClick={() => currentDbPlan ? handleUpgrade(currentDbPlan._id) : navigate('/login')}
+                          sx={{ 
+                            py: 1.5, borderRadius: 3, fontWeight: 'bold',
+                            bgcolor: plan.popular ? 'primary.main' : 'transparent',
+                            color: plan.popular ? 'white' : 'text.primary'
+                          }}
+                        >
+                          {loadingPlan === currentDbPlan?._id 
+                            ? <Loader2 size={24} style={{ animation: 'spin 1s linear infinite' }} /> 
+                            : (plan.key === 'free' ? plan.cta : t('pricing_page.checkout_soon', 'Checkout yakında'))}
+                        </Button>
+                      )}
+                    </Box>
+                  </Paper>
+                </Grid>
+              );
+            })}
+          </Grid>
+        </Container>
+      </Box>
+
+      {/* ── Comparison Table ── */}
+      <Box sx={{ px: { xs: 2, sm: 3 }, py: 10, bgcolor: 'background.paper' }}>
+        <Container maxWidth="lg">
+          <Typography variant="h4" align="center" sx={{ fontWeight: 800, mb: 6 }}>
+            {t('pricing_page.compare_title')}
+          </Typography>
+          <Paper elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 4, overflow: 'hidden' }}>
+            {/* Header */}
+            <Grid container sx={{ bgcolor: 'action.hover', borderBottom: `1px solid ${theme.palette.divider}` }}>
+              <Grid item xs={3} sx={{ p: 2 }}>
+                <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 1 }}>
+                  {t('pricing_page.feat_col')}
+                </Typography>
+              </Grid>
+              {[t('pricing_page.free_col'), t('pricing_page.pro_col'), t('pricing_page.elite_col')].map((c, i) => (
+                <Grid item xs={3} key={c} sx={{ p: 2, textAlign: 'center' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: i === 1 ? 'primary.main' : 'text.primary' }}>
+                    {c}
+                  </Typography>
+                </Grid>
+              ))}
+            </Grid>
+            {/* Rows */}
+            {tableRows.map((row, i) => (
+              <Grid container key={i} sx={{ borderBottom: `1px solid ${theme.palette.divider}`, bgcolor: i % 2 === 0 ? 'background.default' : 'background.paper', '&:last-child': { borderBottom: 0 } }}>
+                <Grid item xs={3} sx={{ p: 2, display: 'flex', alignItems: 'center' }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500, color: 'text.secondary' }}>{row}</Typography>
+                </Grid>
+                {plans.map(plan => (
+                  <Grid item xs={3} key={plan.key} sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <TC v={plan.features[i]} />
+                  </Grid>
+                ))}
+              </Grid>
+            ))}
+          </Paper>
+        </Container>
+      </Box>
+
+      {/* ── FAQ ── */}
+      <Box sx={{ px: { xs: 2, sm: 3 }, py: { xs: 10, sm: 12 } }}>
+        <Container maxWidth="md">
+          <Typography variant="h4" align="center" sx={{ fontWeight: 800, mb: 6 }}>
+            {t('pricing_page.faq_title')}
+          </Typography>
+          <Box>
+            {faqs.map((f, i) => <FAQItem key={i} q={f.q} a={f.a} />)}
+          </Box>
+        </Container>
+      </Box>
+
+      {/* ── Bottom CTA ── */}
+      <Box sx={{ px: { xs: 2, sm: 3 }, pb: 10 }}>
+        <Container maxWidth="md">
+          <Paper 
+            elevation={0}
+            sx={{ 
+              borderRadius: 6, 
+              background: `linear-gradient(to bottom right, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
+              p: { xs: 6, sm: 8 }, 
+              textAlign: 'center', 
+              position: 'relative', 
+              overflow: 'hidden' 
+            }}
+          >
+            <Box sx={{ position: 'absolute', top: -32, right: -32, width: 128, height: 128, borderRadius: '50%', bgcolor: 'rgba(255, 255, 255, 0.1)', filter: 'blur(24px)' }} />
+            <Box sx={{ position: 'relative' }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, color: 'white', mb: 4 }}>
+                {t('pricing_page.cta_title')}
+              </Typography>
+              <Button 
+                component={Link} to="/login"
+                variant="contained"
+                size="large"
+                endIcon={<ArrowRight size={18} />}
+                sx={{ 
+                  bgcolor: 'white', color: theme.palette.primary.main, 
+                  px: 4, py: 1.5, borderRadius: 3, fontWeight: 'bold', fontSize: '1rem',
+                  '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.9)' }
+                }}
+              >
+                {t('pricing_page.cta_btn')}
+              </Button>
+            </Box>
+          </Paper>
+        </Container>
+      </Box>
+    </PublicLayout>
+  );
 };
 
 export default Pricing;

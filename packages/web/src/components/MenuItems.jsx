@@ -1,37 +1,65 @@
-import React from "react";
+import Badge from "@mui/material/Badge";
+import List from "@mui/material/List";
+import ListItemButton from "@mui/material/ListItemButton";
+import ListItemIcon from "@mui/material/ListItemIcon";
+import ListItemText from "@mui/material/ListItemText";
 import { NavLink } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { menuItemsData } from "~/assets/assets";
 import { useTranslation } from "react-i18next";
 
-const MenuItems = ({ setSideBarOpen }) => {
+const MenuItems = ({ setSideBarOpen, unreadCount = 0 }) => {
   const { t } = useTranslation();
+  const { pathname } = useLocation();
 
   return (
-    <div className="px-6 space-y-1.5 font-medium">
-      {menuItemsData.map(({ to, label, Icon }) => (
-        <NavLink
-          key={to}
-          to={to}
-          end={to === "/"}
-          onClick={() => setSideBarOpen(false)}
-          className={({ isActive }) =>
-            `px-3.5 py-2.5 flex items-center gap-3 rounded-xl transition-all duration-200
-            ${isActive
-              ? "bg-surface-light text-text-primary border border-border-subtle shadow-sm"
-              : "text-text-secondary hover:bg-surface-light hover:text-text-primary"}`
-          }
-        >
-          {({ isActive }) => (
-            <>
-              <Icon className={`w-5 h-5 ${isActive ? "text-accent-primary" : "text-text-muted"}`} />
-              <span className={isActive ? "font-semibold text-accent-primary" : ""}>
-                {t(`menu.${label.toLowerCase()}`)}
-              </span>
-            </>
-          )}
-        </NavLink>
-      ))}
-    </div>
+    <List component="nav" aria-label="Primary navigation" sx={{ px: 2, py: 0 }}>
+      {menuItemsData.map(({ to, label, Icon }) => {
+        const isActive = pathname === to || pathname.startsWith(`${to}/`);
+        const icon = (
+          <Icon fontSize="small" color={isActive ? "primary" : "inherit"} />
+        );
+
+        return (
+          <ListItemButton
+            key={to}
+            component={NavLink}
+            to={to}
+            selected={isActive}
+            onClick={() => setSideBarOpen(false)}
+            sx={{
+              borderRadius: 2,
+              mb: 0.5,
+              minHeight: 44,
+              border: 1,
+              borderColor: isActive ? "divider" : "transparent",
+              "&.Mui-selected": { bgcolor: "action.selected" },
+              "&.Mui-selected:hover": { bgcolor: "action.hover" },
+            }}
+          >
+            <ListItemIcon sx={{ color: isActive ? "primary.main" : "text.secondary", minWidth: 38 }}>
+              {to === "/messages" ? (
+                <Badge badgeContent={unreadCount} color="error" max={99}>
+                  {icon}
+                </Badge>
+              ) : icon}
+            </ListItemIcon>
+            <ListItemText
+              primary={t(`menu.${label.toLowerCase()}`)}
+              slotProps={{
+                primary: {
+                  sx: {
+                    color: isActive ? "primary.main" : "text.secondary",
+                    fontSize: 15,
+                    fontWeight: isActive ? 700 : 500,
+                  },
+                },
+              }}
+            />
+          </ListItemButton>
+        );
+      })}
+    </List>
   );
 };
 

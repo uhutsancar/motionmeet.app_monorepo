@@ -19,8 +19,10 @@ export const updateUserProfile = async (userData, token) => {
   return data;
 };
 
-export const getUserProfile = async (profileId) => {
-  const { data } = await api.post('/api/user/profiles', { profileId });
+export const getUserProfile = async (profileId, token) => {
+  const { data } = await api.post('/api/user/profiles', { profileId }, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   return data;
 };
 
@@ -68,6 +70,13 @@ export const getUserConnections = async (token) => {
 
 export const getUserRecentMessages = async (token) => {
   const { data } = await api.get('/api/user/recent-messages', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const getUserConversations = async (token) => {
+  const { data } = await api.get('/api/message/conversations', {
     headers: { Authorization: `Bearer ${token}` },
   });
   return data;
@@ -155,6 +164,14 @@ export const deleteStory = async (storyId, token) => {
   return data;
 };
 
+// ============= WORKOUT APIs =============
+export const getWorkoutStats = async (period, token) => {
+  const { data } = await api.get(`/api/workout/stats?period=${period}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
 export default {
   // User
   getUserData,
@@ -167,6 +184,7 @@ export default {
   acceptConnectionRequest,
   getUserConnections,
   getUserRecentMessages,
+  getUserConversations,
   
   // Post
   getPosts,
@@ -183,4 +201,7 @@ export default {
   getStories,
   createStory,
   deleteStory,
+
+  // Workout
+  getWorkoutStats,
 };

@@ -1,22 +1,41 @@
-FROM node:20-alpine
+FROM node:22-alpine AS builder
+# Set working directory
+WORKDIR /app
+# Install globally needed tools
+RUN npm install -g pnpm turbo
 
+COPY . .
+# Prune the workspace for just the backend dependencies
+RUN turbo prune @motionmeet/backend --docker
+
+FROM node:22-alpine AS installer
+WORKDIR /app
+RUN npm install -g pnpm
+
+# First install dependencies (as they change less often)
+COPY .gitignore .gitignore
+COPY --from=builder /app/out/json/ .
+COPY --from=builder /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
+RUN pnpm install --frozen-lockfile
+
+# Build the project and its dependencies
+COPY --from=builder /app/out/full/ .
+COPY turbo.json turbo.json
+# Using turbo to run any necessary build scripts in dependencies (e.g. shared)
+RUN pnpm turbo run build --filter=@motionmeet/shared
+
+FROM node:22-alpine AS runner
 WORKDIR /app
 
-# Copy root and package jsons for workspaces install
-COPY package.json package-lock.json ./
-COPY packages/backend/package.json ./packages/backend/
-COPY packages/web/package.json ./packages/web/
-COPY packages/mobile/package.json ./packages/mobile/
-COPY packages/shared/package.json ./packages/shared/
+# Add a non-root user
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 backend
+USER backend
 
-# Install dependencies for the entire monorepo
-RUN npm install
+# Copy only the necessary files
+COPY --from=installer /app .
 
-# Copy all code (overshadowed by volume in dev, but good for base image)
-COPY . .
+WORKDIR /app/packages/backend
+EXPOSE 8080
 
-# Expose backend port
-EXPOSE 4000
-
-# Start backend using direct npx nodemon for cleaner signals/logs
-CMD ["npx", "nodemon", "-L", "packages/backend/server.js"]
+CMD ["node", "server.js"]

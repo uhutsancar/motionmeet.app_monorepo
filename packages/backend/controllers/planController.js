@@ -1,32 +1,39 @@
-import Plan from "../models/Plan.js";
-import User from "../models/User.js";
+import { isObjectId } from "../utils/validation.js";
+import * as planService from "../services/planService.js";
 
-export const getPlans = async (req, res) => {
+export const getPlans = async (req, res, next) => {
   try {
-    const plans = await Plan.find({ isActive: true }).sort({ price: 1 });
+    const plans = await planService.getActivePlansList();
     res.status(200).json({ success: true, plans });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 };
 
-export const updateMyPlan = async (req, res) => {
+export const updateMyPlan = async (req, res, next) => {
   try {
-    const { planId } = req.body;
-    const plan = await Plan.findById(planId);
+    const { planId } = req.body || {};
+    if (!isObjectId(planId)) {
+      return res.status(400).json({ success: false, message: "Invalid plan id" });
+    }
+
+    const plan = await planService.getPlanById(planId);
     
-    if (!plan) {
+    if (!plan || !plan.isActive) {
       return res.status(404).json({ success: false, message: "Plan not found" });
     }
 
-    const user = await User.findByIdAndUpdate(
-      req.userId,
-      { plan: plan._id },
-      { new: true }
-    ).populate("plan");
+    if (plan.name !== "Free" || plan.price > 0) {
+      return res.status(409).json({
+        success: false,
+        message: "Paid plan activation requires a verified checkout",
+      });
+    }
+
+    const user = await planService.updateUserPlan(req.userId, plan._id);
 
     res.status(200).json({ success: true, message: "Plan updated successfully", user });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 };

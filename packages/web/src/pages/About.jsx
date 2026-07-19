@@ -1,215 +1,299 @@
-import React from 'react';
+
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowRight, Zap, Shield, Heart } from 'lucide-react';
 import PublicLayout from './PublicLayout';
 import motionmeetLogo from '../assets/motionmeet_logo.svg';
+import { Box, Stack, Typography, Button, Container, Grid, Paper, useTheme } from '@mui/material';
 
-/* ── Value Card ── */
-const ValueCard = ({ icon: Icon, title, desc, color }) => (
-    <div className="p-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] flex flex-col gap-4 hover:border-[var(--accent-primary)] transition-colors">
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${color}`}>
-            <Icon className="w-6 h-6" />
-        </div>
-        <div>
-            <h3 className="font-bold text-[var(--text-primary)] mb-1">{title}</h3>
-            <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{desc}</p>
-        </div>
-    </div>
-);
+const ValueCard = ({ icon: Icon, title, desc, iconBgColor, iconColor }) => {
+  const theme = useTheme();
+  return (
+    <Paper 
+      elevation={0}
+      sx={{ 
+        p: 3, 
+        borderRadius: 4, 
+        border: `1px solid ${theme.palette.divider}`,
+        bgcolor: 'background.paper',
+        display: 'flex', flexDirection: 'column', gap: 2,
+        transition: 'border-color 0.3s',
+        '&:hover': { borderColor: theme.palette.primary.main }
+      }}
+    >
+      <Box sx={{ 
+        width: 48, height: 48, borderRadius: 3, 
+        bgcolor: iconBgColor, color: iconColor,
+        display: 'flex', alignItems: 'center', justifyContent: 'center'
+      }}>
+        <Icon size={24} />
+      </Box>
+      <Box>
+        <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 0.5 }}>{title}</Typography>
+        <Typography variant="body2" sx={{ color: 'text.secondary', lineHeight: 1.6 }}>{desc}</Typography>
+      </Box>
+    </Paper>
+  );
+};
 
-/* ── Team Card ── */
-const TeamCard = ({ name, role, bio, initials, color }) => (
-    <div className="p-6 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] flex flex-col items-center text-center gap-4">
-        <div className={`w-20 h-20 rounded-2xl ${color} flex items-center justify-center text-2xl font-extrabold text-white shadow-lg`}>
-            {initials}
-        </div>
-        <div>
-            <h3 className="font-extrabold text-[var(--text-primary)]">{name}</h3>
-            <p className="text-sm font-semibold text-[var(--accent-primary)] mt-0.5">{role}</p>
-            <p className="text-sm text-[var(--text-secondary)] mt-2 leading-relaxed">{bio}</p>
-        </div>
-    </div>
-);
+const TeamCard = ({ name, role, bio, initials, gradient }) => {
+  const theme = useTheme();
+  return (
+    <Paper 
+      elevation={0}
+      sx={{ 
+        p: 3, 
+        borderRadius: 4, 
+        border: `1px solid ${theme.palette.divider}`,
+        bgcolor: 'background.paper',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 2
+      }}
+    >
+      <Box sx={{ 
+        width: 80, height: 80, borderRadius: 4, 
+        background: gradient, 
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: 'white', fontSize: 24, fontWeight: 800, boxShadow: '0 10px 20px -5px rgba(0,0,0,0.2)'
+      }}>
+        {initials}
+      </Box>
+      <Box>
+        <Typography variant="h6" sx={{ fontWeight: 800 }}>{name}</Typography>
+        <Typography variant="subtitle2" sx={{ color: theme.palette.primary.main, fontWeight: 600, mt: 0.5 }}>{role}</Typography>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1.5, lineHeight: 1.6 }}>{bio}</Typography>
+      </Box>
+    </Paper>
+  );
+};
 
 const About = () => {
-    const { t } = useTranslation();
+  const { t } = useTranslation();
+  const theme = useTheme();
 
-    const values = [
-        {
-            icon: Zap,
-            title: t('about_page.val1_title'),
-            desc: t('about_page.val1_desc'),
-            color: 'bg-amber-500/10 text-amber-500',
-        },
-        {
-            icon: Shield,
-            title: t('about_page.val2_title'),
-            desc: t('about_page.val2_desc'),
-            color: 'bg-blue-500/10 text-blue-500',
-        },
-        {
-            icon: Heart,
-            title: t('about_page.val3_title'),
-            desc: t('about_page.val3_desc'),
-            color: 'bg-pink-500/10 text-pink-500',
-        },
-    ];
+  const values = [
+    {
+      icon: Zap,
+      title: t('about_page.val1_title'),
+      desc: t('about_page.val1_desc'),
+      iconBgColor: 'rgba(245, 158, 11, 0.1)',
+      iconColor: '#f59e0b',
+    },
+    {
+      icon: Shield,
+      title: t('about_page.val2_title'),
+      desc: t('about_page.val2_desc'),
+      iconBgColor: 'rgba(59, 130, 246, 0.1)',
+      iconColor: '#3b82f6',
+    },
+    {
+      icon: Heart,
+      title: t('about_page.val3_title'),
+      desc: t('about_page.val3_desc'),
+      iconBgColor: 'rgba(236, 72, 153, 0.1)',
+      iconColor: '#ec4899',
+    },
+  ];
 
-    const team = [
-        {
-            name: t('about_page.team1_name'),
-            role: t('about_page.team1_role'),
-            bio: t('about_page.team1_bio'),
-            initials: 'AC',
-            color: 'bg-gradient-to-br from-blue-500 to-blue-700',
-        },
-        {
-            name: t('about_page.team2_name'),
-            role: t('about_page.team2_role'),
-            bio: t('about_page.team2_bio'),
-            initials: 'SJ',
-            color: 'bg-gradient-to-br from-violet-500 to-violet-700',
-        },
-        {
-            name: t('about_page.team3_name'),
-            role: t('about_page.team3_role'),
-            bio: t('about_page.team3_bio'),
-            initials: 'MJ',
-            color: 'bg-gradient-to-br from-emerald-500 to-emerald-700',
-        },
-    ];
+  const team = [
+    {
+      name: t('about_page.team1_name'),
+      role: t('about_page.team1_role'),
+      bio: t('about_page.team1_bio'),
+      initials: 'AC',
+      gradient: 'linear-gradient(to bottom right, #3b82f6, #1d4ed8)',
+    },
+    {
+      name: t('about_page.team2_name'),
+      role: t('about_page.team2_role'),
+      bio: t('about_page.team2_bio'),
+      initials: 'SJ',
+      gradient: 'linear-gradient(to bottom right, #8b5cf6, #6d28d9)',
+    },
+    {
+      name: t('about_page.team3_name'),
+      role: t('about_page.team3_role'),
+      bio: t('about_page.team3_bio'),
+      initials: 'MJ',
+      gradient: 'linear-gradient(to bottom right, #10b981, #047857)',
+    },
+  ];
 
-    const stats = [
-        { val: t('about_page.stats_users') },
-        { val: t('about_page.stats_workouts') },
-        { val: t('about_page.stats_rating') },
-    ];
+  const stats = [
+    { val: t('about_page.stats_users') },
+    { val: t('about_page.stats_workouts') },
+    { val: t('about_page.stats_rating') },
+  ];
 
-    return (
-        <PublicLayout>
-            {/* ── Hero ── */}
-            <section className="relative overflow-hidden py-20 sm:py-28 px-4 sm:px-6 text-center">
-                <div className="pointer-events-none absolute -top-32 left-1/2 -translate-x-1/2 w-[700px] h-[400px] rounded-full bg-emerald-600/10 blur-3xl" />
-                <div className="relative max-w-3xl mx-auto space-y-6">
-                    <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold text-[var(--accent-primary)] bg-[var(--accent-primary)]/10 border border-[var(--accent-primary)]/20">
-                        {t('about_page.hero_badge')}
-                    </span>
-                    <h1 className="text-4xl sm:text-6xl font-extrabold text-[var(--text-primary)] leading-tight">
-                        {t('about_page.hero_title')}
-                    </h1>
-                    <p className="text-lg sm:text-xl text-[var(--text-secondary)] leading-relaxed max-w-2xl mx-auto">
-                        {t('about_page.hero_sub')}
-                    </p>
-                    {/* Stats */}
-                    <div className="flex flex-wrap justify-center gap-6 pt-4">
-                        {stats.map(({ val }, i) => (
-                            <div key={i} className="px-6 py-3 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] font-extrabold text-[var(--accent-primary)] text-lg">
-                                {val}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
+  return (
+    <PublicLayout>
+      {/* ── Hero ── */}
+      <Box sx={{ position: 'relative', overflow: 'hidden', py: { xs: 10, sm: 14 }, px: { xs: 2, sm: 3 }, textAlign: 'center' }}>
+        <Box sx={{ position: 'absolute', top: -128, left: '50%', transform: 'translateX(-50%)', width: 700, height: 400, borderRadius: '50%', bgcolor: 'rgba(16, 185, 129, 0.1)', filter: 'blur(80px)', pointerEvents: 'none' }} />
+        
+        <Container maxWidth="md" sx={{ position: 'relative', zIndex: 1 }}>
+          <Stack spacing={3} alignItems="center">
+            <Box sx={{ display: 'inline-flex', alignItems: 'center', px: 2, py: 1, borderRadius: 10, bgcolor: `${theme.palette.primary.main}1A`, border: `1px solid ${theme.palette.primary.main}33` }}>
+              <Typography variant="body2" sx={{ color: theme.palette.primary.main, fontWeight: 'bold' }}>{t('about_page.hero_badge')}</Typography>
+            </Box>
+            
+            <Typography variant="h2" sx={{ fontWeight: 800, color: 'text.primary', lineHeight: 1.2, fontSize: { xs: '2.5rem', sm: '3.75rem' } }}>
+              {t('about_page.hero_title')}
+            </Typography>
+            
+            <Typography variant="h6" sx={{ color: 'text.secondary', fontWeight: 400, maxWidth: 672, mx: 'auto', lineHeight: 1.6 }}>
+              {t('about_page.hero_sub')}
+            </Typography>
 
-            {/* ── Our Story ── */}
-            <section className="py-16 sm:py-20 px-4 sm:px-6 bg-[var(--bg-surface)]">
-                <div className="max-w-6xl mx-auto flex flex-col lg:flex-row items-center gap-14">
-                    {/* Visual */}
-                    <div className="flex-1 relative">
-                        <div className="absolute inset-0 bg-[var(--accent-primary)]/5 rounded-3xl rotate-1 scale-105" />
-                        <div className="relative bg-[var(--bg-base)] rounded-3xl p-8 space-y-5 border border-[var(--border-subtle)]">
-                            {/* Logo + brand */}
-                            <div className="flex items-center gap-3 mb-2">
-                                <img src={motionmeetLogo} alt="MotionMeet" className="h-10 w-auto" />
-                                <span className="font-extrabold text-2xl text-[var(--text-primary)]">MotionMeet</span>
-                            </div>
-                            {/* Quote */}
-                            <blockquote className="border-l-4 border-[var(--accent-primary)] pl-5 py-1">
-                                <p className="text-lg font-semibold italic text-[var(--text-secondary)] leading-relaxed">
-                                    "{t('about_page.story_quote')}"
-                                </p>
-                            </blockquote>
-                            {/* Timeline dots */}
-                            <div className="space-y-4 pt-2">
-                                {[
-                                    { year: '2023', label: 'MotionMeet founded' },
-                                    { year: '2024', label: '10k active users' },
-                                    { year: '2025', label: '50k+ athletes worldwide' },
-                                    { year: '2026', label: '1M+ workouts logged' },
-                                ].map(({ year, label }) => (
-                                    <div key={year} className="flex items-center gap-4">
-                                        <div className="w-14 text-xs font-extrabold text-[var(--accent-primary)]">{year}</div>
-                                        <div className="w-2 h-2 rounded-full bg-[var(--accent-primary)] flex-shrink-0" />
-                                        <div className="text-sm text-[var(--text-secondary)]">{label}</div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                    {/* Text */}
-                    <div className="flex-1 space-y-6">
-                        <h2 className="text-3xl sm:text-4xl font-extrabold text-[var(--text-primary)]">
-                            {t('about_page.story_title')}
-                        </h2>
-                        <p className="text-[var(--text-secondary)] leading-relaxed">{t('about_page.story_p1')}</p>
-                        <p className="text-[var(--text-secondary)] leading-relaxed">{t('about_page.story_p2')}</p>
-                        <p className="text-[var(--text-secondary)] leading-relaxed">{t('about_page.story_p3')}</p>
-                    </div>
-                </div>
-            </section>
+            {/* Stats */}
+            <Stack direction="row" flexWrap="wrap" justifyContent="center" gap={3} pt={2}>
+              {stats.map(({ val }, i) => (
+                <Box key={i} sx={{ px: 3, py: 1.5, borderRadius: 4, bgcolor: 'background.paper', border: `1px solid ${theme.palette.divider}` }}>
+                  <Typography variant="h6" sx={{ fontWeight: 800, color: theme.palette.primary.main }}>{val}</Typography>
+                </Box>
+              ))}
+            </Stack>
+          </Stack>
+        </Container>
+      </Box>
 
-            {/* ── Team ── */}
-            <section className="py-16 sm:py-20 px-4 sm:px-6">
-                <div className="max-w-5xl mx-auto">
-                    <h2 className="text-3xl sm:text-4xl font-extrabold text-center text-[var(--text-primary)] mb-12">
-                        {t('about_page.team_title')}
-                    </h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                        {team.map((m, i) => <TeamCard key={i} {...m} />)}
-                    </div>
-                </div>
-            </section>
+      {/* ── Our Story ── */}
+      <Box sx={{ py: { xs: 8, sm: 10 }, px: { xs: 2, sm: 3 }, bgcolor: 'background.paper' }}>
+        <Container maxWidth="lg">
+          <Grid container spacing={{ xs: 7, lg: 10 }} alignItems="center">
+            {/* Visual */}
+            <Grid item xs={12} lg={6}>
+              <Box sx={{ position: 'relative' }}>
+                <Box sx={{ position: 'absolute', inset: 0, bgcolor: `${theme.palette.primary.main}10`, borderRadius: 6, transform: 'rotate(1deg) scale(1.05)' }} />
+                <Paper elevation={0} sx={{ position: 'relative', bgcolor: 'background.default', borderRadius: 6, p: 4, border: 1, borderColor: 'divider' }}>
+                  <Stack direction="row" alignItems="center" spacing={1.5} mb={2.5}>
+                    <Box component="img" src={motionmeetLogo} alt="MotionMeet" sx={{ height: 40, width: 'auto' }} />
+                    <Typography variant="h5" sx={{ fontWeight: 800 }}>MotionMeet</Typography>
+                  </Stack>
+                  <Box sx={{ borderLeft: `4px solid ${theme.palette.primary.main}`, pl: 2.5, py: 0.5, mb: 3 }}>
+                    <Typography variant="subtitle1" sx={{ fontStyle: 'italic', color: 'text.secondary', fontWeight: 600, lineHeight: 1.6 }}>
+                      "{t('about_page.story_quote')}"
+                    </Typography>
+                  </Box>
+                  <Stack spacing={2} pt={1}>
+                    {[
+                      { year: '2023', label: 'MotionMeet founded' },
+                      { year: '2024', label: '10k active users' },
+                      { year: '2025', label: '50k+ athletes worldwide' },
+                      { year: '2026', label: '1M+ workouts logged' },
+                    ].map(({ year, label }) => (
+                      <Stack key={year} direction="row" alignItems="center" spacing={2}>
+                        <Typography sx={{ width: 40, fontSize: 12, fontWeight: 800, color: theme.palette.primary.main }}>{year}</Typography>
+                        <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: theme.palette.primary.main, flexShrink: 0 }} />
+                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>{label}</Typography>
+                      </Stack>
+                    ))}
+                  </Stack>
+                </Paper>
+              </Box>
+            </Grid>
+            {/* Text */}
+            <Grid item xs={12} lg={6}>
+              <Stack spacing={3}>
+                <Typography variant="h3" sx={{ fontWeight: 800, color: 'text.primary' }}>
+                  {t('about_page.story_title')}
+                </Typography>
+                <Typography variant="body1" sx={{ color: 'text.secondary', lineHeight: 1.6 }}>{t('about_page.story_p1')}</Typography>
+                <Typography variant="body1" sx={{ color: 'text.secondary', lineHeight: 1.6 }}>{t('about_page.story_p2')}</Typography>
+                <Typography variant="body1" sx={{ color: 'text.secondary', lineHeight: 1.6 }}>{t('about_page.story_p3')}</Typography>
+              </Stack>
+            </Grid>
+          </Grid>
+        </Container>
+      </Box>
 
-            {/* ── Values ── */}
-            <section className="py-16 sm:py-20 px-4 sm:px-6 bg-[var(--bg-surface)]">
-                <div className="max-w-5xl mx-auto">
-                    <h2 className="text-3xl sm:text-4xl font-extrabold text-center text-[var(--text-primary)] mb-12">
-                        {t('about_page.values_title')}
-                    </h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                        {values.map((v, i) => <ValueCard key={i} {...v} />)}
-                    </div>
-                </div>
-            </section>
+      {/* ── Team ── */}
+      <Box sx={{ py: { xs: 8, sm: 10 }, px: { xs: 2, sm: 3 } }}>
+        <Container maxWidth="md">
+          <Typography variant="h3" align="center" sx={{ fontWeight: 800, mb: 6 }}>
+            {t('about_page.team_title')}
+          </Typography>
+          <Grid container spacing={3}>
+            {team.map((m, i) => (
+              <Grid item xs={12} sm={4} key={i}>
+                <TeamCard {...m} />
+              </Grid>
+            ))}
+          </Grid>
+        </Container>
+      </Box>
 
-            {/* ── CTA ── */}
-            <section className="px-4 sm:px-6 py-16 sm:py-20">
-                <div className="max-w-3xl mx-auto text-center rounded-3xl bg-gradient-to-br from-emerald-600 via-blue-600 to-indigo-600 p-12 text-white relative overflow-hidden">
-                    <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/10 blur-xl" />
-                    <div className="absolute -bottom-8 -left-8 w-32 h-32 rounded-full bg-white/10 blur-xl" />
-                    <div className="relative space-y-5">
-                        <h2 className="text-3xl sm:text-4xl font-extrabold">{t('about_page.cta_title')}</h2>
-                        <p className="text-blue-100 text-lg max-w-md mx-auto">{t('about_page.cta_sub')}</p>
-                        <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                            <Link
-                                to="/login"
-                                className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-bold text-blue-700 bg-white hover:bg-blue-50 transition shadow-xl"
-                            >
-                                {t('about_page.cta_btn')} <ArrowRight className="w-4 h-4" />
-                            </Link>
-                            <a
-                                href="mailto:support@motionmeet.app"
-                                className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-bold text-white border-2 border-white/30 hover:border-white hover:bg-white/10 transition"
-                            >
-                                {t('about_page.cta_btn2')}
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </section>
-        </PublicLayout>
-    );
+      {/* ── Values ── */}
+      <Box sx={{ py: { xs: 8, sm: 10 }, px: { xs: 2, sm: 3 }, bgcolor: 'background.paper' }}>
+        <Container maxWidth="md">
+          <Typography variant="h3" align="center" sx={{ fontWeight: 800, mb: 6 }}>
+            {t('about_page.values_title')}
+          </Typography>
+          <Grid container spacing={3}>
+            {values.map((v, i) => (
+              <Grid item xs={12} sm={4} key={i}>
+                <ValueCard {...v} />
+              </Grid>
+            ))}
+          </Grid>
+        </Container>
+      </Box>
+
+      {/* ── CTA ── */}
+      <Box sx={{ px: { xs: 2, sm: 3 }, py: { xs: 8, sm: 10 } }}>
+        <Container maxWidth="md">
+          <Paper 
+            elevation={0}
+            sx={{ 
+              borderRadius: 6, 
+              background: `linear-gradient(to bottom right, #059669, #2563eb, #4f46e5)`,
+              p: { xs: 6, sm: 8 }, 
+              textAlign: 'center', 
+              position: 'relative', 
+              overflow: 'hidden' 
+            }}
+          >
+            <Box sx={{ position: 'absolute', top: -32, right: -32, width: 128, height: 128, borderRadius: '50%', bgcolor: 'rgba(255, 255, 255, 0.1)', filter: 'blur(24px)' }} />
+            <Box sx={{ position: 'absolute', bottom: -32, left: -32, width: 128, height: 128, borderRadius: '50%', bgcolor: 'rgba(255, 255, 255, 0.1)', filter: 'blur(24px)' }} />
+            <Stack spacing={3} sx={{ position: 'relative' }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, color: 'white' }}>
+                {t('about_page.cta_title')}
+              </Typography>
+              <Typography variant="h6" sx={{ color: 'rgba(255, 255, 255, 0.8)', maxWidth: 448, mx: 'auto', fontWeight: 400 }}>
+                {t('about_page.cta_sub')}
+              </Typography>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center" pt={1}>
+                <Button 
+                  component={Link} to="/login"
+                  variant="contained"
+                  size="large"
+                  endIcon={<ArrowRight size={18} />}
+                  sx={{ 
+                    bgcolor: 'white', color: '#1d4ed8', 
+                    px: 4, py: 1.5, borderRadius: 3, fontWeight: 'bold', fontSize: '1rem',
+                    '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.9)' }
+                  }}
+                >
+                  {t('about_page.cta_btn')}
+                </Button>
+                <Button 
+                  href="mailto:support@motionmeet.app"
+                  variant="outlined"
+                  size="large"
+                  sx={{ 
+                    color: 'white', borderColor: 'rgba(255, 255, 255, 0.3)', 
+                    px: 4, py: 1.5, borderRadius: 3, fontWeight: 'bold', fontSize: '1rem', border: '2px solid',
+                    '&:hover': { borderColor: 'white', bgcolor: 'rgba(255, 255, 255, 0.1)' }
+                  }}
+                >
+                  {t('about_page.cta_btn2')}
+                </Button>
+              </Stack>
+            </Stack>
+          </Paper>
+        </Container>
+      </Box>
+    </PublicLayout>
+  );
 };
 
 export default About;

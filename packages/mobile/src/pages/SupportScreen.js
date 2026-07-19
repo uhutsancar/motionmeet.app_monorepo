@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
-import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar,
-  Linking, LayoutAnimation, UIManager, Platform,
-} from 'react-native';
+import { ScrollView, StatusBar, Linking, LayoutAnimation, UIManager, Platform } from 'react-native';
+import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -30,13 +28,13 @@ const FaqItem = ({ item, theme, styles }) => {
   };
 
   return (
-    <TouchableOpacity style={styles.faqItem} onPress={handleToggle} activeOpacity={0.8}>
-      <View style={styles.faqHeader}>
+    <TouchableRipple borderless style={styles.faqItem} onPress={handleToggle} activeOpacity={0.8}>
+      <Surface elevation={0} style={styles.faqHeader}>
         <Text style={styles.faqQ}>{t(item.q, item.qFallback)}</Text>
         <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={theme.textMuted} />
-      </View>
+      </Surface>
       {open && <Text style={styles.faqA}>{t(item.a, item.aFallback)}</Text>}
-    </TouchableOpacity>
+    </TouchableRipple>
   );
 };
 
@@ -70,64 +68,64 @@ const SupportScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+      <Surface elevation={0} style={styles.header}>
+        <TouchableRipple borderless style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </TouchableOpacity>
+        </TouchableRipple>
         <Text style={styles.headerTitle}>{t('settings.support', 'Destek')}</Text>
-        <View style={{ width: 40 }} />
-      </View>
+        <Surface elevation={0} style={{ width: 40 }} />
+      </Surface>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
         {/* Contact */}
-        <View style={styles.section}>
+        <Surface elevation={0} style={styles.section}>
           <Text style={styles.sectionLabel}>{t('support.contact_section', 'İLETİŞİM')}</Text>
-          <View style={styles.card}>
+          <Surface elevation={0} style={styles.card}>
             {contactItems.map((item, i) => (
-              <TouchableOpacity
+              <TouchableRipple borderless
                 key={i}
                 style={[styles.row, i !== contactItems.length - 1 && styles.rowBorder]}
                 onPress={item.onPress}
                 activeOpacity={0.7}
               >
-                <View style={styles.rowLeft}>
-                  <View style={[styles.iconBox, { backgroundColor: theme.surfaceLight }]}>
+                <Surface elevation={0} style={styles.rowLeft}>
+                  <Surface elevation={0} style={[styles.iconBox, { backgroundColor: theme.surfaceLight }]}>
                     <Ionicons name={item.icon} size={22} color={item.iconColor} />
-                  </View>
-                  <View>
+                  </Surface>
+                  <Surface elevation={0}>
                     <Text style={styles.rowLabel}>{item.label}</Text>
                     <Text style={styles.rowSub}>{item.subtitle}</Text>
-                  </View>
-                </View>
+                  </Surface>
+                </Surface>
                 <Ionicons name="open-outline" size={16} color={theme.textMuted} />
-              </TouchableOpacity>
+              </TouchableRipple>
             ))}
-          </View>
-        </View>
+          </Surface>
+        </Surface>
 
         {/* FAQ */}
-        <View style={styles.section}>
+        <Surface elevation={0} style={styles.section}>
           <Text style={styles.sectionLabel}>{t('support.faq_section', 'SIKÇA SORULAN SORULAR')}</Text>
-          <View style={styles.card}>
+          <Surface elevation={0} style={styles.card}>
             {FAQS.map((item, i) => (
-              <View key={i} style={i !== FAQS.length - 1 && styles.rowBorder}>
+              <Surface elevation={0} key={i} style={i !== FAQS.length - 1 && styles.rowBorder}>
                 <FaqItem item={item} theme={theme} styles={styles} />
-              </View>
+              </Surface>
             ))}
-          </View>
-        </View>
+          </Surface>
+        </Surface>
 
         {/* App version info */}
-        <View style={styles.versionBox}>
+        <Surface elevation={0} style={styles.versionBox}>
           <Text style={styles.versionText}>MotionMeet v1.0.0</Text>
           <Text style={styles.versionSub}>© 2026 MotionMeet Studios</Text>
-        </View>
+        </Surface>
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-const getStyles = (theme) => StyleSheet.create({
+const getStyles = (theme) => ({
   container: { flex: 1, backgroundColor: theme.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

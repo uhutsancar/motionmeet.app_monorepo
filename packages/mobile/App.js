@@ -1,46 +1,41 @@
 import React from 'react';
 import { Provider } from 'react-redux';
-import { ClerkProvider } from '@clerk/clerk-expo';
-import * as SecureStore from 'expo-secure-store';
+import { AuthProvider } from './src/context/AuthProvider';
 import Toast from 'react-native-toast-message';
 import { store } from './src/store/store';
 import AuthNavigator from './src/navigation/AuthNavigator';
 import { StatusBar } from 'expo-status-bar';
 import './src/i18n'; // Initialize i18n
 import { ThemeProvider } from './src/context/ThemeContext';
+import { useTheme } from './src/context/ThemeContext';
+import { PaperProvider } from 'react-native-paper';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
+const AppContent = () => {
+  const { theme, isDark } = useTheme();
 
-const tokenCache = {
-  async getToken(key) {
-    try {
-      return SecureStore.getItemAsync(key);
-    } catch (err) {
-      return null;
-    }
-  },
-  async saveToken(key, value) {
-    try {
-      return SecureStore.setItemAsync(key, value);
-    } catch (err) {
-      return;
-    }
-  },
+  return (
+    <PaperProvider theme={theme}>
+      <AuthNavigator />
+      <StatusBar
+        style={isDark ? 'light' : 'dark'}
+        backgroundColor={theme.background}
+      />
+      <Toast />
+    </PaperProvider>
+  );
 };
 
 export default function App() {
   return (
-    <ClerkProvider 
-      publishableKey={CLERK_PUBLISHABLE_KEY}
-      tokenCache={tokenCache}
-    >
-      <Provider store={store}>
-        <ThemeProvider>
-          <AuthNavigator />
-          <StatusBar style="auto" />
-          <Toast />
-        </ThemeProvider>
-      </Provider>
-    </ClerkProvider>
+    <Provider store={store}>
+      <ThemeProvider>
+        <SafeAreaProvider>
+          <AuthProvider>
+            <AppContent />
+          </AuthProvider>
+        </SafeAreaProvider>
+      </ThemeProvider>
+    </Provider>
   );
 }

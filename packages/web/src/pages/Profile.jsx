@@ -1,296 +1,366 @@
-import React, { useState } from "react";
-import { Dumbbell, Calendar as CalendarIcon, LogOut, LineChart, User as UserIcon, Share2, TrendingUp, Trophy, Target } from "lucide-react";
-import { useSelector } from "react-redux";
-import { useClerk, useAuth } from "@clerk/clerk-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { useTranslation } from "react-i18next";
-import ProfileModal from "../components/ProfileModal";
-import api from "~/api/axios";
-import { useEffect } from "react";
+import { useAuthContext } from "../context/AuthProvider";
+import {
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  Card,
+  CardActionArea,
+  Chip,
+  IconButton,
+  Paper,
+  Stack,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+  useTheme,
+} from "@mui/material";
+import { Calendar as CalendarIcon, Dumbbell, LineChart, Share2, Target, TrendingUp, Trophy } from "lucide-react";
 import moment from "moment";
+import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { useTranslation } from "react-i18next";
+import { useSelector } from "react-redux";
+import { useParams } from "react-router-dom";
+import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis } from "recharts";
+import api from "~/api/axios";
+import Loading from "~/components/Loading";
+import ProfileModal from "~/components/ProfileModal";
+
+const EMPTY_WORKOUTS = [];
 
 const Profile = () => {
-  const user = useSelector((state) => state.user.value);
-  const { signOut } = useClerk();
-  const { getToken } = useAuth();
+  const theme = useTheme();
+  const currentUser = useSelector((state) => state.user.value);
+  const { profileId } = useParams();
+  const { getToken } = useAuthContext();
   const { t, i18n } = useTranslation();
-
+  const [publicProfile, setPublicProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(Boolean(profileId));
+  const [profileError, setProfileError] = useState("");
   const [activeStatTab, setActiveStatTab] = useState("duration");
   const [showEdit, setShowEdit] = useState(false);
   const [workouts, setWorkouts] = useState([]);
   const [chartData, setChartData] = useState([]);
 
-  // Set moment locale
+  const isOwnProfile = !profileId || profileId === currentUser?._id;
+  const user = isOwnProfile ? currentUser : publicProfile;
+  const visibleWorkouts = isOwnProfile ? workouts : EMPTY_WORKOUTS;
+  const followersCount = user?.followers_count ?? user?.followers?.length ?? 0;
+  const followingCount = user?.following_count ?? user?.following?.length ?? 0;
+
   useEffect(() => {
-    moment.locale(i18n.language.startsWith('tr') ? 'tr' : 'en');
+    moment.locale(i18n.language.startsWith("tr") ? "tr" : "en");
   }, [i18n.language]);
 
   useEffect(() => {
+    if (!profileId || profileId === currentUser?._id) {
+      setProfileError("");
+      setProfileLoading(false);
+      return undefined;
+    }
+
+    let active = true;
+    const fetchProfile = async () => {
+      setProfileLoading(true);
+      setPublicProfile(null);
+      setProfileError("");
+      try {
+        const token = await getToken();
+        const { data } = await api.post(
+          "/api/user/profiles",
+          { profileId },
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (active && data.success) setPublicProfile(data.profile);
+        if (active && !data.success) {
+          setProfileError(data.message || "Profile could not be loaded");
+          toast.error(data.message);
+        }
+      } catch (error) {
+        if (active) {
+          const message = error.response?.data?.message || error.message || "Profile could not be loaded";
+          setProfileError(message);
+          toast.error(message);
+        }
+      } finally {
+        if (active) setProfileLoading(false);
+      }
+    };
+
+    fetchProfile();
+    return () => {
+      active = false;
+    };
+  }, [currentUser?._id, getToken, profileId]);
+
+  useEffect(() => {
+    if (!isOwnProfile) return undefined;
+
     const fetchWorkouts = async () => {
       try {
         const token = await getToken();
         if (!token) return;
-
         const { data } = await api.get("/api/workout", {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
         });
-        if (data.success) {
-          setWorkouts(data.workouts || []);
-        }
+        if (data.success) setWorkouts(data.workouts || []);
       } catch (error) {
         console.error("Error fetching workouts", error);
       }
     };
     fetchWorkouts();
-  }, [getToken]);
+    return undefined;
+  }, [getToken, isOwnProfile]);
 
   useEffect(() => {
     const weeks = [];
-    for (let i = 5; i >= 0; i--) {
-      const startOfWeek = moment().subtract(i, 'weeks').startOf('isoWeek');
+    for (let index = 5; index >= 0; index -= 1) {
+      const startOfWeek = moment().subtract(index, "weeks").startOf("isoWeek");
       weeks.push({
         start: startOfWeek,
-        end: moment(startOfWeek).endOf('isoWeek'),
+        end: moment(startOfWeek).endOf("isoWeek"),
         name: startOfWeek.format("MMM DD"),
-        amt: 0
+        amt: 0,
       });
     }
 
-    workouts.forEach(workout => {
+    visibleWorkouts.forEach((workout) => {
       const workoutDate = moment(workout.startTime);
-      const week = weeks.find(w => workoutDate.isBetween(w.start, w.end));
-      if (week) {
-        if (activeStatTab === "duration") {
-          week.amt += workout.durationMinutes || 0;
-        } else if (activeStatTab === "volume") {
-          week.amt += workout.volumeKg || 0;
-        } else if (activeStatTab === "reps") {
-          let totalReps = 0;
-          workout.exercises?.forEach(e => {
-            e.sets?.forEach(s => {
-              totalReps += s.reps || 0;
-            });
+      const week = weeks.find((item) => workoutDate.isBetween(item.start, item.end));
+      if (!week) return;
+
+      if (activeStatTab === "duration") week.amt += workout.durationMinutes || 0;
+      if (activeStatTab === "volume") week.amt += workout.volumeKg || 0;
+      if (activeStatTab === "reps") {
+        workout.exercises?.forEach((exercise) => {
+          exercise.sets?.forEach((set) => {
+            week.amt += set.reps || 0;
           });
-          week.amt += totalReps;
-        }
+        });
       }
     });
 
     setChartData(weeks.map(({ name, amt }) => ({ name, amt })));
-  }, [workouts, activeStatTab]);
+  }, [visibleWorkouts, activeStatTab]);
 
+  const shareWorkout = async (workout) => {
+    try {
+      const token = await getToken();
+      const { data } = await api.post(
+        "/api/post/add",
+        {
+          post_type: "workout",
+          workout: workout._id,
+          content: t("feed.workout_post_content", { name: workout.name }) || `Just finished my ${workout.name} workout!`,
+        },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (data.success) toast.success(t("feed.post_published", "Shared to feed!"));
+    } catch {
+      toast.error(t("feed.publish_failed", "Failed to share"));
+    }
+  };
+
+  if (profileLoading) return <Loading />;
   if (!user) {
     return (
-      <div className="w-full h-screen flex items-center justify-center bg-background">
-        <div className="w-8 h-8 border-4 border-accent-primary border-t-transparent rounded-full animate-spin" />
-      </div>
+      <Box sx={{ display: "grid", placeItems: "center", minHeight: "60vh", p: 3 }}>
+        <Box sx={{ width: "min(100%, 520px)" }}>
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {profileError || t("profile.not_found", "Profile not found")}
+          </Alert>
+          <Button fullWidth variant="outlined" onClick={() => window.history.back()}>
+            {t("common.back", "Back")}
+          </Button>
+        </Box>
+      </Box>
     );
   }
 
+  const profileStats = [
+    { label: t("profile.workouts"), value: visibleWorkouts.length, highlight: true },
+    { label: t("profile.followers"), value: followersCount },
+    { label: t("profile.following"), value: followingCount },
+  ];
+  const insights = [
+    { label: t("profile.stats"), icon: LineChart },
+    { label: t("menu.exercises"), icon: Dumbbell },
+    { label: t("profile.awards"), icon: Trophy },
+    { label: t("profile.events"), icon: CalendarIcon },
+  ];
+  const currentAmount = chartData.at(-1)?.amt || 0;
+  const currentUnit = activeStatTab === "duration" ? t("common.minutes_short") : activeStatTab === "volume" ? t("common.kg") : t("profile.reps");
+
   return (
-    <div className="w-full h-full min-h-screen pt-4 pb-20 sm:pb-0 text-text-primary bg-background overflow-y-auto no-scrollbar">
-      <div className="max-w-4xl mx-auto px-4 sm:px-8 space-y-6">
+    <Box sx={{ width: "100%", minHeight: "100vh", overflowY: "auto", py: { xs: 2, sm: 3 }, pb: { xs: 10, sm: 5 } }}>
+      <Stack spacing={3} sx={{ maxWidth: 896, mx: "auto", px: { xs: 2, sm: 4 } }}>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ py: 2, alignItems: { xs: "flex-start", sm: "center" }, justifyContent: "space-between" }}>
+          <Stack direction="row" spacing={2.5} sx={{ alignItems: "center" }}>
+            <Box sx={{ position: "relative" }}>
+              <Avatar src={user.profile_picture || undefined} alt={user.full_name} variant="rounded" sx={{ width: 80, height: 80, borderRadius: 3, fontSize: 30, fontWeight: 800, border: 1, borderColor: "divider", boxShadow: 2 }}>
+                {user.full_name?.charAt(0).toUpperCase() || "U"}
+              </Avatar>
+              <Box sx={{ position: "absolute", right: -3, bottom: -3, width: 22, height: 22, bgcolor: "success.main", borderRadius: "50%", border: 4, borderColor: "background.default" }} />
+            </Box>
+            <Stack spacing={1}>
+              <Typography variant="h5" sx={{ fontWeight: 900 }}>
+                {user.full_name || user.username}
+              </Typography>
+              <Stack direction="row" spacing={2} divider={<Box sx={{ width: "1px", height: 32, bgcolor: "divider" }} />} sx={{ alignItems: "center" }}>
+                {profileStats.map((stat) => (
+                  <Stack key={stat.label}>
+                    <Typography variant="h6" color={stat.highlight ? "primary.main" : "text.primary"} sx={{ fontWeight: 900, lineHeight: 1 }}>
+                      {stat.value}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                      {stat.label}
+                    </Typography>
+                  </Stack>
+                ))}
+              </Stack>
+            </Stack>
+          </Stack>
+          {isOwnProfile && (
+            <Button variant="outlined" onClick={() => setShowEdit(true)} sx={{ width: { xs: "100%", sm: "auto" } }}>
+              {t("profile.edit_profile")}
+            </Button>
+          )}
+        </Stack>
 
-        {/* User Header Card */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-6 animate-in">
-          <div className="flex items-center gap-5 mb-4 sm:mb-0">
-            <div className="relative group">
-              <div className="w-20 h-20 bg-surface rounded-3xl flex items-center justify-center text-3xl font-bold cursor-pointer overflow-hidden border border-border-subtle shadow-lg transition-transform group-hover:scale-105">
-                {user.profile_picture ? (
-                  <img src={user.profile_picture} alt="Avatar" className="w-full h-full object-cover" />
-                ) : (
-                  user.full_name?.charAt(0).toUpperCase() || "U"
-                )}
-              </div>
-              <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 border-4 border-background rounded-full"></div>
-            </div>
-            <div>
-              <h1 className="text-2xl font-black tracking-tight">{user.full_name || user.username}</h1>
-              <div className="flex gap-4 mt-2">
-                <div className="flex flex-col">
-                  <span className="text-xl font-black text-accent-primary leading-none">{workouts.length}</span>
-                  <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest">{t('profile.workouts')}</span>
-                </div>
-                <div className="w-px h-8 bg-border-subtle mx-1"></div>
-                <div className="flex flex-col">
-                  <span className="text-xl font-black text-text-primary leading-none">{user.followers?.length || 0}</span>
-                  <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest">{t('profile.followers')}</span>
-                </div>
-                <div className="w-px h-8 bg-border-subtle mx-1"></div>
-                <div className="flex flex-col">
-                  <span className="text-xl font-black text-text-primary leading-none">{user.following?.length || 0}</span>
-                  <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest">{t('profile.following')}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <button
-              onClick={() => setShowEdit(true)}
-              className="flex-1 sm:flex-none bg-surface border border-border-subtle hover:border-accent-primary px-6 py-2.5 rounded-2xl text-sm font-bold transition-all text-text-primary shadow-sm hover:shadow-md active:scale-95"
-            >
-              {t('profile.edit_profile')}
-            </button>
-          </div>
-        </div>
+        <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 }, borderRadius: 3 }}>
+          <Stack direction="row" spacing={1.5} sx={{ mb: 3, alignItems: "flex-start" }}>
+            <Avatar variant="rounded" sx={{ bgcolor: "action.hover", color: "primary.main" }}>
+              <TrendingUp size={20} />
+            </Avatar>
+            <Stack>
+              <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 800, lineHeight: 1.5 }}>
+                {t("profile.weekly_activity")}
+              </Typography>
+              <Stack direction="row" spacing={1} sx={{ alignItems: "baseline" }}>
+                <Typography variant="h4" sx={{ fontWeight: 900 }}>
+                  {currentAmount}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 700 }}>
+                  {currentUnit}
+                </Typography>
+              </Stack>
+            </Stack>
+          </Stack>
 
-        {/* Dynamic Chart Area */}
-        <div className="glass rounded-3xl p-6 border border-border-subtle shadow-sm animate-in" style={{ animationDelay: '0.05s' }}>
-          <div className="flex justify-between items-start mb-8">
-            <div className="flex items-start gap-3">
-              <div className="p-2.5 bg-accent-primary/10 rounded-2xl">
-                <TrendingUp className="w-5 h-5 text-accent-primary" />
-              </div>
-              <div>
-                <h2 className="text-xs font-bold text-text-muted uppercase tracking-widest mb-1">{t('profile.weekly_activity')}</h2>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-black text-text-primary tracking-tighter">
-                    {chartData.length > 0 ? chartData[chartData.length - 1].amt : 0}
-                  </span>
-                  <span className="text-sm font-bold text-text-muted">
-                    {activeStatTab === "duration" ? t('common.minutes_short') : activeStatTab === "volume" ? t('common.kg') : t('profile.reps')}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="h-48 w-full">
+          <Box sx={{ width: "100%", height: 192 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
-                <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={10} fontWeight="bold" tickLine={false} axisLine={false} tickMargin={10} />
+                <XAxis dataKey="name" stroke={theme.palette.text.disabled} fontSize={10} fontWeight="bold" tickLine={false} axisLine={false} tickMargin={10} />
                 <Tooltip
-                  cursor={{ fill: 'var(--bg-surface-light)', radius: 8 }}
-                  contentStyle={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '16px', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                  itemStyle={{ fontWeight: 'bold' }}
+                  cursor={{ fill: theme.palette.action.hover }}
+                  contentStyle={{ backgroundColor: theme.palette.background.paper, color: theme.palette.text.primary, border: `1px solid ${theme.palette.divider}`, borderRadius: 12, boxShadow: theme.shadows[3] }}
+                  itemStyle={{ fontWeight: 700, color: theme.palette.text.primary }}
                 />
-                <Bar dataKey="amt" fill="var(--accent-primary)" radius={[6, 6, 0, 0]}>
+                <Bar dataKey="amt" fill={theme.palette.primary.main} radius={[6, 6, 0, 0]}>
                   {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={index === chartData.length - 1 ? 'var(--accent-primary)' : 'var(--accent-primary)'} fillOpacity={index === chartData.length - 1 ? 1 : 0.3} />
+                    <Cell key={`${entry.name}-${index}`} fill={theme.palette.primary.main} fillOpacity={index === chartData.length - 1 ? 1 : 0.3} />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </Box>
 
-          <div className="flex gap-2 mt-8 bg-surface-light p-1 rounded-2xl border border-border-subtle max-w-fit">
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={activeStatTab}
+            onChange={(_, value) => value && setActiveStatTab(value)}
+            sx={{ mt: 3, bgcolor: "action.hover", p: 0.5, borderRadius: 2, "& .MuiToggleButton-root": { border: 0, borderRadius: 1.5, px: 2.5, fontWeight: 700 } }}
+          >
             {["duration", "volume", "reps"].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveStatTab(tab)}
-                className={`px-5 py-2 rounded-xl text-xs font-bold transition-all duration-300 ${activeStatTab === tab ? "bg-surface text-accent-primary shadow-sm border border-border-subtle scale-100" : "text-text-muted hover:text-text-primary"}`}
-              >
+              <ToggleButton key={tab} value={tab}>
                 {t(`profile.${tab}`)}
-              </button>
+              </ToggleButton>
             ))}
-          </div>
-        </div>
+          </ToggleButtonGroup>
+        </Paper>
 
-        {/* Dashboard Grid */}
-        <div className="animate-in" style={{ animationDelay: '0.1s' }}>
-          <h3 className="text-xs font-black text-text-muted mb-4 px-2 uppercase tracking-widest flex items-center gap-2">
-            <Target className="w-4 h-4" />
-            {t('profile.insights')}
-          </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <button className="flex flex-col items-center justify-center gap-3 glass hover:bg-surface transition-all rounded-3xl p-5 border border-border-subtle shadow-sm group active:scale-95">
-              <div className="p-3 bg-surface-light rounded-2xl group-hover:bg-accent-primary/10 transition-colors">
-                <LineChart className="w-5 h-5 text-text-muted group-hover:text-accent-primary" />
-              </div>
-              <span className="font-bold text-xs text-text-secondary group-hover:text-text-primary uppercase tracking-tighter">{t('profile.stats')}</span>
-            </button>
-            <button className="flex flex-col items-center justify-center gap-3 glass hover:bg-surface transition-all rounded-3xl p-5 border border-border-subtle shadow-sm group active:scale-95">
-              <div className="p-3 bg-surface-light rounded-2xl group-hover:bg-accent-primary/10 transition-colors">
-                <Dumbbell className="w-5 h-5 text-text-muted group-hover:text-accent-primary" />
-              </div>
-              <span className="font-bold text-xs text-text-secondary group-hover:text-text-primary uppercase tracking-tighter">{t('menu.exercises')}</span>
-            </button>
-            <button className="flex flex-col items-center justify-center gap-3 glass hover:bg-surface transition-all rounded-3xl p-5 border border-border-subtle shadow-sm group active:scale-95">
-              <div className="p-3 bg-surface-light rounded-2xl group-hover:bg-accent-primary/10 transition-colors">
-                <Trophy className="w-5 h-5 text-text-muted group-hover:text-accent-primary" />
-              </div>
-              <span className="font-bold text-xs text-text-secondary group-hover:text-text-primary uppercase tracking-tighter">{t('profile.awards')}</span>
-            </button>
-            <button className="flex flex-col items-center justify-center gap-3 glass hover:bg-surface transition-all rounded-3xl p-5 border border-border-subtle shadow-sm group active:scale-95">
-              <div className="p-3 bg-surface-light rounded-2xl group-hover:bg-accent-primary/10 transition-colors">
-                <CalendarIcon className="w-5 h-5 text-text-muted group-hover:text-accent-primary" />
-              </div>
-              <span className="font-bold text-xs text-text-secondary group-hover:text-text-primary uppercase tracking-tighter">{t('profile.events')}</span>
-            </button>
-          </div>
-        </div>
+        <Stack spacing={1.5}>
+          <Stack direction="row" spacing={1} sx={{ px: 1, alignItems: "center" }}>
+            <Target size={16} />
+            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>
+              {t("profile.insights")}
+            </Typography>
+          </Stack>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, 1fr)", sm: "repeat(4, 1fr)" }, gap: 2 }}>
+            {insights.map(({ label, icon: Icon }) => (
+              <Card key={label} variant="outlined" sx={{ borderRadius: 3 }}>
+                <CardActionArea sx={{ p: 2.5, height: "100%" }}>
+                  <Stack spacing={1.5} sx={{ alignItems: "center" }}>
+                    <Avatar variant="rounded" sx={{ bgcolor: "action.hover", color: "text.secondary" }}>
+                      <Icon size={20} />
+                    </Avatar>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, textAlign: "center" }}>
+                      {label}
+                    </Typography>
+                  </Stack>
+                </CardActionArea>
+              </Card>
+            ))}
+          </Box>
+        </Stack>
 
-        {/* Workouts Feed */}
-        <div className="animate-in pb-20 sm:pb-10" style={{ animationDelay: '0.15s' }}>
-          <div className="flex items-center justify-between mb-4 px-2">
-            <h3 className="text-xs font-black text-text-muted uppercase tracking-widest">{t('profile.workouts')}</h3>
-            <span className="bg-surface-light text-[10px] font-bold px-3 py-1 rounded-full border border-border-subtle">{workouts.length}</span>
-          </div>
+        <Stack spacing={2}>
+          <Stack direction="row" sx={{ px: 1, alignItems: "center", justifyContent: "space-between" }}>
+            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>
+              {t("profile.workouts")}
+            </Typography>
+            <Chip label={visibleWorkouts.length} size="small" />
+          </Stack>
 
-          {workouts.length > 0 ? (
-            <div className="space-y-4">
-              {workouts.map((workout) => (
-                <div key={workout._id} className="bg-surface rounded-3xl p-6 border border-border-subtle shadow-sm flex flex-col justify-between hover:shadow-md transition-all group relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-1 bg-accent-primary h-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                  <div className="flex justify-between items-center mb-4">
-                    <h4 className="font-bold text-text-primary text-xl tracking-tight">{workout.name}</h4>
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={async () => {
-                          try {
-                            const token = await getToken();
-                            const { data } = await api.post("/api/post/add", {
-                              post_type: "workout",
-                              workout: workout._id,
-                              content: t('feed.workout_post_content', { name: workout.name }) || `Just finished my ${workout.name} workout! 🏋️‍♂️`
-                            }, {
-                              headers: { Authorization: `Bearer ${token}` }
-                            });
-                            if (data.success) {
-                              toast.success(t('feed.post_published', 'Shared to feed!'));
-                            }
-                          } catch (err) {
-                            toast.error("Failed to share");
-                          }
-                        }}
-                        className="p-2.5 bg-surface-light hover:bg-accent-primary/10 text-text-muted hover:text-accent-primary rounded-xl border border-border-subtle transition-all"
-                        title="Share to Feed"
-                      >
-                        <Share2 className="w-4 h-4" />
-                      </button>
-                      <div className="text-right">
-                        <p className="text-[10px] font-black text-text-muted uppercase tracking-tighter leading-none mb-1">{t('profile.history')}</p>
-                        <p className="text-xs font-bold text-text-secondary">{moment(workout.startTime).format("MMM DD, YYYY")}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-accent-primary"></div>
-                      <span className="text-sm font-bold text-text-primary capitalize">{workout.durationMinutes} min</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-accent-primary"></div>
-                      <span className="text-sm font-bold text-text-primary capitalize">{workout.volumeKg} kg volume</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+          {visibleWorkouts.length > 0 ? (
+            visibleWorkouts.map((workout) => (
+              <Paper key={workout._id} variant="outlined" sx={{ p: { xs: 2, sm: 3 }, borderRadius: 3 }}>
+                <Stack spacing={2}>
+                  <Stack direction="row" spacing={2} sx={{ alignItems: "center", justifyContent: "space-between" }}>
+                    <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                      {workout.name}
+                    </Typography>
+                    <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
+                      <IconButton onClick={() => shareWorkout(workout)} title={t("feed.share", "Share to feed")}>
+                        <Share2 size={18} />
+                      </IconButton>
+                      <Stack sx={{ alignItems: "flex-end" }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>
+                          {t("profile.history")}
+                        </Typography>
+                        <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                          {moment(workout.startTime).format("MMM DD, YYYY")}
+                        </Typography>
+                      </Stack>
+                    </Stack>
+                  </Stack>
+                  <Stack direction="row" spacing={3}>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>• {workout.durationMinutes} min</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>• {workout.volumeKg} kg</Typography>
+                  </Stack>
+                </Stack>
+              </Paper>
+            ))
           ) : (
-            <div className="bg-surface rounded-3xl p-12 border border-border-subtle shadow-sm flex flex-col items-center justify-center text-center">
-              <div className="p-5 bg-surface-light rounded-full mb-4">
-                <Dumbbell className="w-10 h-10 text-text-muted opacity-30" />
-              </div>
-              <h3 className="text-lg font-bold mb-1 text-text-primary">{t('profile.no_workouts_yet')}</h3>
-              <p className="text-sm text-text-secondary max-w-xs">{t('profile.start_journey')}</p>
-            </div>
+            <Paper variant="outlined" sx={{ p: 6, borderRadius: 3, textAlign: "center" }}>
+              <Avatar sx={{ width: 72, height: 72, mx: "auto", mb: 2, bgcolor: "action.hover", color: "text.disabled" }}>
+                <Dumbbell size={36} />
+              </Avatar>
+              <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                {t("profile.no_workouts_yet")}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                {t("profile.start_journey")}
+              </Typography>
+            </Paper>
           )}
-        </div>
-      </div>
-      {showEdit && <ProfileModal setShowEdit={setShowEdit} />}
-    </div>
+        </Stack>
+      </Stack>
+
+      {isOwnProfile && showEdit && <ProfileModal setShowEdit={setShowEdit} />}
+    </Box>
   );
 };
 

@@ -1,9 +1,13 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import * as path from "path"
+import { fileURLToPath } from 'node:url'
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const rootDirectory = fileURLToPath(new URL('.', import.meta.url))
+  const env = loadEnv(mode, rootDirectory, '')
+
+  return {
   plugins: [
     react(),
     tailwindcss(),
@@ -11,14 +15,9 @@ export default defineConfig({
 
   resolve: {
     alias: {
-      '~': path.resolve(__dirname, 'src'),
-      '@clerk/clerk-react': path.resolve(__dirname, '../../node_modules/@clerk/clerk-react/dist/index.js'),
+      '~': fileURLToPath(new URL('./src', import.meta.url)),
     },
     dedupe: ['react', 'react-dom'],
-  },
-  
-  optimizeDeps: {
-    include: ['@clerk/clerk-react'],
   },
 
   server: {
@@ -30,12 +29,10 @@ export default defineConfig({
   },
 
   build: {
-    commonjsOptions: {
-      include: [/@clerk\/clerk-react/, /node_modules/],
-    },
     target: 'esnext',
     chunkSizeWarningLimit: 2000,
     minify: 'terser',
-    sourcemap: true,
+    sourcemap: env.VITE_BUILD_SOURCEMAP === 'true',
+  }
   }
 })

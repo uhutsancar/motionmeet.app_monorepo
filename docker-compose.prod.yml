@@ -1,0 +1,29 @@
+﻿name: motionmeet-prod
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: packages/backend/Dockerfile.prod
+    ports:
+      - "4000:4000"
+    env_file:
+      - path: ./packages/backend/.env
+        required: false
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: packages/web/Dockerfile.prod
+      args:
+        VITE_BASEURL: ${VITE_BASEURL}
+        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY}
+        VITE_SOCKET_URL: ${VITE_SOCKET_URL}
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

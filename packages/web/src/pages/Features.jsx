@@ -1,252 +1,297 @@
-import React from 'react';
+
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { CheckCircle2, Dumbbell, TrendingUp, ListChecks, MessageSquare, BookOpen, BarChart2, ArrowRight } from 'lucide-react';
 import PublicLayout from './PublicLayout';
+import { Box, Stack, Typography, Button, Container, Grid, Paper, useTheme } from '@mui/material';
 
-/* ── Icon map ── */
 const ICONS = [Dumbbell, TrendingUp, ListChecks, MessageSquare, BookOpen, BarChart2];
 const COLORS = [
-    'text-blue-500 bg-blue-500/10',
-    'text-green-500 bg-green-500/10',
-    'text-violet-500 bg-violet-500/10',
-    'text-pink-500 bg-pink-500/10',
-    'text-amber-500 bg-amber-500/10',
-    'text-cyan-500 bg-cyan-500/10',
+  { main: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' },
+  { main: '#22c55e', bg: 'rgba(34, 197, 94, 0.1)' },
+  { main: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)' },
+  { main: '#ec4899', bg: 'rgba(236, 72, 153, 0.1)' },
+  { main: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' },
+  { main: '#06b6d4', bg: 'rgba(6, 182, 212, 0.1)' },
 ];
 
-/* ── Feature Row (alternating) ── */
-const FeatureRow = ({ features, index }) => {
-    const { t } = useTranslation();
-    const isReversed = index % 2 === 1;
-    const Icon = ICONS[index];
-    const colorCls = COLORS[index];
-    const bullets = [
-        t(`features_page.f${index + 1}_b1`),
-        t(`features_page.f${index + 1}_b2`),
-        t(`features_page.f${index + 1}_b3`),
-        t(`features_page.f${index + 1}_b4`),
-    ];
+const FeatureRow = ({ index }) => {
+  const { t } = useTranslation();
+  const theme = useTheme();
+  const isReversed = index % 2 === 1;
+  const Icon = ICONS[index];
+  const color = COLORS[index];
+  
+  const bullets = [
+    t(`features_page.f${index + 1}_b1`),
+    t(`features_page.f${index + 1}_b2`),
+    t(`features_page.f${index + 1}_b3`),
+    t(`features_page.f${index + 1}_b4`),
+  ];
 
-    /* Pretty "mock UI" panels for each feature */
-    const fakeUIs = [
-        /* 1 – Workout Logging */
-        <div className="space-y-3 p-2">
-            {[{ ex: 'Bench Press', done: true, val: '80 kg × 8' }, { ex: 'Squat', done: true, val: '100 kg × 5' }, { ex: 'Deadlift', done: false, val: '120 kg × 3' }].map((r, i) => (
-                <div key={i} className={`rounded-xl px-4 py-3 flex items-center justify-between border ${r.done ? 'bg-green-500/10 border-green-500/20' : 'bg-[var(--bg-surface-light)] border-[var(--border-subtle)]'}`}>
-                    <div>
-                        <p className={`font-bold text-sm ${r.done ? 'text-green-400' : 'text-[var(--text-primary)]'}`}>{r.ex}</p>
-                        <p className="text-[11px] text-[var(--text-muted)]">Set {i + 1}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className={`text-sm font-bold ${r.done ? 'text-green-400' : 'text-[var(--text-secondary)]'}`}>{r.val}</span>
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${r.done ? 'bg-green-500 border-green-500' : 'border-[var(--border-subtle)]'}`}>
-                            {r.done && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                        </div>
-                    </div>
-                </div>
+  const fakeUIs = [
+    /* 1 – Workout Logging */
+    <Stack spacing={1.5} key="1">
+      {[{ ex: 'Bench Press', done: true, val: '80 kg × 8' }, { ex: 'Squat', done: true, val: '100 kg × 5' }, { ex: 'Deadlift', done: false, val: '120 kg × 3' }].map((r, i) => (
+        <Stack key={i} direction="row" alignItems="center" justifyContent="space-between" sx={{ 
+          p: 1.5, borderRadius: 3, border: '1px solid',
+          bgcolor: r.done ? 'rgba(34, 197, 94, 0.1)' : 'background.default',
+          borderColor: r.done ? 'rgba(34, 197, 94, 0.2)' : 'divider'
+        }}>
+          <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: r.done ? '#4ade80' : 'text.primary' }}>{r.ex}</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>Set {i + 1}</Typography>
+          </Box>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: r.done ? '#4ade80' : 'text.secondary' }}>{r.val}</Typography>
+            <Box sx={{ 
+              width: 20, height: 20, borderRadius: '50%', border: '2px solid',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              bgcolor: r.done ? '#22c55e' : 'transparent', borderColor: r.done ? '#22c55e' : 'divider'
+            }}>
+              {r.done && <CheckCircle2 size={12} color="white" />}
+            </Box>
+          </Stack>
+        </Stack>
+      ))}
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ p: 1.5, borderRadius: 3, bgcolor: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+        <Typography variant="caption" sx={{ color: '#fbbf24', fontWeight: 'bold' }}>🏆 New PR — Bench Press 80 kg!</Typography>
+      </Stack>
+    </Stack>,
+    /* 2 – Progress Tracking */
+    <Stack spacing={1.5} key="2">
+      <Stack direction="row" alignItems="flex-end" spacing={0.5} sx={{ height: 96 }}>
+        {[40, 55, 50, 72, 65, 90, 85].map((h, i) => (
+          <Box key={i} sx={{ flex: 1, position: 'relative', height: `${h}%` }}>
+            <Box sx={{ width: '100%', height: '100%', borderRadius: 1, bgcolor: '#3b82f6', opacity: 0.8 }} />
+            {i === 5 && <Box sx={{ position: 'absolute', top: -20, left: '50%', transform: 'translateX(-50%)', bgcolor: '#fbbf24', color: 'white', fontSize: 9, fontWeight: 'bold', px: 0.5, py: 0.25, borderRadius: 1 }}>PR!</Box>}
+          </Box>
+        ))}
+      </Stack>
+      <Stack direction="row" justifyContent="space-between" sx={{ typography: 'caption', color: 'text.secondary', fontSize: 9 }}>
+        {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'].map(m => <Typography key={m} component="span" variant="inherit">{m}</Typography>)}
+      </Stack>
+      <Grid container spacing={1}>
+        {[{ l: 'Total Volume', v: '23,500 kg', c: '#3b82f6' }, { l: 'Personal Record', v: '90 kg', c: '#f59e0b' }].map(({ l, v, c }) => (
+          <Grid item xs={6} key={l}>
+            <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>{l}</Typography>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: c }}>{v}</Typography>
+            </Box>
+          </Grid>
+        ))}
+      </Grid>
+    </Stack>,
+    /* 3 – Routine Builder */
+    <Stack spacing={1} key="3">
+      {['Push Day A', 'Pull Day B', 'Leg Day C'].map((r, i) => (
+        <Stack key={i} direction="row" alignItems="center" spacing={1.5} sx={{ p: 1.5, borderRadius: 3, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
+          <Box sx={{ width: 32, height: 32, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: ['#3b82f6', '#8b5cf6', '#22c55e'][i], color: 'white', fontWeight: 'bold', fontSize: 14 }}>
+            {['P', 'P', 'L'][i]}
+          </Box>
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{r}</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{[5, 4, 5][i]} exercises</Typography>
+          </Box>
+          <ArrowRight size={16} color={theme.palette.text.secondary} />
+        </Stack>
+      ))}
+      <Button variant="outlined" sx={{ py: 1.5, borderRadius: 3, borderStyle: 'dashed', borderWidth: 2, fontWeight: 'bold' }}>
+        + Add Routine
+      </Button>
+    </Stack>,
+    /* 4 – Social Feed */
+    <Stack spacing={1.5} key="4">
+      {[{ name: 'Alex M.', workout: 'Push Day A', time: '1h 20m', vol: '12,400 kg', pr: true }, { name: 'Sara K.', workout: 'Leg Day', time: '55m', vol: '8,200 kg', pr: false }].map((p, i) => (
+        <Box key={i} sx={{ p: 1.5, borderRadius: 3, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
+          <Stack direction="row" alignItems="center" spacing={1} mb={1}>
+            <Box sx={{ width: 32, height: 32, borderRadius: '50%', bgcolor: ['#3b82f6', '#ec4899'][i], display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold', fontSize: 12 }}>
+              {p.name[0]}
+            </Box>
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{p.name}</Typography>
+              {p.pr && <Typography variant="caption" sx={{ color: '#fbbf24', fontWeight: 'bold', fontSize: 10 }}>🏆 PR Crushed!</Typography>}
+            </Box>
+          </Stack>
+          <Stack direction="row" spacing={1}>
+            {[p.workout, `⏱ ${p.time}`, `💪 ${p.vol}`].map(t => (
+              <Box key={t} sx={{ px: 1, py: 0.5, borderRadius: 1, bgcolor: 'background.paper', fontSize: 10, fontWeight: 'bold', color: 'text.secondary' }}>
+                {t}
+              </Box>
             ))}
-            <div className="rounded-xl px-4 py-2.5 bg-amber-500/10 border border-amber-500/20 flex items-center gap-2">
-                <span className="text-amber-400 text-[11px] font-bold">🏆 New PR — Bench Press 80 kg!</span>
-            </div>
-        </div>,
-        /* 2 – Progress Tracking */
-        <div className="p-2 space-y-3">
-            <div className="flex items-end gap-1.5 h-24">
-                {[40, 55, 50, 72, 65, 90, 85].map((h, i) => (
-                    <div key={i} className="flex-1 rounded-t-sm relative overflow-visible">
-                        <div className="w-full rounded-t-sm bg-gradient-to-t from-blue-600 to-blue-400" style={{ height: `${h}%` }} />
-                        {i === 5 && <div className="absolute -top-5 left-1/2 -translate-x-1/2 bg-amber-400 text-[9px] font-bold text-white px-1 py-0.5 rounded whitespace-nowrap">PR!</div>}
-                    </div>
-                ))}
-            </div>
-            <div className="flex justify-between text-[9px] text-[var(--text-muted)]">
-                {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'].map(m => <span key={m}>{m}</span>)}
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-                {[{ l: 'Total Volume', v: '23,500 kg', c: 'text-blue-500' }, { l: 'Personal Record', v: '90 kg', c: 'text-amber-500' }].map(({ l, v, c }) => (
-                    <div key={l} className="rounded-xl p-3 bg-[var(--bg-surface-light)] border border-[var(--border-subtle)]">
-                        <p className="text-[10px] text-[var(--text-muted)]">{l}</p>
-                        <p className={`font-extrabold text-sm ${c}`}>{v}</p>
-                    </div>
-                ))}
-            </div>
-        </div>,
-        /* 3 – Routine Builder */
-        <div className="p-2 space-y-2">
-            {['Push Day A', 'Pull Day B', 'Leg Day C'].map((r, i) => (
-                <div key={i} className="rounded-xl px-4 py-3 flex items-center gap-3 bg-[var(--bg-surface-light)] border border-[var(--border-subtle)]">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-white ${['bg-blue-500', 'bg-violet-500', 'bg-green-500'][i]}`}>
-                        {['P', 'P', 'L'][i]}
-                    </div>
-                    <div className="flex-1">
-                        <p className="font-bold text-sm text-[var(--text-primary)]">{r}</p>
-                        <p className="text-[11px] text-[var(--text-muted)]">{[5, 4, 5][i]} exercises</p>
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-[var(--text-muted)]" />
-                </div>
-            ))}
-            <button className="w-full rounded-xl py-2.5 text-sm font-bold text-[var(--accent-primary)] border-2 border-dashed border-[var(--accent-primary)]/30 hover:border-[var(--accent-primary)] transition">
-                + Add Routine
-            </button>
-        </div>,
-        /* 4 – Social Feed */
-        <div className="p-2 space-y-3">
-            {[{ name: 'Alex M.', workout: 'Push Day A', time: '1h 20m', vol: '12,400 kg', pr: true }, { name: 'Sara K.', workout: 'Leg Day', time: '55m', vol: '8,200 kg', pr: false }].map((p, i) => (
-                <div key={i} className="rounded-xl p-3.5 bg-[var(--bg-surface-light)] border border-[var(--border-subtle)]">
-                    <div className="flex items-center gap-2.5 mb-2">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${['bg-blue-500', 'bg-pink-500'][i]}`}>{p.name[0]}</div>
-                        <div>
-                            <p className="font-bold text-sm text-[var(--text-primary)]">{p.name}</p>
-                            {p.pr && <span className="text-[10px] font-bold text-amber-400">🏆 PR Crushed!</span>}
-                        </div>
-                    </div>
-                    <div className="flex gap-2">
-                        <span className="px-2 py-1 rounded-md bg-[var(--bg-surface)] text-[10px] font-bold text-[var(--text-muted)]">{p.workout}</span>
-                        <span className="px-2 py-1 rounded-md bg-[var(--bg-surface)] text-[10px] font-bold text-[var(--text-muted)]">⏱ {p.time}</span>
-                        <span className="px-2 py-1 rounded-md bg-[var(--bg-surface)] text-[10px] font-bold text-[var(--text-muted)]]">💪 {p.vol}</span>
-                    </div>
-                </div>
-            ))}
-        </div>,
-        /* 5 – Exercise Library */
-        <div className="p-2 space-y-2">
-            <div className="flex gap-2 mb-3">
-                {['All', 'Chest', 'Back', 'Legs'].map((f, i) => (
-                    <button key={f} className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition ${i === 1 ? 'bg-[var(--accent-primary)] text-white' : 'bg-[var(--bg-surface-light)] text-[var(--text-secondary)] border border-[var(--border-subtle)]'}`}>{f}</button>
-                ))}
-            </div>
-            {[{ name: 'Bench Press', muscle: 'Chest', eq: 'Barbell' }, { name: 'Incline DB Press', muscle: 'Chest', eq: 'Dumbbell' }, { name: 'Cable Fly', muscle: 'Chest', eq: 'Cable' }].map((e, i) => (
-                <div key={i} className="flex items-center gap-3 rounded-xl px-4 py-3 bg-[var(--bg-surface-light)] border border-[var(--border-subtle)]">
-                    <div className="w-9 h-9 rounded-lg bg-blue-500/15 flex items-center justify-center text-blue-500">
-                        <Dumbbell className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1">
-                        <p className="font-bold text-sm text-[var(--text-primary)]">{e.name}</p>
-                        <p className="text-[11px] text-[var(--text-muted)]">{e.muscle} · {e.eq}</p>
-                    </div>
-                </div>
-            ))}
-        </div>,
-        /* 6 – Insights */
-        <div className="p-2 space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-                {[{ l: 'Weekly Workouts', v: '5', c: 'text-blue-500' }, { l: 'Avg Duration', v: '62 min', c: 'text-green-500' }, { l: 'Total Volume', v: '84,200 kg', c: 'text-violet-500' }, { l: 'Calories', v: '12,400 kcal', c: 'text-amber-500' }].map(({ l, v, c }) => (
-                    <div key={l} className="rounded-xl p-3 bg-[var(--bg-surface-light)] border border-[var(--border-subtle)]">
-                        <p className="text-[10px] text-[var(--text-muted)] mb-0.5">{l}</p>
-                        <p className={`font-extrabold text-base ${c}`}>{v}</p>
-                    </div>
-                ))}
-            </div>
-            {/* Heatmap */}
-            <div className="rounded-xl p-3 bg-[var(--bg-surface-light)] border border-[var(--border-subtle)]">
-                <p className="text-[11px] font-bold text-[var(--text-muted)] mb-2">Weekly Activity</p>
-                <div className="flex gap-1">
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d, i) => (
-                        <div key={d} className="flex-1 text-center">
-                            <div className={`w-full aspect-square rounded-sm mb-1 ${[true, true, false, true, true, false, false][i] ? 'bg-blue-500' : 'bg-[var(--border-subtle)]'}`} />
-                            <span className="text-[9px] text-[var(--text-muted)]">{d[0]}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </div>,
-    ];
+          </Stack>
+        </Box>
+      ))}
+    </Stack>,
+    /* 5 – Exercise Library */
+    <Stack spacing={1} key="5">
+      <Stack direction="row" spacing={1} mb={1}>
+        {['All', 'Chest', 'Back', 'Legs'].map((f, i) => (
+          <Box key={f} sx={{ px: 1.5, py: 0.5, borderRadius: 10, fontSize: 11, fontWeight: 'bold', bgcolor: i === 1 ? 'primary.main' : 'background.default', color: i === 1 ? 'white' : 'text.secondary', border: '1px solid', borderColor: i === 1 ? 'primary.main' : 'divider', cursor: 'pointer' }}>
+            {f}
+          </Box>
+        ))}
+      </Stack>
+      {[{ name: 'Bench Press', muscle: 'Chest', eq: 'Barbell' }, { name: 'Incline DB Press', muscle: 'Chest', eq: 'Dumbbell' }, { name: 'Cable Fly', muscle: 'Chest', eq: 'Cable' }].map((e, i) => (
+        <Stack key={i} direction="row" alignItems="center" spacing={1.5} sx={{ p: 1.5, borderRadius: 3, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
+          <Box sx={{ width: 36, height: 36, borderRadius: 2, bgcolor: 'rgba(59, 130, 246, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6' }}>
+            <Dumbbell size={16} />
+          </Box>
+          <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{e.name}</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: 11 }}>{e.muscle} · {e.eq}</Typography>
+          </Box>
+        </Stack>
+      ))}
+    </Stack>,
+    /* 6 – Insights */
+    <Stack spacing={1.5} key="6">
+      <Grid container spacing={1}>
+        {[{ l: 'Weekly Workouts', v: '5', c: '#3b82f6' }, { l: 'Avg Duration', v: '62 min', c: '#22c55e' }, { l: 'Total Volume', v: '84,200 kg', c: '#8b5cf6' }, { l: 'Calories', v: '12,400 kcal', c: '#f59e0b' }].map(({ l, v, c }) => (
+          <Grid item xs={6} key={l}>
+            <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: 10, mb: 0.5, display: 'block' }}>{l}</Typography>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: c }}>{v}</Typography>
+            </Box>
+          </Grid>
+        ))}
+      </Grid>
+      <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
+        <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 1, display: 'block' }}>Weekly Activity</Typography>
+        <Stack direction="row" spacing={0.5}>
+          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d, i) => (
+            <Box key={d} sx={{ flex: 1, textAlign: 'center' }}>
+              <Box sx={{ width: '100%', aspectRatio: '1/1', borderRadius: 0.5, mb: 0.5, bgcolor: [true, true, false, true, true, false, false][i] ? '#3b82f6' : 'divider' }} />
+              <Typography sx={{ fontSize: 9, color: 'text.secondary' }}>{d[0]}</Typography>
+            </Box>
+          ))}
+        </Stack>
+      </Box>
+    </Stack>,
+  ];
 
-    const textContent = (
-        <div className="flex-1 space-y-6">
-            <div className={`inline-flex p-3 rounded-2xl ${colorCls}`}>
-                <Icon className="w-7 h-7" />
-            </div>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-[var(--text-primary)] leading-tight">
-                {t(`features_page.f${index + 1}_title`)}
-            </h2>
-            <p className="text-lg text-[var(--text-secondary)] leading-relaxed">
-                {t(`features_page.f${index + 1}_desc`)}
-            </p>
-            <ul className="space-y-3">
-                {bullets.map((b, i) => (
-                    <li key={i} className="flex items-center gap-3 text-[var(--text-secondary)]">
-                        <CheckCircle2 className="w-5 h-5 text-[var(--accent-primary)] flex-shrink-0" />
-                        <span className="font-medium">{b}</span>
-                    </li>
-                ))}
-            </ul>
-        </div>
-    );
-
-    const visualContent = (
-        <div className="flex-1">
-            <div className="rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 shadow-xl shadow-black/5">
-                {fakeUIs[index] || <div className="h-64 rounded-2xl bg-[var(--bg-surface-light)]" />}
-            </div>
-        </div>
-    );
-
-    return (
-        <div className={`flex flex-col ${isReversed ? 'lg:flex-row-reverse' : 'lg:flex-row'} items-center gap-12 lg:gap-16`}>
-            {textContent}
-            {visualContent}
-        </div>
-    );
+  return (
+    <Grid container spacing={{ xs: 6, lg: 8 }} alignItems="center" direction={isReversed ? 'row-reverse' : 'row'}>
+      {/* Text */}
+      <Grid item xs={12} lg={6}>
+        <Stack spacing={3}>
+          <Box sx={{ display: 'inline-flex', p: 1.5, borderRadius: 4, bgcolor: color.bg, color: color.main, alignSelf: 'flex-start' }}>
+            <Icon size={28} />
+          </Box>
+          <Typography variant="h3" sx={{ fontWeight: 800, color: 'text.primary', lineHeight: 1.2 }}>
+            {t(`features_page.f${index + 1}_title`)}
+          </Typography>
+          <Typography variant="h6" sx={{ color: 'text.secondary', fontWeight: 400, lineHeight: 1.6 }}>
+            {t(`features_page.f${index + 1}_desc`)}
+          </Typography>
+          <Stack spacing={1.5}>
+            {bullets.map((b, i) => (
+              <Stack key={i} direction="row" alignItems="center" spacing={1.5}>
+                <CheckCircle2 size={20} color={theme.palette.primary.main} style={{ flexShrink: 0 }} />
+                <Typography variant="body1" sx={{ color: 'text.secondary', fontWeight: 500 }}>{b}</Typography>
+              </Stack>
+            ))}
+          </Stack>
+        </Stack>
+      </Grid>
+      {/* Visual */}
+      <Grid item xs={12} lg={6}>
+        <Paper elevation={0} sx={{ p: 3, borderRadius: 6, border: `1px solid ${theme.palette.divider}`, bgcolor: 'background.paper', boxShadow: '0 20px 40px -10px rgba(0,0,0,0.1)' }}>
+          {fakeUIs[index]}
+        </Paper>
+      </Grid>
+    </Grid>
+  );
 };
 
-/* ── Page ── */
 const Features = () => {
-    const { t } = useTranslation();
+  const { t } = useTranslation();
+  const theme = useTheme();
 
-    return (
-        <PublicLayout>
-            {/* Hero */}
-            <section className="relative overflow-hidden py-20 sm:py-28 px-4 sm:px-6 text-center">
-                <div className="pointer-events-none absolute -top-32 left-1/2 -translate-x-1/2 w-[700px] h-[400px] rounded-full bg-blue-600/10 blur-3xl" />
-                <div className="relative max-w-3xl mx-auto space-y-5">
-                    <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold text-[var(--accent-primary)] bg-[var(--accent-primary)]/10 border border-[var(--accent-primary)]/20">
-                        {t('features_page.hero_badge')}
-                    </span>
-                    <h1 className="text-4xl sm:text-6xl font-extrabold text-[var(--text-primary)] leading-tight">
-                        {t('features_page.hero_title')}
-                    </h1>
-                    <p className="text-lg sm:text-xl text-[var(--text-secondary)] leading-relaxed max-w-2xl mx-auto">
-                        {t('features_page.hero_sub')}
-                    </p>
-                    <div className="pt-4">
-                        <Link
-                            to="/login"
-                            className="inline-flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-white bg-[var(--accent-primary)] hover:bg-[var(--accent-hover)] transition shadow-lg shadow-blue-500/25"
-                        >
-                            {t('features_page.cta_btn')} <ArrowRight className="w-4 h-4" />
-                        </Link>
-                    </div>
-                </div>
-            </section>
+  return (
+    <PublicLayout>
+      {/* Hero */}
+      <Box sx={{ position: 'relative', overflow: 'hidden', py: { xs: 10, sm: 14 }, px: { xs: 2, sm: 3 }, textAlign: 'center' }}>
+        <Box sx={{ position: 'absolute', top: -128, left: '50%', transform: 'translateX(-50%)', width: 700, height: 400, borderRadius: '50%', bgcolor: 'rgba(37, 99, 235, 0.1)', filter: 'blur(80px)', pointerEvents: 'none' }} />
+        
+        <Container maxWidth="md" sx={{ position: 'relative', zIndex: 1 }}>
+          <Stack spacing={3} alignItems="center">
+            <Box sx={{ display: 'inline-flex', alignItems: 'center', px: 2, py: 1, borderRadius: 10, bgcolor: `${theme.palette.primary.main}1A`, border: `1px solid ${theme.palette.primary.main}33` }}>
+              <Typography variant="body2" sx={{ color: theme.palette.primary.main, fontWeight: 'bold' }}>{t('features_page.hero_badge')}</Typography>
+            </Box>
+            
+            <Typography variant="h2" sx={{ fontWeight: 800, color: 'text.primary', lineHeight: 1.2, fontSize: { xs: '2.5rem', sm: '3.75rem' } }}>
+              {t('features_page.hero_title')}
+            </Typography>
+            
+            <Typography variant="h6" sx={{ color: 'text.secondary', fontWeight: 400, maxWidth: 600, mx: 'auto', lineHeight: 1.6 }}>
+              {t('features_page.hero_sub')}
+            </Typography>
 
-            {/* Feature rows */}
-            <section className="py-8 sm:py-12 px-4 sm:px-6">
-                <div className="max-w-6xl mx-auto space-y-24 sm:space-y-32">
-                    {[0, 1, 2, 3, 4, 5].map(i => (
-                        <FeatureRow key={i} index={i} />
-                    ))}
-                </div>
-            </section>
+            <Box pt={2}>
+              <Button 
+                component={Link} to="/login"
+                variant="contained"
+                size="large"
+                endIcon={<ArrowRight size={18} />}
+                sx={{ px: 4, py: 1.5, borderRadius: 3, fontWeight: 'bold', fontSize: '1rem', boxShadow: `0 10px 25px -5px ${theme.palette.primary.main}66` }}
+              >
+                {t('features_page.cta_btn')}
+              </Button>
+            </Box>
+          </Stack>
+        </Container>
+      </Box>
 
-            {/* CTA */}
-            <section className="px-4 sm:px-6 py-20 sm:py-24">
-                <div className="max-w-3xl mx-auto text-center rounded-3xl bg-gradient-to-br from-blue-600 via-blue-500 to-indigo-600 p-12 text-white relative overflow-hidden">
-                    <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/10 blur-xl" />
-                    <div className="relative">
-                        <h2 className="text-3xl sm:text-4xl font-extrabold mb-4">{t('features_page.cta_title')}</h2>
-                        <Link
-                            to="/login"
-                            className="inline-flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-blue-600 bg-white hover:bg-blue-50 transition shadow-xl"
-                        >
-                            {t('features_page.cta_btn')} <ArrowRight className="w-4 h-4" />
-                        </Link>
-                    </div>
-                </div>
-            </section>
-        </PublicLayout>
-    );
+      {/* Feature rows */}
+      <Box sx={{ py: { xs: 6, sm: 10 }, px: { xs: 2, sm: 3 } }}>
+        <Container maxWidth="lg">
+          <Stack spacing={{ xs: 12, sm: 16 }}>
+            {[0, 1, 2, 3, 4, 5].map(i => (
+              <FeatureRow key={i} index={i} />
+            ))}
+          </Stack>
+        </Container>
+      </Box>
+
+      {/* CTA */}
+      <Box sx={{ px: { xs: 2, sm: 3 }, py: { xs: 10, sm: 12 } }}>
+        <Container maxWidth="md">
+          <Paper 
+            elevation={0}
+            sx={{ 
+              borderRadius: 6, 
+              background: `linear-gradient(to bottom right, ${theme.palette.primary.main}, #4f46e5)`,
+              p: { xs: 6, sm: 8 }, 
+              textAlign: 'center', 
+              position: 'relative', 
+              overflow: 'hidden' 
+            }}
+          >
+            <Box sx={{ position: 'absolute', top: -32, right: -32, width: 128, height: 128, borderRadius: '50%', bgcolor: 'rgba(255, 255, 255, 0.1)', filter: 'blur(24px)' }} />
+            <Box sx={{ position: 'relative' }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, color: 'white', mb: 3 }}>
+                {t('features_page.cta_title')}
+              </Typography>
+              <Button 
+                component={Link} to="/login"
+                variant="contained"
+                size="large"
+                endIcon={<ArrowRight size={18} />}
+                sx={{ 
+                  bgcolor: 'white', color: theme.palette.primary.main, 
+                  px: 4, py: 1.5, borderRadius: 3, fontWeight: 'bold', fontSize: '1rem',
+                  '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.9)' }
+                }}
+              >
+                {t('features_page.cta_btn')}
+              </Button>
+            </Box>
+          </Paper>
+        </Container>
+      </Box>
+    </PublicLayout>
+  );
 };
 
 export default Features;

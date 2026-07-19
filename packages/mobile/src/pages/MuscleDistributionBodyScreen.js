@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { ScrollView, ActivityIndicator } from 'react-native';
+import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
-import { useAuth } from '@clerk/clerk-expo';
+import { useAuthContext } from "../context/AuthProvider";
 import api from '../api/client';
 
 const MuscleDistributionBodyScreen = ({ navigation }) => {
   const { t } = useTranslation();
   const { theme } = useTheme();
   const styles = getStyles(theme);
-  const { getToken } = useAuth();
+  const { getToken } = useAuthContext();
   
   const [loading, setLoading] = useState(true);
   const [muscleData, setMuscleData] = useState([]);
@@ -48,43 +49,43 @@ const MuscleDistributionBodyScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+      <Surface elevation={0} style={styles.header}>
+        <TouchableRipple borderless style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </TouchableOpacity>
+        </TouchableRipple>
         <Text style={styles.headerTitle}>{t('statistics.muscle_dist_body', 'Kas dağılımı (Vücut)')}</Text>
-        <View style={{ width: 40 }} />
-      </View>
+        <Surface elevation={0} style={{ width: 40 }} />
+      </Surface>
 
       <ScrollView contentContainerStyle={styles.content}>
         {loading ? (
           <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 50 }} />
         ) : muscleData.length === 0 ? (
-          <View style={styles.emptyState}>
+          <Surface elevation={0} style={styles.emptyState}>
              <Ionicons name="body-outline" size={48} color={theme.textMuted} />
              <Text style={styles.emptyText}>{t('common.no_data', 'Veri bulunamadı')}</Text>
-          </View>
+          </Surface>
         ) : (
-          <View style={styles.grid}>
+          <Surface elevation={0} style={styles.grid}>
              {muscleData.map((item, index) => {
                 const translatedName = t(`statistics.muscle_${item.name.toLowerCase()}`, item.name);
                 return (
-                <View key={index} style={styles.gridItem}>
-                   <View style={[styles.iconBox, { backgroundColor: getIntensityColor(item.value) + '20' }]}>
+                <Surface elevation={0} key={index} style={styles.gridItem}>
+                   <Surface elevation={0} style={[styles.iconBox, { backgroundColor: getIntensityColor(item.value) + '20' }]}>
                       <Ionicons name="fitness-outline" size={28} color={getIntensityColor(item.value)} />
-                   </View>
+                   </Surface>
                    <Text style={styles.itemName}>{translatedName}</Text>
                    <Text style={[styles.itemValue, { color: getIntensityColor(item.value) }]}>{item.value}{t('statistics.intensity_percent', '% Intensity')}</Text>
-                </View>
+                </Surface>
              )})}
-          </View>
+          </Surface>
         )}
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-const getStyles = (theme) => StyleSheet.create({
+const getStyles = (theme) => ({
   container: { flex: 1, backgroundColor: theme.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

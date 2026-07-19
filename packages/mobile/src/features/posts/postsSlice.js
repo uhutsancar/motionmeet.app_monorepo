@@ -32,7 +32,7 @@ export const toggleLikePost = createAsyncThunk(
   async ({ postId, token }) => {
     const data = await likePost(postId, token);
     if (data.success) {
-      return { postId, post: data.post };
+      return { postId, likes_count: data.likes_count || [] };
     } else {
       throw new Error(data.message);
     }
@@ -89,7 +89,7 @@ const postsSlice = createSlice({
       .addCase(toggleLikePost.fulfilled, (state, action) => {
         const index = state.posts.findIndex(p => p._id === action.payload.postId);
         if (index !== -1) {
-          state.posts[index] = action.payload.post;
+          state.posts[index].likes_count = action.payload.likes_count;
         }
       })
       // Delete Post

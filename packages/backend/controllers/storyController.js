@@ -1,81 +1,92 @@
-import fs from "fs";
-import Story from "../models/Story.js";
-import User from "../models/User.js";
 import imagekit from "../configs/imageKit.js";
-import { inngest } from "../inngest/index.js";
-import { uploadToS3 } from "../utils/s3Utils.js";
 
-// Add User Story
-export const addUserStory = async (req, res) => {
+import { deleteFromS3, extractS3Key, uploadToS3 } from "../utils/s3Utils.js";
+import { isObjectId, isOptionalString } from "../utils/validation.js";
+import { hasValidMediaSignature } from "../utils/mediaValidation.js";
+import * as storyService from "../services/storyService.js";
+
+export const addUserStory = async (req, res, next) => {
   try {
-    const { userId } = await req.auth();
-    const { content, media_type, background_color } = req.body;
-
+    const { content, media_type, background_color } = req.body || {};
     const media = req.file;
 
-    let media_url = "";
+    if (!isOptionalString(content, 2000) || !isOptionalString(background_color, 32)) {
+      return res.status(400).json({ success: false, message: "Invalid story content" });
+    }
 
-    // upload media to S3
-    if (media_type === "image" || media_type === "video") {
-      const stream = fs.createReadStream(media.path);
-      const { key } = await uploadToS3(stream, media.originalname, "stories");
-      
-      try { fs.unlinkSync(media.path); } catch (e) {}
+    const inferredMediaType = media
+      ? media.mimetype.startsWith("video/") ? "video" : "image"
+      : "text";
+    const resolvedMediaType = media_type || inferredMediaType;
+    if (!["text", "image", "video"].includes(resolvedMediaType) || resolvedMediaType !== inferredMediaType) {
+      return res.status(400).json({ success: false, message: "Story media type does not match the upload" });
+    }
+    if (resolvedMediaType === "text" && !content?.trim()) {
+      return res.status(400).json({ success: false, message: "Story content is required" });
+    }
+    if (media && !hasValidMediaSignature(media)) {
+      return res.status(415).json({ success: false, message: "Uploaded media content is invalid" });
+    }
+    if (media && !imagekit) {
+      return res.status(503).json({ success: false, message: "Media service is not configured" });
+    }
 
-      // ImageKit URL with path as S3 key
-      media_url = imagekit.url({
+    let mediaUrl = "";
+    if (media) {
+      const { key } = await uploadToS3(media.buffer, media.originalname, "stories", media.mimetype);
+      mediaUrl = imagekit.url({
         path: key,
-        transformation: [{ quality: "auto" }, { format: "webp" }]
+        ...(resolvedMediaType === "image"
+          ? { transformation: [{ quality: "auto" }, { format: "webp" }] }
+          : {}),
       });
     }
 
-    //create story
-    const story = await Story.create({
-      user: userId,
-      content,
-      media_url,
-      media_type,
-      background_color,
+    const story = await storyService.createStory({
+      user: req.userId,
+      content: content?.trim() || "",
+      media_url: mediaUrl,
+      media_type: resolvedMediaType,
+      background_color: background_color?.trim() || "",
     });
 
-    // schedule story deletion after 24 hours via inngest
-    try {
-      await inngest.send({
-        name: 'app/story.delete',
-        data: { storyId: story._id }
-      });
-    } catch (inngestError) {
-      console.error("Inngest error (Ignoring for story creation):", inngestError.message);
-    }
-
-    res.json({ success: true });
+    return res.json({ success: true, story });
   } catch (error) {
-    console.log(error);
-    res.json({ success: false, message: error.message });
+    return next(error);
   }
 };
 
-// Get User Stories — only return stories created within the last 24 hours
-export const getStories = async (req, res) => {
+export const getStories = async (req, res, next) => {
   try {
-    const { userId } = await req.auth();
-    const user = await User.findById(userId);
+    const stories = await storyService.getStoriesForUser(req.userId);
+    if (!stories) return res.status(404).json({ success: false, message: "User not found" });
 
-    // 24h cutoff — any story older than this is expired
-    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-    // User connections and followings
-    const userIds = [userId, ...user.connections, ...user.following];
-    const stories = await Story.find({
-      user: { $in: userIds },
-      createdAt: { $gte: cutoff }, // ← KEY FIX: only stories from the last 24h
-    })
-      .populate("user")
-      .sort({ createdAt: -1 });
-
-    res.json({ success: true, stories });
+    return res.json({ success: true, stories });
   } catch (error) {
-    console.log(error);
-    res.json({ success: false, message: error.message });
+    return next(error);
+  }
+};
+
+export const deleteStory = async (req, res, next) => {
+  try {
+    const { storyId } = req.params;
+    if (!isObjectId(storyId)) {
+      return res.status(400).json({ success: false, message: "Invalid story id" });
+    }
+
+    const story = await storyService.getStoryById(storyId);
+    if (!story) return res.json({ success: false, message: "Story not found" });
+    if (story.user.toString() !== req.userId) {
+      return res.status(403).json({ success: false, message: "Unauthorized to delete this story" });
+    }
+
+    const key = extractS3Key(story.media_url);
+    if (key) await deleteFromS3(key);
+    
+    await storyService.deleteStoryById(story);
+
+    return res.json({ success: true, storyId, message: "Story deleted successfully" });
+  } catch (error) {
+    return next(error);
   }
 };

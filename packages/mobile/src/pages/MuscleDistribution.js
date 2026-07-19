@@ -1,27 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, ActivityIndicator } from 'react-native';
+import { ScrollView, Dimensions, ActivityIndicator } from 'react-native';
+import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import Svg, { Polygon, Line, Text as SvgText } from 'react-native-svg';
 import api from '../api/client';
+import { useMuscleGroups } from '../hooks/useMuscleGroups';
 
 const { width } = Dimensions.get('window');
 const SIZE = width - 80;
 const CENTER = SIZE / 2;
 const RADIUS = SIZE / 2 - 30;
 
-const MUSCLE_KEYS  = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Abs'];
-const MUSCLE_LABELS = {
-  Chest: 'Göğüs', Back: 'Sırt', Legs: 'Bacak',
-  Shoulders: 'Omuz', Arms: 'Kol', Abs: 'Core Bölgesi'
-};
-
 const MuscleDistribution = ({ navigation }) => {
   const { t } = useTranslation();
   const { theme } = useTheme();
   const styles = getStyles(theme);
+  const { data: muscleGroupsList, isLoading: isMusclesLoading } = useMuscleGroups();
 
   const [period, setPeriod] = useState('month');
   const [showDropdown, setShowDropdown] = useState(false);
@@ -47,8 +44,10 @@ const MuscleDistribution = ({ navigation }) => {
     fetchStats();
   }, [period]);
 
+  const MUSCLE_KEYS = muscleGroupsList.map(mg => mg.code);
+
   const values = MUSCLE_KEYS.map(k => stats?.muscleDistribution?.[k] ?? 0);
-  const angles = MUSCLE_KEYS.map((_, i) => (Math.PI * 2 * i) / MUSCLE_KEYS.length - Math.PI / 2);
+  const angles = MUSCLE_KEYS.map((_, i) => (Math.PI * 2 * i) / (MUSCLE_KEYS.length || 1) - Math.PI / 2);
 
   const getPoint = (val, idx) => {
     const r = RADIUS * Math.max(val, 0.03);
@@ -61,33 +60,33 @@ const MuscleDistribution = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
+      <Surface elevation={0} style={styles.header}>
+        <TouchableRipple borderless style={styles.iconBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </TouchableOpacity>
+        </TouchableRipple>
         <Text style={styles.headerTitle}>{t('statistics.muscle_dist', 'Kas Dağılımı')}</Text>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <TouchableOpacity style={styles.iconBtn}>
+        <Surface elevation={0} style={{ flexDirection: 'row', gap: 10 }}>
+          <TouchableRipple borderless style={styles.iconBtn}>
             <Ionicons name="help-circle-outline" size={24} color={theme.textMuted} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn}>
+          </TouchableRipple>
+          <TouchableRipple borderless style={styles.iconBtn}>
             <Ionicons name="share-outline" size={24} color={theme.textMuted} />
-          </TouchableOpacity>
-        </View>
-      </View>
+          </TouchableRipple>
+        </Surface>
+      </Surface>
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
 
         {/* Period dropdown */}
-        <View style={{ alignSelf: 'center', marginTop: 10 }}>
-          <TouchableOpacity style={styles.dropdownBtn} onPress={() => setShowDropdown(!showDropdown)}>
+        <Surface elevation={0} style={{ alignSelf: 'center', marginTop: 10 }}>
+          <TouchableRipple borderless style={styles.dropdownBtn} onPress={() => setShowDropdown(!showDropdown)}>
             <Text style={styles.dropdownText}>{periodLabels[period]}</Text>
             <Ionicons name="chevron-down" size={18} color={theme.textMuted} />
-          </TouchableOpacity>
+          </TouchableRipple>
           {showDropdown && (
-            <View style={[styles.dropdownMenu, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <Surface elevation={0} style={[styles.dropdownMenu, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               {Object.entries(periodLabels).map(([key, label]) => (
-                <TouchableOpacity
+                <TouchableRipple borderless
                   key={key}
                   style={[styles.dropdownItem, { borderBottomColor: theme.border }]}
                   onPress={() => { setPeriod(key); setShowDropdown(false); }}
@@ -95,15 +94,15 @@ const MuscleDistribution = ({ navigation }) => {
                   <Text style={{ color: period === key ? theme.primary : theme.text, fontWeight: period === key ? 'bold' : 'normal' }}>
                     {label}
                   </Text>
-                </TouchableOpacity>
+                </TouchableRipple>
               ))}
-            </View>
+            </Surface>
           )}
-        </View>
+        </Surface>
 
         {/* Radar Chart */}
-        <View style={styles.chartContainer}>
-          {loading ? (
+        <Surface elevation={0} style={styles.chartContainer}>
+          {loading || isMusclesLoading ? (
             <ActivityIndicator color={theme.primary} size="large" style={{ marginVertical: 60 }} />
           ) : (
             <Svg width={SIZE} height={SIZE}>
@@ -142,6 +141,7 @@ const MuscleDistribution = ({ navigation }) => {
               {MUSCLE_KEYS.map((key, i) => {
                 const x = CENTER + (RADIUS + 20) * Math.cos(angles[i]);
                 const y = CENTER + (RADIUS + 20) * Math.sin(angles[i]);
+                const mg = muscleGroupsList.find(m => m.code === key);
                 return (
                   <SvgText
                     key={`label-${i}`}
@@ -150,55 +150,55 @@ const MuscleDistribution = ({ navigation }) => {
                     fill={theme.textMuted}
                     textAnchor="middle"
                   >
-                    {MUSCLE_LABELS[key]}
+                    {t(`muscle_groups.${key}`, mg?.name || key)}
                   </SvgText>
                 );
               })}
             </Svg>
           )}
 
-          <View style={styles.legendRow}>
-            <View style={styles.legendItem}>
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.primary }} />
+          <Surface elevation={0} style={styles.legendRow}>
+            <Surface elevation={0} style={styles.legendItem}>
+              <Surface elevation={0} style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.primary }} />
               <Text style={styles.legendText}>{t('statistics.current', 'Güncel')}</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.textMuted }} />
+            </Surface>
+            <Surface elevation={0} style={styles.legendItem}>
+              <Surface elevation={0} style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.textMuted }} />
               <Text style={styles.legendText}>{t('statistics.previous', 'Önceki')}</Text>
-            </View>
-          </View>
-        </View>
+            </Surface>
+          </Surface>
+        </Surface>
 
         {/* Stats Grid — dynamic */}
-        <View style={styles.statsGrid}>
-          <View style={styles.statSquare}>
+        <Surface elevation={0} style={styles.statsGrid}>
+          <Surface elevation={0} style={styles.statSquare}>
             <Text style={styles.statLabel}>{t('statistics.workouts', 'Antrenman')}</Text>
             <Text style={styles.statLargeVal}>{stats?.totalWorkouts ?? 0}</Text>
             <Text style={styles.statDiffPos}>↑ {stats?.totalWorkouts ?? 0}</Text>
-          </View>
-          <View style={styles.statSquare}>
+          </Surface>
+          <Surface elevation={0} style={styles.statSquare}>
             <Text style={styles.statLabel}>{t('statistics.duration', 'Süre')}</Text>
             <Text style={styles.statLargeVal}>{stats?.totalDuration ?? 0}<Text style={{ fontSize: 14, fontWeight: 'normal' }}>min</Text></Text>
             <Text style={styles.statDiffPos}>↑ {stats?.totalDuration ?? 0}min</Text>
-          </View>
-          <View style={styles.statSquare}>
+          </Surface>
+          <Surface elevation={0} style={styles.statSquare}>
             <Text style={styles.statLabel}>{t('statistics.volume', 'Hacim')}</Text>
             <Text style={styles.statLargeVal}>{stats?.totalVolume ?? 0} <Text style={{ fontSize: 14, fontWeight: 'normal' }}>kg</Text></Text>
             <Text style={styles.statDiffPos}>↑ {stats?.totalVolume ?? 0} kg</Text>
-          </View>
-          <View style={styles.statSquare}>
+          </Surface>
+          <Surface elevation={0} style={styles.statSquare}>
             <Text style={styles.statLabel}>{t('statistics.sets', 'Set')}</Text>
             <Text style={styles.statLargeVal}>{stats?.totalSets ?? 0}</Text>
             <Text style={styles.statDiffPos}>↑ {stats?.totalSets ?? 0}</Text>
-          </View>
-        </View>
+          </Surface>
+        </Surface>
 
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-const getStyles = (theme) => StyleSheet.create({
+const getStyles = (theme) => ({
   container: { flex: 1, backgroundColor: theme.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

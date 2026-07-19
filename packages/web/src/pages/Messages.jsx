@@ -1,45 +1,63 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuth, useUser } from '@clerk/clerk-react';
+import { useAuthContext } from "../context/AuthProvider";
 import { useSocket } from '../hooks/useSocket';
 import { Send, Search, MessageSquare, ArrowLeft, Check, CheckCheck, X, Trash2 } from 'lucide-react';
 import moment from 'moment';
 import 'moment/locale/tr';
+import toast from 'react-hot-toast';
+import { useNavigate, useParams } from 'react-router-dom';
 
-const API = import.meta.env.VITE_BASEURL;
+import Box from '@mui/material/Box';
+import Stack from '@mui/material/Stack';
+import Typography from '@mui/material/Typography';
+import AvatarMui from '@mui/material/Avatar';
+import IconButton from '@mui/material/IconButton';
+import TextField from '@mui/material/TextField';
+import InputAdornment from '@mui/material/InputAdornment';
+import CircularProgress from '@mui/material/CircularProgress';
+import Badge from '@mui/material/Badge';
+import List from '@mui/material/List';
+import ListItemButton from '@mui/material/ListItemButton';
+import ListItemAvatar from '@mui/material/ListItemAvatar';
+import ListItemText from '@mui/material/ListItemText';
+import Paper from '@mui/material/Paper';
 
-const authedFetch = (url, token, opts = {}) =>
-  fetch(`${API}${url}`, {
-    ...opts,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...opts.headers },
-  }).then(r => r.json());
+import { getConversations, getMessages, markSeen, deleteMessage } from '../services/messageService';
+import { getConnections } from '../services/userService';
 
 const Avatar = ({ user, size = 40, online = false }) => {
   const initials = user?.full_name?.charAt(0)?.toUpperCase() || user?.username?.charAt(0)?.toUpperCase() || '?';
   return (
-    <div className="relative flex-shrink-0">
-      {user?.profile_picture
-        ? <img src={user.profile_picture} alt="" className="rounded-full object-cover" style={{ width: size, height: size }} />
-        : <div className="rounded-full flex items-center justify-center text-white font-bold bg-[var(--accent-primary)]" style={{ width: size, height: size, fontSize: size * 0.4 }}>{initials}</div>
-      }
-      {online && <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[var(--bg-surface)] rounded-full" />}
-    </div>
+    <Badge
+      overlap="circular"
+      anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      variant="dot"
+      invisible={!online}
+      sx={{ '& .MuiBadge-badge': { backgroundColor: '#4ade80', color: '#4ade80', boxShadow: '0 0 0 2px var(--mui-palette-background-paper)' } }}
+    >
+      <AvatarMui src={user?.profile_picture} sx={{ width: size, height: size, bgcolor: 'primary.main', fontSize: size * 0.4, fontWeight: 'bold' }}>
+        {!user?.profile_picture && initials}
+      </AvatarMui>
+    </Badge>
   );
 };
 
 const TypingDots = () => (
-  <div className="flex items-center gap-1 px-3 py-2 rounded-2xl bg-[var(--bg-surface-light)] w-16">
+  <Stack direction="row" alignItems="center" spacing={0.5} sx={{ px: 1.5, py: 1, borderRadius: 3, bgcolor: 'action.hover', width: 'fit-content' }}>
     {[0, 1, 2].map(i => (
-      <span key={i} className="w-1.5 h-1.5 rounded-full bg-[var(--text-muted)] animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+      <Box key={i} sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'text.secondary', animation: 'bounce 1.4s infinite ease-in-out both', animationDelay: `${i * 0.15}s`, '@keyframes bounce': { '0%, 80%, 100%': { transform: 'scale(0)' }, '40%': { transform: 'scale(1)' } } }} />
     ))}
-  </div>
+  </Stack>
 );
 
 const WebMessages = () => {
   const { t, i18n } = useTranslation();
-  const { getToken } = useAuth();
-  const { user: clerkUser } = useUser();
-  const { socketRef, connected, onlineUsers, sendMessage: socketSend } = useSocket();
+  const { getToken } = useAuthContext();
+  const { user: currentUser } = useAuthContext();
+  const { userId: requestedUserId } = useParams();
+  const navigate = useNavigate();
+  const { socket, socketRef, connected, onlineUsers, sendMessage: socketSend } = useSocket();
 
   const [conversations, setConversations] = useState([]);
   const [connections, setConnections] = useState([]);
@@ -50,31 +68,93 @@ const WebMessages = () => {
   const [loadingConvs, setLoadingConvs] = useState(true);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [partnerTyping, setPartnerTyping] = useState(false);
+  const [sending, setSending] = useState(false);
 
   const messagesEndRef = useRef(null);
   const typingTimerRef = useRef(null);
   const activeConvRef = useRef(null);
-  const tokenRef = useRef(null);
+  const pendingDraftRef = useRef('');
 
-  useEffect(() => { moment.locale(i18n.language.startsWith('tr') ? 'tr' : 'en'); }, [i18n.language]);
-  useEffect(() => { activeConvRef.current = activeConv; }, [activeConv]);
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, partnerTyping]);
+  const loadConversations = useCallback(async (token) => {
+    setLoadingConvs(true);
+    try {
+      const [data, connData] = await Promise.all([
+        getConversations(token),
+        getConnections(token),
+      ]);
+      if (data.success) {
+        setConversations((data.conversations || []).sort((a, b) => new Date(b.lastMessage?.createdAt || 0) - new Date(a.lastMessage?.createdAt || 0)));
+      }
+      if (connData.success) setConnections(connData.connections || []);
+    } catch (error) {
+      toast.error(error.message || 'Conversations could not be loaded');
+    } finally {
+      setLoadingConvs(false);
+    }
+  }, []);
+
+  const openConversation = useCallback(async (conv) => {
+    if (!conv?.partner?._id) return;
+    setActiveConv(conv);
+    setMessages([]);
+    setPartnerTyping(false);
+    setLoadingMsgs(true);
+    setConversations(prev => prev.map(c => c.partner?._id === conv.partner?._id ? { ...c, unreadCount: 0 } : c));
+    try {
+      const token = await getToken();
+      const data = await getMessages(token, conv.partner._id);
+      if (data.success) setMessages(data.messages || []);
+    } catch (error) {
+      toast.error(error.message || 'Messages could not be loaded');
+    } finally {
+      setLoadingMsgs(false);
+    }
+  }, [getToken]);
 
   useEffect(() => {
-    if (!clerkUser) return;
-    getToken().then(tok => { tokenRef.current = tok; loadConversations(tok); });
-  }, [clerkUser]);
+    moment.locale(i18n.language.startsWith('tr') ? 'tr' : 'en');
+  }, [i18n.language]);
 
-  // Socket listeners
   useEffect(() => {
-    const socket = socketRef.current;
+    activeConvRef.current = activeConv;
+  }, [activeConv]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, partnerTyping]);
+
+  useEffect(() => {
+    return () => clearTimeout(typingTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    getToken().then(token => {
+      if (!token) return;
+      loadConversations(token);
+    }).catch((error) => toast.error(error.message || 'Authentication failed'));
+  }, [currentUser, getToken, loadConversations]);
+
+  useEffect(() => {
+    if (!requestedUserId) {
+      setActiveConv(null);
+      return;
+    }
+    if (loadingConvs || activeConv?.partner?._id === requestedUserId) return;
+    const conversation = conversations.find(item => item.partner?._id === requestedUserId);
+    const connection = connections.find(item => item._id === requestedUserId);
+    const target = conversation || (connection ? { partner: connection, lastMessage: null, unreadCount: 0, isNew: true } : null);
+    if (target) openConversation(target);
+  }, [activeConv, connections, conversations, loadingConvs, openConversation, requestedUserId]);
+
+  useEffect(() => {
     if (!socket) return;
 
     const onMsg = (msg) => {
       const partnerId = msg.from_user_id?._id || msg.from_user_id;
       if (activeConvRef.current?.partner?._id === partnerId) {
-        setMessages(prev => [...prev, msg]);
-        getToken().then(tok => authedFetch('/api/message/seen', tok, { method: 'POST', body: JSON.stringify({ from_user_id: partnerId }) }));
+        setMessages(prev => prev.some(item => item._id === msg._id) ? prev : [...prev, msg]);
+        getToken().then(tok => markSeen(tok, partnerId));
       }
       setConversations(prev => {
         const exists = prev.some(c => c.partner?._id === partnerId);
@@ -89,10 +169,11 @@ const WebMessages = () => {
     };
 
     const onSent = (msg) => {
+      pendingDraftRef.current = '';
+      setSending(false);
       const partnerId = msg.to_user_id?._id || msg.to_user_id;
       if (activeConvRef.current?.partner?._id === partnerId) {
         setMessages(prev => {
-          // Check if message is already in list (could happen if HTTP response came first)
           if (!prev.some(m => m._id === msg._id)) {
             return [...prev, msg];
           }
@@ -114,56 +195,44 @@ const WebMessages = () => {
 
     const onTypStart = ({ from_user_id }) => { if (activeConvRef.current?.partner?._id === from_user_id) setPartnerTyping(true); };
     const onTypStop = ({ from_user_id }) => { if (activeConvRef.current?.partner?._id === from_user_id) setPartnerTyping(false); };
+    const restorePendingDraft = ({ message } = {}) => {
+      setText((current) => current || pendingDraftRef.current);
+      pendingDraftRef.current = '';
+      setSending(false);
+      if (message) toast.error(message);
+    };
 
     socket.on('message_received', onMsg);
     socket.on('message_sent', onSent);
     socket.on('typing_start', onTypStart);
     socket.on('typing_stop', onTypStop);
-    socket.on('message_deleted', ({ messageId }) => {
+    socket.on('message_error', restorePendingDraft);
+    socket.on('disconnect', restorePendingDraft);
+    const onDeleted = ({ messageId }) => {
       setMessages(prev => prev.filter(m => m._id !== messageId));
-    });
+    };
+    socket.on('message_deleted', onDeleted);
     return () => {
       socket.off('message_received', onMsg);
       socket.off('message_sent', onSent);
       socket.off('typing_start', onTypStart);
       socket.off('typing_stop', onTypStop);
-      socket.off('message_deleted');
+      socket.off('message_error', restorePendingDraft);
+      socket.off('disconnect', restorePendingDraft);
+      socket.off('message_deleted', onDeleted);
     };
-  }, [socketRef.current]);
-
-  const loadConversations = async (token) => {
-    try {
-      const data = await authedFetch('/api/message/conversations', token);
-      if (data.success) {
-        setConversations(data.conversations.sort((a, b) => new Date(b.lastMessage?.createdAt || 0) - new Date(a.lastMessage?.createdAt || 0)));
-      }
-      // Also fetch connections to start new chats
-      const connData = await authedFetch('/api/user/connections', token);
-      if (connData.success) {
-        setConnections(connData.connections || []);
-      }
-    } finally { setLoadingConvs(false); }
-  };
-
-  const openConversation = async (conv) => {
-    setActiveConv(conv);
-    setMessages([]);
-    setPartnerTyping(false);
-    setLoadingMsgs(true);
-    setConversations(prev => prev.map(c => c.partner?._id === conv.partner?._id ? { ...c, unreadCount: 0 } : c));
-    try {
-      const tok = tokenRef.current || await getToken();
-      const data = await authedFetch('/api/message/get', tok, { method: 'POST', body: JSON.stringify({ to_user_id: conv.partner._id }) });
-      if (data.success) setMessages(data.messages);
-    } finally { setLoadingMsgs(false); }
-  };
+  }, [getToken, socket]);
 
   const handleSend = useCallback(() => {
-    if (!text.trim() || !activeConv) return;
-    socketSend(activeConv.partner._id, text.trim());
+    if (!text.trim() || !activeConv || sending) return;
+    const draft = text.trim();
+    const sent = socketSend(activeConv.partner._id, draft);
+    if (!sent) return;
+    pendingDraftRef.current = draft;
+    setSending(true);
     setText('');
     socketRef.current?.emit('typing_stop', { to_user_id: activeConv.partner._id });
-  }, [text, activeConv, socketSend]);
+  }, [text, activeConv, sending, socketRef, socketSend]);
 
   const handleKeyDown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } };
 
@@ -175,8 +244,6 @@ const WebMessages = () => {
     typingTimerRef.current = setTimeout(() => socketRef.current?.emit('typing_stop', { to_user_id: activeConv.partner._id }), 1500);
   };
 
-  // Determine list of displayed chats/users
-  // If searching, mix in connections that don't have a conversation yet
   const displayedConvs = React.useMemo(() => {
     if (!searchQuery) return conversations;
 
@@ -185,7 +252,6 @@ const WebMessages = () => {
       c.partner?.full_name?.toLowerCase().includes(lowerQuery) || c.partner?.username?.toLowerCase().includes(lowerQuery)
     );
 
-    // Add connections that match search but aren't in conversations
     const convPartnerIds = new Set(conversations.map(c => c.partner?._id));
     const matchingConnections = connections.filter(conn =>
       !convPartnerIds.has(conn._id) &&
@@ -204,160 +270,196 @@ const WebMessages = () => {
 
   const isMe = (msg) => {
     const fromId = msg.from_user_id?._id || msg.from_user_id;
-    return fromId === clerkUser?.id || fromId !== activeConv?.partner?._id;
+    return fromId === currentUser?.id;
   };
 
   const handleDeleteMessage = async (msgId) => {
     if (window.confirm(t('messages.delete_confirm', 'Are you sure you want to delete this message?'))) {
       try {
-        const tok = tokenRef.current || await getToken();
-        const data = await authedFetch(`/api/message/delete/${msgId}`, tok, { method: 'DELETE' });
+        const tok = await getToken();
+        const data = await deleteMessage(tok, msgId);
         if (data.success) {
           setMessages(prev => prev.filter(m => m._id !== msgId));
         } else {
           alert(data.message);
         }
-      } catch (err) {
+      } catch {
         alert(t('messages.delete_failed', 'Failed to delete message'));
       }
     }
   };
 
   return (
-    <div className="flex h-full bg-[var(--bg-base)] overflow-hidden" style={{ minHeight: 0, flex: 1 }}>
-      {/* Conversation List */}
-      <div className={`${activeConv ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-80 lg:w-96 border-r border-[var(--border-subtle)] flex-shrink-0`}>
-        <div className="px-5 py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-xl font-extrabold text-[var(--text-primary)]">{t('messages.title', 'Messages')}</h1>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${connected ? 'bg-green-500/15 text-green-500' : 'bg-red-500/15 text-red-400'}`}>
-              {connected ? 'LIVE' : 'OFFLINE'}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--bg-base)] border border-[var(--border-subtle)]">
-            <Search className="w-4 h-4 text-[var(--text-muted)] flex-shrink-0" />
-            <input type="text" placeholder={t('messages.search', 'Search...')} value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="flex-1 bg-transparent text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none" />
-            {searchQuery && <button onClick={() => setSearchQuery('')}><X className="w-3 h-3 text-[var(--text-muted)]" /></button>}
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto">
+    <Box sx={{ display: 'flex', height: '100%', bgcolor: 'background.default', overflow: 'hidden', minHeight: 0, flex: 1 }}>
+      <Box sx={{ display: { xs: activeConv ? 'none' : 'flex', md: 'flex' }, flexDirection: 'column', width: { xs: '100%', md: 320, lg: 384 }, borderRight: 1, borderColor: 'divider', flexShrink: 0 }}>
+        <Box sx={{ px: 2.5, py: 2, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
+            <Typography variant="h6" fontWeight={800}>{t('messages.title', 'Messages')}</Typography>
+            <Box sx={{ px: 1, py: 0.25, borderRadius: 4, bgcolor: connected ? 'success.main' : 'error.main', opacity: 0.8 }}>
+              <Typography variant="caption" fontWeight={800} color="white" sx={{ fontSize: 10 }}>{connected ? 'LIVE' : 'OFFLINE'}</Typography>
+            </Box>
+          </Stack>
+          <TextField
+            variant="outlined"
+            size="small"
+            fullWidth
+            placeholder={t('messages.search', 'Search...')}
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            InputProps={{
+              startAdornment: <InputAdornment position="start"><Search size={16} /></InputAdornment>,
+              endAdornment: searchQuery ? (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={() => setSearchQuery('')}><X size={14} /></IconButton>
+                </InputAdornment>
+              ) : null,
+              sx: { borderRadius: 3, bgcolor: 'background.default' }
+            }}
+          />
+        </Box>
+        <Box sx={{ flex: 1, overflowY: 'auto' }}>
           {loadingConvs ? (
-            <div className="p-4 space-y-3">{Array(5).fill(0).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 p-2 animate-pulse">
-                <div className="w-12 h-12 rounded-full bg-[var(--bg-surface-light)]" />
-                <div className="flex-1 space-y-2"><div className="h-3 w-24 bg-[var(--bg-surface-light)] rounded" /><div className="h-2.5 w-36 bg-[var(--bg-surface-light)] rounded" /></div>
-              </div>
-            ))}</div>
+            <Stack p={2} spacing={1.5}>
+              {Array(5).fill(0).map((_, i) => (
+                <Stack key={i} direction="row" spacing={2} p={1}>
+                  <Box sx={{ borderRadius: '50%', bgcolor: 'action.hover', width: 48, height: 48 }} />
+                  <Stack flex={1} spacing={1} justifyContent="center">
+                    <Box sx={{ h: 12, w: 96, bgcolor: 'action.hover', borderRadius: 1 }} />
+                    <Box sx={{ h: 10, w: 144, bgcolor: 'action.hover', borderRadius: 1 }} />
+                  </Stack>
+                </Stack>
+              ))}
+            </Stack>
           ) : displayedConvs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-48 gap-2 text-center px-8">
-              <MessageSquare className="w-10 h-10 text-[var(--border-subtle)]" />
-              <p className="text-sm text-[var(--text-muted)]">{searchQuery ? t('messages.no_results', 'No users found') : t('messages.no_conversations', 'No conversations yet')}</p>
-            </div>
-          ) : displayedConvs.map(conv => {
-            const isActive = activeConv?.partner?._id === conv.partner?._id;
-            const isOnline = onlineUsers.has(conv.partner?._id);
-            const hasUnread = conv.unreadCount > 0;
-            return (
-              <button key={conv.partner?._id} onClick={() => openConversation(conv)}
-                className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors ${isActive ? 'bg-[var(--accent-primary)]/10 border-r-2 border-[var(--accent-primary)]' : 'hover:bg-[var(--bg-surface)]'}`}>
-                <Avatar user={conv.partner} size={48} online={isOnline} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-0.5">
-                    <span className={`text-sm ${hasUnread ? 'font-bold text-[var(--text-primary)]' : 'font-medium text-[var(--text-secondary)]'} truncate`}>
-                      {conv.partner?.full_name || conv.partner?.username}
-                    </span>
-                    <span className="text-[11px] text-[var(--text-muted)] flex-shrink-0 ml-2">{conv.lastMessage?.createdAt ? moment(conv.lastMessage.createdAt).fromNow() : ''}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <p className={`text-xs truncate max-w-[180px] ${hasUnread ? 'text-[var(--text-primary)] font-medium' : 'text-[var(--text-muted)]'}`}>
-                      {conv.isNew ? t('messages.start_new_chat', 'Start a new chat') : (conv.lastMessage?.text || (conv.lastMessage?.message_type === 'image' ? '📷 Fotoğraf' : '...'))}
-                    </p>
-                    {hasUnread && <span className="ml-2 min-w-5 h-5 px-1.5 rounded-full bg-[var(--accent-primary)] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">{conv.unreadCount}</span>}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+            <Stack alignItems="center" justifyContent="center" height={192} spacing={1} px={4} textAlign="center">
+              <MessageSquare size={40} color="var(--mui-palette-text-disabled)" />
+              <Typography variant="body2" color="text.secondary">{searchQuery ? t('messages.no_results', 'No users found') : t('messages.no_conversations', 'No conversations yet')}</Typography>
+            </Stack>
+          ) : (
+            <List disablePadding>
+              {displayedConvs.map(conv => {
+                const isActive = activeConv?.partner?._id === conv.partner?._id;
+                const isOnline = onlineUsers.has(conv.partner?._id);
+                const hasUnread = conv.unreadCount > 0;
+                return (
+                  <ListItemButton key={conv.partner?._id} onClick={() => navigate(`/messages/${conv.partner?._id}`)} selected={isActive} sx={{ px: 2.5, py: 1.5, borderRight: isActive ? 2 : 0, borderColor: 'primary.main', bgcolor: isActive ? 'action.selected' : 'transparent' }}>
+                    <ListItemAvatar>
+                      <Avatar user={conv.partner} size={48} online={isOnline} />
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={
+                        <Stack direction="row" alignItems="center" justifyContent="space-between" mb={0.5}>
+                          <Typography variant="body2" fontWeight={hasUnread ? 700 : 500} noWrap>{conv.partner?.full_name || conv.partner?.username}</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11, ml: 1, flexShrink: 0 }}>{conv.lastMessage?.createdAt ? moment(conv.lastMessage.createdAt).fromNow() : ''}</Typography>
+                        </Stack>
+                      }
+                      secondary={
+                        <Stack direction="row" alignItems="center" justifyContent="space-between">
+                          <Typography variant="caption" noWrap sx={{ maxWidth: 180, color: hasUnread ? 'text.primary' : 'text.secondary', fontWeight: hasUnread ? 500 : 400 }}>
+                            {conv.isNew ? t('messages.start_new_chat', 'Start a new chat') : (conv.lastMessage?.text || (conv.lastMessage?.message_type === 'image' ? '📷 Fotoğraf' : '...'))}
+                          </Typography>
+                          {hasUnread && <Box sx={{ minWidth: 20, height: 20, px: 0.75, borderRadius: 10, bgcolor: 'primary.main', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, ml: 1, flexShrink: 0 }}>{conv.unreadCount}</Box>}
+                        </Stack>
+                      }
+                      disableTypography
+                    />
+                  </ListItemButton>
+                );
+              })}
+            </List>
+          )}
+        </Box>
+      </Box>
 
-      {/* Chat Area */}
       {activeConv ? (
-        <div className="flex flex-col flex-1 min-w-0">
-          <div className="flex items-center gap-3 px-4 py-3.5 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]">
-            <button className="md:hidden p-1" onClick={() => setActiveConv(null)}>
-              <ArrowLeft className="w-5 h-5 text-[var(--text-secondary)]" />
-            </button>
+        <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+          <Stack direction="row" alignItems="center" spacing={2} sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
+            <IconButton sx={{ display: { xs: 'flex', md: 'none' } }} onClick={() => navigate('/messages')} size="small">
+              <ArrowLeft size={20} />
+            </IconButton>
             <Avatar user={activeConv.partner} size={40} online={onlineUsers.has(activeConv.partner?._id)} />
-            <div className="flex-1 min-w-0">
-              <p className="font-bold text-sm text-[var(--text-primary)] truncate">{activeConv.partner?.full_name || activeConv.partner?.username}</p>
-              <p className="text-xs text-[var(--text-muted)]">{onlineUsers.has(activeConv.partner?._id) ? '● Online' : `@${activeConv.partner?.username}`}</p>
-            </div>
-          </div>
+            <Box flex={1} minWidth={0}>
+              <Typography variant="subtitle2" fontWeight={700} noWrap>{activeConv.partner?.full_name || activeConv.partner?.username}</Typography>
+              <Typography variant="caption" color="text.secondary">{onlineUsers.has(activeConv.partner?._id) ? '● Online' : `@${activeConv.partner?.username}`}</Typography>
+            </Box>
+          </Stack>
 
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2 bg-[var(--bg-base)]">
+          <Box sx={{ flex: 1, overflowY: 'auto', px: 2, py: 2, bgcolor: 'background.default', display: 'flex', flexDirection: 'column', gap: 1 }}>
             {loadingMsgs ? (
-              <div className="flex justify-center items-center h-full"><div className="w-7 h-7 border-2 border-[var(--accent-primary)] border-t-transparent rounded-full animate-spin" /></div>
+              <Stack alignItems="center" justifyContent="center" height="100%">
+                <CircularProgress size={28} />
+              </Stack>
             ) : messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full gap-2 text-center">
-                <MessageSquare className="w-10 h-10 text-[var(--border-subtle)]" />
-                <p className="text-sm text-[var(--text-muted)]">{t('messages.start_conversation', 'Start the conversation!')}</p>
-              </div>
+              <Stack alignItems="center" justifyContent="center" height="100%" spacing={1} textAlign="center">
+                <MessageSquare size={40} color="var(--mui-palette-text-disabled)" />
+                <Typography variant="body2" color="text.secondary">{t('messages.start_conversation', 'Start the conversation!')}</Typography>
+              </Stack>
             ) : messages.map((msg, idx) => {
               const mine = isMe(msg);
               return (
-                <div key={msg._id || idx} className={`flex items-end gap-2 ${mine ? 'justify-end' : 'justify-start'}`}>
-                  {!mine && <div className="flex-shrink-0"><Avatar user={activeConv.partner} size={26} /></div>}
-                  <div className="max-w-[70%]">
-                    {msg.message_type === 'image' && msg.media_url && <img src={msg.media_url} alt="media" className="rounded-2xl mb-1 max-h-60 object-cover" />}
+                <Stack key={msg._id || idx} direction="row" alignItems="flex-end" justifyContent={mine ? 'flex-end' : 'flex-start'} spacing={1}>
+                  {!mine && <Avatar user={activeConv.partner} size={26} />}
+                  <Box sx={{ maxWidth: '70%' }}>
+                    {msg.message_type === 'image' && msg.media_url && <Box component="img" src={msg.media_url} alt="media" sx={{ borderRadius: 3, mb: 0.5, maxHeight: 240, objectFit: 'cover' }} />}
                     {msg.text && (
-                      <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${mine ? 'bg-[var(--accent-primary)] text-white rounded-br-sm' : 'bg-[var(--bg-surface)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-bl-sm'}`}>
-                        {msg.text}
-                      </div>
+                      <Paper elevation={0} sx={{ px: 2, py: 1.25, borderRadius: 3, borderBottomRightRadius: mine ? 4 : undefined, borderBottomLeftRadius: !mine ? 4 : undefined, bgcolor: mine ? 'primary.main' : 'background.paper', color: mine ? 'primary.contrastText' : 'text.primary', border: !mine ? 1 : 0, borderColor: 'divider' }}>
+                        <Typography variant="body2" sx={{ lineHeight: 1.5, wordBreak: 'break-word' }}>{msg.text}</Typography>
+                      </Paper>
                     )}
-                    <div className={`flex items-center gap-1 mt-0.5 ${mine ? 'justify-end' : 'justify-start'}`}>
+                    <Stack direction="row" alignItems="center" justifyContent={mine ? 'flex-end' : 'flex-start'} spacing={0.5} mt={0.5}>
                       {mine && (
-                        <button onClick={() => handleDeleteMessage(msg._id)} className="text-[var(--text-muted)] hover:text-red-500 mr-2 transition-colors">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <IconButton size="small" onClick={() => handleDeleteMessage(msg._id)} sx={{ p: 0.25, mr: 0.5, color: 'text.secondary', '&:hover': { color: 'error.main' } }}>
+                          <Trash2 size={14} />
+                        </IconButton>
                       )}
-                      <span className="text-[10px] text-[var(--text-muted)]">{moment(msg.createdAt).format('HH:mm')}</span>
-                      {mine && (msg.seen ? <CheckCheck className="w-3 h-3 text-blue-400" /> : <Check className="w-3 h-3 text-[var(--text-muted)]" />)}
-                    </div>
-                  </div>
-                </div>
+                      <Typography variant="caption" sx={{ fontSize: 10, color: 'text.secondary' }}>{moment(msg.createdAt).format('HH:mm')}</Typography>
+                      {mine && (msg.seen ? <CheckCheck size={12} color="#60a5fa" /> : <Check size={12} color="var(--mui-palette-text-disabled)" />)}
+                    </Stack>
+                  </Box>
+                </Stack>
               );
             })}
-            {partnerTyping && <div className="flex items-end gap-2"><Avatar user={activeConv.partner} size={26} /><TypingDots /></div>}
-            <div ref={messagesEndRef} />
-          </div>
+            {partnerTyping && <Stack direction="row" alignItems="flex-end" spacing={1}><Avatar user={activeConv.partner} size={26} /><TypingDots /></Stack>}
+            <Box ref={messagesEndRef} />
+          </Box>
 
-          <div className="px-4 py-3 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)]">
-            <div className="flex items-end gap-2 px-4 py-2 rounded-2xl bg-[var(--bg-base)] border border-[var(--border-subtle)]">
-              <textarea rows={1} placeholder={t('messages.type_message', 'Type a message...')}
-                value={text} onChange={e => handleTextChange(e.target.value)} onKeyDown={handleKeyDown}
-                className="flex-1 bg-transparent resize-none text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none py-1.5 max-h-28" style={{ scrollbarWidth: 'none' }} />
-              <button onClick={handleSend} disabled={!text.trim()}
-                className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center text-white bg-[var(--accent-primary)] hover:bg-[var(--accent-hover)] disabled:opacity-40 transition-all">
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
+          <Box sx={{ px: 2, py: 1.5, borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
+            <Stack direction="row" alignItems="flex-end" spacing={1} sx={{ px: 2, py: 1, borderRadius: 4, bgcolor: 'background.default', border: 1, borderColor: 'divider' }}>
+              <TextField
+                multiline
+                maxRows={4}
+                placeholder={t('messages.type_message', 'Type a message...')}
+                value={text}
+                onChange={e => handleTextChange(e.target.value)}
+                onKeyDown={handleKeyDown}
+                variant="standard"
+                fullWidth
+                InputProps={{ disableUnderline: true, sx: { fontSize: 14, py: 0.5 } }}
+                sx={{ flex: 1 }}
+              />
+              <IconButton
+                onClick={handleSend}
+                disabled={!text.trim() || !connected || sending}
+                sx={{ bgcolor: 'primary.main', color: 'white', '&:hover': { bgcolor: 'primary.dark' }, '&.Mui-disabled': { bgcolor: 'action.disabledBackground', color: 'action.disabled' }, width: 36, height: 36, borderRadius: 3, flexShrink: 0 }}
+              >
+                <Send size={16} />
+              </IconButton>
+            </Stack>
+          </Box>
+        </Box>
       ) : (
-        <div className="hidden md:flex flex-1 items-center justify-center">
-          <div className="text-center space-y-3">
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-[var(--accent-primary)]/10 flex items-center justify-center">
-              <MessageSquare className="w-8 h-8 text-[var(--accent-primary)]" />
-            </div>
-            <p className="font-bold text-[var(--text-primary)]">{t('messages.select_conversation', 'Select a conversation')}</p>
-            <p className="text-sm text-[var(--text-muted)] max-w-xs">{t('messages.select_hint', 'Choose from your conversations to start chatting.')}</p>
-          </div>
-        </div>
+        <Box sx={{ display: { xs: 'none', md: 'flex' }, flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Stack alignItems="center" spacing={2} textAlign="center">
+            <Box sx={{ borderRadius: 4, bgcolor: 'primary.main', opacity: 0.1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 64, height: 64, position: 'absolute' }} />
+            <MessageSquare size={32} color="var(--mui-palette-primary-main)" />
+            <Box>
+              <Typography variant="subtitle1" fontWeight={700}>{t('messages.select_conversation', 'Select a conversation')}</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 260 }}>{t('messages.select_hint', 'Choose from your conversations to start chatting.')}</Typography>
+            </Box>
+          </Stack>
+        </Box>
       )}
-    </div>
+    </Box>
   );
 };
 

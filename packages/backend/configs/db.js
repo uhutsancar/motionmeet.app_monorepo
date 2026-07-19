@@ -1,30 +1,34 @@
 import mongoose from "mongoose";
 
 const connectDB = async () => {
-  try {
-    if (!process.env.MONGODB_URL) {
-      console.warn("MONGODB_URL is missing from environment variables. Running without MongoDB connection.");
-      return;
-    }
-    
-    mongoose.connection.on("connected", () =>
-      console.log("Database connected")
-    );
-    
-    // Ensure we specifically use the "motionmeet" database
-    const dbUri = process.env.MONGODB_URL;
-    let finalUri = dbUri;
-    
-    if (dbUri.includes('?')) {
-        const parts = dbUri.split('?');
-        finalUri = `${parts[0].replace(/\/$/, '')}/motionmeet?${parts[1]}`;
-    } else {
-        finalUri = `${dbUri.replace(/\/$/, '')}/motionmeet`;
-    }
-    
-    await mongoose.connect(finalUri);
-  } catch (error) {
-    console.log(error.message);
+  const databaseUrl = process.env.MONGODB_URL?.trim();
+  if (!databaseUrl) {
+    throw new Error("MONGODB_URL is required");
+  }
+
+  mongoose.set("strictQuery", true);
+
+  mongoose.connection.on("error", (error) => {
+    console.error("Database connection error:", error.message);
+  });
+
+  mongoose.connection.on("disconnected", () => {
+    console.warn("Database disconnected");
+  });
+
+  const databaseName = process.env.MONGODB_DB_NAME?.trim();
+  await mongoose.connect(databaseUrl, {
+    ...(databaseName ? { dbName: databaseName } : {}),
+    serverSelectionTimeoutMS: 10000,
+  });
+
+  console.log("Database connected");
+  return mongoose.connection;
+};
+
+export const disconnectDB = async () => {
+  if (mongoose.connection.readyState !== 0) {
+    await mongoose.disconnect();
   }
 };
 

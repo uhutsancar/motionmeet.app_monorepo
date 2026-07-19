@@ -405,6 +405,26 @@
         "publish_failed": "Gönderi paylaşılamadı.",
         "workout_post_content": "{{name}} antrenmanımı yeni bitirdim! 🏋️‍♂️"
     },
+    "muscle_groups": {
+        "chest": "Göğüs",
+        "back": "Sırt",
+        "legs": "Bacak",
+        "shoulders": "Omuz",
+        "arms": "Kol",
+        "abs": "Karın",
+        "cardio": "Kardiyo",
+        "full_body": "Tüm Vücut",
+        "other": "Diğer"
+    },
+    "equipment": {
+        "dumbbell": "Dambıl",
+        "barbell": "Halter",
+        "machine": "Makine",
+        "cables": "Kablo",
+        "bodyweight": "Vücut Ağırlığı",
+        "kettlebell": "Girya",
+        "other": "Diğer"
+    },
     "monthly_report": {
         "title": "{{month}} Raporu",
         "summary": "Özet",

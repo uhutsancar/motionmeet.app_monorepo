@@ -1,5 +1,7 @@
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
+import { randomUUID } from "crypto";
+import path from "path";
 import s3Client from "../configs/aws.js";
 
 /**
@@ -9,8 +11,14 @@ import s3Client from "../configs/aws.js";
  * @param {string} folder - The folder in S3 (e.g., 'posts', 'profiles').
  * @returns {Promise<Object>} - S3 upload response containing the Key.
  */
-export const uploadToS3 = async (file, fileName, folder = "") => {
-    const key = folder ? `${folder}/${Date.now()}-${fileName}` : `${Date.now()}-${fileName}`;
+export const uploadToS3 = async (file, fileName, folder = "", contentType) => {
+    if (!process.env.AWS_BUCKET_NAME) {
+        throw new Error("AWS_BUCKET_NAME is not configured");
+    }
+
+    const safeName = path.basename(fileName || "upload").replace(/[^A-Za-z0-9._-]/g, "-");
+    const objectName = `${Date.now()}-${randomUUID()}-${safeName}`;
+    const key = folder ? `${folder}/${objectName}` : objectName;
     
     const parallelUploads3 = new Upload({
         client: s3Client,
@@ -18,6 +26,7 @@ export const uploadToS3 = async (file, fileName, folder = "") => {
             Bucket: process.env.AWS_BUCKET_NAME,
             Key: key,
             Body: file,
+            ...(contentType ? { ContentType: contentType } : {}),
         },
     });
 
@@ -30,7 +39,7 @@ export const uploadToS3 = async (file, fileName, folder = "") => {
  * @param {string} s3Key - The key of the object to delete.
  */
 export const deleteFromS3 = async (s3Key) => {
-    if (!s3Key) return;
+    if (!s3Key || !process.env.AWS_BUCKET_NAME) return;
     try {
         const command = new DeleteObjectCommand({
             Bucket: process.env.AWS_BUCKET_NAME,
@@ -63,7 +72,7 @@ export const extractS3Key = (url) => {
         
         // For S3 or other formats, take everything after the first slash
         return pathParts.slice(1).join('/');
-    } catch (e) {
+    } catch (_e) {
         return null;
     }
 };

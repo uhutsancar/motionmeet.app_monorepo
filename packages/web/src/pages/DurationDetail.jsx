@@ -1,10 +1,15 @@
-import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Clock } from 'lucide-react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
+import Box from '@mui/material/Box';
+import Stack from '@mui/material/Stack';
+import Typography from '@mui/material/Typography';
+import Paper from '@mui/material/Paper';
+import IconButton from '@mui/material/IconButton';
+import ArrowBackRounded from '@mui/icons-material/ArrowBackRounded';
+import AccessTimeRounded from '@mui/icons-material/AccessTimeRounded';
 
 const DurationDetail = () => {
     const { t } = useTranslation();
@@ -29,58 +34,55 @@ const DurationDetail = () => {
     const CustomTooltip = ({ active, payload, label }) => {
         if (active && payload?.length) {
             return (
-                <div className="bg-[var(--surface-color)] border border-[var(--border-color)] p-3 rounded-xl shadow-lg">
-                    <p className="text-xs font-bold text-[var(--text-secondary)] uppercase mb-1">{label}</p>
-                    <p className="text-sm font-bold text-[var(--text-primary)]">
-                        {payload[0].value} <span className="text-[var(--text-secondary)] font-normal">{t('monthly_report.chart_unit_duration', 'dk')}</span>
-                    </p>
-                </div>
+                <Paper elevation={3} sx={{ p: 1.5, borderRadius: 2 }}>
+                    <Typography variant="caption" color="text.secondary" display="block" textTransform="uppercase" mb={0.5}>{label}</Typography>
+                    <Typography variant="body2" fontWeight={700}>
+                        {payload[0].value} <Typography component="span" variant="caption" color="text.secondary">{t('monthly_report.chart_unit_duration', 'dk')}</Typography>
+                    </Typography>
+                </Paper>
             );
         }
         return null;
     };
 
     return (
-        <div className="w-full min-h-screen bg-[var(--background)] text-[var(--text-primary)] p-4 sm:p-8">
-            <div className="max-w-3xl mx-auto">
-                <div className="flex items-center gap-3 mb-8">
-                    <button
-                        onClick={() => navigate(-1)}
-                        className="p-2 rounded-full hover:bg-[var(--surface-color)] transition-colors"
-                    >
-                        <ArrowLeft size={22} className="text-[var(--text-primary)]" />
-                    </button>
-                    <h1 className="text-2xl font-black">{t('monthly_report.duration_detail', 'Süre Detayı')}</h1>
-                </div>
+        <Box sx={{ width: '100%', minHeight: '100vh', bgcolor: 'background.default', p: { xs: 2, sm: 4 } }}>
+            <Box sx={{ maxWidth: 768, mx: 'auto', pb: 10 }}>
+                <Stack direction="row" alignItems="center" spacing={2} mb={4}>
+                    <IconButton onClick={() => navigate(-1)} sx={{ bgcolor: 'action.hover' }}>
+                        <ArrowBackRounded />
+                    </IconButton>
+                    <Typography variant="h5" fontWeight={900}>{t('monthly_report.duration_detail', 'Süre Detayı')}</Typography>
+                </Stack>
 
-                <div className="grid grid-cols-2 gap-4 mb-8">
-                    <div className="bg-[var(--surface-color)] rounded-2xl p-5 border border-[var(--border-color)]">
-                        <p className="text-sm text-[var(--text-secondary)] mb-3 font-medium">{t('monthly_report.total', 'Toplam')}</p>
-                        <p className="text-4xl font-black text-[var(--text-primary)]">{totalDuration}</p>
-                        <p className="text-xs text-[var(--text-secondary)] mt-1">{t('monthly_report.chart_unit_duration', 'dk')}</p>
-                    </div>
-                    <div className="bg-[var(--surface-color)] rounded-2xl p-5 border border-[var(--border-color)]">
-                        <p className="text-sm text-[var(--text-secondary)] mb-3 font-medium">{t('monthly_report.avg_per_session', 'Seans Başına Ort.')}</p>
-                        <p className="text-4xl font-black text-[var(--text-primary)]">{avgDuration}</p>
-                        <p className="text-xs text-[var(--text-secondary)] mt-1">{t('monthly_report.chart_unit_duration', 'dk')}</p>
-                    </div>
-                </div>
+                <Box display="grid" gridTemplateColumns="1fr 1fr" gap={2} mb={4}>
+                    <Paper variant="outlined" sx={{ p: 3, borderRadius: 4 }}>
+                        <Typography variant="body2" fontWeight={600} color="text.secondary" mb={2}>{t('monthly_report.total', 'Toplam')}</Typography>
+                        <Typography variant="h4" fontWeight={900}>{totalDuration}</Typography>
+                        <Typography variant="caption" color="text.secondary">{t('monthly_report.chart_unit_duration', 'dk')}</Typography>
+                    </Paper>
+                    <Paper variant="outlined" sx={{ p: 3, borderRadius: 4 }}>
+                        <Typography variant="body2" fontWeight={600} color="text.secondary" mb={2}>{t('monthly_report.avg_per_session', 'Seans Başına Ort.')}</Typography>
+                        <Typography variant="h4" fontWeight={900}>{avgDuration}</Typography>
+                        <Typography variant="caption" color="text.secondary">{t('monthly_report.chart_unit_duration', 'dk')}</Typography>
+                    </Paper>
+                </Box>
 
-                <div className="bg-[var(--surface-color)] rounded-2xl p-6 border border-[var(--border-color)]">
-                    <h2 className="text-base font-bold text-[var(--text-secondary)] mb-6">{t('monthly_report.trend_title', 'Trend')}</h2>
+                <Paper variant="outlined" sx={{ p: 3, borderRadius: 4 }}>
+                    <Typography variant="body2" fontWeight={700} color="text.secondary" mb={3}>{t('monthly_report.trend_title', 'Trend')}</Typography>
                     {!hasData ? (
-                        <div className="flex flex-col items-center justify-center py-16 gap-3">
-                            <Clock size={48} className="text-[var(--text-secondary)]" />
-                            <p className="text-[var(--text-secondary)]">{t('monthly_report.no_data', 'Bu dönem için veri yok')}</p>
-                        </div>
+                        <Stack alignItems="center" justifyContent="center" py={8} spacing={1.5}>
+                            <AccessTimeRounded sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.5 }} />
+                            <Typography variant="body2" color="text.secondary">{t('monthly_report.no_data', 'Bu dönem için veri yok')}</Typography>
+                        </Stack>
                     ) : (
-                        <div className="h-[260px]">
+                        <Box sx={{ height: 260 }}>
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={chartData} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--border-color)" opacity={0.5} />
-                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} />
-                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--text-secondary)', fontSize: 12 }} allowDecimals={false} />
-                                    <Tooltip content={<CustomTooltip />} />
+                                    <CartesianGrid strokeDasharray="4 4" vertical={false} opacity={0.3} />
+                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} allowDecimals={false} />
+                                    <Tooltip content={<CustomTooltip />} cursor={{ opacity: 0.1 }} />
                                     <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={40}>
                                         {chartData.map((_, i) => (
                                             <Cell key={i} fill="#3b82f6" />
@@ -88,11 +90,11 @@ const DurationDetail = () => {
                                     </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
-                        </div>
+                        </Box>
                     )}
-                </div>
-            </div>
-        </div>
+                </Paper>
+            </Box>
+        </Box>
     );
 };
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, memo } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { ScrollView } from 'react-native';
+import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import UserCard from './UserCard';
@@ -31,10 +32,10 @@ const SuggestedAthletes = ({ navigation }) => {
   if (loading || users.length === 0) return null;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-      <View style={styles.header}>
+    <Surface elevation={0} style={[styles.container, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+      <Surface elevation={0} style={styles.header}>
         <Text style={[styles.title, { color: theme.text }]}>{t('feed.suggested_athletes')}</Text>
-      </View>
+      </Surface>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -48,12 +49,12 @@ const SuggestedAthletes = ({ navigation }) => {
           />
         ))}
       </ScrollView>
-    </View>
+    </Surface>
   );
 };
 
 // ✅ NO theme references here - styles are static (theme applied inline in JSX above)
-const styles = StyleSheet.create({
+const styles = {
   container: {
     marginVertical: 16,
     borderRadius: 32,
@@ -74,6 +75,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 4,
   },
-});
+};
 
 export default memo(SuggestedAthletes);

@@ -1,123 +1,102 @@
+import { useAuthContext } from "../context/AuthProvider";
+import { Avatar, Box, Card, CardActionArea, Stack, Typography } from "@mui/material";
 import { Plus } from "lucide-react";
-import React, { useEffect, useState } from "react";
 import moment from "moment";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import api from "~/api/axios";
 import StoryModal from "./StoryModal";
 import StoryViewer from "./StoryViewer";
-import { useAuth } from "@clerk/clerk-react";
-import api from "~/api/axios";
-import toast from "react-hot-toast";
 
 const StoriesBar = () => {
   const { t, i18n } = useTranslation();
-  const { getToken } = useAuth();
-
+  const { getToken } = useAuthContext();
   const [stories, setStories] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [viewStory, setViewStory] = useState(null);
 
-  // Set moment locale
   useEffect(() => {
-    moment.locale(i18n.language.startsWith('tr') ? 'tr' : 'en');
+    moment.locale(i18n.language.startsWith("tr") ? "tr" : "en");
   }, [i18n.language]);
 
-  const fetchStories = async () => {
+  const fetchStories = useCallback(async () => {
     try {
       const token = await getToken();
       const { data } = await api.get("/api/story/get", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (data.success) {
-        setStories(data.stories);
-      }
+      if (data.success) setStories(data.stories);
     } catch (error) {
       console.error(error.message);
     }
-  };
+  }, [getToken]);
 
   useEffect(() => {
     fetchStories();
-  }, []);
+  }, [fetchStories]);
 
   return (
-    <div className="w-full no-scrollbar overflow-x-auto mb-2 px-1">
-      <div className="flex gap-4 pb-4">
-        {/* Add story card */}
-        <div
-          onClick={() => setShowModal(true)}
-          className="rounded-[28px] min-w-[110px] h-44 cursor-pointer transition-all duration-300 bg-surface border border-border-subtle hover:bg-surface-light hover:shadow-xl flex flex-col items-center justify-center text-center p-4 group animate-in relative overflow-hidden"
-        >
-          <div className="absolute top-0 left-0 w-full h-1 bg-accent-primary opacity-20"></div>
-          <div className="size-12 bg-accent-primary rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-accent-primary/20 group-hover:scale-110 active:scale-90 transition-all">
-            <Plus className="w-6 h-6 text-white" />
-          </div>
-          <p className="text-[10px] font-black text-text-primary uppercase tracking-widest leading-tight">
-            {t('feed.create_story')}
-          </p>
-        </div>
+    <>
+      <Box sx={{ width: "100%", overflowX: "auto", pb: 0.5 }}>
+        <Stack direction="row" spacing={2} sx={{ width: "max-content", pb: 1.5 }}>
+          <Card variant="outlined" sx={{ width: 110, height: 176, flexShrink: 0, borderRadius: 3 }}>
+            <CardActionArea onClick={() => setShowModal(true)} sx={{ height: "100%", p: 2 }}>
+              <Stack spacing={2} sx={{ height: "100%", textAlign: "center", alignItems: "center", justifyContent: "center" }}>
+                <Box sx={{ width: 48, height: 48, borderRadius: 2, bgcolor: "primary.main", color: "primary.contrastText", display: "grid", placeItems: "center" }}>
+                  <Plus size={24} />
+                </Box>
+                <Typography variant="caption" sx={{ fontWeight: 800, lineHeight: 1.25 }}>
+                  {t("feed.create_story")}
+                </Typography>
+              </Stack>
+            </CardActionArea>
+          </Card>
 
-        {/* Story cards */}
-        {stories.map((story, index) => (
-          <div
-            onClick={() => setViewStory(story)}
-            key={index}
-            className={`relative rounded-[28px] shadow-sm min-w-[110px] h-44 cursor-pointer transition-all duration-300 bg-surface border border-border-subtle overflow-hidden hover:shadow-xl hover:border-accent-primary/30 active:scale-95 group animate-in`}
-            style={{ animationDelay: `${(index + 1) * 0.05}s` }}
-          >
-            <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/80 to-transparent z-10"></div>
-            <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/80 to-transparent z-10"></div>
-
-            <div className="absolute top-3 left-3 z-20 p-0.5 bg-accent-primary rounded-full shadow-lg">
-              <img
-                src={story.user.profile_picture}
-                alt="Profile"
-                className="size-9 rounded-full object-cover border-2 border-surface"
-              />
-            </div>
-
-            <div className="absolute inset-0 z-0 bg-zinc-900">
-              {story.media_type === "text" ? (
-                <div className="w-full h-full flex items-center justify-center p-4 text-[10px] font-bold text-white text-center leading-tight" style={{ backgroundColor: story.background_color }}>
-                  {story.content}
-                </div>
-              ) : (
-                story.media_type === "image" ? (
-                  <img
-                    src={story.media_url}
-                    alt="Story"
-                    className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-700"
-                  />
+          {stories.map((story, index) => (
+            <Card
+              key={story._id || `${story.user?._id}-${story.createdAt}-${index}`}
+              variant="outlined"
+              sx={{ width: 110, height: 176, flexShrink: 0, borderRadius: 3, bgcolor: "common.black" }}
+            >
+              <CardActionArea onClick={() => setViewStory(story)} sx={{ height: "100%", position: "relative" }}>
+                {story.media_type === "text" ? (
+                  <Box sx={{ position: "absolute", inset: 0, bgcolor: story.background_color, color: "common.white", display: "grid", placeItems: "center", p: 2 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, textAlign: "center" }}>
+                      {story.content}
+                    </Typography>
+                  </Box>
                 ) : (
-                  <video
+                  <Box
+                    component={story.media_type === "image" ? "img" : "video"}
                     src={story.media_url}
-                    className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-700"
-                    muted
-                    loop
-                    autoPlay
+                    alt={story.media_type === "image" ? "Story" : undefined}
+                    muted={story.media_type === "video" ? true : undefined}
+                    loop={story.media_type === "video" ? true : undefined}
+                    autoPlay={story.media_type === "video" ? true : undefined}
+                    sx={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
                   />
-                )
-              )}
-            </div>
+                )}
+                <Box sx={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,.65), transparent 42%, rgba(0,0,0,.82))" }} />
+                <Avatar src={story.user?.profile_picture || undefined} alt={story.user?.full_name} sx={{ position: "absolute", top: 12, left: 12, width: 38, height: 38, border: 2, borderColor: "primary.main" }}>
+                  {story.user?.full_name?.charAt(0)}
+                </Avatar>
+                <Stack sx={{ position: "absolute", left: 14, right: 10, bottom: 12, color: "common.white" }}>
+                  <Typography variant="caption" noWrap sx={{ fontWeight: 800 }}>
+                    {story.user?.full_name?.split(" ")[0]}
+                  </Typography>
+                  <Typography variant="caption" sx={{ fontSize: 9, opacity: 0.72 }}>
+                    {moment(story.createdAt).fromNow()}
+                  </Typography>
+                </Stack>
+              </CardActionArea>
+            </Card>
+          ))}
+        </Stack>
+      </Box>
 
-            <div className="absolute inset-0 z-20 flex flex-col justify-end p-4 pointer-events-none">
-              <p className="text-white text-[11px] font-bold leading-tight line-clamp-2 drop-shadow-lg mb-1">
-                {story.user.full_name.split(' ')[0]}
-              </p>
-              <p className="text-white/60 text-[9px] drop-shadow-md font-black uppercase tracking-tighter">
-                {moment(story.createdAt).fromNow()}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {showModal && (
-        <StoryModal setShowModal={setShowModal} fetchStories={fetchStories} />
-      )}
-      {viewStory && (
-        <StoryViewer viewStory={viewStory} setViewStory={setViewStory} />
-      )}
-    </div>
+      {showModal && <StoryModal setShowModal={setShowModal} fetchStories={fetchStories} />}
+      {viewStory && <StoryViewer viewStory={viewStory} setViewStory={setViewStory} />}
+    </>
   );
 };
 

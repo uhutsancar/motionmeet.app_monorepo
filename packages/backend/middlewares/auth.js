@@ -1,50 +1,59 @@
+import User from "../models/User.js";
+import { getOrCreateFreePlan } from "../utils/plans.js";
+import jwt from "jsonwebtoken";
+
 export const protect = async (req, res, next) => {
   try {
-    const { userId } = await req.auth();
-    if (!userId) {
-      return res.status(401).json({ success: false, message: "not authenticated" });
+    let token;
+    
+    if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
+      token = req.headers.authorization.split(" ")[1];
     }
-    
-    // Attach Clerk userId to request
-    req.userId = userId;
-    
-    // We could populate full user here, but we will do it via a separate middleware or inside controllers
-    // if we need full DB access in every protected route. Let's create an attachDbUser middleware.
-    
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: "Not authenticated, no token" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.userId = decoded.id;
     next();
   } catch (error) {
-    res.status(401).json({ success: false, message: error.message });
+    console.warn("Authentication failed:", error.message);
+    res.status(401).json({ success: false, message: "Not authenticated, token failed" });
   }
 };
 
 export const attachDbUser = async (req, res, next) => {
   try {
-    // Requires protect to be run first
     if (!req.userId) return res.status(401).json({ success: false, message: "Not authenticated" });
-    
-    const User = (await import("../models/User.js")).default;
-    const Plan = (await import("../models/Plan.js")).default;
-    
-    const user = await User.findById(req.userId).populate("plan");
+
+    let user = await User.findById(req.userId).populate("plan");
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found in database" });
     }
-    
+
+    // Older users may predate plans. Assigning Free here prevents missing plans
+    // from accidentally bypassing feature and quota checks.
+    if (!user.plan) {
+      const freePlan = await getOrCreateFreePlan();
+      user.plan = freePlan._id;
+      await user.save();
+      user = await User.findById(req.userId).populate("plan");
+    }
+
     req.dbUser = user;
     next();
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 };
 
 export const authorizeRole = (...roles) => {
   return (req, res, next) => {
-    // Requires attachDbUser to be run first
     if (!req.dbUser) {
       return res.status(500).json({ success: false, message: "User context not attached" });
     }
 
-    // Superadmin bypasses role checks
     if (req.dbUser.role === 'superadmin') {
        return next();
     }
@@ -53,42 +62,6 @@ export const authorizeRole = (...roles) => {
       return res.status(403).json({ success: false, message: "Forbidden: You do not have the required role to access this." });
     }
     
-    next();
-  };
-};
-
-export const authorizeFeature = (featureKey) => {
-  return (req, res, next) => {
-    // Requires attachDbUser to be run first
-    if (!req.dbUser) {
-      return res.status(500).json({ success: false, message: "User context not attached" });
-    }
-
-    // Superadmin bypasses feature checks
-    if (req.dbUser.role === 'superadmin') {
-       return next();
-    }
-
-    const userPlan = req.dbUser.plan;
-    if (!userPlan || !userPlan.features) {
-        return res.status(403).json({ success: false, message: "Forbidden: No valid plan found. Please upgrade your plan." });
-    }
-
-    const featureValue = userPlan.features[featureKey];
-    
-    // For boolean features (e.g. can_message_anyone)
-    if (typeof featureValue === "boolean") {
-        if (!featureValue) {
-             return res.status(403).json({ success: false, message: `Forbidden: Your plan does not support ${featureKey}. Please upgrade.` });
-        }
-    }
-    
-    // For numerical limits (e.g. max_workouts_per_month), the controller will handle the decrement/check logic
-    // but this middleware just ensures the key exists.
-    if (featureValue === undefined) {
-         return res.status(403).json({ success: false, message: `Forbidden: Feature ${featureKey} not available in your plan.` });
-    }
-
     next();
   };
 };

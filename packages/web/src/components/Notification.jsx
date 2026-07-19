@@ -1,48 +1,88 @@
-import React from "react";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { Box, Stack, Typography, Button, Avatar, Paper, useTheme } from "@mui/material";
 
 const Notification = ({ toastInstance, message }) => {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const theme = useTheme();
 
   return (
-    <div
-      className={`max-w-md w-full bg-surface glass shadow-2xl rounded-2xl flex border border-border-subtle overflow-hidden transform transition-all duration-300 hover:scale-[1.02]`}
+    <Paper
+      elevation={4}
+      sx={{
+        maxWidth: 400,
+        width: "100%",
+        bgcolor: "background.paper",
+        borderRadius: 4,
+        display: "flex",
+        overflow: "hidden",
+        border: `1px solid ${theme.palette.divider}`,
+        transition: "transform 0.3s ease",
+        "&:hover": { transform: "scale(1.02)" },
+        pointerEvents: "auto",
+      }}
     >
-      <div className="flex-1 p-4">
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <img
+      <Box sx={{ flex: 1, p: 2 }}>
+        <Stack direction="row" alignItems="center" spacing={2}>
+          <Box sx={{ position: "relative" }}>
+            <Avatar
               src={message.from_user_id.profile_picture}
               alt=""
-              className="h-12 w-12 rounded-full object-cover border-2 border-accent-primary"
+              sx={{
+                width: 48,
+                height: 48,
+                border: `2px solid ${theme.palette.primary.main}`,
+              }}
             />
-            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-surface animate-pulse" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-text-primary truncate">
+            <Box
+              sx={{
+                position: "absolute",
+                bottom: -2,
+                right: -2,
+                width: 14,
+                height: 14,
+                bgcolor: "#22c55e",
+                borderRadius: "50%",
+                border: `2px solid ${theme.palette.background.paper}`,
+              }}
+            />
+          </Box>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: "bold", noWrap: true }}>
               {message.from_user_id.full_name}
-            </p>
-            <p className="text-sm text-text-muted truncate italic">
+            </Typography>
+            <Typography variant="body2" sx={{ color: "text.secondary", fontStyle: "italic", noWrap: true }}>
               "{message.text.slice(0, 50)}{message.text.length > 50 ? "..." : ""}"
-            </p>
-          </div>
-        </div>
-      </div>
-      <div className="flex border-l border-border-subtle bg-surface-light/50">
-        <button
+            </Typography>
+          </Box>
+        </Stack>
+      </Box>
+      <Box sx={{ display: "flex", borderLeft: `1px solid ${theme.palette.divider}`, bgcolor: "action.hover" }}>
+        <Button
           onClick={() => {
             navigate(`/messages/${message.from_user_id._id}`);
             toast.dismiss(toastInstance.id);
           }}
-          className="px-6 text-accent-primary font-black text-xs uppercase tracking-widest hover:bg-accent-primary hover:text-white transition-colors h-full"
+          sx={{
+            px: 3,
+            color: "primary.main",
+            fontWeight: 800,
+            fontSize: "0.75rem",
+            letterSpacing: 1,
+            borderRadius: 0,
+            height: "100%",
+            "&:hover": {
+              bgcolor: "primary.main",
+              color: "primary.contrastText",
+            },
+          }}
         >
           {t("messages.reply", "Reply")}
-        </button>
-      </div>
-    </div>
+        </Button>
+      </Box>
+    </Paper>
   );
 };
 

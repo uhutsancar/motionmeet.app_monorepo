@@ -1,24 +1,24 @@
-import { useAuth } from "@clerk/clerk-react";
-import React, { useEffect, useState } from "react";
+import { useAuthContext } from "../context/AuthProvider";
+import { Box, Paper, Stack, Typography } from "@mui/material";
+import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { useTranslation } from "react-i18next";
 import api from "~/api/axios";
-import { assets } from "~/assets/assets";
 import Loading from "~/components/Loading";
 import PostCard from "~/components/PostCard";
+import QuickProfile from "~/components/QuickProfile";
 import RecentMessages from "~/components/RecentMessages";
 import StoriesBar from "~/components/StoriesBar";
-import QuickProfile from "~/components/QuickProfile";
 import SuggestedAthletes from "~/components/SuggestedAthletes";
-import { useTranslation } from "react-i18next";
 import CreatePost from "./CreatePost";
 
 const Feed = () => {
   const { t } = useTranslation();
   const [feeds, setFeeds] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { getToken } = useAuth();
+  const { getToken } = useAuthContext();
 
-  const fetchFeeds = async () => {
+  const fetchFeeds = useCallback(async () => {
     try {
       const { data } = await api.get("/api/post/feed", {
         headers: {
@@ -34,7 +34,7 @@ const Feed = () => {
     } catch (error) {
       toast.error(error.message);
     }
-  };
+  }, [getToken]);
 
   useEffect(() => {
     const init = async () => {
@@ -43,33 +43,47 @@ const Feed = () => {
       setLoading(false);
     };
     init();
-  }, []);
+  }, [fetchFeeds]);
 
-  return !loading ? (
-    <div className="h-full overflow-y-scroll no-scrollbar py-10 xl:pr-5 flex items-start justify-center xl:gap-8">
-      <div className="w-full max-w-2xl px-4">
-        <StoriesBar />
-        <CreatePost onSuccess={fetchFeeds} />
-        <div className="space-y-6 mt-6">
+  if (loading) return <Loading />;
+
+  return (
+    <Box sx={{ height: "100%", overflowY: "auto", py: { xs: 3, md: 5 }, px: { xs: 2, md: 3 } }}>
+      <Box
+        sx={{
+          mx: "auto",
+          maxWidth: 1040,
+          display: "grid",
+          gridTemplateColumns: { xs: "minmax(0, 672px)", xl: "minmax(0, 672px) 320px" },
+          justifyContent: "center",
+          alignItems: "start",
+          gap: 4,
+        }}
+      >
+        <Stack spacing={3} sx={{ minWidth: 0 }}>
+          <StoriesBar />
+          <CreatePost onSuccess={fetchFeeds} />
           {feeds.length > 0 ? (
             feeds.map((post) => <PostCard key={post._id} post={post} />)
           ) : (
-            <div className="text-center py-20 glass rounded-3xl border border-border-subtle">
-              <p className="text-text-muted font-medium">{t('feed.no_posts')}</p>
-            </div>
+            <Paper variant="outlined" sx={{ py: 10, px: 3, borderRadius: 3, textAlign: "center" }}>
+              <Typography color="text.secondary" sx={{ fontWeight: 600 }}>
+                {t("feed.no_posts")}
+              </Typography>
+            </Paper>
           )}
-        </div>
-      </div>
+        </Stack>
 
-      {/* right sidebar */}
-      <div className="max-xl:hidden sticky top-10 flex flex-col gap-6 w-80">
-        <QuickProfile />
-        <SuggestedAthletes />
-        <RecentMessages />
-      </div>
-    </div>
-  ) : (
-    <Loading />
+        <Stack
+          spacing={3}
+          sx={{ display: { xs: "none", xl: "flex" }, position: "sticky", top: 32, minWidth: 0 }}
+        >
+          <QuickProfile />
+          <SuggestedAthletes />
+          <RecentMessages />
+        </Stack>
+      </Box>
+    </Box>
   );
 };
 

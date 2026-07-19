@@ -1,28 +1,28 @@
-import Routine from "../models/Routine.js";
+import { isExerciseList, isNonEmptyString, isObjectId, isOptionalString } from "../utils/validation.js";
+import * as routineService from "../services/routineService.js";
 
 // Get user routines
-export const getUserRoutines = async (req, res) => {
+export const getUserRoutines = async (req, res, next) => {
   try {
-    const { userId } = await req.auth();
-    const routines = await Routine.find({ userId }).populate("exercises.exerciseId");
+    const userId = req.userId;
+    const routines = await routineService.getUserRoutinesList(userId);
     res.json({ success: true, routines });
   } catch (error) {
-    console.log(error);
-    res.json({ success: false, message: error.message });
+    next(error);
   }
 };
 
 // Create a new routine
-export const createRoutine = async (req, res) => {
+export const createRoutine = async (req, res, next) => {
   try {
-    const { userId } = await req.auth();
-    const { name, folder, exercises } = req.body;
+    const userId = req.userId;
+    const { name, folder, exercises } = req.body || {};
 
-    if (!name || !name.trim()) {
-      return res.json({ success: false, message: "Routine name is required" });
+    if (!isNonEmptyString(name, 120)) {
+      return res.status(400).json({ success: false, message: "Routine name is required" });
     }
-    if (!exercises || exercises.length === 0) {
-      return res.json({ success: false, message: "At least one exercise is required" });
+    if (!isOptionalString(folder, 120) || !isExerciseList(exercises)) {
+      return res.status(400).json({ success: false, message: "Invalid routine exercises or folder" });
     }
 
     // Role-Based Plan Limits
@@ -30,7 +30,7 @@ export const createRoutine = async (req, res) => {
       if (req.dbUser.role !== "superadmin") {
         const limit = req.dbUser.plan.features.max_routines;
         if (limit !== -1) {
-          const count = await Routine.countDocuments({ userId: req.dbUser._id });
+          const count = await routineService.countUserRoutines(req.dbUser._id);
           if (count >= limit) {
             return res.json({ success: false, message: `Routine limit reached (${limit}). Please upgrade your plan to Elite.` });
           }
@@ -38,40 +38,50 @@ export const createRoutine = async (req, res) => {
       }
     }
 
-    const newRoutine = await Routine.create({
+    const populated = await routineService.createRoutine({
       userId,
       name: name.trim(),
       folder: folder || "My Routines",
       exercises
     });
 
-    // Return populated routine so client has exercise names immediately
-    const populated = await Routine.findById(newRoutine._id).populate("exercises.exerciseId");
     res.json({ success: true, routine: populated, message: "Routine created successfully" });
   } catch (error) {
-    console.log(error);
-    res.json({ success: false, message: error.message });
+    next(error);
   }
 };
 
 // Update a routine
-export const updateRoutine = async (req, res) => {
+export const updateRoutine = async (req, res, next) => {
   try {
-    const { userId } = await req.auth();
+    const userId = req.userId;
     const { id } = req.params;
-    
-    // Prevent Mass Assignment by extracting only the safe fields
-    const { name, folder, exercises } = req.body;
-    let updateData = {};
-    if (name !== undefined) updateData.name = name;
-    if (folder !== undefined) updateData.folder = folder;
-    if (exercises !== undefined) updateData.exercises = exercises;
 
-    const routine = await Routine.findOneAndUpdate(
-      { _id: id, userId },
-      updateData,
-      { new: true }
-    ).populate("exercises.exerciseId");
+    if (!isObjectId(id)) {
+      return res.status(400).json({ success: false, message: "Invalid routine id" });
+    }
+
+    // Prevent Mass Assignment by extracting only the safe fields
+    const { name, folder, exercises } = req.body || {};
+    const updateData = {};
+    if (name !== undefined) {
+      if (!isNonEmptyString(name, 120)) return res.status(400).json({ success: false, message: "Invalid routine name" });
+      updateData.name = name.trim();
+    }
+    if (folder !== undefined) {
+      if (!isOptionalString(folder, 120)) return res.status(400).json({ success: false, message: "Invalid routine folder" });
+      updateData.folder = folder.trim();
+    }
+    if (exercises !== undefined) {
+      if (!isExerciseList(exercises)) return res.status(400).json({ success: false, message: "Invalid routine exercises" });
+      updateData.exercises = exercises;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ success: false, message: "No valid routine fields supplied" });
+    }
+
+    const routine = await routineService.updateRoutine(id, userId, updateData);
 
     if (!routine) {
       return res.json({ success: false, message: "Routine not found or not authorized" });
@@ -79,18 +89,21 @@ export const updateRoutine = async (req, res) => {
 
     res.json({ success: true, routine, message: "Routine updated successfully" });
   } catch (error) {
-    console.log(error);
-    res.json({ success: false, message: error.message });
+    next(error);
   }
 };
 
 // Delete a routine
-export const deleteRoutine = async (req, res) => {
+export const deleteRoutine = async (req, res, next) => {
   try {
-    const { userId } = await req.auth();
+    const userId = req.userId;
     const { id } = req.params;
 
-    const routine = await Routine.findOneAndDelete({ _id: id, userId });
+    if (!isObjectId(id)) {
+      return res.status(400).json({ success: false, message: "Invalid routine id" });
+    }
+
+    const routine = await routineService.deleteRoutine(id, userId);
 
     if (!routine) {
       return res.json({ success: false, message: "Routine not found or not authorized" });
@@ -98,7 +111,6 @@ export const deleteRoutine = async (req, res) => {
 
     res.json({ success: true, message: "Routine deleted successfully" });
   } catch (error) {
-    console.log(error);
-    res.json({ success: false, message: error.message });
+    next(error);
   }
 };

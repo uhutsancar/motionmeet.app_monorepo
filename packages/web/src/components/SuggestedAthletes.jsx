@@ -1,97 +1,112 @@
-import React, { useEffect, useState } from 'react';
-import { useAuth } from '@clerk/clerk-react';
-import { useTranslation } from 'react-i18next';
-import api from '~/api/axios';
-import toast from 'react-hot-toast';
-import { useDispatch, useSelector } from 'react-redux';
-import { fetchUser } from '~/features/user/userSlice';
-import { useNavigate } from 'react-router-dom';
+import { useAuthContext } from "../context/AuthProvider";
+import { Avatar, Button, ButtonBase, Card, CardContent, Skeleton, Stack, Typography } from "@mui/material";
+import { useCallback, useEffect, useState } from "react";
+import toast from "react-hot-toast";
+import { useTranslation } from "react-i18next";
+import { useDispatch } from "react-redux";
+import { useNavigate } from "react-router-dom";
+import api from "~/api/axios";
+import { fetchUser } from "~/features/user/userSlice";
 
 const SuggestedAthletes = () => {
-    const { t } = useTranslation();
-    const { getToken } = useAuth();
-    const dispatch = useDispatch();
-    const navigate = useNavigate();
-    const currentUser = useSelector((state) => state.user.value);
+  const { t } = useTranslation();
+  const { getToken } = useAuthContext();
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-    const [users, setUsers] = useState([]);
-    const [loading, setLoading] = useState(true);
+  const fetchSuggested = useCallback(async () => {
+    try {
+      const { data } = await api.get("/api/user/suggested", {
+        headers: { Authorization: `Bearer ${await getToken()}` },
+      });
+      if (data.success) setUsers(data.users);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  }, [getToken]);
 
-    const fetchSuggested = async () => {
-        try {
-            const { data } = await api.get('/api/user/suggested', {
-                headers: {
-                    Authorization: `Bearer ${await getToken()}`,
-                },
-            });
-            if (data.success) {
-                setUsers(data.users);
-            }
-        } catch (error) {
-            console.error(error);
-        } finally {
-            setLoading(false);
-        }
-    };
+  const handleFollow = async (userId) => {
+    try {
+      const token = await getToken();
+      const { data } = await api.post(
+        "/api/user/follow",
+        { id: userId },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (data.success) {
+        toast.success(data.message);
+        dispatch(fetchUser(token));
+        setUsers((currentUsers) => currentUsers.filter((user) => user._id !== userId));
+      }
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
 
-    const handleFollow = async (userId) => {
-        try {
-            const { data } = await api.post(
-                "/api/user/follow",
-                { id: userId },
-                {
-                    headers: { Authorization: `Bearer ${await getToken()}` },
-                }
-            );
-            if (data.success) {
-                toast.success(data.message);
-                dispatch(fetchUser(await getToken()));
-                // Remove from suggested list locally
-                setUsers(prev => prev.filter(u => u._id !== userId));
-            }
-        } catch (error) {
-            toast.error(error.message);
-        }
-    };
+  useEffect(() => {
+    fetchSuggested();
+  }, [fetchSuggested]);
 
-    useEffect(() => {
-        fetchSuggested();
-    }, []);
-
-    if (loading) return null;
-    if (users.length === 0) return null;
-
+  if (loading) {
     return (
-        <div className="w-full bg-surface border border-border-subtle rounded-[2rem] p-8 shadow-xl animate-in" style={{ animationDelay: '0.1s' }}>
-            <h3 className="text-text-primary font-black text-lg tracking-tight mb-6">{t('feed.suggested_athletes')}</h3>
-            <div className="space-y-6">
-                {users.map((user) => (
-                    <div key={user._id} className="flex items-center justify-between group">
-                        <div
-                            className="flex items-center gap-4 cursor-pointer"
-                            onClick={() => navigate('/profile/' + user.username)}
-                        >
-                            <img
-                                src={user.profile_picture}
-                                alt={user.full_name}
-                                className="w-12 h-12 rounded-full object-cover border-2 border-border-subtle shadow-md"
-                            />
-                            <div className="flex flex-col">
-                                <span className="text-sm font-black text-text-primary leading-tight group-hover:text-accent-primary transition-colors">{user.username}</span>
-                                <span className="text-xs font-bold text-text-muted line-clamp-1">{user.full_name}</span>
-                            </div>
-                        </div>
-                        <button
-                            onClick={() => handleFollow(user._id)}
-                            className="text-xs font-black text-accent-primary hover:text-accent-hover transition-colors px-2 py-1"
-                        >
-                            {t('feed.follow')}
-                        </button>
-                    </div>
-                ))}
-            </div>
-        </div>
+      <Card variant="outlined" sx={{ borderRadius: 3 }}>
+        <CardContent>
+          <Skeleton width="55%" height={30} />
+          <Stack spacing={2} sx={{ mt: 2 }}>
+            {[0, 1, 2].map((item) => (
+              <Stack key={item} direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
+                <Skeleton variant="circular" width={48} height={48} />
+                <Skeleton sx={{ flex: 1 }} />
+              </Stack>
+            ))}
+          </Stack>
+        </CardContent>
+      </Card>
     );
+  }
+
+  if (users.length === 0) return null;
+
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 3 }}>
+      <CardContent sx={{ p: 3, "&:last-child": { pb: 3 } }}>
+        <Typography variant="h6" sx={{ mb: 2.5, fontWeight: 800 }}>
+          {t("feed.suggested_athletes")}
+        </Typography>
+        <Stack spacing={2}>
+          {users.map((user) => (
+            <Stack key={user._id} direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "space-between" }}>
+              <ButtonBase
+                onClick={() => navigate(`/profile/${user._id}`)}
+                sx={{ minWidth: 0, borderRadius: 2, justifyContent: "flex-start", textAlign: "left" }}
+              >
+                <Stack direction="row" spacing={1.5} sx={{ minWidth: 0, alignItems: "center" }}>
+                  <Avatar src={user.profile_picture || undefined} alt={user.full_name} sx={{ width: 48, height: 48 }}>
+                    {user.username?.charAt(0).toUpperCase()}
+                  </Avatar>
+                  <Stack sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" noWrap sx={{ fontWeight: 800 }}>
+                      {user.username}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" noWrap>
+                      {user.full_name}
+                    </Typography>
+                  </Stack>
+                </Stack>
+              </ButtonBase>
+              <Button size="small" onClick={() => handleFollow(user._id)}>
+                {t("feed.follow")}
+              </Button>
+            </Stack>
+          ))}
+        </Stack>
+      </CardContent>
+    </Card>
+  );
 };
 
 export default SuggestedAthletes;

@@ -6,6 +6,7 @@ const userSchema = new mongoose.Schema(
     email: { type: String, required: true },
     full_name: { type: String, required: true },
     username: { type: String, required: true, unique: true },
+    password: { type: String, required: true, select: false },
     bio: { type: String, default: "Athlete on MotionMeet" },
     profile_picture: { type: String, default: "" },
     cover_photo: { type: String, default: "" },
@@ -15,7 +16,6 @@ const userSchema = new mongoose.Schema(
     weight: { type: Number, default: 0 }, // Added for user measurements
     height: { type: Number, default: 0 }, // Added for user measurements
     followers: [{ type: String, ref: "User" }],
-    following: [{ type: String, ref: "User" }],
     following: [{ type: String, ref: "User" }],
     connections: [{ type: String, ref: "User" }],
     statistics: {
@@ -29,4 +29,4 @@ const userSchema = new mongoose.Schema(
 
 const User = mongoose.model("User", userSchema);
 
-export default User
+export default User;

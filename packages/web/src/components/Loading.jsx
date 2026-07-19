@@ -1,11 +1,21 @@
-import React from "react";
+import Box from "@mui/material/Box";
+import CircularProgress from "@mui/material/CircularProgress";
 
-const Loading = ({height= '100vh'}) => {
+const Loading = ({ height = "100vh" }) => {
   return (
-    <div style={{height}} className="flex items-center justify-center h-screen">
-      <div className="w-10 h-10 rounded-full border-3 border-purple-500 border-t-transparent animate-spin">
-      </div>
-    </div>
+    <Box
+      role="status"
+      aria-label="Loading"
+      sx={{
+        alignItems: "center",
+        display: "flex",
+        height,
+        justifyContent: "center",
+        width: "100%",
+      }}
+    >
+      <CircularProgress size={40} thickness={4} />
+    </Box>
   );
 };
 

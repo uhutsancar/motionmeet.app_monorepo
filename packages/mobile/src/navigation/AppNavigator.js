@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+
+import {
+  DarkTheme as NavigationDarkTheme,
+  DefaultTheme as NavigationLightTheme,
+  NavigationContainer,
+} from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useSocket } from '../hooks/useSocket';
@@ -22,7 +25,7 @@ import Connections from '../pages/Connections';
 import ExerciseDetail from '../pages/ExerciseDetail';
 import MuscleDistribution from '../pages/MuscleDistribution';
 import WorkoutSummaryScreen from '../pages/WorkoutSummaryScreen';
-import WorkoutCompleteShare from '../pages/WorkoutCompleteShare';
+import WorkoutDetailScreen from '../pages/WorkoutDetailScreen';
 import ActiveWorkoutScreen from '../pages/ActiveWorkoutScreen';
 import MonthlyReportScreen from '../pages/MonthlyReportScreen';
 import WorkoutsDetailScreen from '../pages/WorkoutsDetailScreen';
@@ -72,7 +75,7 @@ const MainStack = () => (
     <Stack.Screen name="ExerciseDetail" component={ExerciseDetail} />
     <Stack.Screen name="MuscleDistribution" component={MuscleDistribution} />
     <Stack.Screen name="WorkoutSummaryScreen" component={WorkoutSummaryScreen} />
-    <Stack.Screen name="WorkoutCompleteShare" component={WorkoutCompleteShare} />
+    <Stack.Screen name="WorkoutDetailScreen" component={WorkoutDetailScreen} />
     <Stack.Screen name="ActiveWorkoutScreen" component={ActiveWorkoutScreen} />
     <Stack.Screen name="MonthlyReportScreen" component={MonthlyReportScreen} />
     <Stack.Screen name="WorkoutsDetailScreen" component={WorkoutsDetailScreen} />
@@ -94,12 +97,11 @@ const MainStack = () => (
 const TabNavigator = () => {
   const { theme } = useTheme();
   const { t } = useTranslation();
-  const { socketRef } = useSocket();
+  const { socket } = useSocket();
   const [unreadMessages, setUnreadMessages] = useState(0);
 
   // Listen for new messages globally to show badge
   useEffect(() => {
-    const socket = socketRef.current;
     if (!socket) return;
     const onMsg = (msg) => {
       setUnreadMessages(prev => prev + 1);
@@ -114,7 +116,7 @@ const TabNavigator = () => {
     };
     socket.on('message_received', onMsg);
     return () => socket.off('message_received', onMsg);
-  }, [socketRef.current]);
+  }, [socket, t]);
 
   const iconForRoute = (name, focused) => {
     const map = {
@@ -137,9 +139,9 @@ const TabNavigator = () => {
           
           if (route.name === 'MessagesTab' && unreadMessages > 0) {
             return (
-              <View style={{ width: iconSize, height: iconSize, justifyContent: 'center', alignItems: 'center' }}>
+              <Surface elevation={0} style={{ width: iconSize, height: iconSize, justifyContent: 'center', alignItems: 'center' }}>
                 <Ionicons name={iconName} size={iconSize} color={color} />
-                <View style={{
+                <Surface elevation={0} style={{
                   position: 'absolute', top: -1, right: -3,
                   backgroundColor: theme.primary, borderRadius: 6,
                   minWidth: 14, height: 14, justifyContent: 'center', alignItems: 'center',
@@ -148,8 +150,8 @@ const TabNavigator = () => {
                   <Text style={{ color: '#fff', fontSize: 8, fontWeight: '900' }}>
                     {unreadMessages > 9 ? '9+' : unreadMessages}
                   </Text>
-                </View>
-              </View>
+                </Surface>
+              </Surface>
             );
           }
           return <Ionicons name={iconName} size={iconSize} color={color} />;
@@ -201,12 +203,27 @@ const TabNavigator = () => {
 };
 
 /* ─── Root ───────────────────────────────────────────────────────────────────── */
-const AppNavigator = () => (
-  <SafeAreaProvider>
-    <NavigationContainer>
+const AppNavigator = () => {
+  const { theme, isDark } = useTheme();
+  const navigationBaseTheme = isDark ? NavigationDarkTheme : NavigationLightTheme;
+  const navigationTheme = {
+    ...navigationBaseTheme,
+    colors: {
+      ...navigationBaseTheme.colors,
+      primary: theme.primary,
+      background: theme.background,
+      card: theme.surface,
+      text: theme.text,
+      border: theme.border,
+      notification: theme.colors.error,
+    },
+  };
+
+  return (
+    <NavigationContainer theme={navigationTheme}>
       <MainStack />
     </NavigationContainer>
-  </SafeAreaProvider>
-);
+  );
+};
 
 export default AppNavigator;

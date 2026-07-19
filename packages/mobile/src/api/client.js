@@ -1,10 +1,8 @@
 import axios from 'axios';
-
-// Ensure this matches your local IP address where the backend is running
-const BASE_URL = 'http://192.168.1.146:4000';
+import { API_URL } from '../config/environment';
 
 const api = axios.create({
-  baseURL: BASE_URL,
+  baseURL: API_URL,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
@@ -13,17 +11,25 @@ const api = axios.create({
 
 // Store token setter function
 let authToken = null;
+let authTokenProvider = null;
 
 export const setAuthToken = (token) => {
   authToken = token;
 };
 
+export const setAuthTokenProvider = (provider) => {
+  authTokenProvider = typeof provider === 'function' ? provider : null;
+  if (!authTokenProvider) authToken = null;
+};
+
 // Request interceptor for adding auth token
 api.interceptors.request.use(
   async (config) => {
-    // Add Clerk auth token if available
-    if (authToken) {
-      config.headers.Authorization = `Bearer ${authToken}`;
+    // Ask Clerk for a current token on every request. Clerk serves its cached
+    // token while valid and refreshes it when needed.
+    const token = authTokenProvider ? await authTokenProvider() : authToken;
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
     
     // Handle multipart/form-data

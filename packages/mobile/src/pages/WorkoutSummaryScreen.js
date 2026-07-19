@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  TextInput, Image, Alert, ActivityIndicator, ActionSheetIOS, Platform, KeyboardAvoidingView
+  View, ScrollView, Image, Alert, KeyboardAvoidingView, Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
-import { useAuth } from '@clerk/clerk-expo';
+import { useAuthContext } from "../context/AuthProvider";
 import * as ImagePicker from 'expo-image-picker';
 import api, { setAuthToken } from '../api/client';
 import moment from 'moment';
+import { Appbar, Button, Surface, Text, TextInput, Divider, List, IconButton, ActivityIndicator } from 'react-native-paper';
 
 const VISIBILITY_OPTIONS = ['public', 'followers', 'private'];
 
@@ -23,9 +23,7 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
     private: t('workout_summary.only_me', 'Gizli') 
   };
   const { theme, isDark } = useTheme();
-  const styles = getStyles(theme);
-  const kbAppearance = isDark ? 'dark' : 'light';
-  const { getToken } = useAuth();
+  const { getToken } = useAuthContext();
 
   const workoutData = route?.params?.workoutData || {};
 
@@ -52,7 +50,6 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
     date: new Date()
   };
 
-  // ── Media Picker ──────────────────────────────────────────────────
   const pickMedia = () => {
     Alert.alert(t('workout.add_photo_title', 'Fotoğraf Ekle'), '', [
       {
@@ -63,13 +60,8 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
             Alert.alert(t('common.error', 'Hata'), t('workout.camera_permission', 'Kamera izni gerekiyor'));
             return;
           }
-          const result = await ImagePicker.launchCameraAsync({
-            allowsEditing: true,
-            quality: 0.8,
-          });
-          if (!result.canceled && result.assets?.length > 0) {
-            setMediaUri(result.assets[0].uri);
-          }
+          const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.8 });
+          if (!result.canceled && result.assets?.length > 0) setMediaUri(result.assets[0].uri);
         }
       },
       {
@@ -80,46 +72,28 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
             Alert.alert(t('common.error', 'Hata'), t('workout.gallery_permission', 'Galeri izni gerekiyor'));
             return;
           }
-          const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            allowsEditing: true,
-            quality: 0.8,
-          });
-          if (!result.canceled && result.assets?.length > 0) {
-            setMediaUri(result.assets[0].uri);
-          }
+          const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.8 });
+          if (!result.canceled && result.assets?.length > 0) setMediaUri(result.assets[0].uri);
         }
       },
       { text: t('common.cancel', 'İptal'), style: 'cancel' }
     ]);
   };
 
-  const removeMedia = () => setMediaUri(null);
-
-  // ── Visibility Picker ─────────────────────────────────────────────
   const pickVisibility = () => {
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { options: [...VISIBILITY_OPTIONS.map(k => VISIBILITY_LABELS[k]), t('common.cancel', 'İptal')], cancelButtonIndex: 3 },
-        (idx) => { if (idx < 3) setVisibility(VISIBILITY_OPTIONS[idx]); }
-      );
-    } else {
-      Alert.alert(t('settings.visibility', 'Görünürlük'), '', VISIBILITY_OPTIONS.map(key => ({
-        text: VISIBILITY_LABELS[key],
-        onPress: () => setVisibility(key),
-        style: visibility === key ? 'destructive' : 'default'
-      })).concat([{ text: t('common.cancel', 'İptal'), style: 'cancel' }]));
-    }
+    Alert.alert(t('settings.visibility', 'Görünürlük'), '', VISIBILITY_OPTIONS.map(key => ({
+      text: VISIBILITY_LABELS[key],
+      onPress: () => setVisibility(key),
+      style: visibility === key ? 'destructive' : 'default'
+    })).concat([{ text: t('common.cancel', 'İptal'), style: 'cancel' }]));
   };
 
-  // ── Save Workout ──────────────────────────────────────────────────
   const handleSave = async () => {
     try {
       setSaving(true);
       const freshToken = await getToken();
       if (freshToken) setAuthToken(freshToken);
 
-      // 1. Save the workout to database
       const workoutPayload = {
         name: workoutData.name || t('workout.my_workout', 'Antrenmanım'),
         durationMinutes: Math.round((workoutData.duration || 0) / 60),
@@ -136,10 +110,8 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
 
       const savedWorkoutId = workoutRes.workout?._id;
 
-      // 2. ALWAYS create a workout post (visibility controls who sees it)
       try {
         if (mediaUri) {
-          // With photo → multipart/form-data
           const formData = new FormData();
           formData.append('content', note.trim() || '');
           formData.append('post_type', 'workout');
@@ -153,11 +125,8 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
             type: `image/${ext === 'jpg' ? 'jpeg' : ext}`
           });
 
-          await api.post('/api/post/add', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-          });
+          await api.post('/api/post/add', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
         } else {
-          // No photo → JSON post with workout reference
           await api.post('/api/post/add', {
             content: note.trim() || '',
             post_type: 'workout',
@@ -166,14 +135,10 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
           });
         }
       } catch (postErr) {
-        console.warn('Workout post oluşturulamadı (antrenman yine kaydedildi):', postErr.response?.data || postErr.message);
+        console.warn('Workout post oluşturulamadı:', postErr.response?.data || postErr.message);
       }
 
-      Alert.alert(
-        t('common.success', 'Başarılı'),
-        t('workout.saved', 'Antrenman kaydedildi!'),
-        [{ text: 'Tamam', onPress: () => navigation.navigate('Tabs') }]
-      );
+      Alert.alert(t('common.success', 'Başarılı'), t('workout.saved', 'Antrenman kaydedildi!'), [{ text: 'Tamam', onPress: () => navigation.navigate('Tabs') }]);
     } catch (error) {
       console.error('Workout save error:', error.response?.data || error.message);
       Alert.alert(t('common.error'), error.response?.data?.message || error.message || t('common.error', 'Bir hata oluştu'));
@@ -194,169 +159,147 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('workout.save_workout', 'Antrenmanı Kaydet')}</Text>
-        <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving}>
-          {saving
-            ? <ActivityIndicator size="small" color="#fff" />
-            : <Text style={styles.saveBtnText}>{t('common.save', 'Kaydet')}</Text>
-          }
-        </TouchableOpacity>
-      </View>
-
-      <KeyboardAvoidingView 
-        style={{ flex: 1 }} 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
-
-        {/* Workout Name */}
-        <View style={styles.titleRow}>
-          <Text style={styles.workoutName}>{workoutData.name || t('workout.my_workout', 'Antrenmanım')}</Text>
-        </View>
-
-        {/* Stats */}
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>{t('statistics.duration', 'Süre')}</Text>
-            <Text style={styles.statValueBlue}>{stats.duration}</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>{t('statistics.volume', 'Hacim')}</Text>
-            <Text style={styles.statValue}>{stats.volume}</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>{t('statistics.sets', 'Set')}</Text>
-            <Text style={styles.statValue}>{stats.sets}</Text>
-          </View>
-        </View>
-
-        <View style={styles.divider} />
-
-        {/* Date */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('workout.when', 'Ne Zaman')}</Text>
-          <Text style={styles.dateText}>{moment(stats.date).format('D MMM YYYY, HH:mm')}</Text>
-        </View>
-
-        <View style={styles.divider} />
-
-        {/* Media upload */}
-        {mediaUri ? (
-          <View style={styles.mediaPreviewContainer}>
-            <Image source={{ uri: mediaUri }} style={styles.mediaPreview} resizeMode="cover" />
-            <TouchableOpacity style={styles.removeMediaBtn} onPress={removeMedia}>
-              <Ionicons name="close-circle" size={26} color="#ef4444" />
-            </TouchableOpacity>
-          </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
+      <Appbar.Header style={{ backgroundColor: theme.background, elevation: 0 }}>
+        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
+        <Appbar.Content title={t('workout.save_workout', 'Antrenmanı Kaydet')} titleStyle={{ fontSize: 18, fontWeight: 'bold', color: theme.text }} />
+        {saving ? (
+          <ActivityIndicator size="small" color={theme.primary} style={{ marginRight: 16 }} />
         ) : (
-          <TouchableOpacity style={styles.mediaUploadBox} onPress={pickMedia}>
-            <View style={styles.dashedBox}>
-              <Ionicons name="image-outline" size={28} color={theme.text} />
-              <View style={styles.plusOverlay}>
-                <Ionicons name="add" size={12} color={theme.background} />
-              </View>
-            </View>
-            <Text style={styles.mediaUploadText}>{t('workout.add_photo_video', 'Bir fotoğraf / video ekle')}</Text>
-          </TouchableOpacity>
+          <Button mode="contained" compact onPress={handleSave} style={{ marginRight: 8, borderRadius: 8 }}>
+            {t('common.save', 'Kaydet')}
+          </Button>
         )}
+      </Appbar.Header>
 
-        <View style={styles.divider} />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+          
+          <Text variant="headlineSmall" style={{ color: theme.text, fontWeight: 'bold', marginTop: 16 }}>
+            {workoutData.name || t('workout.my_workout', 'Antrenmanım')}
+          </Text>
 
-        {/* Note */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('workout.description', 'Açıklama')}</Text>
-          <TextInput
-            style={styles.textInput}
-            placeholder={t('workout.note_placeholder', 'Antrenmanınız nasıl geçti? Buraya birkaç not bırakın...')}
-            placeholderTextColor={theme.textMuted}
-            multiline
-            value={note}
-            onChangeText={setNote}
-            keyboardAppearance={kbAppearance}
-          />
-        </View>
-
-        <View style={styles.divider} />
-
-        {/* Visibility */}
-        <TouchableOpacity style={styles.listItem} onPress={pickVisibility}>
-          <Text style={styles.listItemText}>{t('settings.visibility', 'Görünürlük')}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={styles.listItemValue}>{VISIBILITY_LABELS[visibility]}</Text>
-            <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
+          {/* Stats */}
+          <View style={{ flexDirection: 'row', marginTop: 16, gap: 12 }}>
+            <Surface style={{ flex: 1, padding: 12, borderRadius: 12, backgroundColor: theme.surfaceLight }} elevation={1}>
+              <Text variant="labelMedium" style={{ color: theme.textMuted }}>{t('statistics.duration', 'Süre')}</Text>
+              <Text variant="titleMedium" style={{ color: theme.primary, fontWeight: 'bold', marginTop: 4 }}>{stats.duration}</Text>
+            </Surface>
+            <Surface style={{ flex: 1, padding: 12, borderRadius: 12, backgroundColor: theme.surfaceLight }} elevation={1}>
+              <Text variant="labelMedium" style={{ color: theme.textMuted }}>{t('statistics.volume', 'Hacim')}</Text>
+              <Text variant="titleMedium" style={{ color: theme.text, fontWeight: 'bold', marginTop: 4 }}>{stats.volume}</Text>
+            </Surface>
+            <Surface style={{ flex: 1, padding: 12, borderRadius: 12, backgroundColor: theme.surfaceLight }} elevation={1}>
+              <Text variant="labelMedium" style={{ color: theme.textMuted }}>{t('statistics.sets', 'Set')}</Text>
+              <Text variant="titleMedium" style={{ color: theme.text, fontWeight: 'bold', marginTop: 4 }}>{stats.sets}</Text>
+            </Surface>
           </View>
-        </TouchableOpacity>
 
-        <View style={styles.divider} />
+          <Divider style={{ marginVertical: 20, backgroundColor: theme.border }} />
 
-        {/* Exercise summary */}
-        {workoutData.exercises?.length > 0 && (
-          <>
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>{t('workout.exercises', 'Egzersizler')}</Text>
-              {workoutData.exercises.map((ex, i) => (
-                <View key={i} style={styles.exerciseSummaryRow}>
-                  <Text style={{ color: theme.primary, fontWeight: '600', fontSize: 14 }}>{ex.name}</Text>
-                  <Text style={{ color: theme.textMuted, fontSize: 12 }}>
-                    {ex.sets.length} {t('statistics.sets', 'set')}
-                    {ex.sets[0]?.weight ? ` • ${ex.sets[0].weight}kg` : ''}
-                  </Text>
-                </View>
-              ))}
+          {/* Date */}
+          <View>
+            <Text variant="labelMedium" style={{ color: theme.textMuted, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 4 }}>
+              {t('workout.when', 'Ne Zaman')}
+            </Text>
+            <Text variant="titleMedium" style={{ color: theme.primary, fontWeight: '600' }}>
+              {moment(stats.date).format('D MMM YYYY, HH:mm')}
+            </Text>
+          </View>
+
+          <Divider style={{ marginVertical: 20, backgroundColor: theme.border }} />
+
+          {/* Media upload */}
+          {mediaUri ? (
+            <View style={{ position: 'relative' }}>
+              <Image source={{ uri: mediaUri }} style={{ width: '100%', height: 200, borderRadius: 16 }} resizeMode="cover" />
+              <IconButton 
+                icon="close-circle" 
+                iconColor="#ef4444" 
+                size={28} 
+                style={{ position: 'absolute', top: 0, right: 0, backgroundColor: theme.surface, margin: 8 }} 
+                onPress={() => setMediaUri(null)} 
+              />
             </View>
-            <View style={styles.divider} />
-          </>
-        )}
+          ) : (
+            <Surface style={{ borderRadius: 16, backgroundColor: theme.surfaceLight }} elevation={1}>
+              <List.Item
+                title={t('workout.add_photo_video', 'Bir fotoğraf / video ekle')}
+                titleStyle={{ color: theme.text, fontWeight: '500' }}
+                left={props => <List.Icon {...props} icon="image-plus" color={theme.textMuted} />}
+                onPress={pickMedia}
+                style={{ paddingVertical: 12 }}
+              />
+            </Surface>
+          )}
 
-        {/* Delete */}
-        <TouchableOpacity style={[styles.listItem, { justifyContent: 'center', marginTop: 20 }]} onPress={handleDiscard}>
-          <Text style={styles.deleteText}>{t('workout.delete', 'Antrenmanı Sil')}</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          <Divider style={{ marginVertical: 20, backgroundColor: theme.border }} />
+
+          {/* Note */}
+          <View>
+            <Text variant="labelMedium" style={{ color: theme.textMuted, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 8 }}>
+              {t('workout.description', 'Açıklama')}
+            </Text>
+            <TextInput
+              mode="outlined"
+              placeholder={t('workout.note_placeholder', 'Antrenmanınız nasıl geçti?')}
+              multiline
+              numberOfLines={4}
+              value={note}
+              onChangeText={setNote}
+              style={{ backgroundColor: theme.surfaceLight }}
+              outlineColor={theme.border}
+              activeOutlineColor={theme.primary}
+              textColor={theme.text}
+            />
+          </View>
+
+          <Divider style={{ marginVertical: 20, backgroundColor: theme.border }} />
+
+          {/* Visibility */}
+          <Surface style={{ borderRadius: 16, backgroundColor: theme.surfaceLight }} elevation={1}>
+            <List.Item
+              title={t('settings.visibility', 'Görünürlük')}
+              description={VISIBILITY_LABELS[visibility]}
+              descriptionStyle={{ color: theme.textMuted }}
+              left={props => <List.Icon {...props} icon={visibility === 'public' ? 'globe' : visibility === 'followers' ? 'account-multiple' : 'lock'} color={theme.textMuted} />}
+              right={props => <List.Icon {...props} icon="chevron-right" color={theme.textMuted} />}
+              onPress={pickVisibility}
+            />
+          </Surface>
+
+          <Divider style={{ marginVertical: 20, backgroundColor: theme.border }} />
+
+          {/* Exercise summary */}
+          {workoutData.exercises?.length > 0 && (
+            <View style={{ marginBottom: 20 }}>
+              <Text variant="labelMedium" style={{ color: theme.textMuted, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 12 }}>
+                {t('workout.exercises', 'Egzersizler')}
+              </Text>
+              <Surface style={{ borderRadius: 16, backgroundColor: theme.surfaceLight, overflow: 'hidden' }} elevation={1}>
+                {workoutData.exercises.map((ex, i) => (
+                  <List.Item
+                    key={i}
+                    title={ex.name}
+                    titleStyle={{ color: theme.text, fontWeight: 'bold' }}
+                    description={`${ex.sets.length} ${t('statistics.sets', 'set')} ${ex.sets[0]?.weight ? ` • ${ex.sets[0].weight}kg` : ''}`}
+                    descriptionStyle={{ color: theme.textMuted }}
+                    style={{ borderBottomWidth: i === workoutData.exercises.length - 1 ? 0 : 1, borderBottomColor: theme.border }}
+                  />
+                ))}
+              </Surface>
+            </View>
+          )}
+
+          {/* Delete */}
+          <Button mode="text" textColor="#ef4444" onPress={handleDiscard} style={{ marginTop: 8 }}>
+            {t('workout.delete', 'Antrenmanı Sil')}
+          </Button>
+
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
-
-const getStyles = (theme) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.background },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.surface
-  },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: theme.text },
-  saveBtn: { backgroundColor: '#3b82f6', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, minWidth: 64, alignItems: 'center' },
-  saveBtnText: { color: '#fff', fontWeight: 'bold' },
-  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 20 },
-  workoutName: { fontSize: 22, fontWeight: 'bold', color: theme.text },
-  statsRow: { flexDirection: 'row', marginTop: 16, gap: 10 },
-  statItem: { flex: 1 },
-  statLabel: { fontSize: 13, color: theme.textMuted, marginBottom: 4 },
-  statValue: { fontSize: 16, color: theme.text, fontWeight: '600' },
-  statValueBlue: { fontSize: 16, color: '#3b82f6', fontWeight: '600' },
-  divider: { height: 1, backgroundColor: theme.border, marginTop: 16, marginBottom: 16 },
-  section: {},
-  sectionTitle: { fontSize: 12, color: theme.textMuted, marginBottom: 6, fontWeight: '600', textTransform: 'uppercase' },
-  dateText: { fontSize: 16, color: '#3b82f6', fontWeight: '500' },
-  mediaPreviewContainer: { position: 'relative', marginBottom: 8 },
-  mediaPreview: { width: '100%', height: 200, borderRadius: 16 },
-  removeMediaBtn: { position: 'absolute', top: 8, right: 8 },
-  mediaUploadBox: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
-  dashedBox: { width: 60, height: 60, borderRadius: 12, borderWidth: 1, borderColor: theme.border, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center' },
-  plusOverlay: { position: 'absolute', right: -4, top: -4, backgroundColor: theme.text, borderRadius: 10, padding: 2 },
-  mediaUploadText: { marginLeft: 20, fontSize: 16, color: theme.text },
-  textInput: { fontSize: 16, color: theme.text, minHeight: 60, textAlignVertical: 'top' },
-  listItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  listItemText: { fontSize: 16, color: theme.text, fontWeight: '500' },
-  listItemValue: { fontSize: 16, color: theme.textMuted },
-  deleteText: { color: '#ef4444', fontSize: 16, fontWeight: '500' },
-  exerciseSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: theme.border + '50' }
-});
 
 export default WorkoutSummaryScreen;

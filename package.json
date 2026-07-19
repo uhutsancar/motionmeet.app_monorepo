@@ -3,24 +3,22 @@
   "version": "1.0.0",
   "description": "MotionMeet - Social media app for athletes",
   "private": true,
-  "workspaces": [
-    "packages/backend",
-    "packages/web",
-    "packages/mobile",
-    "packages/shared"
-  ],
+  "packageManager": "pnpm@11.10.0",
   "scripts": {
-    "dev:backend": "npm run dev --workspace=@motionmeet/backend",
-    "dev:web": "npm run dev --workspace=@motionmeet/web",
-    "test:backend": "npm run test --workspace=@motionmeet/backend",
-    "test:web": "npm run test --workspace=@motionmeet/web"
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "dev:backend": "turbo run dev --filter=@motionmeet/backend",
+    "dev:web": "turbo run dev --filter=@motionmeet/web",
+    "dev:mobile": "turbo run dev --filter=@motionmeet/mobile"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.0"
   },
   "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=9.0.0"
+    "node": ">=20.19.0"
   },
   "dependencies": {}
 }

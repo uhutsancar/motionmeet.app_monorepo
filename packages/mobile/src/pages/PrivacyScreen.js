@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, StatusBar, Alert, Linking,
-} from 'react-native';
+import { ScrollView, Switch, StatusBar, Alert, Linking } from 'react-native';
+import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -54,11 +53,11 @@ const PrivacyScreen = ({ navigation }) => {
   };
 
   const SwitchRow = ({ label, subtitle, prefKey, isLast }) => (
-    <View style={[styles.row, !isLast && styles.rowBorder]}>
-      <View style={styles.rowText}>
+    <Surface elevation={0} style={[styles.row, !isLast && styles.rowBorder]}>
+      <Surface elevation={0} style={styles.rowText}>
         <Text style={styles.rowLabel}>{label}</Text>
         {subtitle ? <Text style={styles.rowSub}>{subtitle}</Text> : null}
-      </View>
+      </Surface>
       <Switch
         value={prefs[prefKey]}
         onValueChange={() => toggle(prefKey)}
@@ -66,26 +65,26 @@ const PrivacyScreen = ({ navigation }) => {
         thumbColor="#fff"
         ios_backgroundColor={theme.border}
       />
-    </View>
+    </Surface>
   );
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+      <Surface elevation={0} style={styles.header}>
+        <TouchableRipple borderless style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </TouchableOpacity>
+        </TouchableRipple>
         <Text style={styles.headerTitle}>{t('settings.privacy', 'Gizlilik')}</Text>
-        <View style={{ width: 40 }} />
-      </View>
+        <Surface elevation={0} style={{ width: 40 }} />
+      </Surface>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
         {/* Profile Visibility */}
-        <View style={styles.section}>
+        <Surface elevation={0} style={styles.section}>
           <Text style={styles.sectionLabel}>{t('privacy.profile_section', 'PROFİL GÖRÜNÜRLÜĞü').toUpperCase()}</Text>
-          <View style={styles.card}>
+          <Surface elevation={0} style={styles.card}>
             <SwitchRow
               label={t('privacy.public_profile', 'Genel Profil')}
               subtitle={t('privacy.public_sub', 'Profiliniz herkes tarafından görülür')}
@@ -97,26 +96,26 @@ const PrivacyScreen = ({ navigation }) => {
               prefKey="showInSearch"
               isLast
             />
-          </View>
-        </View>
+          </Surface>
+        </Surface>
 
         {/* Workout Privacy */}
-        <View style={styles.section}>
+        <Surface elevation={0} style={styles.section}>
           <Text style={styles.sectionLabel}>{t('privacy.workout_section', 'ANTRENMAN').toUpperCase()}</Text>
-          <View style={styles.card}>
+          <Surface elevation={0} style={styles.card}>
             <SwitchRow
               label={t('privacy.workouts_on_feed', 'Antrenmanları Akışta Göster')}
               subtitle={t('privacy.feed_sub', 'Takipçileriniz antrenmanlarınızı görebilir')}
               prefKey="showWorkoutsOnFeed"
               isLast
             />
-          </View>
-        </View>
+          </Surface>
+        </Surface>
 
         {/* Social Privacy */}
-        <View style={styles.section}>
+        <Surface elevation={0} style={styles.section}>
           <Text style={styles.sectionLabel}>{t('privacy.social_section', 'SOSYAL').toUpperCase()}</Text>
-          <View style={styles.card}>
+          <Surface elevation={0} style={styles.card}>
             <SwitchRow
               label={t('privacy.allow_followers', 'Takipçilere İzin Ver')}
               subtitle={t('privacy.followers_sub', 'Hesabınızı takip edebilenler')}
@@ -128,39 +127,39 @@ const PrivacyScreen = ({ navigation }) => {
               prefKey="allowMessages"
               isLast
             />
-          </View>
-        </View>
+          </Surface>
+        </Surface>
 
         {/* Links */}
-        <View style={styles.section}>
+        <Surface elevation={0} style={styles.section}>
           <Text style={styles.sectionLabel}>{t('privacy.legal_section', 'YASAL').toUpperCase()}</Text>
-          <View style={styles.card}>
-            <TouchableOpacity
+          <Surface elevation={0} style={styles.card}>
+            <TouchableRipple borderless
               style={[styles.row, styles.rowBorder]}
               onPress={() => Linking.openURL('https://motionmeet.app/privacy')}
             >
               <Text style={styles.rowLabel}>{t('privacy.privacy_policy', 'Gizlilik Politikası')}</Text>
               <Ionicons name="open-outline" size={18} color={theme.textMuted} />
-            </TouchableOpacity>
-            <TouchableOpacity
+            </TouchableRipple>
+            <TouchableRipple borderless
               style={[styles.row, styles.rowBorder]}
               onPress={() => Linking.openURL('https://motionmeet.app/terms')}
             >
               <Text style={styles.rowLabel}>{t('privacy.terms', 'Kullanım Koşulları')}</Text>
               <Ionicons name="open-outline" size={18} color={theme.textMuted} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.row} onPress={handleDeleteAccount}>
+            </TouchableRipple>
+            <TouchableRipple borderless style={styles.row} onPress={handleDeleteAccount}>
               <Text style={[styles.rowLabel, { color: '#ef4444' }]}>{t('privacy.delete_account', 'Hesabı Sil')}</Text>
               <Ionicons name="chevron-forward" size={18} color="#ef4444" />
-            </TouchableOpacity>
-          </View>
-        </View>
+            </TouchableRipple>
+          </Surface>
+        </Surface>
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-const getStyles = (theme) => StyleSheet.create({
+const getStyles = (theme) => ({
   container: { flex: 1, backgroundColor: theme.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

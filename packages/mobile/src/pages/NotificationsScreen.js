@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, StatusBar,
-} from 'react-native';
+import { ScrollView, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Appbar, Surface, Switch, Text, useTheme as usePaperTheme, TouchableRipple } from 'react-native-paper';
 
 const STORAGE_KEY = '@mm_notification_prefs';
 
@@ -23,7 +22,8 @@ const DEFAULT_PREFS = {
 const NotificationsScreen = ({ navigation }) => {
   const { t } = useTranslation();
   const { theme, isDark } = useTheme();
-  const styles = getStyles(theme);
+  const paperTheme = usePaperTheme();
+  const styles = getStyles(theme, paperTheme);
   const [prefs, setPrefs] = useState(DEFAULT_PREFS);
 
   useEffect(() => {
@@ -39,19 +39,17 @@ const NotificationsScreen = ({ navigation }) => {
   };
 
   const SwitchRow = ({ label, subtitle, prefKey, isLast }) => (
-    <View style={[styles.row, !isLast && styles.rowBorder]}>
-      <View style={styles.rowText}>
-        <Text style={styles.rowLabel}>{label}</Text>
-        {subtitle ? <Text style={styles.rowSub}>{subtitle}</Text> : null}
-      </View>
+    <Surface elevation={0} style={[styles.row, !isLast && styles.rowBorder]}>
+      <Surface elevation={0} style={styles.rowText}>
+        <Text variant="titleMedium" style={styles.rowLabel}>{label}</Text>
+        {subtitle ? <Text variant="bodySmall" style={styles.rowSub}>{subtitle}</Text> : null}
+      </Surface>
       <Switch
         value={prefs[prefKey]}
         onValueChange={() => toggle(prefKey)}
-        trackColor={{ false: theme.border, true: theme.primary }}
-        thumbColor="#fff"
-        ios_backgroundColor={theme.border}
+        color={theme.primary}
       />
-    </View>
+    </Surface>
   );
 
   const sections = [
@@ -80,22 +78,19 @@ const NotificationsScreen = ({ navigation }) => {
   ];
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <Surface elevation={0} style={styles.container}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('settings.notifications', 'Bildirimler')}</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <Appbar.Header style={styles.header}>
+        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
+        <Appbar.Content title={t('settings.notifications', 'Bildirimler')} titleStyle={styles.headerTitle} />
+      </Appbar.Header>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
         {sections.map((section) => (
-          <View key={section.title} style={styles.section}>
-            <Text style={styles.sectionLabel}>{section.title.toUpperCase()}</Text>
-            <View style={styles.card}>
+          <Surface elevation={0} key={section.title} style={styles.section}>
+            <Text variant="labelMedium" style={styles.sectionLabel}>{section.title.toUpperCase()}</Text>
+            <Surface style={styles.card} elevation={1}>
               {section.items.map((item, i) => (
                 <SwitchRow
                   key={item.key}
@@ -105,25 +100,26 @@ const NotificationsScreen = ({ navigation }) => {
                   isLast={i === section.items.length - 1}
                 />
               ))}
-            </View>
-          </View>
+            </Surface>
+          </Surface>
         ))}
       </ScrollView>
-    </SafeAreaView>
+    </Surface>
   );
 };
 
-const getStyles = (theme) => StyleSheet.create({
+const getStyles = (theme, paperTheme) => ({
   container: { flex: 1, backgroundColor: theme.background },
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: theme.border,
+    backgroundColor: theme.background,
+    borderBottomWidth: 1, 
+    borderBottomColor: theme.border,
+    elevation: 0,
   },
-  backBtn: { width: 40, height: 40, justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '700', color: theme.text },
   section: { marginTop: 24 },
   sectionLabel: {
-    fontSize: 12, fontWeight: '700', letterSpacing: 0.8, color: theme.textMuted,
+    fontWeight: '700', letterSpacing: 0.8, color: theme.textMuted,
     paddingHorizontal: 20, marginBottom: 8,
   },
   card: {
@@ -136,8 +132,8 @@ const getStyles = (theme) => StyleSheet.create({
   },
   rowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
   rowText: { flex: 1, paddingRight: 12 },
-  rowLabel: { fontSize: 15, fontWeight: '600', color: theme.text },
-  rowSub: { fontSize: 12, color: theme.textMuted, marginTop: 2 },
+  rowLabel: { fontWeight: '600', color: theme.text },
+  rowSub: { color: theme.textMuted, marginTop: 2 },
 });
 
 export default NotificationsScreen;

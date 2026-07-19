@@ -1,17 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useState, useEffect, useMemo } from 'react';
+import { ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
-import { useAuth } from '@clerk/clerk-expo';
-import api from '../api/client';
+import { useAuthContext } from "../context/AuthProvider";
+import endpoints from '../api/endpoints';
+import { Appbar, Surface, Text, ActivityIndicator, useTheme as usePaperTheme } from 'react-native-paper';
 
 const MainExercisesScreen = ({ navigation }) => {
   const { t } = useTranslation();
   const { theme } = useTheme();
-  const styles = getStyles(theme);
-  const { getToken } = useAuth();
+  const paperTheme = usePaperTheme();
+  const { getToken } = useAuthContext();
   
   const [loading, setLoading] = useState(true);
   const [exercises, setExercises] = useState([]);
@@ -23,9 +23,7 @@ const MainExercisesScreen = ({ navigation }) => {
   const fetchStats = async () => {
     try {
       const token = await getToken();
-      const { data } = await api.get('/api/workout/stats?period=month', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const data = await endpoints.getWorkoutStats('month', token);
       if (data.success && data.exerciseBreakdown) {
         setExercises(data.exerciseBreakdown);
       }
@@ -36,72 +34,71 @@ const MainExercisesScreen = ({ navigation }) => {
     }
   };
 
+  const styles = useMemo(() => ({
+    container: { flex: 1, backgroundColor: theme.background },
+    header: {
+      backgroundColor: theme.background,
+      borderBottomWidth: 1, 
+      borderBottomColor: theme.border,
+      elevation: 0,
+    },
+    headerTitle: { fontSize: 17, fontWeight: '700', color: theme.text },
+    content: { padding: 16 },
+    list: { backgroundColor: theme.surface, borderRadius: 20, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' },
+    listItem: {
+      flexDirection: 'row', alignItems: 'center', padding: 16,
+      borderBottomWidth: 1, borderBottomColor: theme.border,
+      backgroundColor: 'transparent'
+    },
+    rankBadge: {
+      width: 40, height: 40, borderRadius: 20, backgroundColor: theme.primary + '20',
+      justifyContent: 'center', alignItems: 'center', marginRight: 16
+    },
+    rankText: { fontWeight: '800', color: theme.primary },
+    itemInfo: { flex: 1, backgroundColor: 'transparent' },
+    itemName: { fontWeight: '600', color: theme.text, marginBottom: 4 },
+    itemValue: { color: theme.textMuted },
+    emptyState: { alignItems: 'center', marginTop: 60, backgroundColor: 'transparent' },
+    emptyText: { marginTop: 12, color: theme.textMuted }
+  }), [theme]);
+
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('statistics.main_exercises', 'Ana egzersizler')}</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <Surface style={styles.container} elevation={0}>
+      <Appbar.Header style={styles.header}>
+        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
+        <Appbar.Content title={t('statistics.main_exercises', 'Ana egzersizler')} titleStyle={styles.headerTitle} />
+      </Appbar.Header>
 
       <ScrollView contentContainerStyle={styles.content}>
         {loading ? (
           <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 50 }} />
         ) : exercises.length === 0 ? (
-          <View style={styles.emptyState}>
+          <Surface style={styles.emptyState} elevation={0}>
              <Ionicons name="barbell-outline" size={48} color={theme.textMuted} />
-             <Text style={styles.emptyText}>{t('common.no_data', 'Veri bulunamadı')}</Text>
-          </View>
+             <Text variant="bodyLarge" style={styles.emptyText}>{t('common.no_data', 'Veri bulunamadı')}</Text>
+          </Surface>
         ) : (
-          <View style={styles.list}>
+          <Surface style={styles.list} elevation={1}>
              {exercises.map((item, index) => {
                 const tKey = item.name.toLowerCase().replace(/[\s-]/g, '_').replace('pull_up', 'pullup');
                 const translatedName = t(`statistics.ex_${tKey}`, item.name);
                 return (
-                <View key={index} style={styles.listItem}>
-                    <View style={styles.rankBadge}>
-                        <Text style={styles.rankText}>#{index + 1}</Text>
-                    </View>
-                    <View style={styles.itemInfo}>
-                        <Text style={styles.itemName}>{translatedName}</Text>
-                        <Text style={styles.itemValue}>{item.total.toLocaleString()} {t('statistics.total_reps', 'total reps')}</Text>
-                    </View>
+                <Surface key={index} style={[styles.listItem, index === exercises.length - 1 && { borderBottomWidth: 0 }]} elevation={0}>
+                    <Surface style={styles.rankBadge} elevation={0}>
+                        <Text variant="titleMedium" style={styles.rankText}>#{index + 1}</Text>
+                    </Surface>
+                    <Surface style={styles.itemInfo} elevation={0}>
+                        <Text variant="titleMedium" style={styles.itemName}>{translatedName}</Text>
+                        <Text variant="bodyMedium" style={styles.itemValue}>{item.total.toLocaleString()} {t('statistics.total_reps', 'total reps')}</Text>
+                    </Surface>
                     <Ionicons name="chevron-forward" size={20} color={theme.border} />
-                </View>
+                </Surface>
              )})}
-          </View>
+          </Surface>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </Surface>
   );
 };
-
-const getStyles = (theme) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.background },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: theme.border
-  },
-  backBtn: { width: 40, height: 40, justifyContent: 'center' },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: theme.text },
-  content: { padding: 16 },
-  list: { backgroundColor: theme.surface, borderRadius: 20, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' },
-  listItem: {
-    flexDirection: 'row', alignItems: 'center', padding: 16,
-    borderBottomWidth: 1, borderBottomColor: theme.border
-  },
-  rankBadge: {
-    width: 40, height: 40, borderRadius: 20, backgroundColor: theme.primary + '20',
-    justifyContent: 'center', alignItems: 'center', marginRight: 16
-  },
-  rankText: { fontSize: 15, fontWeight: '800', color: theme.primary },
-  itemInfo: { flex: 1 },
-  itemName: { fontSize: 16, fontWeight: '600', color: theme.text, marginBottom: 4 },
-  itemValue: { fontSize: 13, color: theme.textMuted },
-  emptyState: { alignItems: 'center', marginTop: 60 },
-  emptyText: { marginTop: 12, fontSize: 15, color: theme.textMuted }
-});
 
 export default MainExercisesScreen;

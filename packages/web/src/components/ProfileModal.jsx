@@ -1,258 +1,156 @@
-import { useAuth } from "@clerk/clerk-react";
+import { useAuthContext } from "../context/AuthProvider";
+import {
+  Avatar,
+  Box,
+  Button,
+  ButtonBase,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
 import { Pencil } from "lucide-react";
-import React, { useState } from "react";
+import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
 import { updateUser } from "~/features/user/userSlice";
-import { useTranslation } from "react-i18next";
+
+const useObjectUrl = (file, fallback) => {
+  const [url, setUrl] = useState(fallback || "");
+
+  useEffect(() => {
+    if (!file) {
+      setUrl(fallback || "");
+      return undefined;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [fallback, file]);
+
+  return url;
+};
 
 const ProfileModal = ({ setShowEdit }) => {
   const { t } = useTranslation();
   const dispatch = useDispatch();
-  const { getToken } = useAuth();
-
+  const { getToken } = useAuthContext();
   const user = useSelector((state) => state.user.value);
+  const [saving, setSaving] = useState(false);
   const [editForm, setEditForm] = useState({
-    username: user.username,
-    bio: user.bio,
-    location: user.location,
+    username: user.username || "",
+    bio: user.bio || "",
+    location: user.location || "",
     profile_picture: null,
     cover_photo: null,
-    full_name: user.full_name,
+    full_name: user.full_name || "",
     weight: user.weight || 0,
     height: user.height || 0,
   });
-  const handleSaveProfile = async (e) => {
-    e.preventDefault();
+  const profilePreview = useObjectUrl(editForm.profile_picture, user.profile_picture);
+  const coverPreview = useObjectUrl(editForm.cover_photo, user.cover_photo);
+
+  const updateField = (field) => (event) => {
+    setEditForm((current) => ({ ...current, [field]: event.target.value }));
+  };
+
+  const handleSaveProfile = async (event) => {
+    event.preventDefault();
+    setSaving(true);
     try {
       const userData = new FormData();
-      const {
-        full_name,
-        username,
-        bio,
-        location,
-        profile_picture,
-        cover_photo,
-        weight,
-        height,
-      } = editForm;
-
+      const { full_name, username, bio, location, profile_picture, cover_photo, weight, height } = editForm;
       userData.append("username", username);
       userData.append("bio", bio);
       userData.append("location", location);
       userData.append("full_name", full_name);
       userData.append("weight", weight);
       userData.append("height", height);
-      profile_picture && userData.append("profile", profile_picture);
-      cover_photo && userData.append("cover", cover_photo);
+      if (profile_picture) userData.append("profile", profile_picture);
+      if (cover_photo) userData.append("cover", cover_photo);
 
       const token = await getToken();
-      dispatch(updateUser({ userData, token }));
-
+      await dispatch(updateUser({ userData, token })).unwrap();
       setShowEdit(false);
     } catch (error) {
       toast.error(error.message);
+    } finally {
+      setSaving(false);
     }
   };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-      <div className="w-full max-w-2xl bg-surface rounded-2xl shadow-xl border border-border-subtle my-auto max-h-[90vh] overflow-y-auto overflow-x-hidden p-6 no-scrollbar">
-        <h1 className="text-2xl font-bold text-text-primary mb-6">
-          {t('profile.edit_profile')}
-        </h1>
-        <form
-          className="space-y-4"
-          onSubmit={(e) =>
-            toast.promise(handleSaveProfile(e), { loading: t('common.saving', 'Saving...') })
-          }
-        >
-          {/* Profile Picture   */}
-          <div className="flex flex-col items-start gap-3">
-            <label
-              htmlFor="profile_picture"
-              className="block text-sm font-semibold text-text-primary mb-1"
-            >
-              {t('profile.profile_picture', 'Profile Picture')}
-              <input
-                hidden
-                type="file"
-                accept="image/*"
-                id="profile_picture"
-                onChange={(e) =>
-                  setEditForm({
-                    ...editForm,
-                    profile_picture: e.target.files[0],
-                  })
-                }
-              />
-              <div className="group/profile relative mt-2">
-                <img
-                  src={
-                    editForm.profile_picture
-                      ? URL.createObjectURL(editForm.profile_picture)
-                      : user.profile_picture
-                  }
-                  alt=""
-                  className="w-24 h-24 rounded-full object-cover border-2 border-border-subtle shadow-sm"
+    <Dialog open onClose={() => !saving && setShowEdit(false)} fullWidth maxWidth="sm">
+      <Box component="form" onSubmit={handleSaveProfile}>
+        <DialogTitle sx={{ fontWeight: 800 }}>{t("profile.edit_profile")}</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2.5}>
+            <Stack spacing={1}>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                {t("profile.profile_picture", "Profile Picture")}
+              </Typography>
+              <ButtonBase component="label" sx={{ width: 96, height: 96, borderRadius: "50%", position: "relative", overflow: "hidden" }}>
+                <Avatar src={profilePreview || undefined} alt={editForm.full_name} sx={{ width: 96, height: 96, border: 2, borderColor: "divider" }}>
+                  {editForm.full_name?.charAt(0)}
+                </Avatar>
+                <Box sx={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "common.white", bgcolor: "rgba(0,0,0,.38)", opacity: 0, transition: "opacity .2s", "&:hover": { opacity: 1 } }}>
+                  <Pencil size={20} />
+                </Box>
+                <Box
+                  component="input"
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => setEditForm((current) => ({ ...current, profile_picture: event.target.files?.[0] || null }))}
+                  sx={{ display: "none" }}
                 />
+              </ButtonBase>
+            </Stack>
 
-                <div
-                  className="absolute hidden group-hover/profile:flex inset-0 bg-black/40 rounded-full items-center justify-center transition-all cursor-pointer"
-                >
-                  <Pencil className="w-5 h-5 text-white" />
-                </div>
-              </div>
-            </label>
-          </div>
-
-          {/* Cover Photo */}
-
-          <div className="flex flex-col items-start gap-3">
-            <label
-              htmlFor="cover_photo"
-              className="block text-sm font-semibold text-text-primary mb-1 w-full"
-            >
-              {t('profile.cover_photo', 'Cover Photo')}
-              <input
-                hidden
-                type="file"
-                accept="image/*"
-                id="cover_photo"
-                onChange={(e) =>
-                  setEditForm({
-                    ...editForm,
-                    cover_photo: e.target.files[0],
-                  })
-                }
-              />
-              <div className="group/cover relative mt-2 w-full">
-                <img
-                  src={
-                    editForm.cover_photo
-                      ? URL.createObjectURL(editForm.cover_photo)
-                      : user.cover_photo
-                  }
-                  alt=""
-                  className="w-full h-40 rounded-xl bg-gradient-to-r from-accent-primary/20 via-purple-500/20 to-pink-500/20 object-cover border border-border-subtle shadow-sm"
+            <Stack spacing={1}>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                {t("profile.cover_photo", "Cover Photo")}
+              </Typography>
+              <ButtonBase component="label" sx={{ width: "100%", height: 160, borderRadius: 2, overflow: "hidden", position: "relative", bgcolor: "action.hover", background: coverPreview ? undefined : "linear-gradient(110deg, rgba(59,130,246,.24), rgba(168,85,247,.2), rgba(236,72,153,.2))" }}>
+                {coverPreview && <Box component="img" src={coverPreview} alt="Cover" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+                <Box sx={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "common.white", bgcolor: "rgba(0,0,0,.32)", opacity: 0, transition: "opacity .2s", "&:hover": { opacity: 1 } }}>
+                  <Pencil size={22} />
+                </Box>
+                <Box
+                  component="input"
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => setEditForm((current) => ({ ...current, cover_photo: event.target.files?.[0] || null }))}
+                  sx={{ display: "none" }}
                 />
-                <div
-                  className="absolute hidden group-hover/cover:flex inset-0 bg-black/40 rounded-xl items-center justify-center transition-all cursor-pointer"
-                >
-                  <Pencil className="w-5 h-5 text-white" />
-                </div>
-              </div>
-            </label>
-          </div>
+              </ButtonBase>
+            </Stack>
 
-          <div>
-            <label className="block text-sm font-semibold text-text-primary mb-1">
-              {t('profile.full_name', 'Full Name')}
-            </label>
-            <input
-              type="text"
-              className="w-full p-3 bg-background border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:border-accent-primary shadow-sm"
-              placeholder={t('profile.enter_full_name', 'Please enter your full name')}
-              onChange={(e) =>
-                setEditForm({ ...editForm, full_name: e.target.value })
-              }
-              value={editForm.full_name}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-text-primary mb-1">
-              {t('profile.username', 'Username')}
-            </label>
-            <input
-              type="text"
-              className="w-full p-3 bg-background border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:border-accent-primary shadow-sm"
-              placeholder={t('profile.enter_username', 'Please enter your username')}
-              onChange={(e) =>
-                setEditForm({ ...editForm, username: e.target.value })
-              }
-              value={editForm.username}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-text-primary mb-1">
-              {t('profile.bio', 'Bio')}
-            </label>
-            <textarea
-              rows={3}
-              className="w-full p-3 bg-background border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:border-accent-primary shadow-sm"
-              placeholder={t('profile.enter_bio', 'Please enter a short bio')}
-              onChange={(e) =>
-                setEditForm({ ...editForm, bio: e.target.value })
-              }
-              value={editForm.bio}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-text-primary mb-1">
-              {t('profile.location', 'Location')}
-            </label>
-            <input
-              type="text"
-              className="w-full p-3 bg-background border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:border-accent-primary shadow-sm"
-              placeholder={t('profile.enter_location', 'Please enter your location')}
-              onChange={(e) =>
-                setEditForm({ ...editForm, location: e.target.value })
-              }
-              value={editForm.location}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-semibold text-text-primary mb-1">
-                {t('profile.weight', 'Weight (kg)')}
-              </label>
-              <input
-                type="number"
-                className="w-full p-3 bg-background border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:border-accent-primary shadow-sm"
-                placeholder="e.g. 75"
-                onChange={(e) =>
-                  setEditForm({ ...editForm, weight: e.target.value })
-                }
-                value={editForm.weight}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-text-primary mb-1">
-                {t('profile.height', 'Height (cm)')}
-              </label>
-              <input
-                type="number"
-                className="w-full p-3 bg-background border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:border-accent-primary shadow-sm"
-                placeholder="e.g. 180"
-                onChange={(e) =>
-                  setEditForm({ ...editForm, height: e.target.value })
-                }
-                value={editForm.height}
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end space-x-3 pt-6">
-            <button
-              onClick={() => setShowEdit(false)}
-              type="button"
-              className="px-5 py-2.5 border border-border-subtle rounded-xl text-text-secondary hover:text-text-primary hover:bg-surface-light font-semibold transition shadow-sm cursor-pointer"
-            >
-              {t('common.cancel')}
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2.5 bg-accent-primary text-white rounded-xl hover:bg-accent-hover font-semibold transition shadow-sm cursor-pointer"
-            >
-              {t('profile.save_changes', 'Save Changes')}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+            <TextField label={t("profile.full_name", "Full Name")} placeholder={t("profile.enter_full_name", "Please enter your full name")} value={editForm.full_name} onChange={updateField("full_name")} fullWidth />
+            <TextField label={t("profile.username", "Username")} placeholder={t("profile.enter_username", "Please enter your username")} value={editForm.username} onChange={updateField("username")} fullWidth />
+            <TextField label={t("profile.bio", "Bio")} placeholder={t("profile.enter_bio", "Please enter a short bio")} value={editForm.bio} onChange={updateField("bio")} multiline rows={3} fullWidth />
+            <TextField label={t("profile.location", "Location")} placeholder={t("profile.enter_location", "Please enter your location")} value={editForm.location} onChange={updateField("location")} fullWidth />
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <TextField label={t("profile.weight", "Weight (kg)")} type="number" value={editForm.weight} onChange={updateField("weight")} fullWidth />
+              <TextField label={t("profile.height", "Height (cm)")} type="number" value={editForm.height} onChange={updateField("height")} fullWidth />
+            </Stack>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ p: 2.5 }}>
+          <Button onClick={() => setShowEdit(false)} disabled={saving}>
+            {t("common.cancel")}
+          </Button>
+          <Button type="submit" variant="contained" disabled={saving} startIcon={saving ? <CircularProgress size={16} color="inherit" /> : undefined}>
+            {saving ? t("common.saving", "Saving...") : t("profile.save_changes", "Save Changes")}
+          </Button>
+        </DialogActions>
+      </Box>
+    </Dialog>
   );
 };
 

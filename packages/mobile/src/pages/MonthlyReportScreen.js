@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, ActivityIndicator } from 'react-native';
+import { View, ScrollView, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +7,8 @@ import { useTheme } from '../context/ThemeContext';
 import { BarChart } from 'react-native-chart-kit';
 import Svg, { Polygon, Line, Text as SvgText } from 'react-native-svg';
 import api from '../api/client';
+import { Appbar, Text, Surface, TouchableRipple, ActivityIndicator, Divider, Chip, Button } from 'react-native-paper';
+import { useMuscleGroups } from '../hooks/useMuscleGroups';
 
 const { width } = Dimensions.get('window');
 const RADAR_SIZE = width - 80;
@@ -16,11 +18,11 @@ const RADIUS = RADAR_SIZE / 2 - 30;
 const MonthlyReportScreen = ({ navigation }) => {
   const { t } = useTranslation();
   const { theme } = useTheme();
-  const styles = getStyles(theme);
 
   const [activeTab, setActiveTab] = useState('workouts');
   const [statsData, setStatsData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { data: muscleGroupsList } = useMuscleGroups();
 
   const now = new Date();
   const MONTH_NAMES_TR = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
@@ -58,12 +60,10 @@ const MonthlyReportScreen = ({ navigation }) => {
   const safeData = slicedData.every(v => v === 0) ? slicedData.map(() => 0) : slicedData;
 
   // Radar chart
-  const MUSCLE_KEYS = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Abs'];
-  const MUSCLE_LABELS_TR = { Chest: 'Göğüs', Back: 'Sırt', Legs: 'Bacak', Shoulders: 'Omuz', Arms: 'Kol', Abs: 'Core' };
-  const radarLabels = MUSCLE_KEYS.map(k => MUSCLE_LABELS_TR[k]);
-  const currentRadarValues = MUSCLE_KEYS.map(k => statsData?.muscleDistribution?.[k] ?? 0.02);
-  const previousRadarValues = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1];
-  const angles = radarLabels.map((_, i) => (Math.PI * 2 * i) / radarLabels.length - Math.PI / 2);
+  const radarLabels = muscleGroupsList.map(mg => t(`muscle_groups.${mg.code}`, mg.name));
+  const currentRadarValues = muscleGroupsList.map(mg => statsData?.muscleDistribution?.[mg.code] ?? 0.02);
+  const previousRadarValues = muscleGroupsList.map(() => 0.1);
+  const angles = radarLabels.map((_, i) => (Math.PI * 2 * i) / Math.max(radarLabels.length, 1) - Math.PI / 2);
   const getPoint = (val, idx) =>
     `${CENTER + (RADIUS * Math.max(val, 0.02)) * Math.cos(angles[idx])},${CENTER + (RADIUS * Math.max(val, 0.02)) * Math.sin(angles[idx])}`;
   const currentPolygon = currentRadarValues.map((v, i) => getPoint(v, i)).join(' ');
@@ -84,14 +84,6 @@ const MonthlyReportScreen = ({ navigation }) => {
     { id: 'volume', label: t('monthly_report.volume', 'Hacim') },
     { id: 'sets', label: t('monthly_report.sets', 'Set') },
   ];
-
-  // Nav map: tab id -> screen name
-  const detailScreenMap = {
-    workouts: 'WorkoutsDetailScreen',
-    duration: 'DurationDetailScreen',
-    volume: 'VolumeDetailScreen',
-    sets: 'SetsDetailScreen',
-  };
 
   // Stat card configs
   const statCards = [
@@ -136,47 +128,44 @@ const MonthlyReportScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{monthName}</Text>
-        <View style={{ width: 34 }} />
-      </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
+      <Appbar.Header style={{ backgroundColor: theme.background, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
+        <Appbar.Content title={monthName} titleStyle={{ fontWeight: '700', fontSize: 18, color: theme.text }} />
+      </Appbar.Header>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
 
         {/* Title & Subtitle */}
-        <View style={styles.titleSection}>
-          <Text style={styles.largeMonthTitle}>{monthName}</Text>
-          <Text style={styles.deltaSubtitle}>{statsData?.totalWorkouts ?? 0} {t('monthly_report.workouts', 'Antrenmanlar').toLowerCase()}</Text>
+        <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12 }}>
+          <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.text }}>{monthName}</Text>
+          <Text variant="bodyMedium" style={{ color: theme.textMuted, marginTop: 4 }}>{statsData?.totalWorkouts ?? 0} {t('monthly_report.workouts', 'Antrenmanlar').toLowerCase()}</Text>
         </View>
 
         {/* Tabs */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabScroll} contentContainerStyle={styles.tabContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: 10 }} contentContainerStyle={{ paddingHorizontal: 10, gap: 10, paddingBottom: 8 }}>
           {tabs.map(tab => {
             const isActive = activeTab === tab.id;
             return (
-              <TouchableOpacity
+              <Chip
                 key={tab.id}
-                style={[styles.tabBtn, isActive && { backgroundColor: theme.primary }]}
+                mode="outlined"
+                selected={isActive}
                 onPress={() => setActiveTab(tab.id)}
+                style={{ backgroundColor: isActive ? theme.primary : theme.surface, borderColor: theme.border, borderRadius: 20 }}
+                textStyle={{ color: isActive ? '#000' : theme.textMuted, fontWeight: isActive ? 'bold' : '600' }}
               >
-                <Text style={[styles.tabText, isActive && { color: '#000', fontWeight: 'bold' }]}>
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
+                {tab.label}
+              </Chip>
             );
           })}
         </ScrollView>
 
         {/* Bar Chart */}
         {loading ? (
-          <ActivityIndicator color={theme.primary} size="large" style={{ marginVertical: 40 }} />
+          <ActivityIndicator animating={true} color={theme.primary} size="large" style={{ marginVertical: 40 }} />
         ) : (
-          <View style={styles.chartWrapper}>
+          <View style={{ paddingHorizontal: 16, marginTop: 8, position: 'relative' }}>
             <BarChart
               data={{
                 labels: slicedLabels,
@@ -195,12 +184,12 @@ const MonthlyReportScreen = ({ navigation }) => {
                 barPercentage: 0.55,
                 propsForBackgroundLines: { stroke: theme.border, strokeDasharray: '4' },
               }}
-              style={styles.chart}
+              style={{ borderRadius: 16, overflow: 'hidden', marginTop: 4 }}
               showValuesOnTopOfBars
               withInnerLines
             />
             {/* Y-axis label */}
-            <Text style={styles.chartYLabel}>
+            <Text style={{ position: 'absolute', top: 8, right: 24, fontSize: 11, color: theme.textMuted, fontWeight: '600' }}>
               {activeTab === 'volume' ? 'kg' :
                activeTab === 'duration' ? 'dk' :
                activeTab === 'sets' ? 'set' : 'seans'}
@@ -208,69 +197,69 @@ const MonthlyReportScreen = ({ navigation }) => {
           </View>
         )}
 
-        <View style={styles.divider} />
+        <Divider style={{ marginVertical: 24, backgroundColor: theme.surface, height: 1 }} />
 
         {/* Summary (Özet) */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t('monthly_report.summary', 'Özet')}</Text>
+        <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
+          <Text variant="titleMedium" style={{ color: theme.textMuted, fontWeight: '600' }}>{t('monthly_report.summary', 'Özet')}</Text>
         </View>
 
-        <View style={styles.statsGrid}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between', paddingHorizontal: 20 }}>
           {statCards.map(card => (
-            <TouchableOpacity
+            <Surface
               key={card.key}
-              style={styles.statSquare}
-              onPress={() => navigation.navigate(card.screen, { statsData })}
-              activeOpacity={0.75}
+              elevation={1}
+              style={{ width: '48%', backgroundColor: theme.surface, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 18, borderWidth: 1, borderColor: theme.border, overflow: 'hidden', position: 'relative' }}
             >
-              <View style={styles.statTopRow}>
-                <Text style={styles.statLabel}>{card.label}</Text>
-                <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
-              </View>
-              <Text style={styles.statLargeVal}>
-                {card.value.toLocaleString()}
-                {card.unit ? <Text style={styles.statUnit}>{' '}{card.unit}</Text> : null}
-              </Text>
-              <View style={[styles.statAccentBar, { backgroundColor: card.accentColor }]} />
-            </TouchableOpacity>
+                <TouchableRipple onPress={() => navigation.navigate(card.screen, { statsData })} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1 }} borderless><View /></TouchableRipple>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <Text variant="bodyMedium" style={{ color: theme.text, fontWeight: '500' }}>{card.label}</Text>
+                    <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
+                </View>
+                <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.text, marginBottom: 12 }}>
+                    {card.value.toLocaleString()}
+                    {card.unit ? <Text style={{ fontSize: 14, fontWeight: 'normal' }}>{' '}{card.unit}</Text> : null}
+                </Text>
+                <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, borderBottomLeftRadius: 16, borderBottomRightRadius: 16, backgroundColor: card.accentColor }} />
+            </Surface>
           ))}
         </View>
 
-        <View style={styles.divider} />
+        <Divider style={{ marginVertical: 24, backgroundColor: theme.surface, height: 1 }} />
 
         {/* Workout Days Log */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t('monthly_report.workout_days_log', 'Antrenman Günleri Kaydı')}</Text>
+        <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
+          <Text variant="titleMedium" style={{ color: theme.textMuted, fontWeight: '600' }}>{t('monthly_report.workout_days_log', 'Antrenman Günleri Kaydı')}</Text>
         </View>
 
-        <View style={styles.streakContainer}>
+        <View style={{ alignItems: 'center', marginBottom: 20 }}>
           <FontAwesome5 name="fire" size={40} color="#ef4444" solid />
-          <Text style={styles.streakText}>{t('monthly_report.weekly_streak', { count: 0 }, '0 Haftalık Seri')}</Text>
+          <Text variant="titleMedium" style={{ fontWeight: 'bold', color: theme.text, marginTop: 10 }}>{t('monthly_report.weekly_streak', { count: 0 }, '0 Haftalık Seri')}</Text>
         </View>
 
-        <View style={styles.calendarContainer}>
-          <View style={styles.calendarHeaderRow}>
+        <View style={{ paddingHorizontal: 20 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
             {daysOfWeek.map((d, i) => (
-              <Text key={i} style={styles.calDayHeader}>{d}</Text>
+              <Text key={i} style={{ flex: 1, textAlign: 'center', color: theme.textMuted, fontSize: 12, paddingBottom: 6 }}>{d}</Text>
             ))}
           </View>
-          <View style={styles.calendarGrid}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
             {calendarDays.map((num, i) => (
-              <View key={i} style={styles.calCell}>
-                {num && <Text style={styles.calNum}>{num}</Text>}
+              <View key={i} style={{ width: `${100 / 7}%`, height: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
+                {num && <Text style={{ fontSize: 16, color: theme.text, fontWeight: '500' }}>{num}</Text>}
               </View>
             ))}
           </View>
         </View>
 
-        <View style={styles.divider} />
+        <Divider style={{ marginVertical: 24, backgroundColor: theme.surface, height: 1 }} />
 
         {/* Muscle Distribution */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t('monthly_report.muscle_distribution', 'Kas Dağılımı')}</Text>
+        <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
+          <Text variant="titleMedium" style={{ color: theme.textMuted, fontWeight: '600' }}>{t('monthly_report.muscle_distribution', 'Kas Dağılımı')}</Text>
         </View>
 
-        <View style={styles.radarContainer}>
+        <View style={{ alignItems: 'center' }}>
           <Svg width={RADAR_SIZE} height={RADAR_SIZE}>
             {gridLevels.map((lvl, index) => (
               <Polygon
@@ -302,14 +291,14 @@ const MonthlyReportScreen = ({ navigation }) => {
             })}
           </Svg>
 
-          <View style={styles.legendRow}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: theme.textMuted }]} />
-              <Text style={styles.legendText}>{MONTH_NAMES_TR[now.getMonth() === 0 ? 11 : now.getMonth() - 1]} {now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()}</Text>
+          <View style={{ flexDirection: 'row', gap: 16, marginTop: 16, marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.textMuted }} />
+              <Text style={{ fontSize: 12, color: theme.textMuted }}>{MONTH_NAMES_TR[now.getMonth() === 0 ? 11 : now.getMonth() - 1]} {now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()}</Text>
             </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: theme.primary }]} />
-              <Text style={styles.legendText}>{monthName}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.primary }} />
+              <Text style={{ fontSize: 12, color: theme.textMuted }}>{monthName}</Text>
             </View>
           </View>
         </View>
@@ -317,78 +306,13 @@ const MonthlyReportScreen = ({ navigation }) => {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.shareBtn}>
-          <Ionicons name="push-outline" size={20} color="#000" style={{ transform: [{ rotate: '180deg' }] }} />
-          <Text style={styles.shareText}>{t('monthly_report.share', 'Paylaş')}</Text>
-        </TouchableOpacity>
+      <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, backgroundColor: theme.background, borderTopWidth: 1, borderTopColor: theme.border }}>
+        <Button mode="contained" buttonColor={theme.primary} textColor="#000" icon="share-variant" style={{ borderRadius: 12 }} contentStyle={{ paddingVertical: 6 }} labelStyle={{ fontSize: 16, fontWeight: 'bold' }}>
+            {t('monthly_report.share', 'Paylaş')}
+        </Button>
       </View>
     </SafeAreaView>
   );
 };
-
-const getStyles = (theme) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.background },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.border,
-  },
-  iconBtn: { width: 34, height: 34, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: theme.text },
-  scrollContent: { paddingBottom: 40 },
-  titleSection: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12 },
-  largeMonthTitle: { fontSize: 24, fontWeight: 'bold', color: theme.text },
-  deltaSubtitle: { fontSize: 15, color: theme.textMuted, marginTop: 4 },
-  tabScroll: { marginHorizontal: 10 },
-  tabContainer: { paddingHorizontal: 10, gap: 10, paddingBottom: 8 },
-  tabBtn: {
-    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
-    backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border,
-  },
-  tabText: { color: theme.textMuted, fontSize: 14, fontWeight: '600' },
-  chartWrapper: { paddingHorizontal: 16, marginTop: 8, position: 'relative' },
-  chart: { borderRadius: 16, overflow: 'hidden', marginTop: 4 },
-  chartYLabel: {
-    position: 'absolute', top: 8, right: 24, fontSize: 11,
-    color: theme.textMuted, fontWeight: '600',
-  },
-  divider: { height: 1, backgroundColor: theme.surface, marginVertical: 24 },
-  sectionHeader: { paddingHorizontal: 20, marginBottom: 16 },
-  sectionTitle: { fontSize: 16, color: theme.textMuted, fontWeight: '600' },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between', paddingHorizontal: 20 },
-  statSquare: {
-    width: '48%', backgroundColor: theme.surface, borderRadius: 16,
-    paddingHorizontal: 16, paddingVertical: 18, borderWidth: 1, borderColor: theme.border,
-    overflow: 'hidden', position: 'relative',
-  },
-  statTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  statLabel: { fontSize: 14, color: theme.text, fontWeight: '500' },
-  statLargeVal: { fontSize: 22, fontWeight: 'bold', color: theme.text, marginBottom: 12 },
-  statUnit: { fontSize: 14, fontWeight: 'normal' },
-  statAccentBar: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
-  streakContainer: { alignItems: 'center', marginBottom: 20 },
-  streakText: { fontSize: 18, fontWeight: 'bold', color: theme.text, marginTop: 10 },
-  calendarContainer: { paddingHorizontal: 20 },
-  calendarHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  calDayHeader: { flex: 1, textAlign: 'center', color: theme.textMuted, fontSize: 12, paddingBottom: 6 },
-  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  calCell: { width: `${100 / 7}%`, height: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
-  calNum: { fontSize: 16, color: theme.text, fontWeight: '500' },
-  radarContainer: { alignItems: 'center' },
-  legendRow: { flexDirection: 'row', gap: 16, marginTop: 16, marginBottom: 16 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendText: { fontSize: 12, color: theme.textMuted },
-  bottomBar: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    padding: 20, backgroundColor: theme.background,
-    borderTopWidth: 1, borderTopColor: theme.border,
-  },
-  shareBtn: {
-    backgroundColor: theme.primary, borderRadius: 12, paddingVertical: 14,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-  },
-  shareText: { color: '#000', fontSize: 16, fontWeight: 'bold' },
-});
 
 export default MonthlyReportScreen;

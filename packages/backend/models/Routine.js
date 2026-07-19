@@ -22,6 +22,8 @@ const routineSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+routineSchema.index({ userId: 1, updatedAt: -1 });
+
 const Routine = mongoose.model("Routine", routineSchema);
 
 export default Routine;

@@ -1,11 +1,60 @@
-import { useAuth } from "@clerk/clerk-react";
-import { Image, X, Send } from "lucide-react";
-import React, { useState } from "react";
+import { useAuthContext } from "../context/AuthProvider";
+import {
+  Avatar,
+  Box,
+  Button,
+  CircularProgress,
+  IconButton,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
+import { Image, Send, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import api from "~/api/axios";
-import { useTranslation } from "react-i18next";
+
+const MediaPreview = ({ file, onRemove }) => {
+  const [url, setUrl] = useState("");
+
+  useEffect(() => {
+    const objectUrl = URL.createObjectURL(file);
+    setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file]);
+
+  return (
+    <Box
+      sx={{
+        position: "relative",
+        overflow: "hidden",
+        borderRadius: 2,
+        border: 1,
+        borderColor: "divider",
+        bgcolor: "common.black",
+      }}
+    >
+      <Box
+        component={file.type.startsWith("video") ? "video" : "img"}
+        src={url}
+        alt={file.type.startsWith("video") ? undefined : "Preview"}
+        sx={{ display: "block", width: file.type.startsWith("video") ? 160 : 112, height: 112, objectFit: "cover" }}
+      />
+      <IconButton
+        size="small"
+        onClick={onRemove}
+        aria-label="Remove media"
+        sx={{ position: "absolute", top: 6, right: 6, color: "common.white", bgcolor: "rgba(0,0,0,.65)", "&:hover": { bgcolor: "rgba(0,0,0,.85)" } }}
+      >
+        <X size={16} />
+      </IconButton>
+    </Box>
+  );
+};
 
 const CreatePost = ({ onSuccess }) => {
   const { t } = useTranslation();
@@ -13,16 +62,13 @@ const CreatePost = ({ onSuccess }) => {
   const [content, setContent] = useState("");
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(false);
-
   const user = useSelector((state) => state.user.value);
-  const { getToken } = useAuth();
+  const { getToken } = useAuthContext();
 
   const handleSubmit = async () => {
-    if (!images.length && !content) {
-      return toast.error(t('feed.whats_on_mind'));
-    }
-    setLoading(true);
+    if (!images.length && !content.trim()) return toast.error(t("feed.whats_on_mind"));
 
+    setLoading(true);
     const postType =
       images.length > 0 && images[0].type.startsWith("video")
         ? "video"
@@ -36,25 +82,19 @@ const CreatePost = ({ onSuccess }) => {
       const formData = new FormData();
       formData.append("content", content);
       formData.append("post_type", postType);
-      images.forEach((image) => {
-        formData.append("images", image);
-      });
+      images.forEach((image) => formData.append("images", image));
 
       const { data } = await api.post("/api/post/add", formData, {
-        headers: {
-          Authorization: `Bearer ${await getToken()}`,
-        },
+        headers: { Authorization: `Bearer ${await getToken()}` },
       });
 
-      if (data.success) {
-        setContent("");
-        setImages([]);
-        toast.success(t('feed.post_published'));
-        if (onSuccess) onSuccess();
-        else navigate("/");
-      } else {
-        throw new Error(data.message);
-      }
+      if (!data.success) throw new Error(data.message);
+
+      setContent("");
+      setImages([]);
+      toast.success(t("feed.post_published"));
+      if (onSuccess) onSuccess();
+      else navigate("/");
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -62,96 +102,85 @@ const CreatePost = ({ onSuccess }) => {
     }
   };
 
+  if (!user) return null;
+
   return (
-    <div className={`w-full animate-in ${onSuccess ? "" : "min-h-screen bg-background pt-20 px-4"}`}>
-      <div className={`w-full bg-surface p-5 rounded-3xl shadow-sm border border-border-subtle space-y-4 ${onSuccess ? "" : "max-w-xl mx-auto"}`}>
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <img
-              src={user.profile_picture}
-              alt="Profile"
-              className="w-11 h-11 rounded-full object-cover border-2 border-border-subtle shadow-sm"
-            />
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-surface rounded-full"></div>
-          </div>
-          <div className="flex flex-col">
-            <h2 className="font-bold text-sm tracking-tight text-text-primary">{user.full_name}</h2>
-            <p className="text-xs text-text-muted">@{user.username}</p>
-          </div>
-        </div>
+    <Box sx={onSuccess ? undefined : { minHeight: "100vh", bgcolor: "background.default", pt: 10, px: 2 }}>
+      <Paper
+        variant="outlined"
+        sx={{ width: "100%", maxWidth: onSuccess ? "none" : 576, mx: "auto", p: { xs: 2, sm: 2.5 }, borderRadius: 3 }}
+      >
+        <Stack spacing={2}>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
+            <Box sx={{ position: "relative" }}>
+              <Avatar src={user.profile_picture || undefined} alt={user.full_name} sx={{ width: 44, height: 44 }}>
+                {user.full_name?.charAt(0)}
+              </Avatar>
+              <Box
+                sx={{ position: "absolute", right: 0, bottom: 0, width: 12, height: 12, borderRadius: "50%", bgcolor: "success.main", border: 2, borderColor: "background.paper" }}
+              />
+            </Box>
+            <Stack>
+              <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                {user.full_name}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                @{user.username}
+              </Typography>
+            </Stack>
+          </Stack>
 
-        {/* Text Area */}
-        <textarea
-          className="w-full resize-none min-h-[100px] bg-transparent text-text-primary text-sm outline-none placeholder-text-muted border-none focus:ring-0 px-1"
-          placeholder={t('feed.whats_on_mind')}
-          onChange={(e) => setContent(e.target.value)}
-          value={content}
-        />
+          <TextField
+            multiline
+            minRows={3}
+            maxRows={8}
+            fullWidth
+            variant="standard"
+            placeholder={t("feed.whats_on_mind")}
+            value={content}
+            onChange={(event) => setContent(event.target.value)}
+            slotProps={{ input: { disableUnderline: true } }}
+          />
 
-        {/* Media Preview */}
-        {images.length > 0 && (
-          <div className="flex flex-wrap gap-3 py-2">
-            {images.map((image, i) => (
-              <div key={i} className="relative group rounded-2xl overflow-hidden border border-border-subtle shadow-sm">
-                {image.type.startsWith("video") ? (
-                  <video
-                    src={URL.createObjectURL(image)}
-                    className="h-28 w-40 object-cover"
-                  />
-                ) : (
-                  <img
-                    src={URL.createObjectURL(image)}
-                    className="h-28 w-28 object-cover"
-                    alt="Preview"
-                  />
-                )}
-                <button
-                  onClick={() => setImages(images.filter((_, index) => index !== i))}
-                  className="absolute top-2 right-2 p-1.5 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 transition shadow-lg hover:bg-black/80"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+          {images.length > 0 && (
+            <Stack direction="row" sx={{ flexWrap: "wrap", gap: 1.5 }}>
+              {images.map((image, index) => (
+                <MediaPreview
+                  key={`${image.name}-${image.lastModified}-${index}`}
+                  file={image}
+                  onRemove={() => setImages((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                />
+              ))}
+            </Stack>
+          )}
 
-        {/* Bottom Bar */}
-        <div className="flex items-center justify-between pt-4 border-t border-border-subtle">
-          <div className="flex items-center gap-1">
-            <label
-              htmlFor="media-upload"
-              className="flex items-center gap-2 text-sm text-text-primary hover:text-accent-primary transition cursor-pointer px-4 py-2 rounded-xl hover:bg-accent-primary/10 border border-transparent hover:border-accent-primary/20"
+          <Stack direction="row" spacing={2} sx={{ alignItems: "center", justifyContent: "space-between", pt: 2, borderTop: 1, borderColor: "divider" }}>
+            <Button component="label" startIcon={<Image size={20} />}>
+              {t("feed.photo_video")}
+              <Box
+                component="input"
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                onChange={(event) => {
+                  setImages((current) => [...current, ...Array.from(event.target.files || [])]);
+                  event.target.value = "";
+                }}
+                sx={{ display: "none" }}
+              />
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <Send size={17} />}
+              onClick={handleSubmit}
+              disabled={loading || (!content.trim() && !images.length)}
             >
-              <Image className="w-5 h-5 text-accent-primary" />
-              <span className="font-bold">{t('feed.photo_video')}</span>
-            </label>
-            <input
-              type="file"
-              id="media-upload"
-              accept="image/*,video/*"
-              hidden
-              multiple
-              onChange={(e) => setImages([...images, ...Array.from(e.target.files)])}
-            />
-          </div>
-
-          <button
-            onClick={handleSubmit}
-            disabled={loading || (!content.trim() && !images.length)}
-            className="flex items-center gap-2 px-6 py-2.5 bg-accent-primary hover:bg-accent-hover text-white rounded-xl text-sm font-bold shadow-lg shadow-accent-primary/20 transition-all active:scale-95 disabled:opacity-50 disabled:shadow-none"
-          >
-            {loading ? (
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
-            {t('feed.post')}
-          </button>
-        </div>
-      </div>
-    </div>
+              {t("feed.post")}
+            </Button>
+          </Stack>
+        </Stack>
+      </Paper>
+    </Box>
   );
 };
 

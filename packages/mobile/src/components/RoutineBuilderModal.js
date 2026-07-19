@@ -1,27 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Modal, 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  StyleSheet, 
-  ScrollView, 
-  KeyboardAvoidingView, 
-  Platform,
-  ActivityIndicator,
-  Alert
-} from 'react-native';
+import { Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert } from 'react-native';
+import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '@clerk/clerk-expo';
+import { useAuthContext } from "../context/AuthProvider";
 import api, { setAuthToken } from '../api/client';
+import Toast from 'react-native-toast-message';
 
 const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
-  const { getToken } = useAuth();
+  const { getToken } = useAuthContext();
   const styles = getStyles(theme);
 
   const [name, setName] = useState("");
@@ -132,19 +122,19 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
   return (
     <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={handleClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.header}>
-            <TouchableOpacity onPress={handleClose} style={styles.iconBtn}>
+        <Surface elevation={0} style={styles.modalContent}>
+          <Surface elevation={0} style={styles.header}>
+            <TouchableRipple borderless onPress={handleClose} style={styles.iconBtn}>
               <Ionicons name="close" size={24} color={theme.text} />
-            </TouchableOpacity>
+            </TouchableRipple>
             <Text style={styles.headerTitle}>{t('routines.build_routine', 'Rutin Oluştur')}</Text>
-            <TouchableOpacity onPress={handleSubmit} disabled={saving} style={[styles.saveBtn, saving && { opacity: 0.6 }]}>
+            <TouchableRipple borderless onPress={handleSubmit} disabled={saving} style={[styles.saveBtn, saving && { opacity: 0.6 }]}>
               <Text style={styles.saveBtnText}>{t('routines.save', 'Kaydet')}</Text>
-            </TouchableOpacity>
-          </View>
+            </TouchableRipple>
+          </Surface>
 
           <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-            <View style={styles.inputGroup}>
+            <Surface elevation={0} style={styles.inputGroup}>
               <Text style={styles.label}>{t('routines.routine_name', 'Rutin Adı')}</Text>
               <TextInput 
                 style={styles.input} 
@@ -153,11 +143,11 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
                 placeholder={t('routines.routine_name', 'Rutin Adı')} 
                 placeholderTextColor={theme.textMuted} 
               />
-            </View>
+            </Surface>
 
-            <View style={styles.searchSection}>
+            <Surface elevation={0} style={styles.searchSection}>
               <Text style={styles.label}>{t('routines.add_exercises', 'Egzersiz Ekle')}</Text>
-              <View style={styles.searchBar}>
+              <Surface elevation={0} style={styles.searchBar}>
                 <Ionicons name="search" size={18} color={theme.textMuted} />
                 <TextInput 
                   style={styles.searchInt} 
@@ -166,10 +156,10 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
                   onChangeText={setSearchQuery} 
                   placeholderTextColor={theme.textMuted}
                 />
-              </View>
+              </Surface>
 
             {/* Always show exercise list (search filters it) */}
-              <View style={styles.searchResults}>
+              <Surface elevation={0} style={styles.searchResults}>
                 {loadingEx ? (
                   <ActivityIndicator size="small" color={theme.primary} style={{ padding: 12 }} />
                 ) : exercisesData.length === 0 ? (
@@ -178,29 +168,29 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
                   </Text>
                 ) : (
                   exercisesData.slice(0, 20).map(ex => (
-                    <TouchableOpacity key={ex._id} onPress={() => addExercise(ex)} style={styles.resItem}>
-                      <View style={{ flex: 1 }}>
+                    <TouchableRipple borderless key={ex._id} onPress={() => addExercise(ex)} style={styles.resItem}>
+                      <Surface elevation={0} style={{ flex: 1 }}>
                         <Text style={{ color: theme.text, fontWeight: '500' }}>{ex.name}</Text>
                         <Text style={{ color: theme.textMuted, fontSize: 12 }}>{ex.muscleGroup} • {ex.equipment}</Text>
-                      </View>
+                      </Surface>
                       <Ionicons name="add-circle-outline" size={22} color={theme.primary} />
-                    </TouchableOpacity>
+                    </TouchableRipple>
                   ))
                 )}
-              </View>
-            </View>
+              </Surface>
+            </Surface>
 
             {selectedExercises.map((se, exIndex) => (
-              <View key={exIndex} style={styles.exCard}>
-                <View style={styles.exCardHeader}>
+              <Surface elevation={0} key={exIndex} style={styles.exCard}>
+                <Surface elevation={0} style={styles.exCardHeader}>
                   <Text style={styles.exName}>{se.exerciseId.name}</Text>
-                  <TouchableOpacity onPress={() => removeExercise(se.exerciseId._id)}>
+                  <TouchableRipple borderless onPress={() => removeExercise(se.exerciseId._id)}>
                     <Ionicons name="trash-outline" size={18} color="#ef4444" />
-                  </TouchableOpacity>
-                </View>
+                  </TouchableRipple>
+                </Surface>
 
                 {se.sets.map((set, setIndex) => (
-                  <View key={setIndex} style={styles.setRow}>
+                  <Surface elevation={0} key={setIndex} style={styles.setRow}>
                     <Text style={styles.setText}>{setIndex + 1}</Text>
                     <TextInput 
                       style={styles.setInt} 
@@ -216,31 +206,34 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
                       onChangeText={(v) => updateSet(exIndex, setIndex, 'reps', Number(v))}
                     />
                     <Text style={styles.setUnit}>{t('routines.reps', 'Tekrar')}</Text>
-                  </View>
+                  </Surface>
                 ))}
 
-                <TouchableOpacity onPress={() => addSet(exIndex)} style={styles.addSetBtn}>
+                <TouchableRipple borderless onPress={() => addSet(exIndex)} style={styles.addSetBtn}>
                   <Text style={styles.addSetText}>+ {t('routines.add_set', 'SET EKLE')}</Text>
-                </TouchableOpacity>
-              </View>
+                </TouchableRipple>
+              </Surface>
             ))}
 
-            <View style={{ height: 100 }} />
+            <Surface elevation={0} style={{ height: 100 }} />
           </ScrollView>
-        </View>
+        </Surface>
       </KeyboardAvoidingView>
     </Modal>
   );
 };
 
-const getStyles = (theme) => StyleSheet.create({
+const getStyles = (theme) => ({
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: theme.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '90%' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: theme.border },
   headerTitle: { color: theme.text, fontSize: 18, fontWeight: 'bold' },
+  iconBtn: { padding: 4 },
   saveBtn: { backgroundColor: theme.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
   saveBtnText: { color: '#fff', fontWeight: 'bold' },
   scroll: { padding: 20 },
+  inputGroup: { marginBottom: 4 },
+  searchSection: { marginBottom: 4 },
   label: { color: theme.text, fontWeight: 'bold', marginBottom: 8 },
   input: { backgroundColor: theme.surfaceLight, borderRadius: 12, padding: 12, color: theme.text, marginBottom: 20 },
   searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surfaceLight, borderRadius: 12, paddingHorizontal: 12, marginBottom: 10 },

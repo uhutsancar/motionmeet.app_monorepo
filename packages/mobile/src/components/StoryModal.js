@@ -1,31 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
   Modal,
-  TouchableOpacity,
   TextInput,
   Image,
   Alert,
   ScrollView,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useAuth } from '@clerk/clerk-expo';
+import { useAuthContext } from "../context/AuthProvider";
 import { createStory } from '../api/endpoints';
 
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
+import { Surface, TouchableRipple, Text } from 'react-native-paper';
 
 const StoryModal = ({ visible, onClose, onSuccess }) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
-  const styles = getStyles(theme);
-  const { getToken } = useAuth();
+  const { getToken } = useAuthContext();
   const [mode, setMode] = useState('text');
   const [text, setText] = useState('');
   const [media, setMedia] = useState(null);
@@ -41,6 +37,126 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
     '#ca8a04',
     '#0d9488',
   ];
+
+  const styles = useMemo(() => ({
+    container: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 16,
+      minHeight: 64,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
+      backgroundColor: 'transparent'
+    },
+    backButton: {
+      padding: 8,
+      marginLeft: -8,
+    },
+    postButtonWrapper: {
+      padding: 8,
+      marginRight: -8,
+    },
+    headerTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: theme.text,
+    },
+    postButton: {
+      fontSize: 16,
+      fontWeight: '900',
+      textTransform: 'uppercase',
+    },
+    content: {
+      flex: 1,
+      padding: 16,
+    },
+    modeSelector: {
+      flexDirection: 'row',
+      gap: 12,
+      marginBottom: 20,
+      backgroundColor: 'transparent'
+    },
+    modeButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 12,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    modeText: {
+      fontSize: 14,
+      fontWeight: 'bold',
+    },
+    preview: {
+      height: 400,
+      borderRadius: 24,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 20,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    mediaPreview: {
+      width: '100%',
+      height: '100%',
+      resizeMode: 'cover',
+    },
+    previewText: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: '#fff',
+      textAlign: 'center',
+      paddingHorizontal: 20,
+    },
+    textInput: {
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: 16,
+      padding: 16,
+      fontSize: 16,
+      color: theme.text,
+      minHeight: 100,
+      textAlignVertical: 'top',
+      marginBottom: 20,
+      backgroundColor: theme.surface,
+    },
+    sectionTitle: {
+      fontSize: 14,
+      fontWeight: 'bold',
+      color: theme.text,
+      marginBottom: 12,
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+    },
+    colorPicker: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 12,
+      paddingBottom: 40,
+      backgroundColor: 'transparent'
+    },
+    colorButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      borderWidth: 3,
+      borderColor: 'transparent',
+    },
+    selectedColor: {
+      borderColor: theme.text,
+    },
+  }), [theme]);
 
   const pickMedia = async (type) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -122,46 +238,52 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
     >
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.backButton}>
+        <Surface elevation={0} style={styles.header}>
+          <TouchableRipple onPress={onClose} style={styles.backButton} borderless>
             <Ionicons name="arrow-back" size={24} color={theme.text} />
-          </TouchableOpacity>
+          </TouchableRipple>
           <Text style={styles.headerTitle}>{t('feed.create_story')}</Text>
-          <TouchableOpacity onPress={handleCreateStory} disabled={loading} style={styles.postButtonWrapper}>
+          <TouchableRipple onPress={handleCreateStory} disabled={loading} style={styles.postButtonWrapper} borderless>
             <Text style={[styles.postButton, { color: loading ? theme.primary + '80' : theme.primary }]}>
               {loading ? t('common.saving') : t('feed.post_action')}
             </Text>
-          </TouchableOpacity>
-        </View>
+          </TouchableRipple>
+        </Surface>
 
         <ScrollView style={styles.content}>
-          <View style={styles.modeSelector}>
-            <TouchableOpacity
+          <Surface elevation={0} style={styles.modeSelector}>
+            <TouchableRipple
               style={[styles.modeButton, { backgroundColor: mode === 'text' ? theme.surface + '80' : theme.surface }]}
               onPress={() => {
                 setMode('text');
                 setMedia(null);
               }}
+              borderless
             >
-              <Ionicons name="text" size={20} color={mode === 'text' ? theme.primary : theme.textMuted} />
-              <Text style={[styles.modeText, { color: mode === 'text' ? theme.primary : theme.textMuted }]}>{t('feed.text')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+              <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'transparent' }}>
+                <Ionicons name="text" size={20} color={mode === 'text' ? theme.primary : theme.textMuted} />
+                <Text style={[styles.modeText, { color: mode === 'text' ? theme.primary : theme.textMuted }]}>{t('feed.text')}</Text>
+              </Surface>
+            </TouchableRipple>
+            <TouchableRipple
               style={[styles.modeButton, { backgroundColor: mode === 'media' ? theme.surface + '80' : theme.surface }]}
               onPress={() => pickMedia('image')}
+              borderless
             >
-              <Ionicons name="image" size={20} color={mode === 'media' ? theme.primary : theme.textMuted} />
-              <Text style={[styles.modeText, { color: mode === 'media' ? theme.primary : theme.textMuted }]}>{t('feed.media')}</Text>
-            </TouchableOpacity>
-          </View>
+              <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'transparent' }}>
+                <Ionicons name="image" size={20} color={mode === 'media' ? theme.primary : theme.textMuted} />
+                <Text style={[styles.modeText, { color: mode === 'media' ? theme.primary : theme.textMuted }]}>{t('feed.media')}</Text>
+              </Surface>
+            </TouchableRipple>
+          </Surface>
 
-          <View style={[styles.preview, { backgroundColor: mode === 'text' ? background : '#000' }]}>
+          <Surface elevation={0} style={[styles.preview, { backgroundColor: mode === 'text' ? background : '#000' }]}>
             {mode === 'media' && media ? (
               <Image source={{ uri: media.uri }} style={styles.mediaPreview} />
             ) : (
               <Text style={styles.previewText}>{text || t('feed.story_text_placeholder')}</Text>
             )}
-          </View>
+          </Surface>
 
           {mode === 'text' && (
             <>
@@ -176,9 +298,9 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
               />
 
               <Text style={styles.sectionTitle}>{t('feed.background_color')}</Text>
-              <View style={styles.colorPicker}>
+              <Surface elevation={0} style={styles.colorPicker}>
                 {bgColors.map((color) => (
-                  <TouchableOpacity
+                  <TouchableRipple
                     key={color}
                     style={[
                       styles.colorButton,
@@ -186,9 +308,12 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
                       background === color && styles.selectedColor,
                     ]}
                     onPress={() => setBackground(color)}
-                  />
+                    borderless
+                  >
+                    <Surface elevation={0} style={{ width: '100%', height: '100%', backgroundColor: 'transparent' }} />
+                  </TouchableRipple>
                 ))}
-              </View>
+              </Surface>
             </>
           )}
         </ScrollView>
@@ -197,122 +322,5 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
     </Modal>
   );
 };
-
-const getStyles = (theme) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    minHeight: 64,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  backButton: {
-    padding: 8,
-    marginLeft: -8,
-  },
-  postButtonWrapper: {
-    padding: 8,
-    marginRight: -8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: theme.text,
-  },
-  postButton: {
-    fontSize: 16,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  modeSelector: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  modeButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: theme.border,
-  },
-  modeText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  preview: {
-    height: 400,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: theme.border,
-  },
-  mediaPreview: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  previewText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    textAlign: 'center',
-    paddingHorizontal: 20,
-  },
-  textInput: {
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: 16,
-    padding: 16,
-    fontSize: 16,
-    color: theme.text,
-    minHeight: 100,
-    textAlignVertical: 'top',
-    marginBottom: 20,
-    backgroundColor: theme.surface,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: theme.text,
-    marginBottom: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  colorPicker: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    paddingBottom: 40,
-  },
-  colorButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 3,
-    borderColor: 'transparent',
-  },
-  selectedColor: {
-    borderColor: theme.text,
-  },
-});
 
 export default StoryModal;

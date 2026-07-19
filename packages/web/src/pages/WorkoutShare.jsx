@@ -1,130 +1,128 @@
-import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Share, Instagram, Twitter, CheckCircle2, ChevronRight, Download, X } from 'lucide-react';
+import { Share, Instagram, Twitter, CheckCircle2, Download, X } from 'lucide-react';
 import moment from 'moment';
+import { Box, Typography, IconButton, Button, Stack, Paper, Chip } from '@mui/material';
 
 const WorkoutCompleteShare = () => {
     const { t } = useTranslation();
     const location = useLocation();
     const navigate = useNavigate();
 
-    // In a real app, this would come from location.state after finishing a workout
-    const { workout } = location.state || {
-        workout: {
-            name: "Upper Body Power",
-            endTime: new Date(),
-            durationMinutes: 45,
-            volumeKg: 4200,
-            exercises: [
-                { exerciseId: { name: 'Bench Press' }, sets: [{ weight: 80, reps: 10 }, { weight: 85, reps: 8 }] },
-                { exerciseId: { name: 'Incline Dumbbell Press' }, sets: [{ weight: 30, reps: 12 }, { weight: 30, reps: 10 }] }
-            ]
-        }
-    };
+    const workout = location.state?.workout;
+
+    if (!workout) {
+        return (
+            <Box sx={{ width: '100%', minHeight: '100dvh', bgcolor: 'background.default', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 3, textAlign: 'center' }}>
+                <Typography variant="h5" fontWeight="900" mb={2}>Paylaşılacak antrenman bulunamadı.</Typography>
+                <Button variant="contained" onClick={() => navigate('/routines')} sx={{ mt: 2, borderRadius: 4, fontWeight: 'bold' }}>
+                    {t('menu.routines', 'Rutinlere dön')}
+                </Button>
+            </Box>
+        );
+    }
 
     return (
-        <div className="w-full min-h-[100dvh] bg-background text-text-primary p-4 lg:p-8 flex flex-col items-center">
-
+        <Box sx={{ width: '100%', minHeight: '100dvh', bgcolor: 'background.default', display: 'flex', flexDirection: 'column', alignItems: 'center', p: { xs: 2, lg: 4 } }}>
             {/* Header */}
-            <div className="w-full justify-between flex items-center max-w-md mb-6">
-                <div /> {/* spacing element */}
-                <button onClick={() => navigate('/feed')} className="p-2 bg-surface rounded-full hover:bg-surface-light border border-border-subtle transition-colors">
-                    <X className="w-6 h-6 text-text-muted" />
-                </button>
-            </div>
+            <Box sx={{ width: '100%', maxWidth: 'sm', display: 'flex', justifyContent: 'flex-end', mb: 4 }}>
+                <IconButton onClick={() => navigate('/feed')} sx={{ bgcolor: 'background.paper', border: 1, borderColor: 'divider', '&:hover': { bgcolor: 'action.hover' } }}>
+                    <X size={24} />
+                </IconButton>
+            </Box>
 
-            <div className="flex-1 w-full max-w-md flex flex-col items-center">
+            <Box sx={{ flex: 1, width: '100%', maxWidth: 'sm', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 {/* Title Section */}
-                <div className="text-center mb-8">
-                    <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto mb-4" />
-                    <h1 className="text-4xl font-black tracking-tight mb-2">Güzeldi!</h1>
-                    <p className="text-text-muted font-medium">Bu senin 34. antrenmanın oldu.</p>
-                </div>
+                <Box sx={{ textAlign: 'center', mb: 6 }}>
+                    <CheckCircle2 size={64} color="#10b981" style={{ margin: '0 auto', marginBottom: 16 }} />
+                    <Typography variant="h3" fontWeight="900" gutterBottom>Güzeldi!</Typography>
+                    <Typography variant="subtitle1" color="text.secondary" fontWeight="bold">Bu senin 34. antrenmanın oldu.</Typography>
+                </Box>
 
                 {/* Share Card to overlay onto Instagram */}
-                <div className="w-full aspect-[4/5] bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-[2.5rem] p-1 shadow-2xl shadow-purple-500/20 mb-8 relative overflow-hidden group">
+                <Box sx={{
+                    width: '100%', aspectRatio: '4/5', borderRadius: 10, p: 0.5, mb: 6, position: 'relative', overflow: 'hidden',
+                    background: 'linear-gradient(to bottom right, #6366f1, #a855f7, #ec4899)',
+                    boxShadow: '0 25px 50px -12px rgba(168, 85, 247, 0.25)'
+                }}>
                     {/* Glass Overlay */}
-                    <div className="absolute inset-0 bg-white/10 backdrop-blur-md"></div>
+                    <Box sx={{ position: 'absolute', inset: 0, bgcolor: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)' }} />
 
                     {/* Inner Content */}
-                    <div className="relative h-full bg-background/90 backdrop-blur-3xl rounded-[2.25rem] p-8 flex flex-col items-center justify-center text-center">
-                        <div className="w-16 h-16 bg-accent-primary rounded-2xl flex items-center justify-center mb-6 shadow-xl shadow-accent-primary/30">
-                            <span className="text-white font-black text-2xl">M</span>
-                        </div>
+                    <Box sx={{
+                        position: 'relative', height: '100%', bgcolor: 'rgba(var(--mui-palette-background-defaultChannel), 0.9)',
+                        backdropFilter: 'blur(40px)', borderRadius: 9.5, p: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center'
+                    }}>
+                        <Box sx={{ width: 64, height: 64, bgcolor: 'primary.main', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 4, boxShadow: '0 20px 25px -5px rgba(var(--mui-palette-primary-mainChannel), 0.3)' }}>
+                            <Typography variant="h4" fontWeight="900" color="primary.contrastText">M</Typography>
+                        </Box>
 
-                        <h2 className="text-2xl font-black mb-1 text-text-primary">{workout?.name}</h2>
-                        <p className="text-sm font-bold text-text-muted uppercase tracking-widest mb-8">
+                        <Typography variant="h5" fontWeight="900" mb={1}>{workout?.name}</Typography>
+                        <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 2, mb: 4 }}>
                             {moment(workout?.endTime).format('DD MMM YYYY')}
-                        </p>
+                        </Typography>
 
-                        <div className="w-full grid grid-cols-2 gap-4">
-                            <div className="bg-surface/50 border border-border-subtle/50 rounded-2xl p-4">
-                                <span className="block text-3xl font-black text-text-primary mb-1">{workout?.durationMinutes}</span>
-                                <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Süre (Dk)</span>
-                            </div>
-                            <div className="bg-surface/50 border border-border-subtle/50 rounded-2xl p-4">
-                                <span className="block text-3xl font-black text-text-primary mb-1">{workout?.volumeKg}</span>
-                                <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Hacim (Kg)</span>
-                            </div>
-                        </div>
+                        <Stack direction="row" spacing={2} sx={{ width: '100%', mb: 4 }}>
+                            <Paper variant="outlined" sx={{ flex: 1, bgcolor: 'action.hover', p: 2, borderRadius: 4, border: 1, borderColor: 'divider' }}>
+                                <Typography variant="h4" fontWeight="900" mb={0.5}>{workout?.durationMinutes}</Typography>
+                                <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 1 }}>Süre (Dk)</Typography>
+                            </Paper>
+                            <Paper variant="outlined" sx={{ flex: 1, bgcolor: 'action.hover', p: 2, borderRadius: 4, border: 1, borderColor: 'divider' }}>
+                                <Typography variant="h4" fontWeight="900" mb={0.5}>{workout?.volumeKg}</Typography>
+                                <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 1 }}>Hacim (Kg)</Typography>
+                            </Paper>
+                        </Stack>
 
-                        <div className="mt-8 flex flex-wrap justify-center gap-2">
-                            <span className="bg-emerald-500/10 text-emerald-500 font-bold text-[10px] px-3 py-1.5 rounded-full uppercase tracking-widest">
-                                2 Yeni Kupa 🏆
-                            </span>
-                            <span className="bg-blue-500/10 text-blue-500 font-bold text-[10px] px-3 py-1.5 rounded-full uppercase tracking-widest">
-                                Bacak Günü
-                            </span>
-                        </div>
-                    </div>
-                </div>
+                        <Stack direction="row" spacing={1} justifyContent="center" flexWrap="wrap">
+                            <Chip label="2 Yeni Kupa 🏆" size="small" sx={{ bgcolor: 'success.light', color: 'success.dark', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.65rem' }} />
+                            <Chip label="Bacak Günü" size="small" sx={{ bgcolor: 'info.light', color: 'info.dark', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.65rem' }} />
+                        </Stack>
+                    </Box>
+                </Box>
 
                 {/* Sharing Options */}
-                <div className="w-full space-y-4">
-                    <h3 className="font-bold text-sm text-text-muted uppercase tracking-widest ml-2 mb-2 p-0 text-center">Spacelara Paylaş</h3>
+                <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <Typography variant="caption" fontWeight="bold" color="text.secondary" align="center" sx={{ textTransform: 'uppercase', letterSpacing: 2 }}>Spacelara Paylaş</Typography>
 
-                    <div className="flex justify-center gap-4 mb-8">
-                        <button className="flex flex-col items-center gap-2 group">
-                            <div className="w-14 h-14 bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-500 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                                <Instagram className="w-6 h-6 text-white" />
-                            </div>
-                            <span className="text-[10px] font-bold text-text-muted uppercase">Hikaye</span>
-                        </button>
+                    <Stack direction="row" spacing={3} justifyContent="center" mb={4}>
+                        <Stack alignItems="center" spacing={1}>
+                            <IconButton sx={{ width: 56, height: 56, background: 'linear-gradient(to top right, #facc15, #ef4444, #a855f7)', color: 'white', boxShadow: 3, transition: 'transform 0.2s', '&:hover': { transform: 'scale(1.1)' } }}>
+                                <Instagram size={24} />
+                            </IconButton>
+                            <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ textTransform: 'uppercase' }}>Hikaye</Typography>
+                        </Stack>
+                        <Stack alignItems="center" spacing={1}>
+                            <IconButton sx={{ width: 56, height: 56, bgcolor: 'common.black', color: 'white', boxShadow: 3, transition: 'transform 0.2s', '&:hover': { bgcolor: 'grey.900', transform: 'scale(1.1)' } }}>
+                                <Twitter size={24} />
+                            </IconButton>
+                            <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ textTransform: 'uppercase' }}>Gönderi</Typography>
+                        </Stack>
+                        <Stack alignItems="center" spacing={1}>
+                            <IconButton sx={{ width: 56, height: 56, bgcolor: 'info.main', color: 'white', boxShadow: 3, transition: 'transform 0.2s', '&:hover': { bgcolor: 'info.dark', transform: 'scale(1.1)' } }}>
+                                <Share size={24} />
+                            </IconButton>
+                            <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ textTransform: 'uppercase' }}>Diğer</Typography>
+                        </Stack>
+                        <Stack alignItems="center" spacing={1}>
+                            <IconButton sx={{ width: 56, height: 56, bgcolor: 'background.paper', border: 1, borderColor: 'divider', color: 'text.primary', boxShadow: 3, transition: 'transform 0.2s', '&:hover': { transform: 'scale(1.1)' } }}>
+                                <Download size={24} />
+                            </IconButton>
+                            <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ textTransform: 'uppercase' }}>İndir</Typography>
+                        </Stack>
+                    </Stack>
 
-                        <button className="flex flex-col items-center gap-2 group">
-                            <div className="w-14 h-14 bg-black rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                                <Twitter className="w-6 h-6 text-white" />
-                            </div>
-                            <span className="text-[10px] font-bold text-text-muted uppercase">Gönderi</span>
-                        </button>
-
-                        <button className="flex flex-col items-center gap-2 group">
-                            <div className="w-14 h-14 bg-blue-500 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                                <Share className="w-6 h-6 text-white" />
-                            </div>
-                            <span className="text-[10px] font-bold text-text-muted uppercase">Diğer</span>
-                        </button>
-
-                        <button className="flex flex-col items-center gap-2 group">
-                            <div className="w-14 h-14 bg-surface rounded-full flex items-center justify-center shadow-lg border border-border-subtle group-hover:scale-110 transition-transform">
-                                <Download className="w-6 h-6 text-text-primary" />
-                            </div>
-                            <span className="text-[10px] font-bold text-text-muted uppercase">İndir</span>
-                        </button>
-                    </div>
-
-                    <button
+                    <Button
+                        variant="outlined"
+                        fullWidth
+                        size="large"
                         onClick={() => navigate('/feed')}
-                        className="w-full bg-surface-light border border-border-subtle py-4 rounded-2xl font-bold text-text-primary hover:bg-surface transition-colors"
+                        sx={{ py: 2, borderRadius: 4, fontWeight: 'bold', color: 'text.primary', borderColor: 'divider', '&:hover': { bgcolor: 'action.hover' } }}
                     >
                         {t('common.done', 'Bitti')}
-                    </button>
-                </div>
-
-            </div>
-
-        </div>
+                    </Button>
+                </Box>
+            </Box>
+        </Box>
     );
 };
 

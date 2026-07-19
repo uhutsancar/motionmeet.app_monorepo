@@ -1,75 +1,91 @@
-import { BadgeCheck, Heart, MessageCircle, Share2, Dumbbell, Send, Lock } from "lucide-react";
+import { useAuthContext } from "../context/AuthProvider";
+import {
+  Avatar,
+  Box,
+  Button,
+  ButtonBase,
+  Card,
+  Chip,
+  CircularProgress,
+  Collapse,
+  IconButton,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
+import { BadgeCheck, Dumbbell, Heart, Lock, MessageCircle, Send, Share2, Users } from "lucide-react";
 import moment from "moment";
-import React, { useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { useSelector } from "react-redux";
-import { useAuth } from "@clerk/clerk-react";
+import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import api from "~/api/axios";
 import { useTranslation } from "react-i18next";
-import DOMPurify from "dompurify";
+import { useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
+import api from "~/api/axios";
 
 const PostCard = ({ post }) => {
   const { t, i18n } = useTranslation();
-
-  // Replace hashtags with styled spans and sanitize the result to prevent XSS
-  const rawHTML = post.content ? post.content.replace(
-    /(#\w+)/g,
-    '<span class="text-accent-primary cursor-pointer font-semibold">$1</span>'
-  ) : "";
-  const postWithHashtags = DOMPurify.sanitize(rawHTML);
-
-
-  const [likes, setLikes] = useState(post.likes_count || []);
   const currentUser = useSelector((state) => state.user.value);
-  const { getToken } = useAuth();
+  const { getToken } = useAuthContext();
   const navigate = useNavigate();
-
+  const [likes, setLikes] = useState(post?.likes_count || []);
   const [activeSlide, setActiveSlide] = useState(0);
+  const [showComments, setShowComments] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [commentLoading, setCommentLoading] = useState(false);
+  const [comments, setComments] = useState(post?.comments || []);
   const scrollRef = useRef(null);
 
-  moment.locale(i18n.language.startsWith('tr') ? 'tr' : 'en');
+  useEffect(() => {
+    moment.locale(i18n.language.startsWith("tr") ? "tr" : "en");
+  }, [i18n.language]);
+
+  if (!post?.user) return null;
+
+  const isLiked = Boolean(currentUser?._id && likes.includes(currentUser._id));
+  const hasWorkout = post.post_type === "workout" && post.workout;
+  const isVideo = post.post_type === "video";
+  const imageUrls = post.image_urls || [];
+  const carouselData = [];
+
+  if (isVideo && imageUrls.length > 0) carouselData.push({ type: "video", url: imageUrls[0] });
+  else imageUrls.forEach((url) => carouselData.push({ type: "image", url }));
+  if (hasWorkout) carouselData.push({ type: "workout", data: post.workout });
 
   const handleLike = async () => {
     try {
       const { data } = await api.post(
-        `/api/post/like`,
+        "/api/post/like",
         { postId: post._id },
-        { headers: { Authorization: `Bearer ${await getToken()}` } }
+        { headers: { Authorization: `Bearer ${await getToken()}` } },
       );
 
-      if (data.success) {
-        setLikes((prev) => {
-          if (prev.includes(currentUser._id)) {
-            return prev.filter((id) => id !== currentUser._id);
-          } else {
-            return [...prev, currentUser._id];
-          }
-        });
+      if (data.success && currentUser?._id) {
+        setLikes((currentLikes) =>
+          currentLikes.includes(currentUser._id)
+            ? currentLikes.filter((id) => id !== currentUser._id)
+            : [...currentLikes, currentUser._id],
+        );
       }
     } catch (error) {
       toast.error(error.message);
     }
   };
 
-  const [showComments, setShowComments] = useState(false);
-  const [commentText, setCommentText] = useState("");
-  const [commentLoading, setCommentLoading] = useState(false);
-  const [comments, setComments] = useState(post.comments || []);
-
   const handleAddComment = async () => {
     if (!commentText.trim()) return;
+
     setCommentLoading(true);
     try {
       const { data } = await api.post(
         "/api/post/comment/add",
         { postId: post._id, content: commentText },
-        { headers: { Authorization: `Bearer ${await getToken()}` } }
+        { headers: { Authorization: `Bearer ${await getToken()}` } },
       );
       if (data.success) {
         setComments(data.comments);
         setCommentText("");
-        toast.success(t('feed.comment_posted', 'Comment posted!'));
+        toast.success(t("feed.comment_posted", "Comment posted!"));
       }
     } catch (error) {
       toast.error(error.message);
@@ -78,275 +94,208 @@ const PostCard = ({ post }) => {
     }
   };
 
-  // Carousel Data Preparation
-  const hasWorkout = post.post_type === 'workout' && post.workout;
-  const isVideo = post.post_type === 'video';
-  const imageUrls = post.image_urls || [];
-
-  const carouselData = [];
-
-  // First, add photos/videos
-  if (isVideo && imageUrls.length > 0) {
-    carouselData.push({ type: 'video', url: imageUrls[0] });
-  } else {
-    imageUrls.forEach(url => carouselData.push({ type: 'image', url }));
-  }
-
-  // Then, append Workout exercise card (slide 2+)
-  if (hasWorkout) {
-    carouselData.push({ type: 'workout', data: post.workout });
-  }
-
-  // Handle intersection/scroll logic for dots
   const handleScroll = () => {
     if (!scrollRef.current) return;
-    const scrollPosition = scrollRef.current.scrollLeft;
-    const slideWidth = scrollRef.current.offsetWidth;
-    const currentSlide = Math.round(scrollPosition / slideWidth);
-
-    if (currentSlide !== activeSlide) {
-      setActiveSlide(currentSlide);
-    }
+    const currentSlide = Math.round(scrollRef.current.scrollLeft / scrollRef.current.offsetWidth);
+    if (currentSlide !== activeSlide) setActiveSlide(currentSlide);
   };
 
-  if (!post || !post.user) return null;
+  const contentParts = post.content?.split(/(#\w+)/g) || [];
+  const workoutStats = hasWorkout
+    ? [
+        { label: t("feed.duration", "Süre"), value: `${post.workout.durationMinutes || post.workout.duration || 0}m` },
+        { label: t("feed.volume", "Hacim"), value: `${(post.workout.volumeKg || post.workout.volume || 0).toLocaleString()}kg` },
+        { label: t("feed.prs", "Rekorlar"), value: "🥇 0" },
+        { label: t("feed.bpm", "Ort. bpm"), value: "❤️ --" },
+      ]
+    : [];
 
   return (
-    <div className="glass rounded-3xl shadow-sm border border-border-subtle pt-6 pb-2 w-full max-w-[500px] mx-auto animate-in hover:shadow-md transition-all duration-300">
+    <Card
+      variant="outlined"
+      sx={{ width: "100%", maxWidth: 500, mx: "auto", borderRadius: 3, overflow: "hidden", transition: "box-shadow .2s", "&:hover": { boxShadow: 3 } }}
+    >
+      <Box sx={{ px: { xs: 2, sm: 2.5 }, pt: 2.5 }}>
+        <ButtonBase onClick={() => navigate(`/profile/${post.user._id}`)} sx={{ borderRadius: 2, textAlign: "left" }}>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
+            <Avatar src={post.user.profile_picture || undefined} alt={post.user.full_name} sx={{ width: 48, height: 48, border: 1, borderColor: "divider" }}>
+              {post.user.full_name?.charAt(0)}
+            </Avatar>
+            <Stack>
+              <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
+                <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                  {post.user.full_name}
+                </Typography>
+                {post.user.is_verified && <BadgeCheck size={16} color="currentColor" />}
+              </Stack>
+              <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                <Typography variant="caption" color="text.secondary">
+                  @{post.user.username} · {moment(post.createdAt).fromNow()}
+                </Typography>
+                {post.visibility === "private" && (
+                  <Chip icon={<Lock size={12} />} label={t("feed.only_you", "Sadece siz")} size="small" sx={{ height: 21, fontSize: 10 }} />
+                )}
+                {post.visibility === "followers" && (
+                  <Chip icon={<Users size={12} />} label={t("feed.followers", "Takipçiler")} size="small" sx={{ height: 21, fontSize: 10 }} />
+                )}
+              </Stack>
+            </Stack>
+          </Stack>
+        </ButtonBase>
+      </Box>
 
-      {/* User Info Header */}
-      <div className="px-5 mb-3">
-        <div
-          onClick={() => navigate("/profile/" + post.user.username)}
-          className="inline-flex items-center gap-3.5 cursor-pointer group"
-        >
-          <img
-            src={post.user.profile_picture}
-            alt="Profile"
-            className="w-12 h-12 rounded-full object-cover shadow-sm bg-surface-light border border-border-subtle group-hover:border-accent-primary transition-all duration-200"
-          />
-          <div className="flex flex-col">
-            <div className="flex items-center space-x-1">
-              <span className="text-[15px] font-bold text-text-primary tracking-tight group-hover:text-accent-primary transition-colors">{post.user.full_name}</span>
-              {post.user.is_verified && <BadgeCheck className="w-4 h-4 text-accent-primary" />}
-            </div>
-            <div className="flex items-center gap-2 text-text-muted text-xs font-semibold">
-              <span>@{post.user.username} • {moment(post.createdAt).fromNow()}</span>
-              {post.visibility === 'private' && (
-                <span className="flex items-center gap-1">
-                  <Lock className="w-3 h-3" />
-                  <span>Sadece siz</span>
-                </span>
-              )}
-              {post.visibility === 'followers' && (
-                <span className="flex items-center gap-1">
-                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" /></svg>
-                  <span>Takipçiler</span>
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Post Context & Title */}
-      <div className="px-5 mb-4 space-y-1">
+      <Stack spacing={0.75} sx={{ px: { xs: 2, sm: 2.5 }, py: 2 }}>
         {hasWorkout && post.workout?.name && (
-          <h3 className="text-[17px] font-bold text-text-primary leading-tight">
+          <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
             {post.workout.name}
-          </h3>
+          </Typography>
         )}
         {post.content && (
-          <div
-            className="text-text-secondary text-[15px] leading-relaxed whitespace-pre-line"
-            dangerouslySetInnerHTML={{ __html: postWithHashtags }}
-          />
+          <Typography component="div" variant="body2" color="text.secondary" sx={{ whiteSpace: "pre-line", lineHeight: 1.65 }}>
+            {contentParts.map((part, index) =>
+              /^#\w+$/.test(part) ? (
+                <Box component="span" key={`${part}-${index}`} sx={{ color: "primary.main", fontWeight: 700 }}>
+                  {part}
+                </Box>
+              ) : (
+                part
+              ),
+            )}
+          </Typography>
         )}
-      </div>
+      </Stack>
 
-      {/* Structured Stats Row (If Workout Exists) */}
       {hasWorkout && (
-        <div className="flex items-center gap-6 px-5 mb-4">
-          <div className="flex flex-col">
-            <span className="text-xs text-text-muted font-semibold mb-0.5">{t('feed.duration', 'Süre')}</span>
-            <span className="text-[15px] font-bold text-text-primary">
-              {post.workout.durationMinutes || post.workout.duration || '0'}<span className="text-xs text-text-muted font-normal ml-0.5">m</span>
-            </span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-xs text-text-muted font-semibold mb-0.5">{t('feed.volume', 'Hacim')}</span>
-            <span className="text-[15px] font-bold text-text-primary">
-              {(post.workout.volumeKg || post.workout.volume || 0).toLocaleString()}<span className="text-xs text-text-muted font-normal ml-0.5">kg</span>
-            </span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-xs text-text-muted font-semibold mb-0.5">{t('feed.prs', 'Rekorlar')}</span>
-            <span className="text-[15px] font-bold text-text-primary">🥇 0</span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-xs text-text-muted font-semibold mb-0.5">{t('feed.bpm', 'Ort. bpm')}</span>
-            <span className="text-[15px] font-bold text-text-primary">❤️ --</span>
-          </div>
-        </div>
+        <Stack direction="row" spacing={1} sx={{ px: { xs: 2, sm: 2.5 }, pb: 2, overflowX: "auto", justifyContent: "space-between" }}>
+          {workoutStats.map((stat) => (
+            <Stack key={stat.label} sx={{ minWidth: 70 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                {stat.label}
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                {stat.value}
+              </Typography>
+            </Stack>
+          ))}
+        </Stack>
       )}
 
-      {/* Carousel Media */}
       {carouselData.length > 0 && (
-        <div className="relative w-full overflow-hidden">
-          <div
+        <Box sx={{ position: "relative", width: "100%", overflow: "hidden" }}>
+          <Box
             ref={scrollRef}
             onScroll={handleScroll}
-            className="flex w-full overflow-x-auto snap-x snap-mandatory no-scrollbar"
-            style={{ scrollBehavior: 'smooth' }}
+            sx={{ display: "flex", width: "100%", overflowX: "auto", scrollSnapType: "x mandatory", scrollBehavior: "smooth" }}
           >
             {carouselData.map((item, index) => (
-              <div
-                key={index}
-                className="w-full flex-shrink-0 snap-center relative aspect-[4/5] sm:aspect-square bg-black border-y border-border-subtle"
+              <Box
+                key={`${item.type}-${item.url || index}`}
+                sx={{ width: "100%", flexShrink: 0, scrollSnapAlign: "center", position: "relative", aspectRatio: { xs: "4 / 5", sm: "1 / 1" }, bgcolor: item.type === "workout" ? "background.default" : "common.black", borderTop: 1, borderBottom: 1, borderColor: "divider" }}
               >
-                {item.type === 'video' ? (
-                  <div className="w-full h-full flex items-center justify-center relative">
-                    <video src={item.url} controls className="w-full h-full object-contain" />
-                  </div>
-                ) : item.type === 'image' ? (
-                  <img src={item.url} alt={`Slide ${index}`} className="w-full h-full object-cover" />
-                ) : item.type === 'workout' ? (
-                  <div className="w-full h-full bg-background flex flex-col justify-center px-6 gap-5">
-                    {item.data.exercises?.slice(0, 4).map((ex, i) => (
-                      <div key={i} className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-full bg-surface-light border border-border-subtle flex items-center justify-center shrink-0 shadow-sm">
-                          <Dumbbell className="w-6 h-6 text-text-primary" />
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-text-primary font-semibold text-[15px] leading-tight line-clamp-2">
-                            {ex.sets?.length || 0} set {ex.exerciseId?.name || t('routines.exercise', 'Egzersiz')}
-                          </p>
-                        </div>
-                      </div>
+                {item.type === "video" ? (
+                  <Box component="video" src={item.url} controls sx={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                ) : item.type === "image" ? (
+                  <Box component="img" src={item.url} alt={`Slide ${index + 1}`} sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                ) : (
+                  <Stack spacing={2.5} sx={{ height: "100%", px: 3, justifyContent: "center" }}>
+                    {item.data.exercises?.slice(0, 4).map((exercise, exerciseIndex) => (
+                      <Stack key={exercise._id || exercise.exerciseId?._id || exerciseIndex} direction="row" spacing={2} sx={{ alignItems: "center" }}>
+                        <Avatar sx={{ width: 56, height: 56, bgcolor: "action.hover", color: "text.primary", border: 1, borderColor: "divider" }}>
+                          <Dumbbell size={24} />
+                        </Avatar>
+                        <Typography variant="body2" sx={{ fontWeight: 700, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                          {exercise.sets?.length || 0} set {exercise.exerciseId?.name || t("routines.exercise", "Egzersiz")}
+                        </Typography>
+                      </Stack>
                     ))}
                     {item.data.exercises?.length > 4 && (
-                      <div className="text-center mt-2">
-                        <p className="text-text-muted text-sm font-medium">
-                          {item.data.exercises.length - 4} {t('feed.more_exercises', 'egzersiz daha görün')}
-                        </p>
-                      </div>
+                      <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>
+                        {item.data.exercises.length - 4} {t("feed.more_exercises", "egzersiz daha")}
+                      </Typography>
                     )}
-                  </div>
-                ) : null}
-              </div>
+                  </Stack>
+                )}
+              </Box>
             ))}
-          </div>
+          </Box>
 
-          {/* Dots Indicator */}
           {carouselData.length > 1 && (
-            <div className="absolute bottom-4 left-0 right-0 flex justify-center items-center gap-1.5 z-10">
-              {carouselData.map((_, i) => (
-                <div
-                  key={i}
-                  className={`h-1.5 rounded-full transition-all duration-300 ${i === activeSlide
-                    ? "w-4 bg-accent-primary"
-                    : "w-1.5 bg-white/40"
-                    }`}
-                />
+            <Stack direction="row" spacing={0.75} sx={{ justifyContent: "center", position: "absolute", left: 0, right: 0, bottom: 16 }}>
+              {carouselData.map((_, index) => (
+                <Box key={index} sx={{ width: index === activeSlide ? 16 : 6, height: 6, borderRadius: 99, bgcolor: index === activeSlide ? "primary.main" : "rgba(255,255,255,.5)", transition: "width .2s" }} />
               ))}
-            </div>
+            </Stack>
           )}
-        </div>
+        </Box>
       )}
 
-      {/* Actions */}
-      <div className="flex items-center gap-6 px-5 pt-4 mt-2">
-        <button
-          onClick={handleLike}
-          className="flex items-center gap-2 hover:opacity-70 transition-opacity group"
-        >
-          <Heart className={`w-[26px] h-[26px] ${likes.includes(currentUser._id) ? "fill-red-500 stroke-red-500" : "text-text-primary"}`} />
-          <span className={`text-[15px] font-bold ${likes.includes(currentUser._id) ? "text-red-500" : "text-text-primary"}`}>{likes.length}</span>
-        </button>
+      <Stack direction="row" spacing={1} sx={{ px: { xs: 1, sm: 1.5 }, pt: 1.25, alignItems: "center" }}>
+        <Button color={isLiked ? "error" : "inherit"} startIcon={<Heart size={25} fill={isLiked ? "currentColor" : "none"} />} onClick={handleLike}>
+          {likes.length}
+        </Button>
+        <Button color="inherit" startIcon={<MessageCircle size={25} />} onClick={() => setShowComments((visible) => !visible)}>
+          {comments.length}
+        </Button>
+        <IconButton aria-label={t("feed.share", "Share")} sx={{ ml: "auto" }}>
+          <Share2 size={23} />
+        </IconButton>
+      </Stack>
 
-        <button
-          onClick={() => setShowComments(!showComments)}
-          className="flex items-center gap-2 hover:opacity-70 transition-opacity group"
-        >
-          <MessageCircle className={`w-[26px] h-[26px] text-text-primary ${showComments ? "fill-text-primary/20" : ""}`} />
-          <span className="text-[15px] font-bold text-text-primary">{comments.length}</span>
-        </button>
-
-        <button className="flex items-center gap-2 hover:opacity-70 transition-opacity group ml-auto">
-          <Share2 className="w-[24px] h-[24px] text-text-primary -scale-x-100" />
-        </button>
-      </div>
-
-      {/* Interaction Summary */}
       {likes.length > 0 && (
-        <div className="px-5 pt-3 pb-1">
-          <p className="text-[13px] text-text-muted">
-            {t('feed.liked_by', 'Liked by')} <span className="font-bold text-text-secondary">{likes.length}</span> {t('feed.people', 'people')}
-          </p>
-        </div>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", px: { xs: 2, sm: 2.5 }, pb: 0.5 }}>
+          {t("feed.liked_by", "Liked by")} <Box component="span" sx={{ color: "text.primary", fontWeight: 800 }}>{likes.length}</Box> {t("feed.people", "people")}
+        </Typography>
       )}
 
-      {/* Comments Section */}
-      {showComments && (
-        <div className="pt-2 pb-2 space-y-4 animate-in slide-in-from-top-2 duration-300 px-5">
-          <div className="max-h-60 overflow-y-auto no-scrollbar space-y-4">
+      <Collapse in={showComments}>
+        <Stack spacing={2} sx={{ px: { xs: 2, sm: 2.5 }, pt: 1.5, pb: 2 }}>
+          <Stack spacing={1.75} sx={{ maxHeight: 240, overflowY: "auto" }}>
             {comments.length > 0 ? (
-              comments.map((comment, i) => (
-                <div key={i} className="flex gap-3">
-                  <img
-                    src={comment.user?.profile_picture}
-                    alt="Commenter"
-                    className="w-8 h-8 rounded-full object-cover shrink-0 border border-border-subtle"
-                  />
-                  <div className="flex-1">
-                    <div className="bg-surface-light rounded-2xl p-3 border border-border-subtle inline-block min-w-[60%]">
-                      <p className="text-[13px] font-bold text-text-primary mb-0.5">
+              comments.map((comment, index) => (
+                <Stack key={comment._id || `${comment.user?._id}-${comment.createdAt}-${index}`} direction="row" spacing={1.25} sx={{ alignItems: "flex-start" }}>
+                  <Avatar src={comment.user?.profile_picture || undefined} alt={comment.user?.full_name} sx={{ width: 32, height: 32 }}>
+                    {comment.user?.full_name?.charAt(0)}
+                  </Avatar>
+                  <Stack sx={{ minWidth: 0, flex: 1 }}>
+                    <Paper variant="outlined" sx={{ display: "inline-block", alignSelf: "flex-start", minWidth: "60%", p: 1.25, borderRadius: 2, bgcolor: "action.hover" }}>
+                      <Typography variant="caption" sx={{ fontWeight: 800 }}>
                         {comment.user?.full_name}
-                      </p>
-                      <p className="text-[14px] text-text-secondary leading-snug">
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
                         {comment.content}
-                      </p>
-                    </div>
-                    <p className="text-[11px] font-semibold text-text-muted mt-1 ml-2">
+                      </Typography>
+                    </Paper>
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, ml: 1 }}>
                       {moment(comment.createdAt).fromNow()}
-                    </p>
-                  </div>
-                </div>
+                    </Typography>
+                  </Stack>
+                </Stack>
               ))
             ) : (
-              <p className="text-[13px] text-text-muted py-2 italic">
-                {t('feed.no_comments_yet')}
-              </p>
+              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                {t("feed.no_comments_yet")}
+              </Typography>
             )}
-          </div>
+          </Stack>
 
-          <div className="flex items-end gap-2 bg-surface-light p-2.5 rounded-3xl border border-border-subtle mt-2">
-            <textarea
-              className="flex-1 bg-transparent border-none focus:ring-0 text-[14px] p-1.5 max-h-24 resize-none leading-relaxed text-text-primary placeholder:text-text-muted"
-              placeholder={t('feed.write_comment')}
-              rows={1}
+          <Paper variant="outlined" sx={{ display: "flex", alignItems: "flex-end", gap: 1, p: 1, pl: 1.5, borderRadius: 3, bgcolor: "action.hover" }}>
+            <TextField
+              fullWidth
+              multiline
+              maxRows={4}
+              variant="standard"
+              placeholder={t("feed.write_comment")}
               value={commentText}
-              onChange={(e) => {
-                setCommentText(e.target.value);
-                e.target.style.height = 'auto';
-                e.target.style.height = e.target.scrollHeight + 'px';
-              }}
+              onChange={(event) => setCommentText(event.target.value)}
+              slotProps={{ input: { disableUnderline: true } }}
             />
-            <button
-              onClick={handleAddComment}
-              disabled={commentLoading || !commentText.trim()}
-              className="w-9 h-9 flex items-center justify-center bg-accent-primary hover:bg-accent-hover text-black rounded-full transition-all active:scale-90 disabled:opacity-50 shrink-0"
-            >
-              {commentLoading ? (
-                <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-              ) : (
-                <Send size={16} className="-ml-0.5" />
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+            <IconButton color="primary" onClick={handleAddComment} disabled={commentLoading || !commentText.trim()} aria-label={t("feed.post_comment", "Post comment")}>
+              {commentLoading ? <CircularProgress size={18} /> : <Send size={18} />}
+            </IconButton>
+          </Paper>
+        </Stack>
+      </Collapse>
+    </Card>
   );
 };
 

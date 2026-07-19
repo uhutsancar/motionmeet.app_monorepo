@@ -1,22 +1,10 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Modal,
-  ScrollView,
-  TextInput,
-  TouchableOpacity,
-  Image,
-  Alert,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform
-} from 'react-native';
+import { Modal, ScrollView, TextInput, Image, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useDispatch, useSelector } from 'react-redux';
-import { useAuth } from '@clerk/clerk-expo';
+import { useAuthContext } from "../context/AuthProvider";
 import { createNewPost } from '../features/posts/postsSlice';
 
 import { useTheme } from '../context/ThemeContext';
@@ -27,7 +15,7 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
   const { t } = useTranslation();
   const styles = getStyles(theme);
   const dispatch = useDispatch();
-  const { getToken } = useAuth();
+  const { getToken } = useAuthContext();
   const user = useSelector((state) => state.user.value);
   const [content, setContent] = useState('');
   const [images, setImages] = useState([]);
@@ -130,26 +118,26 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+      <Surface elevation={0} style={styles.container}>
+        <Surface elevation={0} style={styles.header}>
+          <TouchableRipple borderless onPress={onClose} style={styles.closeButton}>
             <Ionicons name="close" size={28} color={theme.text} />
-          </TouchableOpacity>
+          </TouchableRipple>
           <Text style={styles.headerTitle}>{t('feed.create_post', 'Yeni Gönderi')}</Text>
-          <View style={{ width: 28 }} />
-        </View>
+          <Surface elevation={0} style={{ width: 28 }} />
+        </Surface>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={styles.userSection}>
+          <Surface elevation={0} style={styles.userSection}>
             <Image
               source={{ uri: user.profile_picture }}
               style={styles.avatar}
             />
-            <View>
+            <Surface elevation={0}>
               <Text style={styles.userName}>{user.full_name}</Text>
               <Text style={styles.username}>@{user.username}</Text>
-            </View>
-          </View>
+            </Surface>
+          </Surface>
 
           <TextInput
             style={styles.textInput}
@@ -163,31 +151,31 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
           />
 
           {images.length > 0 && (
-            <View style={styles.imagesContainer}>
+            <Surface elevation={0} style={styles.imagesContainer}>
               {images.map((image, index) => (
-                <View key={index} style={styles.imageWrapper}>
+                <Surface elevation={0} key={index} style={styles.imageWrapper}>
                   <Image source={{ uri: image.uri }} style={styles.image} />
-                  <TouchableOpacity
+                  <TouchableRipple borderless
                     style={styles.removeButton}
                     onPress={() => removeImage(index)}
                   >
                     <Ionicons name="close-circle" size={28} color="#ef4444" />
-                  </TouchableOpacity>
-                </View>
+                  </TouchableRipple>
+                </Surface>
               ))}
-            </View>
+            </Surface>
           )}
         </ScrollView>
 
-        <View style={styles.bottomBar}>
-          <TouchableOpacity
+        <Surface elevation={0} style={styles.bottomBar}>
+          <TouchableRipple borderless
             style={styles.imageButton}
             onPress={pickImages}
           >
             <Ionicons name="image-outline" size={24} color={theme.textMuted} />
-          </TouchableOpacity>
+          </TouchableRipple>
 
-          <TouchableOpacity
+          <TouchableRipple borderless
             style={[styles.publishButton, { backgroundColor: loading ? theme.primary + '80' : theme.primary }]}
             onPress={handlePublish}
             disabled={loading}
@@ -197,15 +185,15 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
             ) : (
               <Text style={styles.publishButtonText}>{t('feed.post_action', 'Paylaş')}</Text>
             )}
-          </TouchableOpacity>
-        </View>
-      </View>
+          </TouchableRipple>
+        </Surface>
+      </Surface>
       </KeyboardAvoidingView>
     </Modal>
   );
 };
 
-const getStyles = (theme) => StyleSheet.create({
+const getStyles = (theme) => ({
   container: {
     flex: 1,
     backgroundColor: theme.background,

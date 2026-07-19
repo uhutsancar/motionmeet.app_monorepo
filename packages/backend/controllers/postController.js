@@ -1,180 +1,158 @@
-import fs from "fs";
-import Post from "../models/Post.js";
-import User from "../models/User.js";
 import imagekit from "../configs/imageKit.js";
 import { deleteFromS3, extractS3Key, uploadToS3 } from "../utils/s3Utils.js";
+import { isObjectId, isOptionalString } from "../utils/validation.js";
+import { hasValidMediaSignature } from "../utils/mediaValidation.js";
+import * as postService from "../services/postService.js";
 
-// Add Post
-export const addPost = async (req, res) => {
+const POST_TYPES = new Set(["text", "image", "text_with_image", "video", "workout"]);
+const VISIBILITIES = new Set(["public", "followers", "private"]);
+
+export const addPost = async (req, res, next) => {
   try {
-    const { userId } = await req.auth();
-    const { content, post_type, workout, visibility } = req.body;
-    const images = req.files;
+    const userId = req.userId;
+    const { content, post_type, workout, visibility } = req.body || {};
+    const images = req.files || [];
 
-    let image_urls = [];
-    if (images && images.length) {
-      image_urls = await Promise.all(
-        images.map(async (image) => {
-          const stream = fs.createReadStream(image.path);
-          const { key } = await uploadToS3(stream, image.originalname, "posts");
-          
-          try { fs.unlinkSync(image.path); } catch (e) {}
-          
-          // ImageKit URL with path as S3 key
-          return imagekit.url({
-            path: key,
-            transformation: [{ quality: "auto" }, { format: "webp" }]
-          });
-        })
-      );
+    if (!isOptionalString(content, 5000)) {
+      return res.status(400).json({ success: false, message: "Post content is too long" });
+    }
+    if (post_type && !POST_TYPES.has(post_type)) {
+      return res.status(400).json({ success: false, message: "Invalid post type" });
+    }
+    if (visibility && !VISIBILITIES.has(visibility)) {
+      return res.status(400).json({ success: false, message: "Invalid post visibility" });
+    }
+    if (workout && !isObjectId(workout)) {
+      return res.status(400).json({ success: false, message: "Invalid workout id" });
+    }
+    if (post_type === "workout" && !workout) {
+      return res.status(400).json({ success: false, message: "Workout post requires a workout" });
+    }
+    if (workout && !(await postService.checkWorkoutExists(workout, userId))) {
+      return res.status(403).json({ success: false, message: "Workout not found or not owned by user" });
+    }
+    if (!content?.trim() && images.length === 0 && !workout) {
+      return res.status(400).json({ success: false, message: "Post content is required" });
+    }
+    if (images.some((image) => !hasValidMediaSignature(image))) {
+      return res.status(415).json({ success: false, message: "Uploaded image content is invalid" });
+    }
+    if (images.length > 0 && !imagekit) {
+      return res.status(503).json({ success: false, message: "Media service is not configured" });
     }
 
-    // Auto-detect post_type if not provided
+    const imageUrls = await Promise.all(
+      images.map(async (image) => {
+        const { key } = await uploadToS3(image.buffer, image.originalname, "posts", image.mimetype);
+        return imagekit.url({
+          path: key,
+          transformation: [{ quality: "auto" }, { format: "webp" }],
+        });
+      })
+    );
+
     let resolvedType = post_type;
     if (!resolvedType) {
-      if (workout) {
-        resolvedType = image_urls.length > 0 ? "workout" : "workout";
-      } else if (image_urls.length > 0) {
-        resolvedType = content ? "text_with_image" : "image";
-      } else {
-        resolvedType = "text";
-      }
+      if (workout) resolvedType = "workout";
+      else if (imageUrls.length > 0) resolvedType = content?.trim() ? "text_with_image" : "image";
+      else resolvedType = "text";
     }
 
-    await Post.create({
+    const post = await postService.createPost({
       user: userId,
-      content,
-      image_urls,
+      content: content?.trim() || "",
+      image_urls: imageUrls,
       post_type: resolvedType,
       visibility: visibility || "public",
       workout: workout || undefined,
     });
 
-    res.json({ success: true, message: "Post created successfully" });
+    return res.json({ success: true, post, message: "Post created successfully" });
   } catch (error) {
-    console.log(error);
-    res.json({ success: false, message: error.message });
+    return next(error);
   }
 };
 
-// Get Feed Posts — with visibility filtering
-export const getFeedPost = async (req, res) => {
+export const getFeedPost = async (req, res, next) => {
   try {
-    const { userId } = await req.auth();
-    const user = await User.findById(userId);
+    const posts = await postService.getFeedPostsForUser(req.userId);
+    if (!posts) return res.status(404).json({ success: false, message: "User not found" });
 
-    const connections = user.connections || [];
-    const following = user.following || [];
+    return res.json({ success: true, posts });
+  } catch (error) {
+    return next(error);
+  }
+};
 
-    // Build visibility-aware query
-    // - public posts from anyone in the social graph
-    // - followers posts only from people I'm connected to / following
-    // - private posts only from myself
-    const socialIds = [...new Set([...connections, ...following])];
+export const likePost = async (req, res, next) => {
+  try {
+    const postId = req.body?.postId;
+    if (!isObjectId(postId)) {
+      return res.status(400).json({ success: false, message: "Invalid post id" });
+    }
 
-    const posts = await Post.find({
-      $or: [
-        // My own posts (all visibilities)
-        { user: userId },
-        // Public posts from social graph
-        { user: { $in: socialIds }, visibility: "public" },
-        // Followers-only posts from people I'm connected/following
-        { user: { $in: socialIds }, visibility: "followers" },
-      ]
-    })
-      .populate("user")
-      .populate({
-        path: "workout",
-        populate: { path: "exercises.exerciseId" }
+    const post = await postService.getPostForLike(postId);
+    if (!post) return res.json({ success: false, message: "Post not found" });
+    if (!postService.canAccessPost(post, req.dbUser)) {
+      return res.status(403).json({ success: false, message: "Post is not accessible" });
+    }
+
+    const liked = post.likes_count.includes(req.userId);
+    const updatedPost = await postService.toggleLikePost(postId, req.userId, liked);
+
+    return res.json({
+      success: true,
+      message: liked ? "Post unliked" : "Post liked",
+      likes_count: updatedPost.likes_count,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const addComment = async (req, res, next) => {
+  try {
+    const { postId, content } = req.body || {};
+    if (!isObjectId(postId) || typeof content !== "string" || !content.trim() || content.trim().length > 1000) {
+      return res.status(400).json({ success: false, message: "Invalid comment" });
+    }
+
+    const existingPost = await postService.getPostForComment(postId);
+    if (!existingPost) return res.json({ success: false, message: "Post not found" });
+    if (!postService.canAccessPost(existingPost, req.dbUser)) {
+      return res.status(403).json({ success: false, message: "Post is not accessible" });
+    }
+
+    const post = await postService.addCommentToPost(postId, req.userId, content);
+    return res.json({ success: true, comments: post.comments });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const deletePost = async (req, res, next) => {
+  try {
+    const postId = req.params.postId || req.body?.postId;
+    if (!isObjectId(postId)) {
+      return res.status(400).json({ success: false, message: "Invalid post id" });
+    }
+
+    const post = await postService.getPostById(postId);
+    if (!post) return res.json({ success: false, message: "Post not found" });
+    if (post.user.toString() !== req.userId) {
+      return res.status(403).json({ success: false, message: "Unauthorized to delete this post" });
+    }
+
+    await Promise.all(
+      (post.image_urls || []).map(async (url) => {
+        const key = extractS3Key(url);
+        if (key) await deleteFromS3(key);
       })
-      .populate("comments.user")
-      .sort({ createdAt: -1 });
+    );
+    await postService.deletePostById(post);
 
-    res.json({ success: true, posts });
+    return res.json({ success: true, postId, message: "Post deleted successfully" });
   } catch (error) {
-    console.log(error);
-    res.json({ success: false, message: error.message });
-  }
-};
-
-// Like Post
-export const likePost = async (req, res) => {
-  try {
-    const { userId } = await req.auth();
-    const { postId } = req.body;
-
-    const post = await Post.findById(postId);
-    if (!post) return res.json({ success: false, message: "Post not found" });
-
-    if (post.likes_count.includes(userId)) {
-      post.likes_count = post.likes_count.filter((u) => u !== userId);
-      await post.save();
-      res.json({ success: true, message: "Post unliked" });
-    } else {
-      post.likes_count.push(userId);
-      await post.save();
-      res.json({ success: true, message: "Post liked" });
-    }
-  } catch (error) {
-    console.log(error);
-    res.json({ success: false, message: error.message });
-  }
-};
-
-// Add Comment
-export const addComment = async (req, res) => {
-  try {
-    const { userId } = await req.auth();
-    const { postId, content } = req.body;
-
-    if (!content) {
-      return res.json({ success: false, message: "Comment content is required" });
-    }
-
-    const post = await Post.findById(postId);
-    if (!post) {
-      return res.json({ success: false, message: "Post not found" });
-    }
-
-    post.comments.push({ user: userId, content });
-    await post.save();
-
-    const updatedPost = await Post.findById(postId).populate("comments.user");
-    res.json({ success: true, comments: updatedPost.comments });
-  } catch (error) {
-    console.log(error);
-    res.json({ success: false, message: error.message });
-  }
-};
-
-// Delete Post
-export const deletePost = async (req, res) => {
-  try {
-    const { userId } = await req.auth();
-    const { postId } = req.body;
-
-    const post = await Post.findById(postId);
-    if (!post) return res.json({ success: false, message: "Post not found" });
-
-    // Check ownership
-    if (post.user.toString() !== userId) {
-      return res.json({ success: false, message: "Unauthorized to delete this post" });
-    }
-
-    // Delete images from S3
-    if (post.image_urls && post.image_urls.length > 0) {
-      await Promise.all(
-        post.image_urls.map(async (url) => {
-          const key = extractS3Key(url);
-          if (key) await deleteFromS3(key);
-        })
-      );
-    }
-
-    await Post.findByIdAndDelete(postId);
-    res.json({ success: true, message: "Post deleted successfully" });
-  } catch (error) {
-    console.log(error);
-    res.json({ success: false, message: error.message });
+    return next(error);
   }
 };

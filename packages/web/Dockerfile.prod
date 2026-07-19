@@ -1,0 +1,28 @@
+# ── Stage 1: Build ────────────────────────────────────────────────────────────
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@11.10.0 --activate
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.json ./
+COPY packages/backend/package.json ./packages/backend/package.json
+COPY packages/web/package.json ./packages/web/package.json
+COPY packages/mobile/package.json ./packages/mobile/package.json
+RUN pnpm install --frozen-lockfile --filter @motionmeet/web...
+
+COPY packages/web ./packages/web
+
+# VITE_ vars are baked into the JS bundle at build time — pass as build args
+ARG VITE_BASEURL
+ENV VITE_BASEURL=$VITE_BASEURL VITE_SOCKET_URL=$VITE_SOCKET_URL
+
+RUN pnpm --filter @motionmeet/web build
+
+# ── Stage 2: Serve ────────────────────────────────────────────────────────────
+FROM nginx:stable-alpine
+
+COPY --from=builder /app/packages/web/dist /usr/share/nginx/html
+COPY packages/web/nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

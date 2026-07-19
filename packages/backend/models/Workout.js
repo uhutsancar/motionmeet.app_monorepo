@@ -25,6 +25,8 @@ const workoutSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+workoutSchema.index({ userId: 1, startTime: -1 });
+
 const Workout = mongoose.model("Workout", workoutSchema);
 
 export default Workout;

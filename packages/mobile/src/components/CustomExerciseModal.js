@@ -1,28 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Modal, 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  StyleSheet, 
   KeyboardAvoidingView, 
   Platform,
   ScrollView,
-  ActivityIndicator,
   Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '@clerk/clerk-expo';
+import { useAuthContext } from "../context/AuthProvider";
 import api, { setAuthToken } from '../api/client';
+import { Appbar, Text, TextInput, Button, TouchableRipple, Surface, useTheme as usePaperTheme } from 'react-native-paper';
+import { useMuscleGroups } from '../hooks/useMuscleGroups';
+import { useEquipment } from '../hooks/useEquipment';
 
 const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
   const { theme } = useTheme();
+  const paperTheme = usePaperTheme();
   const { t } = useTranslation();
-  const { getToken } = useAuth();
-  const styles = getStyles(theme);
+  const { getToken } = useAuthContext();
   
   const [name, setName] = useState("");
   const [muscleGroup, setMuscleGroup] = useState("");
@@ -32,14 +29,11 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
   const [showMuscles, setShowMuscles] = useState(false);
   const [showEquipment, setShowEquipment] = useState(false);
 
-  const muscleGroups = [
-    "Abdominals", "Biceps", "Calves", "Chest", "Forearms", 
-    "Glutes", "Hamstrings", "Lats", "Lower Back", "Quadriceps", "Shoulders", "Triceps"
-  ];
+  const { data: muscleGroupsList } = useMuscleGroups();
+  const { data: equipmentListItems } = useEquipment();
 
-  const equipmentList = [
-    "Barbell", "Dumbbell", "Machine", "Cable", "Bodyweight", "Band", "Kettlebell"
-  ];
+  const muscleGroups = muscleGroupsList.map(mg => mg.code);
+  const equipmentList = equipmentListItems.map(eq => eq.code);
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -55,7 +49,6 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
     try {
       setSaving(true);
 
-      // Always fetch a fresh token to avoid stale/expired token issues
       const freshToken = await getToken();
       if (freshToken) {
         setAuthToken(freshToken);
@@ -93,194 +86,186 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
     onClose();
   };
 
+  const styles = useMemo(() => ({
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'flex-end',
+    },
+    modalContent: {
+      backgroundColor: theme.background,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      height: '75%',
+      overflow: 'hidden',
+    },
+    header: {
+      backgroundColor: theme.background,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
+      elevation: 0,
+    },
+    headerTitle: {
+      color: theme.text,
+      fontSize: 18,
+      fontWeight: 'bold',
+    },
+    formContainer: {
+      padding: 20,
+    },
+    inputGroup: {
+      marginBottom: 20,
+      backgroundColor: 'transparent',
+    },
+    label: {
+      color: theme.text,
+      fontWeight: '600',
+      marginBottom: 8,
+    },
+    selectBtn: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      backgroundColor: theme.surface,
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: 8,
+      padding: 14,
+    },
+    selectBtnActive: {
+      borderColor: theme.primary,
+    },
+    optionsList: {
+      backgroundColor: theme.surface,
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: 8,
+      marginTop: 4,
+      overflow: 'hidden',
+    },
+    optionItem: {
+      padding: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    }
+  }), [theme, paperTheme]);
+
   return (
     <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={handleClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
+        <Surface style={styles.modalContent} elevation={4}>
           
-          <View style={styles.header}>
-            <TouchableOpacity onPress={handleClose} style={styles.iconButton}>
-              <Ionicons name="close" size={24} color={theme.text} />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>{t('exercises.new_exercise', 'Yeni Egzersiz')}</Text>
-            <TouchableOpacity onPress={handleSubmit} disabled={saving} style={[styles.saveButton, saving && { opacity: 0.6 }]}>
-              {saving ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.saveButtonText}>{t('exercises.create', 'Oluştur')}</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+          <Appbar.Header style={styles.header}>
+            <Appbar.Action icon="close" onPress={handleClose} color={theme.text} />
+            <Appbar.Content title={t('exercises.new_exercise', 'Yeni Egzersiz')} titleStyle={styles.headerTitle} />
+            <Button 
+              mode="contained" 
+              onPress={handleSubmit} 
+              loading={saving} 
+              disabled={saving}
+              buttonColor={theme.primary}
+              style={{ borderRadius: 20, marginRight: 8 }}
+              labelStyle={{ fontSize: 14, fontWeight: 'bold' }}
+            >
+              {!saving && t('exercises.create', 'Oluştur')}
+            </Button>
+          </Appbar.Header>
 
           <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
             
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>{t('exercises.exercise_name', 'Egzersiz Adı')} *</Text>
+            <Surface elevation={0} style={styles.inputGroup}>
+              <Text variant="titleMedium" style={styles.label}>{t('exercises.exercise_name', 'Egzersiz Adı')} *</Text>
               <TextInput
-                style={styles.input}
+                mode="outlined"
                 value={name}
                 onChangeText={setName}
                 placeholder={t('exercises.exercise_name_placeholder', 'Örn. Meyilli Dumbbell Press')}
                 placeholderTextColor={theme.textMuted}
+                outlineColor={theme.border}
+                activeOutlineColor={theme.primary}
+                style={{ backgroundColor: theme.surface, fontSize: 15 }}
+                textColor={theme.text}
+                theme={{ colors: { background: theme.background } }}
               />
-            </View>
+            </Surface>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>{t('exercises.muscle_group', 'Hedef Kas Grubu')} *</Text>
-              <TouchableOpacity 
+            <Surface elevation={0} style={styles.inputGroup}>
+              <Text variant="titleMedium" style={styles.label}>{t('exercises.muscle_group', 'Hedef Kas Grubu')} *</Text>
+              <TouchableRipple 
                 style={[styles.selectBtn, muscleGroup && styles.selectBtnActive]} 
                 onPress={() => { setShowMuscles(!showMuscles); setShowEquipment(false); }}
               >
-                <Text style={{ color: muscleGroup ? theme.text : theme.textMuted }}>
-                  {muscleGroup || t('exercises.select_muscle', 'Kas Grubu Seç')}
-                </Text>
-                <Ionicons name={showMuscles ? "chevron-up" : "chevron-down"} size={16} color={theme.textMuted} />
-              </TouchableOpacity>
+                <Surface elevation={0} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', backgroundColor: 'transparent' }}>
+                  <Text style={{ color: muscleGroup ? theme.text : theme.textMuted }}>
+                    {muscleGroup ? t(`muscle_groups.${muscleGroup}`, muscleGroup) : t('exercises.select_muscle', 'Kas Grubu Seç')}
+                  </Text>
+                  <Ionicons name={showMuscles ? "chevron-up" : "chevron-down"} size={16} color={theme.textMuted} />
+                </Surface>
+              </TouchableRipple>
               {showMuscles && (
-                <View style={styles.optionsList}>
+                <Surface style={styles.optionsList} elevation={2}>
                   <ScrollView nestedScrollEnabled style={{ maxHeight: 180 }}>
                     {muscleGroups.map(m => (
-                      <TouchableOpacity 
+                      <TouchableRipple 
                         key={m} 
                         style={[styles.optionItem, muscleGroup === m && { backgroundColor: theme.primary + '20' }]} 
                         onPress={() => { setMuscleGroup(m); setShowMuscles(false); }}
                       >
-                        <Text style={{ color: muscleGroup === m ? theme.primary : theme.text, fontWeight: muscleGroup === m ? 'bold' : 'normal' }}>{m}</Text>
-                        {muscleGroup === m && <Ionicons name="checkmark" size={16} color={theme.primary} />}
-                      </TouchableOpacity>
+                        <Surface elevation={0} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', backgroundColor: 'transparent' }}>
+                          <Text style={{ color: muscleGroup === m ? theme.primary : theme.text, fontWeight: muscleGroup === m ? 'bold' : 'normal' }}>
+                            {t(`muscle_groups.${m}`, muscleGroupsList.find(mg => mg.code === m)?.name || m)}
+                          </Text>
+                          {muscleGroup === m && <Ionicons name="checkmark" size={16} color={theme.primary} />}
+                        </Surface>
+                      </TouchableRipple>
                     ))}
                   </ScrollView>
-                </View>
+                </Surface>
               )}
-            </View>
+            </Surface>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>{t('exercises.equipment', 'Ekipman')} *</Text>
-              <TouchableOpacity 
+            <Surface elevation={0} style={styles.inputGroup}>
+              <Text variant="titleMedium" style={styles.label}>{t('exercises.equipment', 'Ekipman')} *</Text>
+              <TouchableRipple 
                 style={[styles.selectBtn, equipment && styles.selectBtnActive]} 
                 onPress={() => { setShowEquipment(!showEquipment); setShowMuscles(false); }}
               >
-                <Text style={{ color: equipment ? theme.text : theme.textMuted }}>
-                  {equipment || t('exercises.select_equipment', 'Ekipman Seç')}
-                </Text>
-                <Ionicons name={showEquipment ? "chevron-up" : "chevron-down"} size={16} color={theme.textMuted} />
-              </TouchableOpacity>
+                <Surface elevation={0} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', backgroundColor: 'transparent' }}>
+                  <Text style={{ color: equipment ? theme.text : theme.textMuted }}>
+                    {equipment ? t(`equipment.${equipment}`, equipment) : t('exercises.select_equipment', 'Ekipman Seç')}
+                  </Text>
+                  <Ionicons name={showEquipment ? "chevron-up" : "chevron-down"} size={16} color={theme.textMuted} />
+                </Surface>
+              </TouchableRipple>
               {showEquipment && (
-                <View style={styles.optionsList}>
+                <Surface style={styles.optionsList} elevation={2}>
                   {equipmentList.map(e => (
-                    <TouchableOpacity 
+                    <TouchableRipple 
                       key={e} 
                       style={[styles.optionItem, equipment === e && { backgroundColor: theme.primary + '20' }]} 
                       onPress={() => { setEquipment(e); setShowEquipment(false); }}
                     >
-                      <Text style={{ color: equipment === e ? theme.primary : theme.text, fontWeight: equipment === e ? 'bold' : 'normal' }}>{e}</Text>
-                      {equipment === e && <Ionicons name="checkmark" size={16} color={theme.primary} />}
-                    </TouchableOpacity>
+                      <Surface elevation={0} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', backgroundColor: 'transparent' }}>
+                        <Text style={{ color: equipment === e ? theme.primary : theme.text, fontWeight: equipment === e ? 'bold' : 'normal' }}>
+                          {t(`equipment.${e}`, equipmentListItems.find(eq => eq.code === e)?.name || e)}
+                        </Text>
+                        {equipment === e && <Ionicons name="checkmark" size={16} color={theme.primary} />}
+                      </Surface>
+                    </TouchableRipple>
                   ))}
-                </View>
+                </Surface>
               )}
-            </View>
+            </Surface>
             
-            <View style={{ height: 100 }} />
+            <Surface elevation={0} style={{ height: 100, backgroundColor: 'transparent' }} />
           </ScrollView>
-        </View>
+        </Surface>
       </KeyboardAvoidingView>
     </Modal>
   );
 };
-
-const getStyles = (theme) => StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: theme.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    height: '75%',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  headerTitle: {
-    color: theme.text,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  iconButton: {
-    padding: 4,
-  },
-  saveButton: {
-    backgroundColor: theme.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    minWidth: 64,
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  formContainer: {
-    padding: 20,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    color: theme.text,
-    fontWeight: '600',
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: theme.surface,
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: 12,
-    padding: 14,
-    color: theme.text,
-    fontSize: 15,
-  },
-  selectBtn: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: 12,
-    padding: 14,
-  },
-  selectBtnActive: {
-    borderColor: theme.primary,
-  },
-  optionsList: {
-    backgroundColor: theme.surface,
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: 12,
-    marginTop: 4,
-    overflow: 'hidden',
-  },
-  optionItem: {
-    padding: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  }
-});
 
 export default CustomExerciseModal;

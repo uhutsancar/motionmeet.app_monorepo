@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { Image, Alert } from 'react-native';
+import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { useSelector, useDispatch } from 'react-redux';
-import { useAuth } from '@clerk/clerk-expo';
+import { useAuthContext } from "../context/AuthProvider";
 import { Ionicons } from '@expo/vector-icons';
 import { followUser, unfollowUser, sendConnectionRequest } from '../api/endpoints';
 import { fetchUser } from '../features/user/userSlice';
@@ -15,7 +16,7 @@ const UserCard = ({ user, onPress, onMessagePress }) => {
   const dispatch = useDispatch();
   const currentUser = useSelector((state) => state.user.value);
   const { connections } = useSelector((state) => state.connections);
-  const { getToken } = useAuth();
+  const { getToken } = useAuthContext();
   const [processing, setProcessing] = useState(false);
 
   const isFollowing = currentUser?.following?.includes(user._id);
@@ -43,8 +44,8 @@ const UserCard = ({ user, onPress, onMessagePress }) => {
   };
 
   return (
-    <View style={styles.card}>
-      <View style={styles.infoSection}>
+    <Surface elevation={0} style={styles.card}>
+      <Surface elevation={0} style={styles.infoSection}>
         <Image 
           source={{ uri: user.profile_picture }}
           style={styles.avatar}
@@ -56,16 +57,16 @@ const UserCard = ({ user, onPress, onMessagePress }) => {
         {user.bio && (
           <Text style={styles.bio} numberOfLines={1}>{user.bio}</Text>
         )}
-      </View>
+      </Surface>
 
-      <View style={styles.metaContainer}>
-        <View style={[styles.metaBadge, { borderColor: theme.border }]}>
-          <Text style={styles.metaText}>{user.followers?.length || 0} {t('feed.followers')}</Text>
-        </View>
-      </View>
+      <Surface elevation={0} style={styles.metaContainer}>
+        <Surface elevation={0} style={[styles.metaBadge, { borderColor: theme.border }]}>
+          <Text style={styles.metaText}>{user.followers_count ?? user.followers?.length ?? 0} {t('feed.followers')}</Text>
+        </Surface>
+      </Surface>
 
-      <View style={styles.actionsContainer}>
-        <TouchableOpacity 
+      <Surface elevation={0} style={styles.actionsContainer}>
+        <TouchableRipple borderless 
           style={[
             styles.followButton,
             { backgroundColor: isFollowing ? theme.surfaceLight : theme.primary }
@@ -76,9 +77,9 @@ const UserCard = ({ user, onPress, onMessagePress }) => {
           <Text style={[styles.followButtonText, { color: isFollowing ? theme.text : '#fff' }]}>
             {isFollowing ? t('feed.following_status') : t('feed.follow')}
           </Text>
-        </TouchableOpacity>
+        </TouchableRipple>
 
-        <TouchableOpacity 
+        <TouchableRipple borderless 
           style={[styles.iconButton, { borderColor: theme.border }]}
           onPress={() => onPress?.(user)}
         >
@@ -87,13 +88,13 @@ const UserCard = ({ user, onPress, onMessagePress }) => {
             size={18} 
             color={theme.textMuted} 
           />
-        </TouchableOpacity>
-      </View>
-    </View>
+        </TouchableRipple>
+      </Surface>
+    </Surface>
   );
 };
 
-const getStyles = (theme) => StyleSheet.create({
+const getStyles = (theme) => ({
   card: {
     width: 200,
     padding: 16,

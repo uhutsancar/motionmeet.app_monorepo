@@ -1,11 +1,29 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import api from "~/api/axios";
-import { useAuth } from "@clerk/clerk-react";
-import { FileText, Plus, Search, Trash2, Dumbbell } from "lucide-react";
+import { useAuthContext } from "../context/AuthProvider";
+
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Box from '@mui/material/Box';
+import Stack from '@mui/material/Stack';
+import Typography from '@mui/material/Typography';
+import TextField from '@mui/material/TextField';
+import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
+import Paper from '@mui/material/Paper';
+import InputAdornment from '@mui/material/InputAdornment';
+
+import FileTextRounded from '@mui/icons-material/DescriptionRounded';
+import PlusRounded from '@mui/icons-material/AddRounded';
+import SearchRounded from '@mui/icons-material/SearchRounded';
+import Trash2Rounded from '@mui/icons-material/DeleteOutlineRounded';
+import DumbbellRounded from '@mui/icons-material/FitnessCenterRounded';
 
 const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
-    const { getToken } = useAuth();
+    const { getToken } = useAuthContext();
     const [form, setForm] = useState({ name: "", folder: "My Routines" });
 
     const [exercisesData, setExercisesData] = useState([]);
@@ -111,146 +129,150 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-            <div className="w-full max-w-2xl bg-surface rounded-2xl shadow-xl border border-border-subtle my-auto max-h-[90vh] overflow-y-auto no-scrollbar p-6">
-
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 bg-accent-primary/10 rounded-full flex items-center justify-center">
-                        <FileText className="w-5 h-5 text-accent-primary" />
-                    </div>
-                    <h1 className="text-xl font-bold text-text-primary">Build Routine</h1>
-                </div>
-
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <div>
-                        <label className="block text-sm font-semibold text-text-primary mb-1">
-                            Routine Name
-                        </label>
-                        <input
-                            type="text"
-                            className="w-full p-3 bg-background border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:border-accent-primary shadow-sm"
-                            placeholder="e.g. Leg Day Destroyer"
-                            onChange={(e) => setForm({ ...form, name: e.target.value })}
-                            value={form.name}
+        <Dialog open={true} onClose={() => setShowModal(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 4, bgcolor: 'background.paper', backgroundImage: 'none' } }}>
+            <Box component="form" onSubmit={handleSubmit}>
+                <DialogTitle sx={{ pb: 1, pt: 3, px: 3 }}>
+                    <Stack direction="row" alignItems="center" spacing={2}>
+                        <Box sx={{ width: 40, height: 40, borderRadius: '50%', bgcolor: 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.1, position: 'absolute' }} />
+                        <FileTextRounded color="primary" />
+                        <Typography variant="h6" fontWeight={800}>Build Routine</Typography>
+                    </Stack>
+                </DialogTitle>
+                
+                <DialogContent sx={{ px: 3, pb: 2 }}>
+                    <Stack spacing={3} mt={1}>
+                        <TextField
+                            label="Routine Name"
+                            variant="outlined"
+                            fullWidth
                             required
+                            placeholder="e.g. Leg Day Destroyer"
+                            value={form.name}
+                            onChange={(e) => setForm({ ...form, name: e.target.value })}
+                            InputProps={{ sx: { borderRadius: 3 } }}
                         />
-                    </div>
 
-                    {/* Add Exercises Section */}
-                    <div className="border border-border-subtle rounded-2xl p-4 bg-background">
-                        <label className="block text-sm font-semibold text-text-primary mb-3">
-                            Add Exercises
-                        </label>
-                        <div className="relative mb-3">
-                            <Search className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
-                            <input
-                                type="text"
+                        <Paper variant="outlined" sx={{ p: 2, borderRadius: 3, bgcolor: 'background.default' }}>
+                            <Typography variant="subtitle2" fontWeight={700} mb={2}>Add Exercises</Typography>
+                            
+                            <TextField
                                 placeholder="Search exercise to add..."
+                                fullWidth
+                                variant="outlined"
+                                size="small"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full bg-surface border border-border-subtle rounded-xl pl-9 pr-4 py-2 text-sm text-text-primary focus:outline-none focus:border-accent-primary"
+                                InputProps={{
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <SearchRounded fontSize="small" />
+                                        </InputAdornment>
+                                    ),
+                                    sx: { borderRadius: 2, bgcolor: 'background.paper' }
+                                }}
+                                sx={{ mb: 2 }}
                             />
-                        </div>
 
-                        {searchQuery && (
-                            <div className="max-h-40 overflow-y-auto space-y-2 mb-4 p-2 bg-surface rounded-xl border border-border-subtle shadow-inner">
-                                {exercisesData.length > 0 ? exercisesData.map(ex => (
-                                    <div key={ex._id} onClick={() => addExercise(ex)} className="flex items-center justify-between p-2 hover:bg-surface-light rounded-lg cursor-pointer transition">
-                                        <span className="text-sm font-medium text-text-primary">{ex.name}</span>
-                                        <Plus className="w-4 h-4 text-accent-primary" />
-                                    </div>
-                                )) : (
-                                    <p className="text-xs text-text-secondary text-center py-2">No exercises found.</p>
-                                )}
-                            </div>
-                        )}
+                            {searchQuery && (
+                                <Paper variant="outlined" sx={{ maxHeight: 160, overflowY: 'auto', mb: 2, p: 1, borderRadius: 2 }}>
+                                    {exercisesData.length > 0 ? exercisesData.map(ex => (
+                                        <Stack
+                                            key={ex._id}
+                                            direction="row"
+                                            alignItems="center"
+                                            justifyContent="space-between"
+                                            sx={{ p: 1.5, cursor: 'pointer', borderRadius: 1.5, '&:hover': { bgcolor: 'action.hover' } }}
+                                            onClick={() => addExercise(ex)}
+                                        >
+                                            <Typography variant="body2" fontWeight={600}>{ex.name}</Typography>
+                                            <PlusRounded color="primary" fontSize="small" />
+                                        </Stack>
+                                    )) : (
+                                        <Typography variant="caption" color="text.secondary" display="block" textAlign="center" py={1}>No exercises found.</Typography>
+                                    )}
+                                </Paper>
+                            )}
 
-                        {/* Selected Exercises Configuration */}
-                        {selectedExercises.length > 0 && (
-                            <div className="space-y-4 mt-4">
-                                {selectedExercises.map((se, exIndex) => (
-                                    <div key={exIndex} className="bg-surface border border-border-subtle rounded-xl p-4 shadow-sm">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <div className="flex items-center gap-2">
-                                                <Dumbbell className="w-4 h-4 text-accent-primary" />
-                                                <h4 className="font-bold text-sm text-text-primary">{se.exerciseId.name}</h4>
-                                            </div>
-                                            <button type="button" onClick={() => removeExercise(exIndex)} className="text-red-500 hover:text-red-600 transition p-1">
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </div>
+                            {selectedExercises.length > 0 && (
+                                <Stack spacing={2}>
+                                    {selectedExercises.map((se, exIndex) => (
+                                        <Paper key={exIndex} variant="outlined" sx={{ p: 2, borderRadius: 3, bgcolor: 'background.paper' }}>
+                                            <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
+                                                <Stack direction="row" alignItems="center" spacing={1}>
+                                                    <DumbbellRounded color="primary" fontSize="small" />
+                                                    <Typography variant="subtitle2" fontWeight={700}>{se.exerciseId.name}</Typography>
+                                                </Stack>
+                                                <IconButton size="small" color="error" onClick={() => removeExercise(exIndex)}>
+                                                    <Trash2Rounded fontSize="small" />
+                                                </IconButton>
+                                            </Stack>
 
-                                        <div className="space-y-2">
-                                            <div className="grid grid-cols-4 gap-2 text-xs font-bold text-text-muted uppercase tracking-wider mb-1 px-1">
-                                                <span className="col-span-1">Set</span>
-                                                <span className="col-span-1 text-center">kg</span>
-                                                <span className="col-span-1 text-center">reps</span>
-                                                <span className="col-span-1"></span>
-                                            </div>
+                                            <Box display="grid" gridTemplateColumns="1fr 2fr 2fr 1fr" gap={1} mb={1} px={1}>
+                                                <Typography variant="caption" fontWeight={700} color="text.secondary" textTransform="uppercase">Set</Typography>
+                                                <Typography variant="caption" fontWeight={700} color="text.secondary" textTransform="uppercase" textAlign="center">kg</Typography>
+                                                <Typography variant="caption" fontWeight={700} color="text.secondary" textTransform="uppercase" textAlign="center">reps</Typography>
+                                                <Typography variant="caption" fontWeight={700} color="text.secondary" textTransform="uppercase" textAlign="center"></Typography>
+                                            </Box>
 
-                                            {se.sets.map((set, setIndex) => (
-                                                <div key={setIndex} className="grid grid-cols-4 gap-2 items-center">
-                                                    <div className="col-span-1 flex items-center justify-center p-2 bg-background border border-border-subtle rounded-lg text-sm text-text-secondary font-medium">
-                                                        {setIndex + 1}
-                                                    </div>
-                                                    <div className="col-span-1">
-                                                        <input
+                                            <Stack spacing={1}>
+                                                {se.sets.map((set, setIndex) => (
+                                                    <Box key={setIndex} display="grid" gridTemplateColumns="1fr 2fr 2fr 1fr" gap={1} alignItems="center">
+                                                        <Box sx={{ p: 1, bgcolor: 'background.default', border: 1, borderColor: 'divider', borderRadius: 2, display: 'flex', justifyContent: 'center' }}>
+                                                            <Typography variant="body2" fontWeight={600} color="text.secondary">{setIndex + 1}</Typography>
+                                                        </Box>
+                                                        <TextField
                                                             type="number"
-                                                            className="w-full p-2 bg-background border border-border-subtle rounded-lg text-center text-sm text-text-primary focus:outline-none focus:border-accent-primary"
+                                                            size="small"
                                                             value={set.weight}
                                                             onChange={(e) => updateSet(exIndex, setIndex, "weight", Number(e.target.value))}
+                                                            inputProps={{ style: { textAlign: 'center' } }}
+                                                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, bgcolor: 'background.default' } }}
                                                         />
-                                                    </div>
-                                                    <div className="col-span-1">
-                                                        <input
+                                                        <TextField
                                                             type="number"
-                                                            className="w-full p-2 bg-background border border-border-subtle rounded-lg text-center text-sm text-text-primary focus:outline-none focus:border-accent-primary"
+                                                            size="small"
                                                             value={set.reps}
                                                             onChange={(e) => updateSet(exIndex, setIndex, "reps", Number(e.target.value))}
+                                                            inputProps={{ style: { textAlign: 'center' } }}
+                                                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, bgcolor: 'background.default' } }}
                                                         />
-                                                    </div>
-                                                    <div className="col-span-1 flex justify-end">
-                                                        <button type="button" onClick={() => removeSet(exIndex, setIndex)} className="text-text-muted hover:text-red-500 transition p-2">
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
+                                                        <Box display="flex" justifyContent="center">
+                                                            <IconButton size="small" sx={{ color: 'text.secondary', '&:hover': { color: 'error.main' } }} onClick={() => removeSet(exIndex, setIndex)}>
+                                                                <Trash2Rounded fontSize="small" />
+                                                            </IconButton>
+                                                        </Box>
+                                                    </Box>
+                                                ))}
+                                            </Stack>
 
-                                        <button
-                                            type="button"
-                                            onClick={() => addSet(exIndex)}
-                                            className="w-full mt-3 py-2 border border-dashed border-border-subtle rounded-lg text-sm font-semibold text-text-secondary hover:text-accent-primary hover:border-accent-primary transition-colors flex items-center justify-center gap-1"
-                                        >
-                                            <Plus className="w-4 h-4" />
-                                            Add Set
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="flex justify-end space-x-3 pt-4 border-t border-border-subtle">
-                        <button
-                            onClick={() => setShowModal(false)}
-                            type="button"
-                            className="px-5 py-2.5 rounded-xl text-text-secondary hover:text-text-primary hover:bg-surface-light font-semibold transition"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            className="px-5 py-2.5 bg-accent-primary text-white rounded-xl hover:bg-accent-hover font-semibold transition shadow-sm"
-                        >
-                            Save Routine
-                        </button>
-                    </div>
-                </form>
-
-            </div>
-        </div>
+                                            <Button
+                                                variant="outlined"
+                                                color="inherit"
+                                                fullWidth
+                                                startIcon={<PlusRounded />}
+                                                onClick={() => addSet(exIndex)}
+                                                sx={{ mt: 2, borderRadius: 2, borderStyle: 'dashed', textTransform: 'none', fontWeight: 600 }}
+                                            >
+                                                Add Set
+                                            </Button>
+                                        </Paper>
+                                    ))}
+                                </Stack>
+                            )}
+                        </Paper>
+                    </Stack>
+                </DialogContent>
+                
+                <DialogActions sx={{ px: 3, pb: 3, pt: 1, borderTop: 1, borderColor: 'divider' }}>
+                    <Button onClick={() => setShowModal(false)} color="inherit" sx={{ fontWeight: 600, borderRadius: 2, textTransform: 'none', px: 3 }}>
+                        Cancel
+                    </Button>
+                    <Button type="submit" variant="contained" sx={{ fontWeight: 600, borderRadius: 2, textTransform: 'none', px: 3, boxShadow: 'none' }}>
+                        Save Routine
+                    </Button>
+                </DialogActions>
+            </Box>
+        </Dialog>
     );
 };
 

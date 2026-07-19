@@ -1,14 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Modal,
-  TouchableOpacity,
-  Image,
-  Dimensions,
-  Animated,
-} from 'react-native';
+import { Modal, Image, Dimensions, Animated } from 'react-native';
+import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import moment from 'moment';
 import 'moment/locale/tr';
@@ -89,9 +81,9 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }) => {
       transparent={false}
       onRequestClose={onClose}
     >
-      <View style={styles.container}>
+      <Surface elevation={0} style={styles.container}>
         {/* Story Background / Media */}
-        <View style={[styles.storyContent, { backgroundColor }]}>
+        <Surface elevation={0} style={[styles.storyContent, { backgroundColor }]}>
           {currentStory.media_type === 'image' && currentStory.media_url && (
             <Image
               source={{ uri: currentStory.media_url }}
@@ -100,20 +92,20 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }) => {
             />
           )}
           {currentStory.media_type === 'video' && currentStory.media_url && (
-            <View style={styles.videoPlaceholder}>
+            <Surface elevation={0} style={styles.videoPlaceholder}>
               <Ionicons name="play-circle" size={72} color="#fff" />
-            </View>
+            </Surface>
           )}
           {(currentStory.media_type === 'text' || !currentStory.media_url) && currentStory.content && (
             <Text style={styles.storyText}>{currentStory.content}</Text>
           )}
-        </View>
+        </Surface>
 
         {/* Progress Bars — one per story */}
-        <View style={styles.progressBarsRow}>
+        <Surface elevation={0} style={styles.progressBarsRow}>
           {stories.map((_, i) => (
-            <View key={i} style={[styles.progressBarBg, { flex: 1 }]}>
-              <View
+            <Surface elevation={0} key={i} style={[styles.progressBarBg, { flex: 1 }]}>
+              <Surface elevation={0}
                 style={[
                   styles.progressBarFill,
                   {
@@ -126,46 +118,46 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }) => {
                   },
                 ]}
               />
-            </View>
+            </Surface>
           ))}
-        </View>
+        </Surface>
 
         {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.userInfo}>
+        <Surface elevation={0} style={styles.header}>
+          <Surface elevation={0} style={styles.userInfo}>
             <Image
               source={{ uri: currentStory.user?.profile_picture }}
               style={styles.avatar}
             />
-            <View>
+            <Surface elevation={0}>
               <Text style={styles.userName}>{currentStory.user?.full_name}</Text>
               <Text style={styles.timeAgo}>{moment(currentStory.createdAt).fromNow()}</Text>
-            </View>
-          </View>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            </Surface>
+          </Surface>
+          <TouchableRipple borderless onPress={onClose} style={styles.closeButton}>
             <Ionicons name="close" size={28} color="#fff" />
-          </TouchableOpacity>
-        </View>
+          </TouchableRipple>
+        </Surface>
 
         {/* Tap Areas: left = prev, right = next */}
-        <View style={styles.tapAreas} pointerEvents="box-none">
-          <TouchableOpacity
+        <Surface elevation={0} style={styles.tapAreas} pointerEvents="box-none">
+          <TouchableRipple borderless
             style={styles.tapLeft}
             onPress={goPrev}
             activeOpacity={1}
           />
-          <TouchableOpacity
+          <TouchableRipple borderless
             style={styles.tapRight}
             onPress={goNext}
             activeOpacity={1}
           />
-        </View>
-      </View>
+        </Surface>
+      </Surface>
     </Modal>
   );
 };
 
-const styles = StyleSheet.create({
+const styles = {
   container: {
     flex: 1,
     backgroundColor: '#000',
@@ -267,6 +259,6 @@ const styles = StyleSheet.create({
     flex: 1,
     height: '100%',
   },
-});
+};
 
 export default StoryViewer;

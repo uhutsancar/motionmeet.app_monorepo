@@ -1,7 +1,6 @@
 import React from 'react';
-import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions
-} from 'react-native';
+import { ScrollView, Dimensions } from 'react-native';
+import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -31,35 +30,35 @@ const SetsDetailScreen = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
+      <Surface elevation={0} style={styles.header}>
+        <TouchableRipple borderless style={styles.iconBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </TouchableOpacity>
+        </TouchableRipple>
         <Text style={styles.headerTitle}>{t('monthly_report.sets_detail', 'Set Detayı')}</Text>
-        <View style={{ width: 34 }} />
-      </View>
+        <Surface elevation={0} style={{ width: 34 }} />
+      </Surface>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryCard}>
+        <Surface elevation={0} style={styles.summaryRow}>
+          <Surface elevation={0} style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>{t('monthly_report.total', 'Toplam')}</Text>
             <Text style={styles.summaryValue}>{totalSets}</Text>
             <Text style={styles.summaryUnit}>{t('monthly_report.chart_unit_sets', 'set')}</Text>
-          </View>
-          <View style={styles.summaryCard}>
+          </Surface>
+          <Surface elevation={0} style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>{t('monthly_report.avg_per_session', 'Seans Başına Ort.')}</Text>
             <Text style={styles.summaryValue}>{avgSets}</Text>
             <Text style={styles.summaryUnit}>{t('monthly_report.chart_unit_sets', 'set')}</Text>
-          </View>
-        </View>
+          </Surface>
+        </Surface>
 
-        <View style={styles.chartSection}>
+        <Surface elevation={0} style={styles.chartSection}>
           <Text style={styles.sectionTitle}>{t('monthly_report.trend_title', 'Trend')}</Text>
           {!hasData ? (
-            <View style={styles.noData}>
+            <Surface elevation={0} style={styles.noData}>
               <Ionicons name="layers-outline" size={48} color={theme.textMuted} />
               <Text style={styles.noDataText}>{t('monthly_report.no_data', 'Bu dönem için veri yok')}</Text>
-            </View>
+            </Surface>
           ) : (
             <BarChart
               data={chartData}
@@ -81,15 +80,15 @@ const SetsDetailScreen = ({ navigation, route }) => {
               withInnerLines
             />
           )}
-        </View>
+        </Surface>
 
-        <View style={{ height: 40 }} />
+        <Surface elevation={0} style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-const getStyles = (theme) => StyleSheet.create({
+const getStyles = (theme) => ({
   container: { flex: 1, backgroundColor: theme.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

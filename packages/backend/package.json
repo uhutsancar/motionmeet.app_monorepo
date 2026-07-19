@@ -1,12 +1,17 @@
 {
-  "name": "server",
+  "name": "@motionmeet/backend",
   "version": "1.0.0",
   "description": "",
   "main": "server.js",
   "type": "module",
   "scripts": {
+    "dev": "nodemon -L server.js",
     "server": "nodemon -L server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "seed:exercises": "node scripts/seedExercises.js",
+    "lint": "eslint .",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
@@ -14,22 +19,27 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1010.0",
     "@aws-sdk/lib-storage": "^3.1010.0",
-    "@clerk/express": "^1.7.51",
+    "@motionmeet/shared": "workspace:*",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "escape-string-regexp": "^4.0.0",
     "express": "^5.1.0",
-    "express-mongo-sanitize": "^2.2.0",
     "express-rate-limit": "^8.2.1",
     "helmet": "^8.1.0",
     "imagekit": "^6.0.0",
-    "inngest": "^3.45.1",
+    "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.20.0",
     "multer": "^2.0.2",
+    "node-cron": "^4.6.0",
     "nodemailer": "^7.0.10",
-    "socket.io": "^4.8.3"
+    "socket.io": "^4.8.3",
+    "uuid": "^14.0.1"
   },
   "devDependencies": {
+    "@eslint/js": "^9.36.0",
+    "eslint": "^9.36.0",
+    "globals": "^16.4.0",
     "nodemon": "^3.1.11"
   }
 }

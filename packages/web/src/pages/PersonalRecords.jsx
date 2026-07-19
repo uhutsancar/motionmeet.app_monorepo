@@ -1,87 +1,117 @@
-import React, { useState } from "react";
-import { ChevronLeft, Award, Flame, Trophy, Star } from "lucide-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import Box from "@mui/material/Box";
+import Stack from "@mui/material/Stack";
+import Paper from "@mui/material/Paper";
+import Typography from "@mui/material/Typography";
+import IconButton from "@mui/material/IconButton";
+import Chip from "@mui/material/Chip";
+import ArrowBackRounded from "@mui/icons-material/ArrowBackRounded";
+import EmojiEventsRounded from "@mui/icons-material/EmojiEventsRounded";
+import LocalFireDepartmentRounded from "@mui/icons-material/LocalFireDepartmentRounded";
+import StarRounded from "@mui/icons-material/StarRounded";
+import WorkspacePremiumRounded from "@mui/icons-material/WorkspacePremiumRounded";
+
+const iconMap = {
+    Trophy: EmojiEventsRounded,
+    Flame: LocalFireDepartmentRounded,
+    Award: WorkspacePremiumRounded,
+    Star: StarRounded,
+};
+
+const colorMap = {
+    "from-blue-500 to-indigo-600": "linear-gradient(135deg, #3b82f6, #4f46e5)",
+    "from-orange-400 to-red-500": "linear-gradient(135deg, #fb923c, #ef4444)",
+    "from-amber-400 to-yellow-600": "linear-gradient(135deg, #fbbf24, #ca8a04)",
+    "from-emerald-400 to-teal-500": "linear-gradient(135deg, #34d399, #14b8a6)",
+};
 
 const PersonalRecords = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
 
-    // Since we don't have dedicated PR tracking in backend yet, we use a premium static design
-    // that shows what the layout looks like.
     const [records] = useState([
-        { id: 1, name: "Bench Press", value: "100", unit: "kg", date: "Oct 24, 2025", icon: Trophy, color: "from-blue-500 to-indigo-600" },
-        { id: 2, name: "Squat", value: "140", unit: "kg", date: "Sep 12, 2025", icon: Flame, color: "from-orange-400 to-red-500" },
-        { id: 3, name: "Deadlift", value: "160", unit: "kg", date: "Nov 02, 2025", icon: Award, color: "from-amber-400 to-yellow-600" },
-        { id: 4, name: "Overhead Press", value: "65", unit: "kg", date: "Aug 15, 2025", icon: Star, color: "from-emerald-400 to-teal-500" }
+        { id: 1, name: "Bench Press", value: "100", unit: "kg", date: "Oct 24, 2025", icon: "Trophy", color: "from-blue-500 to-indigo-600" },
+        { id: 2, name: "Squat", value: "140", unit: "kg", date: "Sep 12, 2025", icon: "Flame", color: "from-orange-400 to-red-500" },
+        { id: 3, name: "Deadlift", value: "160", unit: "kg", date: "Nov 02, 2025", icon: "Award", color: "from-amber-400 to-yellow-600" },
+        { id: 4, name: "Overhead Press", value: "65", unit: "kg", date: "Aug 15, 2025", icon: "Star", color: "from-emerald-400 to-teal-500" },
     ]);
 
     return (
-        <div className="w-full min-h-screen bg-[var(--background)] p-4 sm:p-8 animate-in no-scrollbar overflow-y-auto">
-            <div className="max-w-4xl mx-auto space-y-6 pb-20">
+        <Box sx={{ width: "100%", minHeight: "100vh", p: { xs: 2, sm: 4 }, overflowY: "auto" }}>
+            <Box sx={{ maxWidth: 900, mx: "auto", pb: 10 }}>
                 {/* Header */}
-                <div className="flex items-center gap-4 mb-8">
-                    <button
-                        onClick={() => navigate('/statistics')}
-                        className="p-3 bg-[var(--surface-color)] rounded-2xl border border-[var(--border-color)] hover:border-[var(--accent-primary)] transition-colors"
-                    >
-                        <ChevronLeft className="w-6 h-6 text-[var(--text-primary)]" />
-                    </button>
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <h1 className="text-3xl font-black tracking-tight text-[var(--text-primary)]">{t("statistics.records", "Kişisel Rekorlar")}</h1>
-                            <div className="bg-amber-500/20 px-2 py-1 rounded-md border border-amber-500/30">
-                                <span className="text-amber-500 text-[10px] font-black uppercase">PRO</span>
-                            </div>
-                        </div>
-                        <p className="text-sm text-[var(--text-secondary)]">{t("statistics.records_desc", "1RM ve en iyi setlerin")}</p>
-                    </div>
-                </div>
+                <Stack direction="row" alignItems="center" spacing={2} mb={5}>
+                    <IconButton onClick={() => navigate("/statistics")} sx={{ bgcolor: "action.hover", borderRadius: 2 }}>
+                        <ArrowBackRounded />
+                    </IconButton>
+                    <Box>
+                        <Stack direction="row" alignItems="center" spacing={1}>
+                            <Typography variant="h4" fontWeight={900}>{t("statistics.records", "Kişisel Rekorlar")}</Typography>
+                            <Chip label="PRO" size="small" sx={{ bgcolor: "warning.main", color: "#000", fontWeight: 900, fontSize: 10 }} />
+                        </Stack>
+                        <Typography variant="body2" color="text.secondary">{t("statistics.records_desc", "1RM ve en iyi setlerin")}</Typography>
+                    </Box>
+                </Stack>
 
-                {/* Content */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Records Grid */}
+                <Box display="grid" gridTemplateColumns={{ xs: "1fr", md: "1fr 1fr" }} gap={3}>
                     {records.map((record) => {
-                        const Icon = record.icon;
+                        const Icon = iconMap[record.icon] || EmojiEventsRounded;
+                        const gradient = colorMap[record.color] || colorMap["from-blue-500 to-indigo-600"];
                         return (
-                            <div key={record.id} className="relative group overflow-hidden rounded-[2rem] border border-[var(--border-color)] bg-[var(--surface-color)] hover:border-[var(--accent-primary)] hover:shadow-2xl transition-all duration-300">
-                                <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${record.color} opacity-10 rounded-full blur-3xl group-hover:opacity-20 transition-opacity`} />
+                            <Paper
+                                key={record.id}
+                                variant="outlined"
+                                sx={{
+                                    borderRadius: 4, p: 3, position: "relative", overflow: "hidden",
+                                    "&:hover": { borderColor: "primary.main", boxShadow: 3 },
+                                    transition: "all 0.25s",
+                                }}
+                            >
+                                {/* Decorative gradient circle */}
+                                <Box sx={{
+                                    position: "absolute", top: -20, right: -20,
+                                    width: 120, height: 120, borderRadius: "50%",
+                                    background: gradient, opacity: 0.12, filter: "blur(24px)",
+                                }} />
 
-                                <div className="p-6 relative z-10 flex items-center justify-between">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-3 mb-4">
-                                            <div className={`p-3 rounded-2xl bg-gradient-to-br ${record.color} shadow-lg`}>
-                                                <Icon className="w-6 h-6 text-white" />
-                                            </div>
-                                            <div className="bg-[var(--surface-light)] px-3 py-1 rounded-full border border-[var(--border-color)]">
-                                                <span className="text-xs font-bold text-[var(--text-primary)]">1RM</span>
-                                            </div>
-                                        </div>
+                                <Stack direction="row" alignItems="center" justifyContent="space-between" position="relative" zIndex={1}>
+                                    <Box flex={1}>
+                                        <Stack direction="row" alignItems="center" spacing={1.5} mb={2}>
+                                            <Box sx={{ p: 1.5, borderRadius: 2.5, background: gradient, display: "flex" }}>
+                                                <Icon sx={{ fontSize: 22, color: "#fff" }} />
+                                            </Box>
+                                            <Chip label="1RM" size="small" variant="outlined" sx={{ fontWeight: 700, fontSize: 11 }} />
+                                        </Stack>
+                                        <Typography variant="h6" fontWeight={900} mb={0.5}>{record.name}</Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            {t("statistics.archived_on", "Archived on")} {record.date}
+                                        </Typography>
+                                    </Box>
 
-                                        <h3 className="text-xl font-black text-[var(--text-primary)] mb-1">{record.name}</h3>
-                                        <p className="text-sm text-[var(--text-secondary)] font-medium">{t('statistics.archived_on', 'Archived on')} {record.date}</p>
-                                    </div>
-
-                                    <div className="text-right">
-                                        <div className="flex items-baseline justify-end gap-1">
-                                            <span className="text-4xl font-black text-[var(--text-primary)] tracking-tighter">{record.value}</span>
-                                            <span className="text-lg font-bold text-[var(--text-secondary)]">{record.unit}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                                    <Box textAlign="right">
+                                        <Stack direction="row" alignItems="baseline" spacing={0.5} justifyContent="flex-end">
+                                            <Typography variant="h3" fontWeight={900} lineHeight={1}>{record.value}</Typography>
+                                            <Typography variant="body1" fontWeight={700} color="text.secondary">{record.unit}</Typography>
+                                        </Stack>
+                                    </Box>
+                                </Stack>
+                            </Paper>
                         );
                     })}
-                </div>
+                </Box>
 
                 {records.length === 0 && (
-                    <div className="text-center py-20 bg-[var(--surface-color)] rounded-[2rem] border border-[var(--border-color)]">
-                        <Award className="w-16 h-16 mx-auto text-[var(--text-secondary)] mb-4 opacity-50" />
-                        <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">{t('statistics.no_records_yet', 'No Records Yet')}</h3>
-                        <p className="text-[var(--text-secondary)]">{t('statistics.log_more_workouts', 'Log more workouts to see your personal records here.')}</p>
-                    </div>
+                    <Paper variant="outlined" sx={{ textAlign: "center", py: 10, borderRadius: 4 }}>
+                        <WorkspacePremiumRounded sx={{ fontSize: 64, color: "text.disabled", mb: 2 }} />
+                        <Typography variant="h6" fontWeight={700} mb={1}>{t("statistics.no_records_yet", "No Records Yet")}</Typography>
+                        <Typography variant="body2" color="text.secondary">{t("statistics.log_more_workouts", "Log more workouts to see your personal records here.")}</Typography>
+                    </Paper>
                 )}
-            </div>
-        </div>
+            </Box>
+        </Box>
     );
 };
 

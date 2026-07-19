@@ -1,35 +1,53 @@
-import { Menu, X } from "lucide-react";
-import React, { useState } from "react";
+import MenuRounded from "@mui/icons-material/MenuRounded";
+import Box from "@mui/material/Box";
+import IconButton from "@mui/material/IconButton";
+import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import Loading from "~/components/Loading";
 import SideBar from "~/components/SideBar";
-import { useSelector } from 'react-redux'
+import { useSelector } from "react-redux";
 
-const Layout = () => {
+const Layout = ({ unreadCount = 0 }) => {
   const user = useSelector((state) => state.user.value);
   const [sideBarOpen, setSideBarOpen] = useState(false);
 
   return user ? (
-    <div className="w-full flex h-screen text-text-primary bg-background transition-colors duration-300">
+    <Box sx={{ display: "flex", height: "100dvh", width: "100%", bgcolor: "background.default" }}>
+      <SideBar
+        sideBarOpen={sideBarOpen}
+        setSideBarOpen={setSideBarOpen}
+        unreadCount={unreadCount}
+      />
 
-      <SideBar sideBarOpen={sideBarOpen} setSideBarOpen={setSideBarOpen} />
-
-      <main className="flex-1 bg-background overflow-y-auto" role="main">
+      <Box
+        component="main"
+        role="main"
+        sx={{ flex: 1, minWidth: 0, overflowY: "auto", bgcolor: "background.default" }}
+      >
         <Outlet />
-      </main>
+      </Box>
 
-      {sideBarOpen ? (
-        <X
-          className="absolute top-3 right-3 p-2 z-100 bg-surface rounded-md shadow w-10 h-10 text-text-secondary sm:hidden cursor-pointer border border-border-subtle"
-          onClick={() => setSideBarOpen(false)}
-        />
-      ) : (
-        <Menu
-          className="absolute top-3 right-3 p-2 z-100 bg-surface rounded-md shadow w-10 h-10 text-text-secondary sm:hidden cursor-pointer border border-border-subtle"
+      {!sideBarOpen && (
+        <IconButton
+          aria-label="Open navigation"
           onClick={() => setSideBarOpen(true)}
-        />
+          sx={{
+            display: { xs: "inline-flex", sm: "none" },
+            position: "fixed",
+            right: 12,
+            top: 12,
+            zIndex: (theme) => theme.zIndex.drawer + 1,
+            bgcolor: "background.paper",
+            border: 1,
+            borderColor: "divider",
+            boxShadow: 2,
+            "&:hover": { bgcolor: "action.hover" },
+          }}
+        >
+          <MenuRounded />
+        </IconButton>
       )}
-    </div>
+    </Box>
   ) : (
     <Loading />
   );

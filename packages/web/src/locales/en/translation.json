@@ -399,6 +399,26 @@
         "publish_failed": "Failed to publish post.",
         "workout_post_content": "Just finished my {{name}} workout! 🏋️‍♂️"
     },
+    "muscle_groups": {
+        "chest": "Chest",
+        "back": "Back",
+        "legs": "Legs",
+        "shoulders": "Shoulders",
+        "arms": "Arms",
+        "abs": "Abs",
+        "cardio": "Cardio",
+        "full_body": "Full Body",
+        "other": "Other"
+    },
+    "equipment": {
+        "dumbbell": "Dumbbell",
+        "barbell": "Barbell",
+        "machine": "Machine",
+        "cables": "Cables",
+        "bodyweight": "Bodyweight",
+        "kettlebell": "Kettlebell",
+        "other": "Other"
+    },
     "monthly_report": {
         "title": "{{month}} Report",
         "summary": "Summary",

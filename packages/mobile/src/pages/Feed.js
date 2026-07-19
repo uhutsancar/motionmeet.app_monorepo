@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, 
-  Text, 
-  StyleSheet, 
   FlatList,
   TouchableOpacity,
   RefreshControl,
@@ -11,7 +9,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
-import { useAuth } from '@clerk/clerk-expo';
+import { useAuthContext } from "../context/AuthProvider";
 import { fetchPosts } from '../features/posts/postsSlice';
 import { fetchStories } from '../features/stories/storiesSlice';
 import { fetchUser } from '../features/user/userSlice';
@@ -21,22 +19,20 @@ import PostCard from '../components/PostCard';
 import CreatePostModal from '../components/CreatePostModal';
 import StoryModal from '../components/StoryModal';
 import SuggestedAthletes from '../components/SuggestedAthletes';
-import Loading from '../components/Loading';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { setAuthToken } from '../api/client';
+import { Appbar, IconButton, Text, Surface, FAB, ActivityIndicator } from 'react-native-paper';
 
 const Feed = ({ navigation }) => {
   const { theme } = useTheme();
-  // Memoize styles
-  const styles = React.useMemo(() => getStyles(theme), [theme]);
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const TAB_BAR_HEIGHT = 78;
   const fabBottom = TAB_BAR_HEIGHT + insets.bottom + 16;
   const dispatch = useDispatch();
-  const { getToken } = useAuth();
-  const { stories, loading: storiesLoading } = useSelector((state) => state.stories);
+  const { getToken } = useAuthContext();
+  const { stories } = useSelector((state) => state.stories);
   const { posts, loading: postsLoading } = useSelector((state) => state.posts);
   const user = useSelector((state) => state.user.value);
   const [showCreatePost, setShowCreatePost] = useState(false);
@@ -98,38 +94,34 @@ const Feed = ({ navigation }) => {
   }, [handleComment, handleShare, handleUserPress, navigation]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
       {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTitleContainer}>
+      <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12, backgroundColor: theme.background }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
           <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'discover' && styles.tabButtonActive]}
+            style={{ paddingVertical: 4, position: 'relative' }}
             onPress={() => setActiveTab('discover')}
           >
-            <Text style={[styles.tabText, activeTab === 'discover' && { color: theme.text }]}>
+            <Text style={{ fontSize: 22, fontWeight: '900', color: activeTab === 'discover' ? theme.text : theme.textMuted, letterSpacing: -0.5 }}>
               {t('feed.discover')}
             </Text>
-            {activeTab === 'discover' && <View style={[styles.activeIndicator, { backgroundColor: theme.primary }]} />}
+            {activeTab === 'discover' && <View style={{ position: 'absolute', bottom: -4, left: 0, right: 0, height: 3, borderRadius: 2, backgroundColor: theme.primary }} />}
           </TouchableOpacity>
           <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'following' && styles.tabButtonActive]}
+            style={{ paddingVertical: 4, position: 'relative' }}
             onPress={() => setActiveTab('following')}
           >
-            <Text style={[styles.tabText, activeTab === 'following' && { color: theme.text }]}>
+            <Text style={{ fontSize: 22, fontWeight: '900', color: activeTab === 'following' ? theme.text : theme.textMuted, letterSpacing: -0.5 }}>
               {t('feed.following')}
             </Text>
-            {activeTab === 'following' && <View style={[styles.activeIndicator, { backgroundColor: theme.primary }]} />}
+            {activeTab === 'following' && <View style={{ position: 'absolute', bottom: -4, left: 0, right: 0, height: 3, borderRadius: 2, backgroundColor: theme.primary }} />}
           </TouchableOpacity>
         </View>
-        <View style={styles.headerActions}>
-          <TouchableOpacity style={[styles.headerButton, { backgroundColor: theme.surface }]}>
-            <Ionicons name="search-outline" size={20} color={theme.text} />
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.headerButton, { backgroundColor: theme.surface }]}>
-            <Ionicons name="notifications-outline" size={20} color={theme.text} />
-          </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 4 }}>
+          <IconButton icon="magnify" size={24} iconColor={theme.text} style={{ backgroundColor: theme.surface, margin: 0 }} />
+          <IconButton icon="bell-outline" size={24} iconColor={theme.text} style={{ backgroundColor: theme.surface, margin: 0 }} />
         </View>
-      </View>
+      </Surface>
 
       <FlatList
         data={listData}
@@ -151,27 +143,28 @@ const Feed = ({ navigation }) => {
         }
         ListEmptyComponent={
           postsLoading ? (
-            <View style={styles.loadingContainer}>
-              <Text style={{ color: theme.textMuted }}>{t('common.loading', 'Loading...')}</Text>
+            <View style={{ padding: 40, alignItems: 'center' }}>
+              <ActivityIndicator animating={true} color={theme.primary} />
+              <Text style={{ color: theme.textMuted, marginTop: 16 }}>{t('common.loading', 'Loading...')}</Text>
             </View>
           ) : (
-            <View style={styles.emptyContainer}>
+            <View style={{ padding: 80, alignItems: 'center' }}>
               <Ionicons name="document-text-outline" size={64} color={theme.border} />
-              <Text style={[styles.emptyText, { color: theme.text }]}>{t('feed.no_posts', 'No posts yet')}</Text>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', marginTop: 16, textAlign: 'center', color: theme.text }}>{t('feed.no_posts', 'No posts yet')}</Text>
             </View>
           )
         }
-        style={styles.scrollView}
+        style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 100 }}
       />
 
       {/* Floating Action Button for Create Post */}
-      <TouchableOpacity 
-        style={[styles.fab, { backgroundColor: theme.primary, bottom: fabBottom }]}
+      <FAB
+        icon="plus"
+        color="#fff"
+        style={{ position: 'absolute', margin: 16, right: 0, bottom: fabBottom, backgroundColor: theme.primary, borderRadius: 30 }}
         onPress={() => setShowCreatePost(true)}
-      >
-        <Ionicons name="add" size={30} color="#fff" />
-      </TouchableOpacity>
+      />
 
       {/* Modals */}
       <CreatePostModal 
@@ -194,90 +187,5 @@ const Feed = ({ navigation }) => {
     </SafeAreaView>
   );
 };
-
-const getStyles = (theme) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: theme.background,
-  },
-  headerTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  tabButton: {
-    paddingVertical: 4,
-    position: 'relative',
-  },
-  tabText: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: theme.textMuted,
-    letterSpacing: -0.5,
-  },
-  activeIndicator: {
-      position: 'absolute',
-      bottom: -4,
-      left: 0,
-      right: 0,
-      height: 3,
-      borderRadius: 2,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: theme.border,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  postsContainer: {
-    paddingBottom: 100,
-  },
-  loadingContainer: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  emptyContainer: {
-    padding: 80,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginTop: 16,
-    textAlign: 'center',
-  },
-  fab: {
-      position: 'absolute',
-      right: 24,
-      width: 60,
-      height: 60,
-      borderRadius: 30,
-      alignItems: 'center',
-      justifyContent: 'center',
-      elevation: 8,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 6,
-  }
-});
 
 export default Feed;

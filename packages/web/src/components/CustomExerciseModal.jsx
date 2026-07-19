@@ -1,27 +1,36 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import toast from "react-hot-toast";
 import api from "~/api/axios";
-import { useAuth } from "@clerk/clerk-react";
-import { Dumbbell } from "lucide-react";
+import { useAuthContext } from "../context/AuthProvider";
+
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Box from '@mui/material/Box';
+import Stack from '@mui/material/Stack';
+import Typography from '@mui/material/Typography';
+import TextField from '@mui/material/TextField';
+import Button from '@mui/material/Button';
+import MenuItem from '@mui/material/MenuItem';
+
+import DumbbellRounded from '@mui/icons-material/FitnessCenterRounded';
+
+import { useTranslation } from "react-i18next";
+import { useMuscleGroups } from "../hooks/useMuscleGroups";
+import { useEquipment } from "../hooks/useEquipment";
 
 const CustomExerciseModal = ({ setShowModal, onExerciseCreated }) => {
-    const { getToken } = useAuth();
+    const { t } = useTranslation();
+    const { getToken } = useAuthContext();
+    const { data: muscleGroupsList } = useMuscleGroups();
+    const { data: equipmentListItems } = useEquipment();
+
     const [form, setForm] = useState({
         name: "",
         muscleGroup: "All Muscles",
         equipment: "All Equipment",
     });
-
-    const muscleGroups = [
-        "Abdominals", "Abductors", "Adductors", "Biceps", "Calves", "Chest",
-        "Forearms", "Glutes", "Hamstrings", "Lats", "Lower Back", "Middle Back",
-        "Neck", "Quadriceps", "Shoulders", "Traps", "Triceps"
-    ];
-
-    const equipmentList = [
-        "Barbell", "Dumbbell", "Kettlebell", "Machine", "Cable",
-        "Bodyweight", "Band", "Plate", "Other"
-    ];
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -62,80 +71,73 @@ const CustomExerciseModal = ({ setShowModal, onExerciseCreated }) => {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-            <div className="w-full max-w-md bg-surface rounded-2xl shadow-xl border border-border-subtle my-auto p-6">
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 bg-accent-primary/10 rounded-full flex items-center justify-center">
-                        <Dumbbell className="w-5 h-5 text-accent-primary" />
-                    </div>
-                    <h1 className="text-xl font-bold text-text-primary">Custom Exercise</h1>
-                </div>
+        <Dialog open={true} onClose={() => setShowModal(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 4, bgcolor: 'background.paper', backgroundImage: 'none' } }}>
+            <Box component="form" onSubmit={handleSubmit}>
+                <DialogTitle sx={{ pb: 1, pt: 3, px: 3 }}>
+                    <Stack direction="row" alignItems="center" spacing={2}>
+                        <Box sx={{ width: 40, height: 40, borderRadius: '50%', bgcolor: 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.1, position: 'absolute' }} />
+                        <DumbbellRounded color="primary" />
+                        <Typography variant="h6" fontWeight={800}>Custom Exercise</Typography>
+                    </Stack>
+                </DialogTitle>
 
-                <form className="space-y-4" onSubmit={handleSubmit}>
-                    <div>
-                        <label className="block text-sm font-semibold text-text-primary mb-1">
-                            Exercise Name
-                        </label>
-                        <input
-                            type="text"
-                            className="w-full p-3 bg-background border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:border-accent-primary shadow-sm"
-                            placeholder="e.g. Incline Bench Press"
-                            onChange={(e) => setForm({ ...form, name: e.target.value })}
-                            value={form.name}
+                <DialogContent sx={{ px: 3, pb: 2 }}>
+                    <Stack spacing={3} mt={1}>
+                        <TextField
+                            label="Exercise Name"
+                            variant="outlined"
+                            fullWidth
                             required
+                            placeholder="e.g. Incline Bench Press"
+                            value={form.name}
+                            onChange={(e) => setForm({ ...form, name: e.target.value })}
+                            InputProps={{ sx: { borderRadius: 3 } }}
                         />
-                    </div>
 
-                    <div>
-                        <label className="block text-sm font-semibold text-text-primary mb-1">
-                            Target Muscle Group
-                        </label>
-                        <select
-                            className="w-full p-3 bg-background border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:border-accent-primary shadow-sm appearance-none"
-                            onChange={(e) => setForm({ ...form, muscleGroup: e.target.value })}
+                        <TextField
+                            select
+                            label="Target Muscle Group"
+                            fullWidth
                             value={form.muscleGroup}
+                            onChange={(e) => setForm({ ...form, muscleGroup: e.target.value })}
+                            InputProps={{ sx: { borderRadius: 3 } }}
                         >
-                            <option disabled>All Muscles</option>
-                            {muscleGroups.map((mg) => (
-                                <option key={mg} value={mg}>{mg}</option>
+                            <MenuItem disabled value="All Muscles">All Muscles</MenuItem>
+                            {muscleGroupsList.map((mg) => (
+                                <MenuItem key={mg.code} value={mg.code}>
+                                    {t(`muscle_groups.${mg.code}`, mg.name)}
+                                </MenuItem>
                             ))}
-                        </select>
-                    </div>
+                        </TextField>
 
-                    <div>
-                        <label className="block text-sm font-semibold text-text-primary mb-1">
-                            Equipment Required
-                        </label>
-                        <select
-                            className="w-full p-3 bg-background border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:border-accent-primary shadow-sm appearance-none"
-                            onChange={(e) => setForm({ ...form, equipment: e.target.value })}
+                        <TextField
+                            select
+                            label="Equipment Required"
+                            fullWidth
                             value={form.equipment}
+                            onChange={(e) => setForm({ ...form, equipment: e.target.value })}
+                            InputProps={{ sx: { borderRadius: 3 } }}
                         >
-                            <option disabled>All Equipment</option>
-                            {equipmentList.map((eq) => (
-                                <option key={eq} value={eq}>{eq}</option>
+                            <MenuItem disabled value="All Equipment">All Equipment</MenuItem>
+                            {equipmentListItems.map((eq) => (
+                                <MenuItem key={eq.code} value={eq.code}>
+                                    {t(`equipment.${eq.code}`, eq.name)}
+                                </MenuItem>
                             ))}
-                        </select>
-                    </div>
+                        </TextField>
+                    </Stack>
+                </DialogContent>
 
-                    <div className="flex justify-end space-x-3 pt-4 border-t border-border-subtle mt-6">
-                        <button
-                            onClick={() => setShowModal(false)}
-                            type="button"
-                            className="px-5 py-2.5 rounded-xl text-text-secondary hover:text-text-primary hover:bg-surface-light font-semibold transition"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            className="px-5 py-2.5 bg-accent-primary text-white rounded-xl hover:bg-accent-hover font-semibold transition shadow-sm"
-                        >
-                            Create
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
+                <DialogActions sx={{ px: 3, pb: 3, pt: 1, borderTop: 1, borderColor: 'divider' }}>
+                    <Button onClick={() => setShowModal(false)} color="inherit" sx={{ fontWeight: 600, borderRadius: 2, textTransform: 'none', px: 3 }}>
+                        Cancel
+                    </Button>
+                    <Button type="submit" variant="contained" sx={{ fontWeight: 600, borderRadius: 2, textTransform: 'none', px: 3, boxShadow: 'none' }}>
+                        Create
+                    </Button>
+                </DialogActions>
+            </Box>
+        </Dialog>
     );
 };
 

@@ -1,72 +1,66 @@
 # MotionMeet
 
-A social media app for athletes to share custom workouts, upload images and videos, and connect with others.
+MotionMeet is a social fitness platform with an Express/MongoDB backend, a React/Vite web client, and a React Native/Expo mobile client.
 
-## Architecture
+## Requirements
 
-This is a monorepo containing:
-- **Backend**: Node.js + Express.js + MongoDB
-- **Web Frontend**: React
-- **Mobile App**: React Native with Expo
-- **Shared**: Common configurations, API utilities, and database connections
+- Node.js 20.19 or newer
+- pnpm 11.10.0 (managed through Corepack)
+- MongoDB and Clerk credentials for authenticated backend flows
 
-## Getting Started
-
-### Prerequisites
-- Node.js >= 18.0.0
-- npm >= 9.0.0
-- MongoDB (local or cloud instance)
-
-### Installation
+## Install
 
 ```bash
-npm install
+corepack enable
+corepack pnpm install --frozen-lockfile
 ```
 
-This will install all dependencies for all packages in the monorepo.
+Keep credentials in local `.env` files. Do not commit them. The backend example is `packages/backend/.env.example`; web variables use the `VITE_` prefix and mobile variables use `EXPO_PUBLIC_`.
 
-### Running the Application
+Required client variables:
 
-To run all services (backend, web, and mobile) simultaneously:
+- Web: `VITE_BASEURL`, `VITE_SOCKET_URL`, `VITE_CLERK_PUBLISHABLE_KEY`
+- Mobile: `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`
+
+## Development
+
+Run every application through Turborepo:
 
 ```bash
-npm run all
+corepack pnpm dev
 ```
 
-Or run individually:
-- `npm run dev:backend` - Start backend server
-- `npm run dev:web` - Start web frontend
-- `npm run dev:mobile` - Start mobile app (Expo)
+Or run one application:
 
-### Testing
-
-Run all tests:
 ```bash
-npm test
+corepack pnpm dev:backend
+corepack pnpm dev:web
+corepack pnpm dev:mobile
 ```
 
-Run tests for specific packages:
-- `npm run test:backend`
-- `npm run test:web`
-- `npm run test:mobile`
+The default ports are backend `4000`, web `5173`, and Expo/Metro `8081`.
 
-## Project Structure
+## Validation
 
-```
-motionmeet.app/
-├── packages/
-│   ├── backend/          # Express.js backend
-│   ├── web/              # React web application
-│   ├── mobile/           # React Native Expo app
-│   └── shared/           # Shared configurations and utilities
-└── package.json          # Root workspace configuration
+```bash
+corepack pnpm lint
+corepack pnpm typecheck
+corepack pnpm build
 ```
 
-## Technologies
+There is no automated test suite in the repository yet, so no placeholder `test` task is defined.
 
-- **Backend**: Node.js, Express.js, MongoDB
-- **Web**: React, Vite
-- **Mobile**: React Native, Expo
-- **Styling**: Tailwind CSS (shared config)
-- **Monorepo**: npm workspaces
+## Docker development
+
+```bash
+docker compose up --build
+```
+
+For a physical mobile device, set `EXPO_PUBLIC_API_URL` to an address the device can reach and, when Expo cannot infer the host, set `REACT_NATIVE_PACKAGER_HOSTNAME` in your shell or a local Compose override. Never commit a machine-specific LAN IP.
+
+The backend requires a long-running Node host because it serves Socket.IO connections. The web SPA can be deployed separately using `packages/web/vercel.json` when Vercel's project root is `packages/web`.
+
+## Exercise dataset
+
+The local `exercises-dataset-main` snapshot is intentionally excluded from Git and Docker builds. Its media license is not transferable to this project, so it must not be shipped until MotionMeet has a suitable license. See [docs/exercises-dataset.md](docs/exercises-dataset.md).
 

@@ -7,12 +7,12 @@ import {
   markSeen,
   deleteMessage,
 } from "../controllers/messageController.js";
-import { upload } from "../configs/multer.js";
-import { protect } from "../middlewares/auth.js";
+import { imageUpload } from "../configs/multer.js";
+import { attachDbUser, protect } from "../middlewares/auth.js";
 
 const messageRouter = express.Router();
 
-messageRouter.post("/send", upload.single("image"), protect, sendMessage);
+messageRouter.post("/send", protect, attachDbUser, imageUpload.single("image"), sendMessage);
 messageRouter.post("/get", protect, getChatMessages);
 messageRouter.get("/conversations", protect, getUserConversations);
 messageRouter.get("/recent", protect, getUserRecentMessages);

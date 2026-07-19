@@ -1,54 +1,57 @@
-import React from 'react';
-import { useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
+import { Avatar, Button, Card, CardContent, Stack, Typography } from "@mui/material";
+import { useTranslation } from "react-i18next";
+import { useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 
 const QuickProfile = () => {
-    const user = useSelector((state) => state.user.value);
-    const navigate = useNavigate();
-    const { t } = useTranslation();
+  const user = useSelector((state) => state.user.value);
+  const navigate = useNavigate();
+  const { t } = useTranslation();
 
-    if (!user) return null;
+  if (!user) return null;
 
-    return (
-        <div className="w-full bg-surface border border-border-subtle rounded-[2rem] p-8 shadow-xl animate-in">
-            <div className="flex flex-col items-center text-center">
-                <div className="relative mb-4">
-                    <div className="w-20 h-20 rounded-full bg-surface-light flex items-center justify-center text-2xl font-bold text-text-primary shadow-lg border-2 border-border-subtle overflow-hidden">
-                        {user.profile_picture ? (
-                            <img src={user.profile_picture} alt={user.username} className="w-full h-full object-cover" />
-                        ) : (
-                            user.username.charAt(0).toUpperCase()
-                        )}
-                    </div>
-                </div>
+  const statistics = [
+    { label: t("feed.workouts"), value: user.statistics?.totalWorkouts || 0 },
+    { label: t("feed.followers"), value: user.followers_count ?? user.followers?.length ?? 0 },
+    { label: t("feed.following"), value: user.following_count ?? user.following?.length ?? 0 },
+  ];
 
-                <h2 className="text-xl font-black text-text-primary tracking-tight mb-6">@{user.username}</h2>
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 3 }}>
+      <CardContent sx={{ p: 3, "&:last-child": { pb: 3 } }}>
+        <Stack spacing={2.5} sx={{ alignItems: "center" }}>
+          <Avatar
+            src={user.profile_picture || undefined}
+            alt={user.username}
+            sx={{ width: 80, height: 80, fontSize: 28, fontWeight: 800, border: 2, borderColor: "divider" }}
+          >
+            {user.username?.charAt(0).toUpperCase()}
+          </Avatar>
 
-                <div className="flex w-full justify-between items-center mb-8 px-2">
-                    <div className="flex flex-col items-center">
-                        <span className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-1">{t('feed.workouts')}</span>
-                        <span className="text-lg font-black text-text-primary leading-none">{user.statistics?.totalWorkouts || 0}</span>
-                    </div>
-                    <div className="flex flex-col items-center">
-                        <span className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-1">{t('feed.followers')}</span>
-                        <span className="text-lg font-black text-text-primary leading-none">{user.followers?.length || 0}</span>
-                    </div>
-                    <div className="flex flex-col items-center">
-                        <span className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-1">{t('feed.following')}</span>
-                        <span className="text-lg font-black text-text-primary leading-none">{user.following?.length || 0}</span>
-                    </div>
-                </div>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>
+            @{user.username}
+          </Typography>
 
-                <button
-                    onClick={() => navigate('/profile')}
-                    className="w-full py-4 bg-surface-light hover:bg-border-subtle text-text-primary text-sm font-black rounded-2xl transition-all active:scale-95 shadow-sm border border-border-subtle"
-                >
-                    {t('feed.see_profile')}
-                </button>
-            </div>
-        </div>
-    );
+          <Stack direction="row" sx={{ width: "100%", justifyContent: "space-between" }}>
+            {statistics.map((stat) => (
+              <Stack key={stat.label} spacing={0.5} sx={{ minWidth: 0, alignItems: "center" }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                  {stat.label}
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1 }}>
+                  {stat.value}
+                </Typography>
+              </Stack>
+            ))}
+          </Stack>
+
+          <Button fullWidth variant="outlined" onClick={() => navigate("/profile")}>
+            {t("feed.see_profile")}
+          </Button>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
 };
 
 export default QuickProfile;
