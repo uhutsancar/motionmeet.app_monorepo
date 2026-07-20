@@ -5,16 +5,20 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import UserCard from './UserCard';
 import api from '../api/client';
+import { useAuthContext } from '../context/AuthProvider';
+import { getSuggestedUsers } from '../api/endpoints';
 
 const SuggestedAthletes = ({ navigation }) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { getToken } = useAuthContext();
 
   const fetchSuggested = async () => {
     try {
-      const { data } = await api.get('/api/user/suggested');
+      const token = await getToken();
+      const data = await getSuggestedUsers(token);
       if (data.success) {
         setUsers(data.users);
       }

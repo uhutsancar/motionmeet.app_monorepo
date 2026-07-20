@@ -3,7 +3,7 @@ import { Image, Dimensions, Alert, TextInput, FlatList, ActivityIndicator, Style
 import { useSelector, useDispatch } from 'react-redux';
 import { useAuthContext } from "../context/AuthProvider";
 import { Ionicons } from '@expo/vector-icons';
-import { likePost, followUser, unfollowUser } from '../api/endpoints';
+import { likePost, followUser, unfollowUser, addComment } from '../api/endpoints';
 import { fetchUser } from '../features/user/userSlice';
 import api from '../api/client';
 import moment from 'moment';
@@ -116,6 +116,7 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
       paddingHorizontal: POST_PADDING,
       marginBottom: 16,
       gap: 20,
+      flexWrap: 'wrap',
       backgroundColor: 'transparent'
     },
     statBox: {
@@ -381,8 +382,8 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
   const handleAddComment = async () => {
     if (!commentText.trim() || isProcessing) return;
     try {
-      setIsProcessing(true);
-      const { data } = await api.post('/api/post/comment/add', { postId: post._id, content: commentText });
+      const token = await getToken();
+      const data = await addComment(post._id, commentText, token);
       if (data.success) {
         setComments(data.comments);
         setCommentText("");

@@ -5,7 +5,8 @@ import { ActivityIndicator, Appbar, Searchbar, Chip, Surface, Text, IconButton, 
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
-import api from '../api/client';
+import { useAuthContext } from "../context/AuthProvider";
+import { getExercises } from '../api/endpoints';
 import CustomExerciseModal from '../components/CustomExerciseModal';
 import { Image } from 'expo-image';
 import Constants from 'expo-constants';
@@ -20,6 +21,7 @@ const API_BASE = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:4000';
 const Exercises = ({ navigation }) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
+  const { getToken } = useAuthContext();
 
   const { data: muscleGroupsList } = useMuscleGroups();
   const { data: equipmentListItems } = useEquipment();
@@ -45,7 +47,8 @@ const Exercises = ({ navigation }) => {
       if (muscleFilter !== "all") params.muscleGroup = muscleFilter;
       if (equipmentFilter !== "all") params.equipment = equipmentFilter;
 
-      const { data } = await api.get('/api/exercise', { params });
+      const token = await getToken();
+      const data = await getExercises(params, token);
       if (data.success) {
         setExercises(data.exercises);
       }

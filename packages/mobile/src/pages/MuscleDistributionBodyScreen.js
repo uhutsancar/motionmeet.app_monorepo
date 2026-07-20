@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from "../context/AuthProvider";
-import api from '../api/client';
+import { getWorkoutStats } from '../api/endpoints';
 
 const MuscleDistributionBodyScreen = ({ navigation }) => {
   const { t } = useTranslation();
@@ -24,9 +24,7 @@ const MuscleDistributionBodyScreen = ({ navigation }) => {
   const fetchStats = async () => {
     try {
       const token = await getToken();
-      const { data } = await api.get('/api/workout/stats?period=month', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const data = await getWorkoutStats('month', token);
       if (data.success && data.muscleDistribution) {
         const formatted = Object.entries(data.muscleDistribution)
           .map(([name, val]) => ({ name, value: Math.round(val * 100) }))

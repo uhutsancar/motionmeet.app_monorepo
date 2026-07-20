@@ -8,7 +8,8 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from "../context/AuthProvider";
 import * as ImagePicker from 'expo-image-picker';
-import api, { setAuthToken } from '../api/client';
+import { setAuthToken } from '../api/client';
+import { createWorkout, createPost } from '../api/endpoints';
 import moment from 'moment';
 import { Appbar, Button, Surface, Text, TextInput, Divider, List, IconButton, ActivityIndicator } from 'react-native-paper';
 
@@ -102,7 +103,7 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
         endTime: new Date(),
         exercises: workoutData.exercises || [],
       };
-      const { data: workoutRes } = await api.post('/api/workout', workoutPayload);
+      const workoutRes = await createWorkout(workoutPayload, freshToken);
       if (!workoutRes.success) {
         Alert.alert(t('common.error'), workoutRes.message || t('common.error', 'Kaydedilemedi'));
         return;
@@ -125,14 +126,14 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
             type: `image/${ext === 'jpg' ? 'jpeg' : ext}`
           });
 
-          await api.post('/api/post/add', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+          await createPost(formData, freshToken);
         } else {
-          await api.post('/api/post/add', {
+          await createPost({
             content: note.trim() || '',
             post_type: 'workout',
             visibility,
             workout: savedWorkoutId,
-          });
+          }, freshToken);
         }
       } catch (postErr) {
         console.warn('Workout post oluşturulamadı:', postErr.response?.data || postErr.message);

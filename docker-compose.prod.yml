@@ -1,4 +1,4 @@
-﻿name: motionmeet-prod
+name: motionmeet_prod
 
 services:
   backend:
@@ -13,6 +13,9 @@ services:
     environment:
       NODE_ENV: production
     restart: unless-stopped
+    container_name: motionmeet_prod_backend
+    networks:
+      - motionmeet_prod_net
 
   web:
     build:
@@ -20,10 +23,16 @@ services:
       dockerfile: packages/web/Dockerfile.prod
       args:
         VITE_BASEURL: ${VITE_BASEURL}
-        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY}
         VITE_SOCKET_URL: ${VITE_SOCKET_URL}
     ports:
       - "80:80"
     depends_on:
       - backend
     restart: unless-stopped
+    container_name: motionmeet_prod_web
+    networks:
+      - motionmeet_prod_net
+
+networks:
+  motionmeet_prod_net:
+    driver: bridge

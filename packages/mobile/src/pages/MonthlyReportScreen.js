@@ -6,7 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { BarChart } from 'react-native-chart-kit';
 import Svg, { Polygon, Line, Text as SvgText } from 'react-native-svg';
-import api from '../api/client';
+import { getWorkoutStats } from '../api/endpoints';
+import { useAuthContext } from '../context/AuthProvider';
 import { Appbar, Text, Surface, TouchableRipple, ActivityIndicator, Divider, Chip, Button } from 'react-native-paper';
 import { useMuscleGroups } from '../hooks/useMuscleGroups';
 
@@ -22,6 +23,7 @@ const MonthlyReportScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('workouts');
   const [statsData, setStatsData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { getToken } = useAuthContext();
   const { data: muscleGroupsList } = useMuscleGroups();
 
   const now = new Date();
@@ -31,7 +33,8 @@ const MonthlyReportScreen = ({ navigation }) => {
   useEffect(() => {
     const fetchMonthlyStats = async () => {
       try {
-        const { data } = await api.get('/api/workout/stats?period=month');
+        const token = await getToken();
+        const data = await getWorkoutStats('month', token);
         if (data.success) setStatsData(data);
       } catch (err) {
         console.error('Monthly report fetch error:', err);

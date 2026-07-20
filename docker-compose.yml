@@ -1,19 +1,24 @@
+name: motionmeet_dev
+
 services:
   backend:
     build:
       context: .
       dockerfile: packages/backend/Dockerfile
-    container_name: motionmeet_backend
+    container_name: motionmeet_dev_backend
     restart: unless-stopped
     ports:
       - "8081:8080"
     env_file:
       - .env
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - PORT=8080
+    volumes:
+      - ./packages/backend:/app/packages/backend
+      - /app/packages/backend/node_modules
     networks:
-      - motionmeet_net
+      - motionmeet_dev_net
 
   web:
     build:
@@ -22,15 +27,18 @@ services:
       args:
         - VITE_BASEURL=http://localhost:8081
         - VITE_SOCKET_URL=ws://localhost:8081
-    container_name: motionmeet_web
+    container_name: motionmeet_dev_web
     restart: unless-stopped
     ports:
       - "3000:80"
     depends_on:
       - backend
+    volumes:
+      - ./packages/web:/app/packages/web
+      - /app/packages/web/node_modules
     networks:
-      - motionmeet_net
+      - motionmeet_dev_net
 
 networks:
-  motionmeet_net:
+  motionmeet_dev_net:
     driver: bridge

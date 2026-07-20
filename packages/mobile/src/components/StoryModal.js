@@ -207,12 +207,7 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
         });
       }
 
-      // Retry once on null token (Clerk cold start)
       let token = await getToken();
-      if (!token) {
-        await new Promise(res => setTimeout(res, 500));
-        token = await getToken();
-      }
       const data = await createStory(formData, token);
 
       if (data.success) {

@@ -15,7 +15,6 @@
     "@babel/runtime": "^8.0.0",
     "@callstack/react-theme-provider": "^3.0.9",
     "@expo/vector-icons": "^15.0.3",
-    "@motionmeet/shared": "workspace:*",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/bottom-tabs": "^7.3.10",
     "@react-navigation/core": "^7.21.8",

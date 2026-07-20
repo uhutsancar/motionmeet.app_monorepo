@@ -166,7 +166,7 @@ const PostCard = ({ post }) => {
       </Stack>
 
       {hasWorkout && (
-        <Stack direction="row" spacing={1} sx={{ px: { xs: 2, sm: 2.5 }, pb: 2, overflowX: "auto", justifyContent: "space-between" }}>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ px: { xs: 2, sm: 2.5 }, pb: 2, flexWrap: "wrap", justifyContent: "space-between" }}>
           {workoutStats.map((stat) => (
             <Stack key={stat.label} sx={{ minWidth: 70 }}>
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>

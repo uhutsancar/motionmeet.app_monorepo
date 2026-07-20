@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 
 import {
   DarkTheme as NavigationDarkTheme,
@@ -118,7 +118,7 @@ const TabNavigator = () => {
     return () => socket.off('message_received', onMsg);
   }, [socket, t]);
 
-  const iconForRoute = (name, focused) => {
+  const iconForRoute = useCallback((name, focused) => {
     const map = {
       Home:        focused ? 'home'              : 'home-outline',
       Routines:    focused ? 'fitness'           : 'fitness-outline',
@@ -128,62 +128,62 @@ const TabNavigator = () => {
       SettingsTab: focused ? 'settings'          : 'settings-outline',
     };
     return map[name] || 'ellipse-outline';
-  };
+  }, []);
+
+  const screenOptions = useCallback(({ route }) => ({
+    tabBarIcon: ({ focused, color, size }) => {
+      const iconName = iconForRoute(route.name, focused);
+      const iconSize = 26; // Increased size as requested
+      
+      if (route.name === 'MessagesTab' && unreadMessages > 0) {
+        return (
+          <Surface elevation={0} style={{ width: iconSize, height: iconSize, justifyContent: 'center', alignItems: 'center' }}>
+            <Ionicons name={iconName} size={iconSize} color={color} />
+            <Surface elevation={0} style={{
+              position: 'absolute', top: -1, right: -3,
+              backgroundColor: theme.primary, borderRadius: 6,
+              minWidth: 14, height: 14, justifyContent: 'center', alignItems: 'center',
+              borderWidth: 1.5, borderColor: theme.surfaceLight
+            }}>
+              <Text style={{ color: '#fff', fontSize: 8, fontWeight: '900' }}>
+                {unreadMessages > 9 ? '9+' : unreadMessages}
+              </Text>
+            </Surface>
+          </Surface>
+        );
+      }
+      return <Ionicons name={iconName} size={iconSize} color={color} />;
+    },
+    tabBarActiveTintColor: theme.primary,
+    tabBarInactiveTintColor: theme.textMuted,
+    tabBarShowLabel: true,
+    tabBarLabelStyle: { fontSize: 10, fontWeight: '700', marginBottom: 2 },
+    tabBarStyle: {
+      backgroundColor: theme.surfaceLight,
+      borderTopColor: theme.border,
+      borderTopWidth: 0.5,
+      height: 78,
+      elevation: 8,
+      shadowColor: '#000',
+      shadowOpacity: 0.12,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: -3 },
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+    },
+    tabBarItemStyle: {
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingTop: 10,
+      paddingBottom: 8,
+    },
+    headerShown: false,
+  }), [theme, unreadMessages, iconForRoute]);
 
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          const iconName = iconForRoute(route.name, focused);
-          const iconSize = 26; // Increased size as requested
-          
-          if (route.name === 'MessagesTab' && unreadMessages > 0) {
-            return (
-              <Surface elevation={0} style={{ width: iconSize, height: iconSize, justifyContent: 'center', alignItems: 'center' }}>
-                <Ionicons name={iconName} size={iconSize} color={color} />
-                <Surface elevation={0} style={{
-                  position: 'absolute', top: -1, right: -3,
-                  backgroundColor: theme.primary, borderRadius: 6,
-                  minWidth: 14, height: 14, justifyContent: 'center', alignItems: 'center',
-                  borderWidth: 1.5, borderColor: theme.surfaceLight
-                }}>
-                  <Text style={{ color: '#fff', fontSize: 8, fontWeight: '900' }}>
-                    {unreadMessages > 9 ? '9+' : unreadMessages}
-                  </Text>
-                </Surface>
-              </Surface>
-            );
-          }
-          return <Ionicons name={iconName} size={iconSize} color={color} />;
-        },
-        tabBarActiveTintColor: theme.primary,
-        tabBarInactiveTintColor: theme.textMuted,
-        tabBarShowLabel: true,
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '700', marginBottom: 2 },
-        tabBarStyle: {
-          backgroundColor: theme.surfaceLight,
-          borderTopColor: theme.border,
-          borderTopWidth: 0.5,
-          height: 78,
-          elevation: 8,
-          shadowColor: '#000',
-          shadowOpacity: 0.12,
-          shadowRadius: 12,
-          shadowOffset: { width: 0, height: -3 },
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-        },
-        tabBarItemStyle: {
-          justifyContent: 'center',
-          alignItems: 'center',
-          paddingTop: 10,
-          paddingBottom: 8,
-        },
-        headerShown: false,
-      })}
-    >
+    <Tab.Navigator screenOptions={screenOptions}>
       <Tab.Screen name="Home" component={Feed} options={{ tabBarLabel: t('tabs.feed', 'Keşfet') }} />
       <Tab.Screen name="Routines" component={Routines} options={{ tabBarLabel: t('tabs.routines', 'Rutinler') }} />
       <Tab.Screen name="Exercises" component={Exercises} options={{ tabBarLabel: t('tabs.exercises', 'Egzersiz') }} />

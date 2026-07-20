@@ -7,7 +7,7 @@ import { useAuthContext } from "../context/AuthProvider";
 import { useTheme } from '../context/ThemeContext';
 import { useSelector, useDispatch } from 'react-redux';
 import { fetchUser } from '../features/user/userSlice';
-import api from '../api/client';
+import { getPlans, updatePlan } from '../api/endpoints';
 
 const PricingScreen = ({ navigation }) => {
   const { theme } = useTheme();
@@ -23,7 +23,8 @@ const PricingScreen = ({ navigation }) => {
 
   const fetchPlans = async () => {
     try {
-      const { data } = await api.get('/api/plans');
+      const token = await session?.getToken();
+      const data = await getPlans(token);
       if (data.success) setPlans(data.plans);
     } catch (err) {
       console.error(err);
@@ -39,9 +40,7 @@ const PricingScreen = ({ navigation }) => {
     try {
       const token = await session?.getToken();
       if (!token) throw new Error('No token');
-      const { data } = await api.post('/api/plans/update', { planId }, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const data = await updatePlan(planId, token);
       if (data.success) {
         Alert.alert('Success', 'Your plan has been upgraded!');
         dispatch(fetchUser(token));

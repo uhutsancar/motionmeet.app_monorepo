@@ -6,7 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import Svg, { Polygon, Line, Text as SvgText } from 'react-native-svg';
-import api from '../api/client';
+import { getWorkoutStats } from '../api/endpoints';
+import { useAuthContext } from '../context/AuthProvider';
 import { useMuscleGroups } from '../hooks/useMuscleGroups';
 
 const { width } = Dimensions.get('window');
@@ -19,6 +20,7 @@ const MuscleDistribution = ({ navigation }) => {
   const { theme } = useTheme();
   const styles = getStyles(theme);
   const { data: muscleGroupsList, isLoading: isMusclesLoading } = useMuscleGroups();
+  const { getToken } = useAuthContext();
 
   const [period, setPeriod] = useState('month');
   const [showDropdown, setShowDropdown] = useState(false);
@@ -31,7 +33,8 @@ const MuscleDistribution = ({ navigation }) => {
     const fetchStats = async () => {
       setLoading(true);
       try {
-        const { data } = await api.get(`/api/workout/stats?period=${period}`);
+        const token = await getToken();
+        const data = await getWorkoutStats(period, token);
         if (data.success) {
           setStats(data);
         }

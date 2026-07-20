@@ -20,9 +20,7 @@ export const useMuscleGroups = (options = {}) => {
       setIsLoading(true);
       try {
         const token = await getToken();
-        const response = await api.get('/api/muscle-groups', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const data = await getMuscleGroups(); const response = { data };
         
         if (response.data.success) {
           muscleGroupsCache = response.data.data;

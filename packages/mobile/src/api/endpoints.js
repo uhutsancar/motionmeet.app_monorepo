@@ -172,6 +172,88 @@ export const getWorkoutStats = async (period, token) => {
   return data;
 };
 
+export const getWorkouts = async (token) => {
+  const { data } = await api.get('/api/workout', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const createWorkout = async (workoutData, token) => {
+  const { data } = await api.post('/api/workout', workoutData, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+// ============= ROUTINE APIs =============
+export const getRoutines = async (token) => {
+  const { data } = await api.get('/api/routine', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const createRoutine = async (routineData, token) => {
+  const { data } = await api.post('/api/routine', routineData, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+// ============= EXERCISE APIs =============
+export const getExercises = async (params, token) => {
+  const { data } = await api.get('/api/exercise', {
+    params,
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const createExercise = async (exerciseData, token) => {
+  const { data } = await api.post('/api/exercise', exerciseData, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const getExerciseStats = async (exerciseId, token) => {
+  const { data } = await api.get(`/api/exercise/${exerciseId}/stats`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+// ============= PLAN APIs =============
+export const getPlans = async (token) => {
+  const { data } = await api.get('/api/plans', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const updatePlan = async (planId, token) => {
+  const { data } = await api.post('/api/plans/update', { planId }, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+// ============= ADDITIONAL APIs =============
+export const addComment = async (postId, content, token) => {
+  const { data } = await api.post('/api/post/comment/add', { postId, content }, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const getSuggestedUsers = async (token) => {
+  const { data } = await api.get('/api/user/suggested', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
 export default {
   // User
   getUserData,
@@ -204,4 +286,25 @@ export default {
 
   // Workout
   getWorkoutStats,
+  getWorkouts,
+  createWorkout,
+
+  // Routine
+  getRoutines,
+  createRoutine,
+
+  // Exercise
+  getExercises,
+  createExercise,
+  getExerciseStats,
+
+  // Plan
+  getPlans,
+  updatePlan,
+
+  // Post Extras
+  addComment,
+
+  // User Extras
+  getSuggestedUsers,
 };

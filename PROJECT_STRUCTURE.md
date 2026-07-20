@@ -3,7 +3,7 @@
 ```text
 motionmeet.app_monorepo/
 ├── packages/
-│   ├── backend/       Express 5, MongoDB, Clerk, Inngest, Socket.IO
+│   ├── backend/       Express 5, MongoDB, Socket.IO
 │   ├── web/           React 19, Vite, MUI, Recharts
 │   └── mobile/        Expo 54, React Native Paper, react-native-chart-kit
 ├── docs/              Architecture and operational decisions

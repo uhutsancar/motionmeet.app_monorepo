@@ -5,7 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { useAuthContext } from "../context/AuthProvider";
-import api, { setAuthToken } from '../api/client';
+import { setAuthToken } from '../api/client';
+import { getExercises, createRoutine } from '../api/endpoints';
 import Toast from 'react-native-toast-message';
 
 const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
@@ -28,8 +29,8 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
     const fetchEx = async () => {
       try {
         setLoadingEx(true);
-        const params = searchQuery.trim().length > 0 ? `?search=${searchQuery}` : '';
-        const { data } = await api.get(`/api/exercise${params}`);
+        const token = await getToken();
+        const data = await getExercises({ search: searchQuery.trim() }, token);
         if (data.success) setExercisesData(data.exercises);
       } catch (error) {
         console.error('Exercise search error:', error);
@@ -83,7 +84,7 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
     try {
       setSaving(true);
 
-      // Always fetch a fresh Clerk token before saving
+      // Always fetch a fresh token before saving
       const freshToken = await getToken();
       if (freshToken) setAuthToken(freshToken);
 
@@ -96,7 +97,7 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
         }))
       };
 
-      const { data } = await api.post('/api/routine', payload);
+      const data = await createRoutine(payload, freshToken);
       if (data.success) {
         Alert.alert(t('common.success', 'Başarılı'), t('routines.routine_created', 'Rutin oluşturuldu!'));
         onRoutineCreated(data.routine);

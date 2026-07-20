@@ -19,7 +19,6 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1010.0",
     "@aws-sdk/lib-storage": "^3.1010.0",
-    "@motionmeet/shared": "workspace:*",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
@@ -32,7 +31,7 @@
     "mongoose": "^8.20.0",
     "multer": "^2.0.2",
     "node-cron": "^4.6.0",
-    "nodemailer": "^7.0.10",
+    "nodemailer": "^8.0.9",
     "socket.io": "^4.8.3",
     "uuid": "^14.0.1"
   },

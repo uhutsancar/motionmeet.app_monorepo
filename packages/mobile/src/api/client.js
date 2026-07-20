@@ -25,15 +25,10 @@ export const setAuthTokenProvider = (provider) => {
 // Request interceptor for adding auth token
 api.interceptors.request.use(
   async (config) => {
-    // Ask Clerk for a current token on every request. Clerk serves its cached
-    // token while valid and refreshes it when needed.
+    // Fetch current token before request.
     const token = authTokenProvider ? await authTokenProvider() : authToken;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-    }
-    
-    // Handle multipart/form-data
-    if (config.data instanceof FormData) {
       config.headers['Content-Type'] = 'multipart/form-data';
     }
     

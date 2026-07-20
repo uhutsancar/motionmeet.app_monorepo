@@ -4,9 +4,9 @@ MotionMeet is a social fitness platform with an Express/MongoDB backend, a React
 
 ## Requirements
 
-- Node.js 20.19 or newer
-- pnpm 11.10.0 (managed through Corepack)
-- MongoDB and Clerk credentials for authenticated backend flows
+- Node.js 20+ and pnpm
+- MongoDB credentials for authenticated backend flows
+- A modern browser or Expo Go for development testing
 
 ## Install
 
@@ -17,10 +17,14 @@ corepack pnpm install --frozen-lockfile
 
 Keep credentials in local `.env` files. Do not commit them. The backend example is `packages/backend/.env.example`; web variables use the `VITE_` prefix and mobile variables use `EXPO_PUBLIC_`.
 
-Required client variables:
+### Backend Environment (`packages/backend/.env`)
 
-- Web: `VITE_BASEURL`, `VITE_SOCKET_URL`, `VITE_CLERK_PUBLISHABLE_KEY`
-- Mobile: `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`
+- `PORT`, `MONGODB_URL`, `FRONTEND_URL`, `JWT_SECRET`
+
+### Frontend Environment
+
+- Web: `VITE_BASEURL`, `VITE_SOCKET_URL`
+- Mobile: `EXPO_PUBLIC_API_URL`
 
 ## Development
 

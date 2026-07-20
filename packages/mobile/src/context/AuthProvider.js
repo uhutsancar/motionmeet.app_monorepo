@@ -82,11 +82,10 @@ export const useAuthContext = () => {
     throw new Error('useAuthContext must be used within an AuthProvider');
   }
   return {
-    user: context.user,
-    getToken: async () => context.token, // Async function like Clerk's getToken
     isLoaded: context.isLoaded,
-    isSignedIn: !!context.user,
+    getToken: async () => context.token,
     userId: context.user?.id,
+    isSignedIn: !!context.user,
     signOut: context.logout,
     login: context.login,
     register: context.register

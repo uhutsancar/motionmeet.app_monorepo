@@ -35,7 +35,7 @@ export const SocketProvider = ({ children }) => {
           const token = await getTokenRef.current({ skipCache: true });
           callback({ token: token || '' });
         } catch (error) {
-          console.warn('[Socket] Clerk token could not be refreshed:', error.message);
+          console.warn('[Socket] Token could not be refreshed:', error.message);
           callback({ token: '' });
         }
       },

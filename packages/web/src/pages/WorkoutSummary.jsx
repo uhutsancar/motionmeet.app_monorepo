@@ -7,14 +7,20 @@ import {
     TrendingUp, Zap, Eye, Lock, X, Users
 } from 'lucide-react';
 
-import api from '~/api/axios';
+import { createWorkout, createPost } from '~/api/endpoints';
 import { useAuthContext } from "../context/AuthProvider.jsx";
 import toast from 'react-hot-toast';
 import {
     Box, Stack, Typography, IconButton, Button, Paper, TextField,
     Divider, CircularProgress, Select, MenuItem, InputLabel, FormControl
 } from '@mui/material';
-import { formatTime } from '@motionmeet/shared';
+const formatTime = (seconds) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+};
 
 const VISIBILITY_OPTIONS = [
     { value: 'public', label: 'Herkes', icon: <Eye size={16} /> },
@@ -82,14 +88,15 @@ const WorkoutSummary = () => {
             // 1. Save workout to DB (if not already saved from ActiveWorkout)
             let savedWorkoutId = savedWorkoutIdRef.current;
             if (!savedWorkoutId) {
-                const { data: workoutRes } = await api.post('/api/workout', {
+                const workoutData = {
                     name: workout.name,
                     durationMinutes: workout.durationMinutes || 0,
                     volumeKg: workout.volumeKg || 0,
                     startTime: new Date(Date.now() - (workout.durationMinutes || 0) * 60000),
                     endTime: new Date(),
                     exercises: workout.exercises || [],
-                }, { headers: authHeaders });
+                };
+                const workoutRes = await createWorkout(workoutData, token);
 
                 if (!workoutRes.success) {
                     toast.error(workoutRes.message || 'Antrenman kaydedilemedi');
@@ -109,18 +116,16 @@ const WorkoutSummary = () => {
                 if (savedWorkoutId) formData.append('workout', savedWorkoutId);
                 formData.append('images', mediaFile);
 
-                const { data: postRes } = await api.post('/api/post/add', formData, {
-                    headers: { ...authHeaders, 'Content-Type': 'multipart/form-data' }
-                });
+                const postRes = await createPost(formData, token);
                 if (!postRes.success) throw new Error(postRes.message);
             } else {
                 // No photo → JSON
-                const { data: postRes } = await api.post('/api/post/add', {
+                const postRes = await createPost({
                     content: note.trim() || '',
                     post_type: 'workout',
                     visibility,
                     workout: savedWorkoutId,
-                }, { headers: authHeaders });
+                }, token);
                 if (!postRes.success) throw new Error(postRes.message);
             }
 
@@ -189,7 +194,7 @@ const WorkoutSummary = () => {
 
             <Box sx={{ maxWidth: 'md', mx: 'auto', p: { xs: 2, lg: 4 }, display: 'flex', flexDirection: 'column', gap: 3 }}>
                 {/* Stats Grid */}
-                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(1, 1fr)', sm: 'repeat(3, 1fr)' }, gap: 2 }}>
                     <Paper variant="outlined" sx={{ p: 2, borderRadius: 4, textAlign: 'center', bgcolor: 'background.paper' }}>
                         <PlayCircle size={24} style={{ color: '#60A5FA', margin: '0 auto 8px auto' }} />
                         <Typography variant="h5" fontWeight="900">

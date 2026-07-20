@@ -195,8 +195,8 @@ const Profile = () => {
   return (
     <Box sx={{ width: "100%", minHeight: "100vh", overflowY: "auto", py: { xs: 2, sm: 3 }, pb: { xs: 10, sm: 5 } }}>
       <Stack spacing={3} sx={{ maxWidth: 896, mx: "auto", px: { xs: 2, sm: 4 } }}>
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ py: 2, alignItems: { xs: "flex-start", sm: "center" }, justifyContent: "space-between" }}>
-          <Stack direction="row" spacing={2.5} sx={{ alignItems: "center" }}>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ py: 2, alignItems: { xs: "center", sm: "center" }, justifyContent: "space-between", textAlign: { xs: "center", sm: "left" } }}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2.5} sx={{ alignItems: "center" }}>
             <Box sx={{ position: "relative" }}>
               <Avatar src={user.profile_picture || undefined} alt={user.full_name} variant="rounded" sx={{ width: 80, height: 80, borderRadius: 3, fontSize: 30, fontWeight: 800, border: 1, borderColor: "divider", boxShadow: 2 }}>
                 {user.full_name?.charAt(0).toUpperCase() || "U"}
@@ -207,7 +207,7 @@ const Profile = () => {
               <Typography variant="h5" sx={{ fontWeight: 900 }}>
                 {user.full_name || user.username}
               </Typography>
-              <Stack direction="row" spacing={2} divider={<Box sx={{ width: "1px", height: 32, bgcolor: "divider" }} />} sx={{ alignItems: "center" }}>
+              <Stack direction="row" spacing={2} divider={<Box sx={{ width: "1px", height: 32, bgcolor: "divider" }} />} sx={{ alignItems: "center", flexWrap: "wrap" }}>
                 {profileStats.map((stat) => (
                   <Stack key={stat.label}>
                     <Typography variant="h6" color={stat.highlight ? "primary.main" : "text.primary"} sx={{ fontWeight: 900, lineHeight: 1 }}>

@@ -7,7 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Appbar, Avatar, Button, Surface, Text, ActivityIndicator, Divider, Chip } from 'react-native-paper';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
-import api, { setAuthToken } from '../api/client';
+import { setAuthToken } from '../api/client';
+import { getUserProfile, getWorkouts } from '../api/endpoints';
 import moment from 'moment';
 import 'moment/locale/tr';
 
@@ -43,7 +44,7 @@ const Profile = ({ route, navigation }) => {
         setProfileLoading(true);
         const token = await getToken();
         if (token) setAuthToken(token);
-        const { data } = await api.post('/api/user/profiles', { profileId });
+        const data = await getUserProfile(profileId, token);
         if (data.success) {
           setPublicProfile(data.profile);
           // extract workouts from posts
@@ -67,7 +68,7 @@ const Profile = ({ route, navigation }) => {
       try {
         const token = await getToken();
         if (token) setAuthToken(token);
-        const { data } = await api.get('/api/workout');
+        const data = await getWorkouts(token);
         if (data.success) {
           setWorkouts(data.workouts || []);
         }
@@ -157,7 +158,7 @@ const Profile = ({ route, navigation }) => {
             <Surface elevation={0} style={{ flex: 1, backgroundColor: 'transparent' }}>
               <Text variant="titleLarge" style={{ color: theme.text, fontWeight: 'bold' }}>{user?.full_name || user?.username}</Text>
               
-              <Surface elevation={0} style={{ flexDirection: 'row', marginTop: 12, justifyContent: 'space-between', backgroundColor: 'transparent' }}>
+              <Surface elevation={0} style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, justifyContent: 'space-between', backgroundColor: 'transparent' }}>
                 <Surface elevation={0} style={{ alignItems: 'center', backgroundColor: 'transparent' }}>
                   <Text variant="labelSmall" style={{ color: theme.textMuted }}>{isOwnProfile ? t('profile.workouts') : t('feed.post', 'Posts')}</Text>
                   <Text variant="titleMedium" style={{ color: theme.text, fontWeight: 'bold' }}>{isOwnProfile ? workouts.length : (publicProfile?.posts?.length || 0)}</Text>
@@ -175,7 +176,7 @@ const Profile = ({ route, navigation }) => {
           </Surface>
 
           {isOwnProfile && (
-            <Surface elevation={0} style={{ flexDirection: 'row', gap: 12, marginTop: 24, backgroundColor: 'transparent' }}>
+            <Surface elevation={0} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 24, backgroundColor: 'transparent' }}>
               <Button mode="outlined" style={{ flex: 1, borderColor: theme.primary }} textColor={theme.primary} onPress={() => navigation.navigate('Settings')}>
                 {t('profile.edit_profile', 'Edit Profile')}
               </Button>
@@ -224,7 +225,7 @@ const Profile = ({ route, navigation }) => {
               </Surface>
             )}
 
-            <Surface elevation={0} style={{ flexDirection: 'row', gap: 8, marginTop: 16, backgroundColor: 'transparent' }}>
+            <Surface elevation={0} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16, backgroundColor: 'transparent' }}>
               {['duration', 'volume', 'reps'].map(tab => (
                 <Chip 
                   key={tab}

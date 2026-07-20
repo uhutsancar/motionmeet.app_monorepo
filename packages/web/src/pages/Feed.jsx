@@ -54,7 +54,7 @@ const Feed = () => {
           mx: "auto",
           maxWidth: 1040,
           display: "grid",
-          gridTemplateColumns: { xs: "minmax(0, 672px)", xl: "minmax(0, 672px) 320px" },
+          gridTemplateColumns: { xs: "minmax(0, 672px)", lg: "minmax(0, 672px) 320px" },
           justifyContent: "center",
           alignItems: "start",
           gap: 4,
@@ -76,7 +76,7 @@ const Feed = () => {
 
         <Stack
           spacing={3}
-          sx={{ display: { xs: "none", xl: "flex" }, position: "sticky", top: 32, minWidth: 0 }}
+          sx={{ display: { xs: "none", lg: "flex" }, position: "sticky", top: 32, minWidth: 0 }}
         >
           <QuickProfile />
           <SuggestedAthletes />

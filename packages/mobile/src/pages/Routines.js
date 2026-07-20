@@ -4,7 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActivityIndicator, Appbar, Button, Chip, Divider, Surface, Text } from 'react-native-paper';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
-import api from '../api/client';
+import { useAuthContext } from "../context/AuthProvider";
+import { getRoutines } from '../api/endpoints';
 import RoutineBuilderModal from '../components/RoutineBuilderModal';
 
 /* ── Routine Card ─────────────────────────────────────────────────────────── */
@@ -66,6 +67,7 @@ const RoutineCard = ({ routine, theme, navigation }) => {
 const Routines = ({ navigation }) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
+  const { getToken } = useAuthContext();
 
   const [routines, setRoutines] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -74,8 +76,9 @@ const Routines = ({ navigation }) => {
   const fetchRoutines = async () => {
     try {
       setLoading(true);
-      const { data } = await api.get('/api/routine');
-      if (data.success) setRoutines(data.routines);
+      const token = await getToken();
+      const routinesData = await getRoutines(token);
+      if (routinesData.success) setRoutines(routinesData.routines);
     } catch (error) {
       console.error('Error fetching routines:', error);
     } finally {

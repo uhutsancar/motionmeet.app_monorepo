@@ -4,7 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
-import api from '../api/client';
+import { getExerciseStats } from '../api/endpoints';
+import { useAuthContext } from '../context/AuthProvider';
 import { Appbar, Text, Surface, Button, useTheme as usePaperTheme, TouchableRipple } from 'react-native-paper';
 
 const ExerciseDetail = ({ route, navigation }) => {
@@ -16,11 +17,13 @@ const ExerciseDetail = ({ route, navigation }) => {
 
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { getToken } = useAuthContext();
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const { data } = await api.get(`/api/exercise/${exercise._id}/stats`);
+        const token = await getToken();
+        const data = await getExerciseStats(exercise._id, token);
         if (data.success) {
           setStats(data.stats);
         }

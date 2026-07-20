@@ -10,7 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { useAuthContext } from "../context/AuthProvider";
-import api, { setAuthToken } from '../api/client';
+import { setAuthToken } from '../api/client';
+import { createExercise } from '../api/endpoints';
 import { Appbar, Text, TextInput, Button, TouchableRipple, Surface, useTheme as usePaperTheme } from 'react-native-paper';
 import { useMuscleGroups } from '../hooks/useMuscleGroups';
 import { useEquipment } from '../hooks/useEquipment';
@@ -54,11 +55,11 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
         setAuthToken(freshToken);
       }
 
-      const { data } = await api.post("/api/exercise", {
+      const data = await createExercise({
         name: name.trim(),
         muscleGroup,
         equipment,
-      });
+      }, freshToken);
 
       if (data.success) {
         if (onExerciseCreated) onExerciseCreated(data.exercise);

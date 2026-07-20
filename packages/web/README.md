@@ -8,7 +8,6 @@ Copy `.env.example` to a local environment file and set:
 
 - `VITE_BASEURL`: backend HTTP origin, for example `http://localhost:4000`
 - `VITE_SOCKET_URL`: Socket.IO origin; normally the same backend origin
-- `VITE_CLERK_PUBLISHABLE_KEY`: Clerk publishable key
 - `VITE_BUILD_SOURCEMAP=true`: optional production source maps
 
 Do not commit environment files.

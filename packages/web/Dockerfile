@@ -2,15 +2,15 @@ FROM node:22-alpine AS builder
 # Set working directory
 WORKDIR /app
 # Install globally needed tools
-RUN npm install -g pnpm turbo
-
+RUN corepack enable && corepack prepare pnpm@11.10.0 --activate
+RUN npm install -g turbo
 COPY . .
 # Prune the workspace for just the web dependencies
 RUN turbo prune @motionmeet/web --docker
 
 FROM node:22-alpine AS installer
 WORKDIR /app
-RUN npm install -g pnpm
+RUN corepack enable && corepack prepare pnpm@11.10.0 --activate
 
 # First install dependencies (as they change less often)
 COPY .gitignore .gitignore
@@ -29,7 +29,7 @@ ENV VITE_BASEURL=$VITE_BASEURL
 ENV VITE_SOCKET_URL=$VITE_SOCKET_URL
 
 # Using turbo to run any necessary build scripts in dependencies
-RUN pnpm turbo run build --filter=@motionmeet/web...
+RUN pnpm turbo run build --filter=@motionmeet/web
 
 # Nginx image for serving the web app
 FROM nginx:alpine AS runner

@@ -2,15 +2,15 @@ FROM node:22-alpine AS builder
 # Set working directory
 WORKDIR /app
 # Install globally needed tools
-RUN npm install -g pnpm turbo
-
+RUN corepack enable && corepack prepare pnpm@11.10.0 --activate
+RUN npm install -g turbo
 COPY . .
 # Prune the workspace for just the backend dependencies
 RUN turbo prune @motionmeet/backend --docker
 
 FROM node:22-alpine AS installer
 WORKDIR /app
-RUN npm install -g pnpm
+RUN corepack enable && corepack prepare pnpm@11.10.0 --activate
 
 # First install dependencies (as they change less often)
 COPY .gitignore .gitignore
@@ -21,8 +21,7 @@ RUN pnpm install --frozen-lockfile
 # Build the project and its dependencies
 COPY --from=builder /app/out/full/ .
 COPY turbo.json turbo.json
-# Using turbo to run any necessary build scripts in dependencies (e.g. shared)
-RUN pnpm turbo run build --filter=@motionmeet/shared
+# Removed shared package build
 
 FROM node:22-alpine AS runner
 WORKDIR /app

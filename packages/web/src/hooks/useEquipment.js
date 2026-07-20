@@ -20,9 +20,7 @@ export const useEquipment = (options = {}) => {
       setIsLoading(true);
       try {
         const token = await getToken();
-        const response = await api.get('/api/equipment', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const data = await getEquipment(); const response = { data };
         
         if (response.data.success) {
           equipmentCache = response.data.data;

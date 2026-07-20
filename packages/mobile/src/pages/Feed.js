@@ -97,7 +97,7 @@ const Feed = ({ navigation }) => {
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
       {/* Header */}
       <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12, backgroundColor: theme.background }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 16 }}>
           <TouchableOpacity 
             style={{ paddingVertical: 4, position: 'relative' }}
             onPress={() => setActiveTab('discover')}
