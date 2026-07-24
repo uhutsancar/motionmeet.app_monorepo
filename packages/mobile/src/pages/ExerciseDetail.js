@@ -34,7 +34,7 @@ const ExerciseDetail = ({ route, navigation }) => {
       }
     };
     fetchStats();
-  }, [exercise._id]);
+  }, [exercise._id, getToken]);
 
   return (
     <Surface elevation={0} style={styles.container}>

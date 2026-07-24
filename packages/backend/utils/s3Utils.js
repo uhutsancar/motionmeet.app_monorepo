@@ -39,16 +39,24 @@ export const uploadToS3 = async (file, fileName, folder = "", contentType) => {
  * @param {string} s3Key - The key of the object to delete.
  */
 export const deleteFromS3 = async (s3Key) => {
-    if (!s3Key || !process.env.AWS_BUCKET_NAME) return;
-    try {
-        const command = new DeleteObjectCommand({
-            Bucket: process.env.AWS_BUCKET_NAME,
-            Key: s3Key,
-        });
-        await s3Client.send(command);
-    } catch (error) {
-        console.error("Error deleting from S3:", error.message);
+    if (!s3Key) return;
+    if (!process.env.AWS_BUCKET_NAME) {
+        throw new Error("AWS_BUCKET_NAME is not configured");
     }
+    if (
+        s3Key.length > 1024 ||
+        s3Key.startsWith("/") ||
+        s3Key.split("/").includes("..")
+    ) {
+        throw Object.assign(new Error("Invalid S3 object key"), {
+            code: "INVALID_S3_KEY",
+        });
+    }
+    const command = new DeleteObjectCommand({
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: s3Key,
+    });
+    await s3Client.send(command);
 };
 
 /**
@@ -63,15 +71,26 @@ export const extractS3Key = (url) => {
         const parsedUrl = new URL(url);
         // ImageKit URL: https://ik.imagekit.io/mq4ehklmc/path/to/file.jpg
         // S3 URL: https://bucket.s3.region.amazonaws.com/path/to/file.jpg
-        const pathParts = parsedUrl.pathname.split('/');
-        
-        // Skip the first part if it's the ImageKit ID (mq4ehklmc)
-        if (parsedUrl.host === 'ik.imagekit.io') {
-            return pathParts.slice(2).join('/');
+        const pathParts = decodeURIComponent(parsedUrl.pathname)
+            .split("/")
+            .filter(Boolean);
+        const knownFolders = new Set([
+            "profiles",
+            "covers",
+            "posts",
+            "stories",
+            "messages",
+        ]);
+        const folderIndex = pathParts.findIndex((part) => knownFolders.has(part));
+        if (folderIndex >= 0) return pathParts.slice(folderIndex).join("/");
+
+        const withoutTransformations = pathParts.filter(
+            (part) => !part.startsWith("tr:")
+        );
+        if (parsedUrl.host === "ik.imagekit.io" && withoutTransformations.length > 1) {
+            return withoutTransformations.slice(1).join("/");
         }
-        
-        // For S3 or other formats, take everything after the first slash
-        return pathParts.slice(1).join('/');
+        return withoutTransformations.join("/") || null;
     } catch (_e) {
         return null;
     }

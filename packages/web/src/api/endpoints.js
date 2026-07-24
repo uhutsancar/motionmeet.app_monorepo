@@ -181,9 +181,10 @@ export const getWorkoutStats = async (period, token) => {
   return data;
 };
 
-export const getWorkouts = async (token) => {
+export const getWorkouts = async (token, cursor) => {
   const { data } = await api.get('/api/workout', {
-    headers: { Authorization: `Bearer ${token}` }
+    headers: { Authorization: `Bearer ${token}` },
+    params: { limit: 100, ...(cursor ? { cursor } : {}) },
   });
   return data;
 };
@@ -196,9 +197,10 @@ export const createWorkout = async (workoutData, token) => {
 };
 
 // ROUTINE
-export const getRoutines = async (token) => {
+export const getRoutines = async (token, cursor) => {
   const { data } = await api.get('/api/routine', {
-    headers: { Authorization: `Bearer ${token}` }
+    headers: { Authorization: `Bearer ${token}` },
+    params: cursor ? { cursor } : undefined,
   });
   return data;
 };

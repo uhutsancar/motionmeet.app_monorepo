@@ -18,7 +18,8 @@ export const getExercises = async (req, res, next) => {
       muscleGroup,
       equipment,
       limitNum,
-      skipNum
+      skipNum,
+      userId: req.userId,
     });
 
     res.json({ success: true, exercises, total, limit: limitNum, skip: skipNum });
@@ -35,7 +36,7 @@ export const getExerciseById = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Invalid exercise id" });
     }
 
-    const exercise = await exerciseService.getExerciseById(id);
+    const exercise = await exerciseService.getExerciseById(id, req.userId);
     if (!exercise) {
       return res.json({ success: false, message: "Exercise not found" });
     }
@@ -62,7 +63,13 @@ export const createExercise = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Invalid exercise media URL" });
     }
 
-    const newExercise = await exerciseService.createExercise({ name, muscleGroup, equipment, gifUrl });
+    const newExercise = await exerciseService.createExercise({
+      name,
+      muscleGroup,
+      equipment,
+      gifUrl,
+      userId: req.userId,
+    });
     res.json({ success: true, exercise: newExercise, message: "Exercise created successfully" });
   } catch (error) {
     next(error);

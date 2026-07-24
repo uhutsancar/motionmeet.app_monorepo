@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, FlatList, Dimensions } from 'react-native';
+import React, { useCallback, useState, useEffect } from 'react';
+import { View, FlatList, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActivityIndicator, Appbar, Searchbar, Chip, Surface, Text, IconButton, Modal, Portal, List } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,13 +13,12 @@ import Constants from 'expo-constants';
 import { useMuscleGroups } from '../hooks/useMuscleGroups';
 import { useEquipment } from '../hooks/useEquipment';
 
-const { height } = Dimensions.get('window');
-
 // Fallback to local server IP for static assets if needed
 const API_BASE = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:4000';
 
 const Exercises = ({ navigation }) => {
   const { theme } = useTheme();
+  const { height } = useWindowDimensions();
   const { t } = useTranslation();
   const { getToken } = useAuthContext();
 
@@ -39,7 +38,7 @@ const Exercises = ({ navigation }) => {
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filterType, setFilterType] = useState(null); // 'muscle' | 'equipment'
 
-  const fetchExercises = async () => {
+  const fetchExercises = useCallback(async () => {
     try {
       setLoading(true);
       const params = {};
@@ -57,7 +56,7 @@ const Exercises = ({ navigation }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [equipmentFilter, getToken, muscleFilter, searchQuery]);
 
   const navigateToDetail = (exercise) => {
     navigation.navigate('ExerciseDetail', { exercise });
@@ -68,7 +67,7 @@ const Exercises = ({ navigation }) => {
       fetchExercises();
     }, 500);
     return () => clearTimeout(delayDebounceFn);
-  }, [searchQuery, muscleFilter, equipmentFilter]);
+  }, [fetchExercises]);
 
   const openFilter = (type) => {
     setFilterType(type);
@@ -133,30 +132,32 @@ const Exercises = ({ navigation }) => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
-      <Appbar.Header style={{ backgroundColor: theme.background, elevation: 0 }}>
+      <Appbar.Header style={{ backgroundColor: theme.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.border }}>
         <Appbar.Content 
           title={t('menu.exercises', 'Exercises')} 
-          titleStyle={{ fontSize: 28, fontWeight: '900', color: theme.text }}
+          titleStyle={{ fontSize: 24, fontWeight: '900', color: theme.text }}
         />
         <Appbar.Action icon="plus-circle" size={28} color={theme.primary} onPress={() => setShowCreateModal(true)} />
       </Appbar.Header>
-      <Text style={{ paddingHorizontal: 16, color: theme.textMuted, marginTop: -10, marginBottom: 16 }}>
-        {exercises.length} {t('exercises.available', 'available')}
-      </Text>
-
-      <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
+      <View style={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 16, marginBottom: 14 }}>
+        <Text style={{ color: theme.primary, fontSize: 11, fontWeight: '900', letterSpacing: 1.15, marginBottom: 4 }}>
+          EXERCISE LIBRARY
+        </Text>
+        <Text style={{ color: theme.textSecondary, fontSize: 13, marginBottom: 14 }}>
+          {exercises.length} {t('exercises.available', 'available')} · Find the right movement for your session.
+        </Text>
         <Searchbar
           placeholder={t('exercises.search', 'Search Exercises')}
           onChangeText={setSearchQuery}
           value={searchQuery}
-          style={{ backgroundColor: theme.surface, borderRadius: 12, elevation: 0, borderWidth: 1, borderColor: theme.border }}
+          style={{ backgroundColor: theme.surface, borderRadius: 16, elevation: 0, borderWidth: 1, borderColor: theme.border }}
           inputStyle={{ color: theme.text }}
           placeholderTextColor={theme.textMuted}
           iconColor={theme.textMuted}
         />
       </View>
 
-      <View style={{ flexDirection: 'row', paddingHorizontal: 16, gap: 10, marginBottom: 16 }}>
+      <View style={{ width: '100%', maxWidth: 720, alignSelf: 'center', flexDirection: 'row', paddingHorizontal: 16, gap: 10, marginBottom: 16 }}>
         <Chip 
           mode="outlined" 
           onPress={() => openFilter('equipment')} 
@@ -186,7 +187,8 @@ const Exercises = ({ navigation }) => {
           data={exercises}
           keyExtractor={item => item._id}
           renderItem={renderExercise}
-          contentContainerStyle={{ paddingBottom: 40 }}
+          style={{ width: '100%', maxWidth: 720, alignSelf: 'center' }}
+          contentContainerStyle={{ paddingBottom: 28 }}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={{ alignItems: 'center', marginTop: 40 }}>

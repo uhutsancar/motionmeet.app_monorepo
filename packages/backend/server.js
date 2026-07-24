@@ -10,8 +10,6 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-import jwt from "jsonwebtoken";
-
 import connectDB, { disconnectDB } from "./configs/db.js";
 import userRouter from "./routes/userRoutes.js";
 import postRouter from "./routes/postRoutes.js";
@@ -28,15 +26,27 @@ import planRouter from "./routes/planRoutes.js";
 import rbacRouter from "./routes/rbacRoutes.js";
 import muscleGroupRouter from "./routes/muscleGroupRoutes.js";
 import equipmentRouter from "./routes/equipmentRoutes.js";
-import * as messageService from "./services/messageService.js";
+import mediaRouter from "./routes/mediaRoutes.js";
 import * as userService from "./services/userService.js";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler.js";
-import { emitToUser, setSocketServer, userSockets } from "./realtime/socketRegistry.js";
+import { setSocketServer, userSockets } from "./realtime/socketRegistry.js";
 import { isUserId } from "./utils/validation.js";
+import { verifyAccessToken } from "./utils/authTokens.js";
+import { validateEnvironment } from "./configs/validateEnv.js";
+import { createAdapter } from "@socket.io/redis-adapter";
+import {
+  createRateLimitStore,
+  disconnectRedis,
+  initializeRedis,
+  isRedisReady,
+} from "./configs/redis.js";
+import mongoose from "mongoose";
+import { requestContext } from "./middlewares/requestContext.js";
 
 const app = express();
 const httpServer = createServer(app);
 const isProduction = process.env.NODE_ENV === "production";
+validateEnvironment();
 
 const configuredOrigins = (process.env.CORS_ORIGINS || process.env.FRONTEND_URL || "")
   .split(",")
@@ -63,6 +73,7 @@ const corsOptions = {
 if (isProduction) app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(helmet());
+app.use(requestContext);
 app.use(cors(corsOptions));
 app.use(express.json({ limit: "100kb", strict: true }));
 
@@ -72,13 +83,29 @@ const globalLimiter = rateLimit({
   limit: 200,
   standardHeaders: true,
   legacyHeaders: false,
+  store: createRateLimitStore("global"),
   message: { success: false, message: "Too many requests; please try again later" },
 });
 
 app.use("/api", globalLimiter);
 
 app.get("/", (req, res) => res.send("Server is running"));
-app.use("/dataset", express.static(path.join(__dirname, "../../../exercises-dataset-main")));
+app.get("/health/live", (req, res) => {
+  res.json({ status: "ok", uptimeSeconds: Math.floor(process.uptime()) });
+});
+app.get("/health/ready", (req, res) => {
+  const databaseReady = mongoose.connection.readyState === 1;
+  const redisReady = isRedisReady();
+  const ready = databaseReady && redisReady;
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "ready" : "not-ready",
+    database: databaseReady ? "ready" : "not-ready",
+    redis: redisReady ? "ready" : "not-ready",
+  });
+});
+if (!isProduction) {
+  app.use("/dataset", express.static(path.join(__dirname, "../../../exercises-dataset-main")));
+}
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRouter);
 app.use("/api/post", postRouter);
@@ -91,6 +118,7 @@ app.use("/api/plans", planRouter);
 app.use("/api/admin", rbacRouter);
 app.use("/api/muscle-groups", muscleGroupRouter);
 app.use("/api/equipment", equipmentRouter);
+app.use("/api/media", mediaRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
@@ -106,7 +134,7 @@ io.use(async (socket, next) => {
       return next(new Error("Authentication required"));
     }
 
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const payload = verifyAccessToken(token);
     if (!isUserId(payload.id)) return next(new Error("Invalid user identity"));
 
     const user = await userService.getUserById(payload.id);
@@ -120,7 +148,12 @@ io.use(async (socket, next) => {
   }
 });
 
-io.on("connection", handleSocketConnection);
+io.on("connection", (socket) => {
+  void handleSocketConnection(socket).catch((error) => {
+    console.error("Socket initialization failed:", error.message);
+    socket.disconnect(true);
+  });
+});
 
 export { app, io, userSockets };
 
@@ -137,6 +170,7 @@ const shutdown = async (signal, exitCode = 0) => {
 
   await new Promise((resolve) => io.close(resolve));
   await disconnectDB().catch((error) => console.error("Database shutdown error:", error));
+  await disconnectRedis().catch((error) => console.error("Redis shutdown error:", error));
   clearTimeout(forceExitTimer);
   process.exit(exitCode);
 };
@@ -154,6 +188,10 @@ process.once("unhandledRejection", (error) => {
 
 try {
   await connectDB();
+  const redis = await initializeRedis();
+  if (redis) {
+    io.adapter(createAdapter(redis.publisher, redis.subscriber));
+  }
   initCronJobs();
   httpServer.listen(port, "0.0.0.0", () => {
     console.log(`Server + Socket.io running on port ${port}`);

@@ -30,3 +30,10 @@ if (!configuredApiUrl) {
 if (!/^https?:\/\//i.test(API_URL)) {
   throw new Error('[Config] EXPO_PUBLIC_API_URL must start with http:// or https://.');
 }
+
+if (
+  (typeof __DEV__ === 'undefined' || !__DEV__) &&
+  !/^https:\/\//i.test(API_URL)
+) {
+  throw new Error('[Config] Production mobile builds require an HTTPS API origin.');
+}

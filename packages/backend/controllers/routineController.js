@@ -1,12 +1,17 @@
 import { isExerciseList, isNonEmptyString, isObjectId, isOptionalString } from "../utils/validation.js";
 import * as routineService from "../services/routineService.js";
+import * as quotaService from "../services/quotaService.js";
+import { parsePagination } from "../utils/pagination.js";
+import { validateExerciseReferences } from "../services/exerciseService.js";
 
 // Get user routines
 export const getUserRoutines = async (req, res, next) => {
   try {
     const userId = req.userId;
-    const routines = await routineService.getUserRoutinesList(userId);
-    res.json({ success: true, routines });
+    const pagination = parsePagination(req.query, { defaultLimit: 50, maxLimit: 100 });
+    const { items: routines, nextCursor } =
+      await routineService.getUserRoutinesList(userId, pagination);
+    res.json({ success: true, routines, nextCursor });
   } catch (error) {
     next(error);
   }
@@ -24,26 +29,42 @@ export const createRoutine = async (req, res, next) => {
     if (!isOptionalString(folder, 120) || !isExerciseList(exercises)) {
       return res.status(400).json({ success: false, message: "Invalid routine exercises or folder" });
     }
+    if (!(await validateExerciseReferences(exercises, userId))) {
+      return res.status(400).json({ success: false, message: "Routine contains unavailable exercises" });
+    }
 
-    // Role-Based Plan Limits
+    let quotaReserved = false;
     if (req.dbUser && req.dbUser.plan) {
       if (req.dbUser.role !== "superadmin") {
         const limit = req.dbUser.plan.features.max_routines;
         if (limit !== -1) {
-          const count = await routineService.countUserRoutines(req.dbUser._id);
-          if (count >= limit) {
-            return res.json({ success: false, message: `Routine limit reached (${limit}). Please upgrade your plan to Elite.` });
+          quotaReserved = await quotaService.reserveQuota({
+            userId,
+            bucket: quotaService.routineBucket,
+            limit,
+            getCurrentCount: () => routineService.countUserRoutines(userId),
+          });
+          if (!quotaReserved) {
+            return res.status(403).json({ success: false, message: `Routine limit reached (${limit}). Please upgrade your plan to Elite.` });
           }
         }
       }
     }
 
-    const populated = await routineService.createRoutine({
-      userId,
-      name: name.trim(),
-      folder: folder || "My Routines",
-      exercises
-    });
+    let populated;
+    try {
+      populated = await routineService.createRoutine({
+        userId,
+        name: name.trim(),
+        folder: folder || "My Routines",
+        exercises
+      });
+    } catch (error) {
+      if (quotaReserved) {
+        await quotaService.releaseQuota(userId, quotaService.routineBucket);
+      }
+      throw error;
+    }
 
     res.json({ success: true, routine: populated, message: "Routine created successfully" });
   } catch (error) {
@@ -74,6 +95,9 @@ export const updateRoutine = async (req, res, next) => {
     }
     if (exercises !== undefined) {
       if (!isExerciseList(exercises)) return res.status(400).json({ success: false, message: "Invalid routine exercises" });
+      if (!(await validateExerciseReferences(exercises, userId))) {
+        return res.status(400).json({ success: false, message: "Routine contains unavailable exercises" });
+      }
       updateData.exercises = exercises;
     }
 
@@ -109,6 +133,7 @@ export const deleteRoutine = async (req, res, next) => {
       return res.json({ success: false, message: "Routine not found or not authorized" });
     }
 
+    await quotaService.releaseQuota(userId, quotaService.routineBucket);
     res.json({ success: true, message: "Routine deleted successfully" });
   } catch (error) {
     next(error);

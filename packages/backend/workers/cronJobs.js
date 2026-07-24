@@ -3,66 +3,146 @@ import Story from "../models/Story.js";
 import Message from "../models/Message.js";
 import User from "../models/User.js";
 import sendEmail from "../configs/nodeMailer.js";
-import { deleteFromS3, extractS3Key } from "../utils/s3Utils.js";
+import { extractS3Key } from "../utils/s3Utils.js";
+import { runWithRedisLock } from "../configs/redis.js";
+import { escapeHtml } from "../utils/html.js";
+import UploadReservation from "../models/UploadReservation.js";
+import {
+  deleteMediaOrQueue,
+  processMediaDeletionJobs,
+} from "../services/mediaDeletionService.js";
 
-export const initCronJobs = () => {
-  // Delete stories older than 24 hours every hour
-  cron.schedule("0 * * * *", async () => {
-    try {
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const expiredStories = await Story.find({ createdAt: { $lt: oneDayAgo } });
-      
-      for (const story of expiredStories) {
-        const key = extractS3Key(story.media_url);
-        if (key) {
-          await deleteFromS3(key);
-        }
-        await Story.findByIdAndDelete(story._id);
-      }
-      if (expiredStories.length > 0) {
-        console.log(`Deleted ${expiredStories.length} expired stories.`);
-      }
-    } catch (error) {
-      console.error("Error in story deletion cron:", error.message);
+const deleteExpiredStories = async () => {
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  let deleted = 0;
+
+  while (true) {
+    const expiredStories = await Story.find({ createdAt: { $lt: oneDayAgo } })
+      .select("media_url +media_key")
+      .sort({ createdAt: 1 })
+      .limit(200);
+    if (!expiredStories.length) break;
+
+    for (const story of expiredStories) {
+      const key = story.media_key || extractS3Key(story.media_url);
+      await Story.deleteOne({ _id: story._id });
+      if (key) await deleteMediaOrQueue([key]);
+      deleted += 1;
     }
-  });
+  }
 
-  // Send daily notification for unseen messages at 09:00 AM (Istanbul time)
-  cron.schedule("0 9 * * *", async () => {
-    try {
-      const messages = await Message.find({ seen: false }).populate("to_user_id");
-      const unseenCount = {};
+  if (deleted) console.log(`Deleted ${deleted} expired stories.`);
+};
 
-      messages.forEach((message) => {
-        if (message.to_user_id) {
-          const recipient = /** @type {any} */ (message.to_user_id);
-          const recipientId = recipient?._id?.toString();
-          if (recipientId) unseenCount[recipientId] = (unseenCount[recipientId] || 0) + 1;
-        }
-      });
+const sendUnseenMessageEmails = async () => {
+  const counts = await Message.aggregate([
+    { $match: { seen: false } },
+    { $group: { _id: "$to_user_id", count: { $sum: 1 } } },
+  ]);
+  const countByUser = new Map(
+    counts.map(({ _id, count }) => [_id.toString(), count])
+  );
+  const users = await User.find({
+    _id: { $in: [...countByUser.keys()] },
+  })
+    .select("email full_name")
+    .lean();
 
-      for (const userId in unseenCount) {
-        const user = await User.findById(userId);
-        if (!user) continue;
-
-        await sendEmail({
+  for (let index = 0; index < users.length; index += 20) {
+    const batch = users.slice(index, index + 20);
+    await Promise.allSettled(
+      batch.map((user) =>
+        sendEmail({
           to: user.email,
-          subject: `You have ${unseenCount[userId]} unseen messages`,
+          subject: `You have ${countByUser.get(user._id)} unseen messages`,
           body: `
             <div style="font-family: Arial, sans-serif; padding: 20px;">
-              <h2>Hi ${user.full_name},</h2>
-              <p>You have ${unseenCount[userId]} unseen messages waiting for you.</p>
+              <h2>Hi ${escapeHtml(user.full_name)},</h2>
+              <p>You have ${countByUser.get(user._id)} unseen messages waiting for you.</p>
               <p>Click <a href="${process.env.FRONTEND_URL}/messages">here</a> to view them.</p>
               <p>Thanks,<br/>MotionMeet</p>
             </div>`,
-        });
-      }
-    } catch (error) {
-      console.error("Error in unseen messages cron:", error.message);
-    }
-  }, {
-    timezone: "Europe/Istanbul"
+        })
+      )
+    );
+  }
+};
+
+const deleteAbandonedUploads = async () => {
+  while (true) {
+    const reservations = await UploadReservation.find({
+      expiresAt: { $lt: new Date() },
+    })
+      .sort({ expiresAt: 1 })
+      .limit(200);
+    if (!reservations.length) break;
+    await deleteMediaOrQueue(
+      reservations.map((reservation) => reservation.key)
+    );
+    await UploadReservation.deleteMany({
+      _id: { $in: reservations.map((reservation) => reservation._id) },
+    });
+  }
+};
+
+const deleteQueuedMedia = async () => {
+  while ((await processMediaDeletionJobs()) === 200) {
+    // Continue in bounded batches while due work remains.
+  }
+};
+
+export const initCronJobs = () => {
+  if (process.env.RUN_SCHEDULED_JOBS === "false") {
+    console.log("Background cron jobs disabled for this process.");
+    return [];
+  }
+
+  const storyTask = cron.schedule("0 * * * *", () => {
+    void runWithRedisLock("expired-stories", 55 * 60, deleteExpiredStories)
+      .catch((error) =>
+        console.error("Error in story deletion cron:", error.message)
+      );
   });
-  
+
+  const unseenMessageTask = cron.schedule(
+    "0 9 * * *",
+    () => {
+      void runWithRedisLock(
+        "unseen-message-email",
+        23 * 60 * 60,
+        sendUnseenMessageEmails
+      ).catch((error) =>
+        console.error("Error in unseen messages cron:", error.message)
+      );
+    },
+    { timezone: "Europe/Istanbul" }
+  );
+
+  const abandonedUploadTask = cron.schedule("*/15 * * * *", () => {
+    void runWithRedisLock(
+      "abandoned-uploads",
+      14 * 60,
+      deleteAbandonedUploads
+    ).catch((error) =>
+      console.error("Error in abandoned upload cleanup:", error.message)
+    );
+  });
+
+  const mediaDeletionTask = cron.schedule("*/10 * * * *", () => {
+    void runWithRedisLock(
+      "queued-media-deletions",
+      9 * 60,
+      deleteQueuedMedia
+    ).catch((error) =>
+      console.error("Error in queued media deletion:", error.message)
+    );
+  });
+
   console.log("Background cron jobs initialized successfully.");
+  return [
+    storyTask,
+    unseenMessageTask,
+    abandonedUploadTask,
+    mediaDeletionTask,
+  ];
 };

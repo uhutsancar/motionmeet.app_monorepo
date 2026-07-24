@@ -16,13 +16,11 @@ const StoriesBar = ({ onAddStory }) => {
   const styles = useMemo(() => ({
     container: {
       backgroundColor: theme.background,
-      paddingVertical: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
+      paddingVertical: 8,
     },
     scrollContent: {
       paddingHorizontal: 12,
-      gap: 16,
+      gap: 12,
       alignItems: 'center',
     },
     storyContainer: {
@@ -88,7 +86,7 @@ const StoriesBar = ({ onAddStory }) => {
       width: 20,
       height: 20,
       borderRadius: 10,
-      backgroundColor: '#d946ef', // Brand color, keep constant or use theme.secondary
+      backgroundColor: theme.secondary,
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: 1.5,
@@ -192,7 +190,7 @@ const StoriesBar = ({ onAddStory }) => {
               borderless
             >
               <Surface elevation={0} style={{ backgroundColor: 'transparent', alignItems: 'center' }}>
-                <Surface elevation={0} style={[styles.storyRing, { borderColor: '#d946ef' }]}>
+                <Surface elevation={0} style={[styles.storyRing, { borderColor: theme.primary }]}>
                   <Image
                     source={{ uri: storyUser.profile_picture }}
                     style={styles.avatar}

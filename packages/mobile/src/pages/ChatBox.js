@@ -8,7 +8,8 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useSocket } from '../hooks/useSocket';
 import { getMessages, sendMessage as sendMessageHTTP, deleteMessage } from '../api/endpoints';
-import { setMessages, addMessage, removeMessage } from '../features/messages/messagesSlice';
+import { uploadMedia } from '../api/mediaUpload';
+import { setMessages, addMessage, prependMessages, removeMessage } from '../features/messages/messagesSlice';
 import moment from 'moment';
 import { Appbar, Avatar, Text, TextInput, IconButton, Surface, ActivityIndicator, Badge, useTheme as usePaperTheme, TouchableRipple } from 'react-native-paper';
 
@@ -32,11 +33,14 @@ const ChatBox = ({ route, navigation }) => {
   const [text, setText] = useState('');
   const [image, setImage] = useState(null);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [nextCursor, setNextCursor] = useState(null);
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [user, setUser] = useState(routeUser);
 
   const flatListRef = useRef(null);
   const typingRef = useRef(null);
+  const skipAutoScrollRef = useRef(false);
 
   useEffect(() => {
     if (!user && connections.length > 0) {
@@ -50,12 +54,17 @@ const ChatBox = ({ route, navigation }) => {
       return undefined;
     }
 
+    dispatch(setMessages([]));
+    setNextCursor(null);
     let cancelled = false;
     const load = async () => {
       try {
         const token = await getToken();
         const data = await getMessages(userId, token);
-        if (!cancelled && data.success) dispatch(setMessages(data.messages));
+        if (!cancelled && data.success) {
+          dispatch(setMessages(data.messages));
+          setNextCursor(data.nextCursor);
+        }
       } catch (error) {
         if (!cancelled) {
           Alert.alert(t('common.error', 'Error'), t('messages.load_failed', 'Messages could not be loaded'));
@@ -112,9 +121,31 @@ const ChatBox = ({ route, navigation }) => {
 
   useEffect(() => {
     if (messages.length > 0) {
+      if (skipAutoScrollRef.current) {
+        skipAutoScrollRef.current = false;
+        return;
+      }
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     }
   }, [messages, partnerTyping]);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!nextCursor || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const token = await getToken();
+      const data = await getMessages(userId, token, nextCursor);
+      if (data.success) {
+        skipAutoScrollRef.current = true;
+        dispatch(prependMessages(data.messages || []));
+        setNextCursor(data.nextCursor);
+      }
+    } catch {
+      Alert.alert(t('common.error', 'Error'), t('messages.load_failed', 'Messages could not be loaded'));
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [dispatch, getToken, loadingOlder, nextCursor, t, userId]);
 
   const handleTextChange = (val) => {
     setText(val);
@@ -143,13 +174,14 @@ const ChatBox = ({ route, navigation }) => {
 
     try {
       const token = await getToken();
-      const formData = new FormData();
-      formData.append('to_user_id', userId);
-      formData.append('text', text.trim());
-      if (image) {
-        formData.append('image', { uri: image.uri, type: 'image/jpeg', name: 'msg.jpg' });
-      }
-      const data = await sendMessageHTTP(formData, token);
+      const uploadedKey = image
+        ? await uploadMedia(image, 'messages', token)
+        : undefined;
+      const data = await sendMessageHTTP({
+        to_user_id: userId,
+        text: text.trim(),
+        uploadedKey,
+      }, token);
       if (data.success) {
         dispatch(addMessage(data.message));
         setText('');
@@ -158,7 +190,7 @@ const ChatBox = ({ route, navigation }) => {
     } catch {
       Alert.alert(t('common.error', 'Error'), t('messages.send_failed', 'Failed to send message'));
     }
-  }, [connected, emitTypingStop, getToken, image, socketSend, text, t, userId]);
+  }, [connected, dispatch, emitTypingStop, getToken, image, socketSend, text, t, userId]);
 
   const isMine = (msg) => {
     const fromId = msg.from_user_id?._id || msg.from_user_id;
@@ -308,7 +340,20 @@ const ChatBox = ({ route, navigation }) => {
             keyExtractor={(item, i) => item._id || String(i)}
             contentContainerStyle={s.msgList}
             showsVerticalScrollIndicator={false}
-            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+            ListHeaderComponent={
+              nextCursor ? (
+                <TouchableRipple
+                  onPress={loadOlderMessages}
+                  disabled={loadingOlder}
+                  style={{ alignSelf: 'center', padding: 12, marginBottom: 8 }}
+                >
+                  {loadingOlder
+                    ? <ActivityIndicator size="small" color={theme.primary} />
+                    : <Text style={{ color: theme.primary }}>{t('common.load_more', 'Load older messages')}</Text>
+                  }
+                </TouchableRipple>
+              ) : null
+            }
             ListFooterComponent={partnerTyping ? renderTyping : null}
           />
         )}

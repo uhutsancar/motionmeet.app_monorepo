@@ -1,8 +1,21 @@
 import Exercise from "../models/Exercise.js";
 import escapeStringRegexp from "escape-string-regexp";
+import mongoose from "mongoose";
 
-export const getExercisesList = async ({ search, muscleGroup, equipment, limitNum, skipNum }) => {
-  const query = {};
+export const getExercisesList = async ({
+  search,
+  muscleGroup,
+  equipment,
+  limitNum,
+  skipNum,
+  userId,
+}) => {
+  const query = {
+    $or: [
+      { isCustom: { $ne: true } },
+      { isCustom: true, createdBy: userId },
+    ],
+  };
 
   if (search) {
     const escapedSearch = escapeStringRegexp(search.trim());
@@ -23,8 +36,14 @@ export const getExercisesList = async ({ search, muscleGroup, equipment, limitNu
   return { exercises, total };
 };
 
-export const getExerciseById = async (id) => {
-  return await Exercise.findById(id);
+export const getExerciseById = async (id, userId) => {
+  return await Exercise.findOne({
+    _id: id,
+    $or: [
+      { isCustom: { $ne: true } },
+      { isCustom: true, createdBy: userId },
+    ],
+  });
 };
 
 export const createExercise = async (exerciseData) => {
@@ -33,40 +52,70 @@ export const createExercise = async (exerciseData) => {
     muscleGroup: String(exerciseData.muscleGroup || "Other").trim(),
     equipment: String(exerciseData.equipment || "Body Weight").trim(),
     gifUrl: exerciseData.gifUrl ? String(exerciseData.gifUrl).trim() : undefined,
+    isCustom: true,
+    createdBy: exerciseData.userId,
   });
+};
+
+export const validateExerciseReferences = async (exercises, userId) => {
+  const exerciseIds = [
+    ...new Set(exercises.map((exercise) => exercise.exerciseId)),
+  ];
+  const count = await Exercise.countDocuments({
+    _id: { $in: exerciseIds },
+    $or: [
+      { isCustom: { $ne: true } },
+      { isCustom: true, createdBy: userId },
+    ],
+  });
+  return count === exerciseIds.length;
 };
 
 export const getExerciseStats = async (id, userId) => {
   const Workout = (await import("../models/Workout.js")).default;
-
-  const workouts = await Workout.find({
-    userId,
-    "exercises.exerciseId": id,
-  }).sort({ createdAt: -1 });
-
-  let personalRecord = 0;
-  const totalSessions = workouts.length;
-  const history = [];
-
-  workouts.forEach(w => {
-    const ex = w.exercises.find(e => e.exerciseId.toString() === id);
-    if (ex) {
-      let maxWeight = 0;
-      ex.sets.forEach(s => {
-        if (s.weight > maxWeight) maxWeight = s.weight;
-        if (s.weight > personalRecord) personalRecord = s.weight;
-      });
-      history.push({
-        date: w.createdAt,
-        maxWeight,
-        volume: ex.sets.reduce((acc, s) => acc + (s.weight * s.reps), 0)
-      });
-    }
-  });
-
+  const exerciseId = new mongoose.Types.ObjectId(id);
+  const [result] = await Workout.aggregate([
+    { $match: { userId, "exercises.exerciseId": exerciseId } },
+    { $unwind: "$exercises" },
+    { $match: { "exercises.exerciseId": exerciseId } },
+    {
+      $project: {
+        date: { $ifNull: ["$startTime", "$createdAt"] },
+        maxWeight: { $max: "$exercises.sets.weight" },
+        volume: {
+          $sum: {
+            $map: {
+              input: "$exercises.sets",
+              as: "set",
+              in: { $multiply: ["$$set.weight", "$$set.reps"] },
+            },
+          },
+        },
+      },
+    },
+    {
+      $facet: {
+        summary: [
+          {
+            $group: {
+              _id: null,
+              personalRecord: { $max: "$maxWeight" },
+              totalSessions: { $sum: 1 },
+            },
+          },
+        ],
+        history: [
+          { $sort: { date: -1, _id: -1 } },
+          { $limit: 365 },
+          { $project: { _id: 0, date: 1, maxWeight: 1, volume: 1 } },
+        ],
+      },
+    },
+  ]);
+  const summary = result?.summary?.[0] || {};
   return {
-    personalRecord,
-    totalSessions,
-    history: history.reverse()
+    personalRecord: summary.personalRecord || 0,
+    totalSessions: summary.totalSessions || 0,
+    history: (result?.history || []).reverse(),
   };
 };

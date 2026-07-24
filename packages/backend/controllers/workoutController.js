@@ -1,5 +1,8 @@
 import { isExerciseList, isFiniteNumber, isNonEmptyString, isOptionalString } from "../utils/validation.js";
 import * as workoutService from "../services/workoutService.js";
+import * as quotaService from "../services/quotaService.js";
+import { parsePagination } from "../utils/pagination.js";
+import { validateExerciseReferences } from "../services/exerciseService.js";
 
 // Log a completed workout
 export const logWorkout = async (req, res, next) => {
@@ -19,36 +22,51 @@ export const logWorkout = async (req, res, next) => {
     ) {
       return res.status(400).json({ success: false, message: "Invalid workout data" });
     }
+    if (!(await validateExerciseReferences(exercises, userId))) {
+      return res.status(400).json({ success: false, message: "Workout contains unavailable exercises" });
+    }
 
-    // Role-Based Plan Limits
+    let reservedBucket = null;
     if (req.dbUser && req.dbUser.plan) {
       if (req.dbUser.role !== "superadmin") {
-        const limit = req.dbUser.plan.features.max_workouts_per_month;
-        if (limit !== -1) {
-          const startOfMonth = new Date();
-          startOfMonth.setDate(1);
-          startOfMonth.setHours(0, 0, 0, 0);
+          const limit = req.dbUser.plan.features.max_workouts_per_month;
+          if (limit !== -1) {
+          const now = new Date();
+          const startOfMonth = new Date(
+            Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
+          );
 
-          const count = await workoutService.countUserWorkoutsFromDate(req.dbUser._id, startOfMonth);
-          
-          if (count >= limit) {
+          reservedBucket = quotaService.workoutBucket();
+          const reserved = await quotaService.reserveQuota({
+            userId,
+            bucket: reservedBucket,
+            limit,
+            getCurrentCount: () =>
+              workoutService.countUserWorkoutsFromDate(userId, startOfMonth),
+          });
+
+          if (!reserved) {
             return res.status(403).json({ success: false, message: `Monthly workout limit reached (${limit}). Please upgrade your plan.` });
           }
         }
       }
     }
 
-    const newWorkout = await workoutService.createWorkout({
-      userId,
-      name: name.trim(),
-      startTime: parsedStartTime,
-      endTime: parsedEndTime,
-      durationMinutes: Number(durationMinutes || 0),
-      volumeKg: Number(volumeKg || 0),
-      exercises,
-    });
-
-    await workoutService.updateUserStatistics(userId, durationMinutes, volumeKg);
+    let newWorkout;
+    try {
+      newWorkout = await workoutService.createWorkoutWithStatistics({
+        userId,
+        name: name.trim(),
+        startTime: parsedStartTime,
+        endTime: parsedEndTime,
+        durationMinutes: Number(durationMinutes || 0),
+        volumeKg: Number(volumeKg || 0),
+        exercises,
+      });
+    } catch (error) {
+      if (reservedBucket) await quotaService.releaseQuota(userId, reservedBucket);
+      throw error;
+    }
 
     res.json({ success: true, workout: newWorkout, message: "Workout logged successfully" });
   } catch (error) {
@@ -60,9 +78,11 @@ export const logWorkout = async (req, res, next) => {
 export const getUserWorkouts = async (req, res, next) => {
   try {
     const userId = req.userId;
-    const workouts = await workoutService.getUserWorkoutsList(userId);
+    const pagination = parsePagination(req.query, { defaultLimit: 30, maxLimit: 100 });
+    const { items: workouts, nextCursor } =
+      await workoutService.getUserWorkoutsList(userId, pagination);
 
-    res.json({ success: true, workouts });
+    res.json({ success: true, workouts, nextCursor });
   } catch (error) {
     next(error);
   }

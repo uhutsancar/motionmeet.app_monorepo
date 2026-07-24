@@ -87,7 +87,8 @@
         "follow": "Follow",
         "follow_failed": "Failed to update follow status",
         "followers": "Followers",
-        "following_status": "Following"
+        "following_status": "Following",
+        "no_posts": "No posts yet."
     },
     "exercises": {
         "search": "Search Exercises",
@@ -169,7 +170,10 @@
         "type_message": "Message...",
         "send_failed": "Failed to send message",
         "no_messages": "No messages yet",
-        "connect_hint": "Connect with athletes to start chatting"
+        "connect_hint": "Connect with athletes to start chatting",
+        "delete_title": "Delete Message",
+        "delete_confirm": "Are you sure you want to delete this message?",
+        "delete_failed": "Message could not be deleted"
     },
     "statistics": {
         "title": "Statistics",
@@ -358,9 +362,9 @@
         "faq1_q": "Where are my workout data stored?",
         "faq1_a": "All your data is stored encrypted securely on our cloud servers.",
         "faq2_q": "How can I reset my password?",
-        "faq2_a": "You can use the 'Forgot Password' option on the login screen.",
+        "faq2_a": "Contact us at support@motionmeet.app for password reset assistance.",
         "faq3_q": "Can I export my data?",
-        "faq3_a": "Data export feature will be added in an upcoming update.",
+        "faq3_a": "Yes. You can export your data from the Privacy and Data section in Settings.",
         "faq4_q": "Which platforms does the app support?",
         "faq4_a": "MotionMeet is available on iOS, Android, and Web.",
         "faq5_q": "I'm not receiving notifications, what should I do?",

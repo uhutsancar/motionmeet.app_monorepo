@@ -1,5 +1,9 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
 import {
+  deleteAccount,
+  exportAccount,
+  getPrivacySettings,
   getUserData,
   acceptConnectionRequest,
   discoverUsers,
@@ -9,15 +13,33 @@ import {
   sendConnectionRequest,
   unfollowUser,
   updateUserData,
+  updatePrivacySettings,
   getSuggestedUsers,
 } from "../controllers/userController.js";
 import { attachDbUser, protect } from "../middlewares/auth.js";
 import { imageUpload } from "../configs/multer.js";
 import { getUserRecentMessages } from "../controllers/messageController.js";
+import { createRateLimitStore } from "../configs/redis.js";
 
 const userRouter = express.Router();
 
+const sensitiveAccountLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: createRateLimitStore("account"),
+  message: {
+    success: false,
+    message: "Too many account requests; please try again later",
+  },
+});
+
 userRouter.get("/data", protect, getUserData);
+userRouter.get("/privacy", protect, getPrivacySettings);
+userRouter.patch("/privacy", protect, updatePrivacySettings);
+userRouter.get("/export", protect, sensitiveAccountLimiter, exportAccount);
+userRouter.delete("/account", protect, sensitiveAccountLimiter, deleteAccount);
 userRouter.post(
   "/update",
   protect,

@@ -1,12 +1,16 @@
 import Message from "../models/Message.js";
 import User from "../models/User.js";
 import { isUserId } from "../utils/validation.js";
+import { cursorFilter, pageFromDocuments } from "../utils/pagination.js";
 
 const PUBLIC_USER_FIELDS = "_id full_name username profile_picture";
 
 export const canSendToUser = async (sender, recipientId) => {
   if (!isUserId(recipientId) || recipientId === sender._id.toString()) return false;
-  if (!(await User.exists({ _id: recipientId }))) return false;
+  if (!(await User.exists({
+    _id: recipientId,
+    "privacy.allowMessages": { $ne: false },
+  }))) return false;
   if (sender.role === "superadmin" || sender.plan?.features?.can_message_anyone) return true;
   return sender.connections?.includes(recipientId) || false;
 };
@@ -16,35 +20,67 @@ export const createMessage = async (data) => {
   return await Message.findById(message._id).populate("from_user_id", PUBLIC_USER_FIELDS);
 };
 
-export const getChatMessagesList = async (userId, recipientId) => {
+export const getChatMessagesList = async (userId, recipientId, pagination) => {
   const messages = await Message.find({
-    $or: [
-      { from_user_id: userId, to_user_id: recipientId },
-      { from_user_id: recipientId, to_user_id: userId },
+    $and: [
+      {
+        $or: [
+          { from_user_id: userId, to_user_id: recipientId },
+          { from_user_id: recipientId, to_user_id: userId },
+        ],
+      },
+      cursorFilter(pagination.cursor, "createdAt"),
     ],
   })
     .populate("from_user_id", PUBLIC_USER_FIELDS)
-    .sort({ createdAt: -1 })
-    .limit(1000);
+    .sort({ createdAt: -1, _id: -1 })
+    .limit(pagination.limit + 1);
 
-  messages.reverse();
+  const page = pageFromDocuments(messages, pagination.limit, "createdAt");
+  page.items.reverse();
 
   await Message.updateMany(
     { from_user_id: recipientId, to_user_id: userId, seen: false },
     { seen: true }
   );
 
-  return messages;
+  return page;
 };
 
 export const getUserConversationsList = async (userId) => {
-  const messages = await Message.find({
-    $or: [{ from_user_id: userId }, { to_user_id: userId }],
-  })
-    .populate("from_user_id", PUBLIC_USER_FIELDS)
-    .populate("to_user_id", PUBLIC_USER_FIELDS)
-    .sort({ createdAt: -1 })
-    .limit(2000);
+  const rows = await Message.aggregate([
+    {
+      $match: {
+        $or: [{ from_user_id: userId }, { to_user_id: userId }],
+      },
+    },
+    { $sort: { createdAt: -1, _id: -1 } },
+    {
+      $set: {
+        partnerId: {
+          $cond: [
+            { $eq: ["$from_user_id", userId] },
+            "$to_user_id",
+            "$from_user_id",
+          ],
+        },
+      },
+    },
+    {
+      $group: {
+        _id: "$partnerId",
+        lastMessage: { $first: "$$ROOT" },
+      },
+    },
+    { $sort: { "lastMessage.createdAt": -1 } },
+    { $limit: 100 },
+  ]);
+
+  const messages = rows.map((row) => row.lastMessage);
+  await Message.populate(messages, [
+    { path: "from_user_id", select: PUBLIC_USER_FIELDS },
+    { path: "to_user_id", select: PUBLIC_USER_FIELDS },
+  ]);
 
   const conversationMap = new Map();
   messages.forEach((message) => {
@@ -93,7 +129,7 @@ export const markMessagesSeen = async (userId, senderId) => {
 };
 
 export const getMessageById = async (messageId) => {
-  return await Message.findById(messageId);
+  return await Message.findById(messageId).select("+media_key");
 };
 
 export const deleteMessageById = async (message) => {

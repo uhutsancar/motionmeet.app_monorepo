@@ -1,4 +1,5 @@
 import api from './client';
+import { API_ROUTES } from '@motionmeet/shared';
 
 // ============= USER APIs =============
 export const getUserData = async (token) => {
@@ -9,12 +10,8 @@ export const getUserData = async (token) => {
 };
 
 export const updateUserProfile = async (userData, token) => {
-  const isFormData = userData && typeof userData.append === 'function';
   const { data } = await api.post('/api/user/update', userData, {
-    headers: { 
-      Authorization: `Bearer ${token}`,
-      ...(isFormData ? { 'Content-Type': 'multipart/form-data' } : { 'Content-Type': 'application/json' }),
-    },
+    headers: { Authorization: `Bearer ${token}` },
   });
   return data;
 };
@@ -83,51 +80,47 @@ export const getUserConversations = async (token) => {
 };
 
 // ============= POST APIs =============
-export const getPosts = async (token) => {
-  const { data } = await api.get('/api/post/feed', {
+export const getPosts = async (token, cursor) => {
+  const { data } = await api.get(API_ROUTES.post.feed, {
     headers: { Authorization: `Bearer ${token}` },
+    params: cursor ? { cursor } : undefined,
   });
   return data;
 };
 
 export const createPost = async (postData, token) => {
-  const { data } = await api.post('/api/post/add', postData, {
-    headers: { 
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'multipart/form-data',
-    },
+  const { data } = await api.post(API_ROUTES.post.add, postData, {
+    headers: { Authorization: `Bearer ${token}` },
   });
   return data;
 };
 
 export const likePost = async (postId, token) => {
-  const { data } = await api.post('/api/post/like', { postId }, {
+  const { data } = await api.post(API_ROUTES.post.like, { postId }, {
     headers: { Authorization: `Bearer ${token}` },
   });
   return data;
 };
 
 export const deletePost = async (postId, token) => {
-  const { data } = await api.delete(`/api/post/delete/${postId}`, {
+  const { data } = await api.delete(API_ROUTES.post.delete(postId), {
     headers: { Authorization: `Bearer ${token}` },
   });
   return data;
 };
 
 // ============= MESSAGE APIs =============
-export const getMessages = async (userId, token) => {
+export const getMessages = async (userId, token, cursor) => {
   const { data } = await api.post('/api/message/get', { to_user_id: userId }, {
     headers: { Authorization: `Bearer ${token}` },
+    params: cursor ? { cursor } : undefined,
   });
   return data;
 };
 
 export const sendMessage = async (messageData, token) => {
   const { data } = await api.post('/api/message/send', messageData, {
-    headers: { 
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'multipart/form-data',
-    },
+    headers: { Authorization: `Bearer ${token}` },
   });
   return data;
 };
@@ -149,10 +142,7 @@ export const getStories = async (token) => {
 
 export const createStory = async (storyData, token) => {
   const { data } = await api.post('/api/story/create', storyData, {
-    headers: { 
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'multipart/form-data',
-    },
+    headers: { Authorization: `Bearer ${token}` },
   });
   return data;
 };
@@ -172,9 +162,10 @@ export const getWorkoutStats = async (period, token) => {
   return data;
 };
 
-export const getWorkouts = async (token) => {
+export const getWorkouts = async (token, cursor) => {
   const { data } = await api.get('/api/workout', {
     headers: { Authorization: `Bearer ${token}` },
+    params: { limit: 100, ...(cursor ? { cursor } : {}) },
   });
   return data;
 };
@@ -187,9 +178,10 @@ export const createWorkout = async (workoutData, token) => {
 };
 
 // ============= ROUTINE APIs =============
-export const getRoutines = async (token) => {
+export const getRoutines = async (token, cursor) => {
   const { data } = await api.get('/api/routine', {
     headers: { Authorization: `Bearer ${token}` },
+    params: cursor ? { cursor } : undefined,
   });
   return data;
 };
@@ -241,8 +233,16 @@ export const updatePlan = async (planId, token) => {
 
 // ============= ADDITIONAL APIs =============
 export const addComment = async (postId, content, token) => {
-  const { data } = await api.post('/api/post/comment/add', { postId, content }, {
+  const { data } = await api.post(API_ROUTES.post.comment, { postId, content }, {
     headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const getPostComments = async (postId, token, cursor) => {
+  const { data } = await api.get(API_ROUTES.post.comments(postId), {
+    headers: { Authorization: `Bearer ${token}` },
+    params: cursor ? { cursor } : undefined,
   });
   return data;
 };
@@ -304,6 +304,7 @@ export default {
 
   // Post Extras
   addComment,
+  getPostComments,
 
   // User Extras
   getSuggestedUsers,

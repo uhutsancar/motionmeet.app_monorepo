@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, ScrollView, Alert, KeyboardAvoidingView, Platform, Dimensions } from 'react-native';
+import { View, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Appbar, Text, Surface, TextInput, Button, IconButton, Divider, TouchableRipple } from 'react-native-paper';
 const formatTime = (seconds) => {
@@ -12,8 +12,6 @@ const formatTime = (seconds) => {
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
-
-const { width } = Dimensions.get('window');
 
 const ActiveWorkoutScreen = ({ navigation, route }) => {
   const { t } = useTranslation();
@@ -149,7 +147,7 @@ const ActiveWorkoutScreen = ({ navigation, route }) => {
       </Surface>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 120, paddingTop: 16 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: 16, paddingBottom: 32, paddingTop: 16 }} showsVerticalScrollIndicator={false}>
         
         {/* Title */}
         <TextInput

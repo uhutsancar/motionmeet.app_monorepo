@@ -14,11 +14,11 @@ import { fetchConnections } from "./features/connections/connectionsSlice";
 import { addMessage } from "./features/messages/messagesSlice";
 import { fetchUser } from "./features/user/userSlice";
 import { useSocket } from "./hooks/useSocket";
-import Landing from "./pages/Landing";
-import Layout from "./pages/Layout";
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
 
+const Landing = lazy(() => import("./pages/Landing"));
+const Layout = lazy(() => import("./pages/Layout"));
+const Login = lazy(() => import("./pages/Login"));
+const Signup = lazy(() => import("./pages/Signup"));
 const Features = lazy(() => import("./pages/Features"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const About = lazy(() => import("./pages/About"));

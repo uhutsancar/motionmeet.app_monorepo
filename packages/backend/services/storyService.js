@@ -18,12 +18,13 @@ export const getStoriesForUser = async (userId) => {
     user: { $in: userIds },
     createdAt: { $gte: cutoff },
   })
+    .select("-views_count")
     .populate("user", PUBLIC_USER_FIELDS)
     .sort({ createdAt: -1 });
 };
 
 export const getStoryById = async (storyId) => {
-  return await Story.findById(storyId);
+  return await Story.findById(storyId).select("+media_key");
 };
 
 export const deleteStoryById = async (story) => {

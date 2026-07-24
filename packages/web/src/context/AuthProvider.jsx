@@ -1,103 +1,140 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import axios from 'axios';
-import { BASEURL } from '~/config/env';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import axios from "axios";
+import { BASEURL } from "~/config/env";
+import { API_ROUTES } from "@motionmeet/shared";
 
 const AuthContext = createContext();
+const REFRESH_SKEW_MS = 60_000;
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token') || null);
+  const [token, setToken] = useState(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const tokenRef = useRef(null);
+  const expiresAtRef = useRef(0);
+  const refreshPromiseRef = useRef(null);
 
-  const tokenRef = useRef(token);
-  useEffect(() => {
-    tokenRef.current = token;
-  }, [token]);
+  const applySession = useCallback((data) => {
+    const nextToken = data?.token || null;
+    const nextExpiry = Number(data?.accessTokenExpiresAt) || 0;
+    tokenRef.current = nextToken;
+    expiresAtRef.current = nextExpiry;
+    setToken(nextToken);
+    setUser(data?.user || null);
+    return nextToken;
+  }, []);
 
-  const getToken = useCallback(async () => tokenRef.current, []);
+  const clearSession = useCallback(() => {
+    tokenRef.current = null;
+    expiresAtRef.current = 0;
+    setToken(null);
+    setUser(null);
+    localStorage.removeItem("token");
+  }, []);
 
-  useEffect(() => {
-    if (token) {
-      axios.get(`${BASEURL}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      .then(res => {
-        if (res.data.success) {
-          setUser(res.data.user);
-        } else {
-          setToken(null);
-          localStorage.removeItem('token');
+  const refreshAccessToken = useCallback(async () => {
+    if (refreshPromiseRef.current) return refreshPromiseRef.current;
+
+    refreshPromiseRef.current = axios
+      .post(`${BASEURL}${API_ROUTES.auth.refresh}`, {}, { withCredentials: true })
+      .then((response) => applySession(response.data))
+      .catch((error) => {
+        clearSession();
+        if (error.response?.status !== 401) {
+          console.error("Session refresh failed:", error.message);
         }
+        return null;
       })
-      .catch(err => {
-        console.error('Failed to fetch user:', err);
-        setToken(null);
-        localStorage.removeItem('token');
-      })
-      .finally(() => setIsLoaded(true));
-    } else {
-      setIsLoaded(true);
+      .finally(() => {
+        refreshPromiseRef.current = null;
+      });
+
+    return refreshPromiseRef.current;
+  }, [applySession, clearSession]);
+
+  const getToken = useCallback(async () => {
+    if (
+      tokenRef.current &&
+      expiresAtRef.current > Date.now() + REFRESH_SKEW_MS
+    ) {
+      return tokenRef.current;
     }
-  }, [token]);
+    return refreshAccessToken();
+  }, [refreshAccessToken]);
+
+  useEffect(() => {
+    localStorage.removeItem("token");
+    refreshAccessToken().finally(() => setIsLoaded(true));
+  }, [refreshAccessToken]);
 
   const login = async (email, password) => {
     try {
-      const res = await axios.post(`${BASEURL}/api/auth/login`, { email, password });
-      if (res.data.success) {
-        setToken(res.data.token);
-        setUser(res.data.user);
-        localStorage.setItem('token', res.data.token);
-        return { success: true };
-      }
-      return { success: false, message: res.data.message };
-    } catch (err) {
-      return { success: false, message: err.response?.data?.message || err.message };
+      const response = await axios.post(
+        `${BASEURL}${API_ROUTES.auth.login}`,
+        { email, password },
+        { withCredentials: true }
+      );
+      applySession(response.data);
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || error.response?.data?.error?.message || "Login failed",
+      };
     }
   };
 
   const register = async (userData) => {
     try {
-      const res = await axios.post(`${BASEURL}/api/auth/register`, userData);
-      if (res.data.success) {
-        setToken(res.data.token);
-        setUser(res.data.user);
-        localStorage.setItem('token', res.data.token);
-        return { success: true };
-      }
-      return { success: false, message: res.data.message };
-    } catch (err) {
-      return { success: false, message: err.response?.data?.message || err.message };
+      const response = await axios.post(
+        `${BASEURL}${API_ROUTES.auth.register}`,
+        userData,
+        { withCredentials: true }
+      );
+      applySession(response.data);
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || error.response?.data?.error?.message || "Registration failed",
+        fields: error.response?.data?.error?.fields,
+      };
     }
   };
 
-  const logout = () => {
-    setToken(null);
-    setUser(null);
-    localStorage.removeItem('token');
-  };
+  const logout = useCallback(async () => {
+    try {
+      await axios.post(`${BASEURL}${API_ROUTES.auth.logout}`, {}, { withCredentials: true });
+    } catch {
+      // Local logout must still complete if the server is unreachable.
+    } finally {
+      clearSession();
+    }
+  }, [clearSession]);
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoaded, login, register, logout, getToken }}>
+    <AuthContext.Provider
+      value={{ user, token, isLoaded, login, register, logout, getToken }}
+    >
       {children}
     </AuthContext.Provider>
   );
 };
 
-// Legacy auth hooks to minimize rewrite
 // eslint-disable-next-line react-refresh/only-export-components
 export const useAuthContext = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuthContext must be used within an AuthProvider');
+    throw new Error("useAuthContext must be used within an AuthProvider");
   }
   return {
     user: context.user,
     getToken: context.getToken,
     isLoaded: context.isLoaded,
-    isSignedIn: !!context.user,
+    isSignedIn: Boolean(context.user),
     userId: context.user?.id,
     signOut: context.logout,
     login: context.login,
-    register: context.register
+    register: context.register,
   };
 };

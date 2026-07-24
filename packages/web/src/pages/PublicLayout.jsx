@@ -54,13 +54,13 @@ const PublicNavbar = () => {
         elevation={0}
         sx={{
           bgcolor: (muiTheme) => alpha(muiTheme.palette.background.paper, 0.88),
-          backdropFilter: "blur(14px)",
+          backdropFilter: "blur(20px)",
           borderBottom: 1,
           borderColor: "divider",
         }}
       >
         <Container maxWidth="lg">
-          <Toolbar disableGutters sx={{ minHeight: 64 }}>
+          <Toolbar disableGutters sx={{ minHeight: 72 }}>
             <Stack
               component={RouterLink}
               to="/"
@@ -68,8 +68,8 @@ const PublicNavbar = () => {
               spacing={1.25}
               sx={{ alignItems: "center", color: "inherit", textDecoration: "none" }}
             >
-              <Box component="img" src={motionmeetLogo} alt="MotionMeet" sx={{ height: 32, width: 32 }} />
-              <Typography variant="h6" sx={{ display: { xs: "none", sm: "block" }, fontWeight: 800 }}>
+              <Box component="img" src={motionmeetLogo} alt="MotionMeet" sx={{ height: 34, width: 34 }} />
+              <Typography variant="h6" sx={{ display: { xs: "none", sm: "block" }, fontFamily: '"Sora", sans-serif', fontWeight: 800, letterSpacing: "-0.04em" }}>
                 MotionMeet
               </Typography>
             </Stack>
@@ -81,7 +81,7 @@ const PublicNavbar = () => {
                   component={RouterLink}
                   to={link.to}
                   color={pathname === link.to ? "primary" : "inherit"}
-                  sx={{ color: pathname === link.to ? "primary.main" : "text.secondary" }}
+                  sx={{ color: pathname === link.to ? "primary.main" : "text.secondary", px: 1.5 }}
                 >
                   {link.label}
                 </Button>
@@ -103,7 +103,7 @@ const PublicNavbar = () => {
               <Button component={RouterLink} to="/login" color="inherit">
                 {t("nav.login")}
               </Button>
-              <Button component={RouterLink} to="/signup" variant="contained">
+              <Button component={RouterLink} to="/signup" variant="contained" sx={{ minHeight: 40 }}>
                 {t("nav.signup")}
               </Button>
             </Stack>
@@ -221,7 +221,7 @@ const PublicFooter = () => {
 const PublicLayout = ({ children, noFooter = false }) => (
   <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100dvh", bgcolor: "background.default" }}>
     <PublicNavbar />
-    <Box component="main" sx={{ flex: 1, pt: 8 }}>{children}</Box>
+    <Box component="main" sx={{ flex: 1, pt: 9 }}>{children}</Box>
     {!noFooter && <PublicFooter />}
   </Box>
 );

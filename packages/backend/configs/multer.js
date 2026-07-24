@@ -32,5 +32,11 @@ export const storyMediaUpload = multer({
   limits: { fileSize: 20 * 1024 * 1024, files: 1, fields: 10 },
 });
 
+export const postMediaUpload = multer({
+  storage,
+  fileFilter: createFileFilter(STORY_MIME_TYPES),
+  limits: { fileSize: 20 * 1024 * 1024, files: 4, fields: 20 },
+});
+
 // Backward-compatible alias for any local integration importing `upload`.
 export const upload = imageUpload;

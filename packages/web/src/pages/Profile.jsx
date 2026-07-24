@@ -41,6 +41,8 @@ const Profile = () => {
   const [activeStatTab, setActiveStatTab] = useState("duration");
   const [showEdit, setShowEdit] = useState(false);
   const [workouts, setWorkouts] = useState([]);
+  const [workoutCursor, setWorkoutCursor] = useState(null);
+  const [loadingMoreWorkouts, setLoadingMoreWorkouts] = useState(false);
   const [chartData, setChartData] = useState([]);
 
   const isOwnProfile = !profileId || profileId === currentUser?._id;
@@ -103,8 +105,12 @@ const Profile = () => {
         if (!token) return;
         const { data } = await api.get("/api/workout", {
           headers: { Authorization: `Bearer ${token}` },
+          params: { limit: 100 },
         });
-        if (data.success) setWorkouts(data.workouts || []);
+        if (data.success) {
+          setWorkouts(data.workouts || []);
+          setWorkoutCursor(data.nextCursor);
+        }
       } catch (error) {
         console.error("Error fetching workouts", error);
       }
@@ -112,6 +118,32 @@ const Profile = () => {
     fetchWorkouts();
     return undefined;
   }, [getToken, isOwnProfile]);
+
+  const loadMoreWorkouts = async () => {
+    if (!workoutCursor || loadingMoreWorkouts) return;
+    setLoadingMoreWorkouts(true);
+    try {
+      const token = await getToken();
+      const { data } = await api.get("/api/workout", {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { cursor: workoutCursor, limit: 100 },
+      });
+      if (data.success) {
+        setWorkouts((currentWorkouts) => {
+          const knownIds = new Set(currentWorkouts.map((workout) => workout._id));
+          return [
+            ...currentWorkouts,
+            ...(data.workouts || []).filter((workout) => !knownIds.has(workout._id)),
+          ];
+        });
+        setWorkoutCursor(data.nextCursor);
+      }
+    } catch (error) {
+      toast.error(error.message || "Workouts could not be loaded");
+    } finally {
+      setLoadingMoreWorkouts(false);
+    }
+  };
 
   useEffect(() => {
     const weeks = [];
@@ -179,7 +211,11 @@ const Profile = () => {
   }
 
   const profileStats = [
-    { label: t("profile.workouts"), value: visibleWorkouts.length, highlight: true },
+    {
+      label: t("profile.workouts"),
+      value: user?.statistics?.totalWorkouts ?? visibleWorkouts.length,
+      highlight: true,
+    },
     { label: t("profile.followers"), value: followersCount },
     { label: t("profile.following"), value: followingCount },
   ];
@@ -193,8 +229,8 @@ const Profile = () => {
   const currentUnit = activeStatTab === "duration" ? t("common.minutes_short") : activeStatTab === "volume" ? t("common.kg") : t("profile.reps");
 
   return (
-    <Box sx={{ width: "100%", minHeight: "100vh", overflowY: "auto", py: { xs: 2, sm: 3 }, pb: { xs: 10, sm: 5 } }}>
-      <Stack spacing={3} sx={{ maxWidth: 896, mx: "auto", px: { xs: 2, sm: 4 } }}>
+    <Box sx={{ width: "100%", minHeight: "100%", py: { xs: 2, md: 4 }, pb: { xs: 4, md: 6 } }}>
+      <Stack spacing={3} sx={{ maxWidth: 896, mx: "auto", px: { xs: 1.5, sm: 3, md: 4 } }}>
         <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ py: 2, alignItems: { xs: "center", sm: "center" }, justifyContent: "space-between", textAlign: { xs: "center", sm: "left" } }}>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2.5} sx={{ alignItems: "center" }}>
             <Box sx={{ position: "relative" }}>
@@ -228,7 +264,7 @@ const Profile = () => {
           )}
         </Stack>
 
-        <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 }, borderRadius: 3 }}>
+        <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 }, borderRadius: 5, boxShadow: 1 }}>
           <Stack direction="row" spacing={1.5} sx={{ mb: 3, alignItems: "flex-start" }}>
             <Avatar variant="rounded" sx={{ bgcolor: "action.hover", color: "primary.main" }}>
               <TrendingUp size={20} />
@@ -290,7 +326,7 @@ const Profile = () => {
           </Stack>
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, 1fr)", sm: "repeat(4, 1fr)" }, gap: 2 }}>
             {insights.map(({ label, icon: Icon }) => (
-              <Card key={label} variant="outlined" sx={{ borderRadius: 3 }}>
+              <Card key={label} variant="outlined" sx={{ borderRadius: 4 }}>
                 <CardActionArea sx={{ p: 2.5, height: "100%" }}>
                   <Stack spacing={1.5} sx={{ alignItems: "center" }}>
                     <Avatar variant="rounded" sx={{ bgcolor: "action.hover", color: "text.secondary" }}>
@@ -311,12 +347,12 @@ const Profile = () => {
             <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>
               {t("profile.workouts")}
             </Typography>
-            <Chip label={visibleWorkouts.length} size="small" />
+            <Chip label={user?.statistics?.totalWorkouts ?? visibleWorkouts.length} size="small" />
           </Stack>
 
           {visibleWorkouts.length > 0 ? (
             visibleWorkouts.map((workout) => (
-              <Paper key={workout._id} variant="outlined" sx={{ p: { xs: 2, sm: 3 }, borderRadius: 3 }}>
+              <Paper key={workout._id} variant="outlined" sx={{ p: { xs: 2, sm: 3 }, borderRadius: 4 }}>
                 <Stack spacing={2}>
                   <Stack direction="row" spacing={2} sx={{ alignItems: "center", justifyContent: "space-between" }}>
                     <Typography variant="h6" sx={{ fontWeight: 800 }}>
@@ -344,7 +380,7 @@ const Profile = () => {
               </Paper>
             ))
           ) : (
-            <Paper variant="outlined" sx={{ p: 6, borderRadius: 3, textAlign: "center" }}>
+            <Paper variant="outlined" sx={{ p: { xs: 4, sm: 6 }, borderRadius: 5, textAlign: "center" }}>
               <Avatar sx={{ width: 72, height: 72, mx: "auto", mb: 2, bgcolor: "action.hover", color: "text.disabled" }}>
                 <Dumbbell size={36} />
               </Avatar>
@@ -355,6 +391,18 @@ const Profile = () => {
                 {t("profile.start_journey")}
               </Typography>
             </Paper>
+          )}
+          {isOwnProfile && workoutCursor && (
+            <Button
+              variant="outlined"
+              onClick={loadMoreWorkouts}
+              disabled={loadingMoreWorkouts}
+              sx={{ alignSelf: "center" }}
+            >
+              {loadingMoreWorkouts
+                ? t("common.loading", "Loading...")
+                : t("common.load_more", "Load more")}
+            </Button>
           )}
         </Stack>
       </Stack>

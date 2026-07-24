@@ -1,7 +1,15 @@
 import Routine from "../models/Routine.js";
+import { cursorFilter, pageFromDocuments } from "../utils/pagination.js";
 
-export const getUserRoutinesList = async (userId) => {
-  return await Routine.find({ userId }).populate("exercises.exerciseId");
+export const getUserRoutinesList = async (userId, pagination) => {
+  const documents = await Routine.find({
+    userId,
+    ...cursorFilter(pagination.cursor, "updatedAt"),
+  })
+    .populate("exercises.exerciseId")
+    .sort({ updatedAt: -1, _id: -1 })
+    .limit(pagination.limit + 1);
+  return pageFromDocuments(documents, pagination.limit, "updatedAt");
 };
 
 export const countUserRoutines = async (userId) => {

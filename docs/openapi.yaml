@@ -1,0 +1,433 @@
+openapi: 3.1.0
+info:
+  title: MotionMeet API
+  version: 1.0.0
+  description: Contract shared by the web, Expo mobile, and Express API packages.
+servers:
+  - url: /
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+  - name: User
+  - name: Media
+  - name: Social
+  - name: Workouts
+  - name: Messages
+paths:
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+                password: { type: string, minLength: 1, maxLength: 72 }
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      security: []
+      description: "Web uses the HttpOnly refresh cookie. Mobile sends refreshToken and X-Client-Platform: mobile."
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken: { type: string, maxLength: 512 }
+      responses:
+        "200":
+          description: Rotated session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      security: []
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, user]
+                properties:
+                  success: { const: true }
+                  user: { $ref: "#/components/schemas/User" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/user/privacy:
+    get:
+      tags: [User]
+      responses:
+        "200":
+          description: Privacy preferences
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { const: true }
+                  privacy: { $ref: "#/components/schemas/Privacy" }
+    patch:
+      tags: [User]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Privacy"
+      responses:
+        "200":
+          description: Saved privacy preferences
+  /api/user/export:
+    get:
+      tags: [User]
+      responses:
+        "200":
+          description: Complete account export
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /api/user/account:
+    delete:
+      tags: [User]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string, minLength: 1, maxLength: 72 }
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/media/presign:
+    post:
+      tags: [Media]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [purpose, fileName, contentType, size]
+              properties:
+                purpose:
+                  enum: [profiles, covers, posts, stories, messages]
+                fileName: { type: string, maxLength: 255 }
+                contentType: { type: string }
+                size: { type: integer, minimum: 1, maximum: 20971520 }
+      responses:
+        "201":
+          description: Five-minute S3 PUT authorization
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, key, uploadUrl, expiresIn, headers]
+                properties:
+                  success: { const: true }
+                  key: { type: string }
+                  uploadUrl: { type: string, format: uri }
+                  expiresIn: { type: integer }
+                  headers:
+                    type: object
+                    additionalProperties: { type: string }
+  /api/post/feed:
+    get:
+      tags: [Social]
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Cursor-paginated feed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      posts:
+                        type: array
+                        items: { $ref: "#/components/schemas/Post" }
+  /api/post/add:
+    post:
+      tags: [Social]
+      description: Direct-upload clients pass uploadedKeys obtained from /api/media/presign.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content: { type: string, maxLength: 5000 }
+                post_type:
+                  enum: [text, image, text_with_image, video, workout]
+                visibility: { enum: [public, followers, private] }
+                workout: { type: string }
+                uploadedKeys:
+                  type: array
+                  maxItems: 4
+                  items: { type: string }
+      responses:
+        "200":
+          description: Created post
+  /api/post/like:
+    post:
+      tags: [Social]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [postId]
+              properties:
+                postId: { type: string }
+      responses:
+        "200":
+          description: Authoritative like state and aggregate count
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, liked, like_count]
+                properties:
+                  success: { const: true }
+                  liked: { type: boolean }
+                  like_count: { type: integer, minimum: 0 }
+  /api/post/comment/add:
+    post:
+      tags: [Social]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [postId, content]
+              properties:
+                postId: { type: string }
+                content: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        "200":
+          description: Created comment and aggregate count
+  /api/post/{postId}/comments:
+    get:
+      tags: [Social]
+      parameters:
+        - in: path
+          name: postId
+          required: true
+          schema: { type: string }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Cursor-paginated comments, newest first
+  /api/workout:
+    get:
+      tags: [Workouts]
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Cursor-paginated workouts
+    post:
+      tags: [Workouts]
+      responses:
+        "200":
+          description: Logged workout
+        "403":
+          description: Plan quota reached
+  /api/workout/stats:
+    get:
+      tags: [Workouts]
+      parameters:
+        - in: query
+          name: period
+          schema: { enum: [week, month, year], default: month }
+      responses:
+        "200":
+          description: Statistics filtered to the requested 7, 30, or 365-day window
+  /api/message/get:
+    post:
+      tags: [Messages]
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to_user_id]
+              properties:
+                to_user_id: { type: string }
+      responses:
+        "200":
+          description: Cursor-paginated conversation
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Cursor:
+      in: query
+      name: cursor
+      schema: { type: string, maxLength: 512 }
+    Limit:
+      in: query
+      name: limit
+      schema: { type: integer, minimum: 1, maximum: 100 }
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [email, username, full_name, password]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        username:
+          type: string
+          minLength: 3
+          maxLength: 30
+          pattern: "^[a-z0-9._-]+$"
+        full_name: { type: string, minLength: 2, maxLength: 100 }
+        password: { type: string, minLength: 10, maxLength: 72 }
+    Privacy:
+      type: object
+      properties:
+        publicProfile: { type: boolean }
+        showWorkoutsOnFeed: { type: boolean }
+        allowFollowers: { type: boolean }
+        showInSearch: { type: boolean }
+        allowMessages: { type: boolean }
+      additionalProperties: false
+    User:
+      type: object
+      required: [id, email, username, full_name]
+      properties:
+        id: { type: string }
+        email: { type: string, format: email }
+        username: { type: string }
+        full_name: { type: string }
+        profile_picture: { type: string }
+        bio: { type: string }
+        privacy: { $ref: "#/components/schemas/Privacy" }
+    AuthResponse:
+      type: object
+      required: [success, user, token, accessTokenExpiresAt]
+      properties:
+        success: { const: true }
+        user: { $ref: "#/components/schemas/User" }
+        token: { type: string }
+        accessTokenExpiresAt: { type: integer }
+        refreshToken:
+          type: string
+          description: "Returned only to clients declaring X-Client-Platform: mobile."
+    Post:
+      type: object
+      required: [_id, user, like_count, liked_by_me, comment_count, comments]
+      properties:
+        _id: { type: string }
+        user: { $ref: "#/components/schemas/User" }
+        content: { type: string }
+        like_count: { type: integer, minimum: 0 }
+        liked_by_me: { type: boolean }
+        comment_count: { type: integer, minimum: 0 }
+        comment_next_cursor: { type: [string, "null"] }
+        comments:
+          type: array
+          description: Bounded latest-comment preview. Use the comments endpoint for history.
+          maxItems: 20
+          items: { type: object, additionalProperties: true }
+      additionalProperties: true
+    Page:
+      type: object
+      required: [success]
+      properties:
+        success: { const: true }
+        nextCursor:
+          type: [string, "null"]
+  responses:
+    Success:
+      description: Successful operation
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success: { const: true }
+    BadRequest:
+      description: Invalid request
+    Unauthorized:
+      description: Authentication failed
+    Conflict:
+      description: Resource conflict
+    RateLimited:
+      description: Rate limit exceeded

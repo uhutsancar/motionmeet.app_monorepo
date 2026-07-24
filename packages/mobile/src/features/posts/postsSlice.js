@@ -3,15 +3,21 @@ import { getPosts, createPost, likePost, deletePost } from '../../api/endpoints'
 
 const initialState = {
   posts: [],
+  nextCursor: null,
   loading: false,
+  loadingMore: false,
   error: null,
 };
 
 export const fetchPosts = createAsyncThunk(
   'posts/fetchPosts',
-  async (token) => {
-    const data = await getPosts(token);
-    return data.success ? data.posts : [];
+  async (argument) => {
+    const { token, cursor = null } =
+      typeof argument === 'string' ? { token: argument } : argument;
+    const data = await getPosts(token, cursor);
+    return data.success
+      ? { posts: data.posts, nextCursor: data.nextCursor, append: Boolean(cursor) }
+      : { posts: [], nextCursor: null, append: Boolean(cursor) };
   }
 );
 
@@ -32,7 +38,11 @@ export const toggleLikePost = createAsyncThunk(
   async ({ postId, token }) => {
     const data = await likePost(postId, token);
     if (data.success) {
-      return { postId, likes_count: data.likes_count || [] };
+      return {
+        postId,
+        liked_by_me: data.liked,
+        like_count: data.like_count,
+      };
     } else {
       throw new Error(data.message);
     }
@@ -57,20 +67,34 @@ const postsSlice = createSlice({
   reducers: {
     clearPosts: (state) => {
       state.posts = [];
+      state.nextCursor = null;
     },
   },
   extraReducers: (builder) => {
     builder
       // Fetch Posts
-      .addCase(fetchPosts.pending, (state) => {
-        state.loading = true;
+      .addCase(fetchPosts.pending, (state, action) => {
+        const isNextPage =
+          typeof action.meta.arg === 'object' && Boolean(action.meta.arg?.cursor);
+        if (isNextPage) state.loadingMore = true;
+        else state.loading = true;
       })
       .addCase(fetchPosts.fulfilled, (state, action) => {
-        state.posts = action.payload;
+        if (action.payload.append) {
+          const knownIds = new Set(state.posts.map((post) => post._id));
+          state.posts.push(
+            ...action.payload.posts.filter((post) => !knownIds.has(post._id))
+          );
+        } else {
+          state.posts = action.payload.posts;
+        }
+        state.nextCursor = action.payload.nextCursor;
         state.loading = false;
+        state.loadingMore = false;
       })
       .addCase(fetchPosts.rejected, (state, action) => {
         state.loading = false;
+        state.loadingMore = false;
         state.error = action.error.message;
       })
       // Create Post
@@ -89,7 +113,8 @@ const postsSlice = createSlice({
       .addCase(toggleLikePost.fulfilled, (state, action) => {
         const index = state.posts.findIndex(p => p._id === action.payload.postId);
         if (index !== -1) {
-          state.posts[index].likes_count = action.payload.likes_count;
+          state.posts[index].liked_by_me = action.payload.liked_by_me;
+          state.posts[index].like_count = action.payload.like_count;
         }
       })
       // Delete Post

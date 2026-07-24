@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, Dimensions, Alert } from 'react-native';
+import { ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthContext } from "../context/AuthProvider";
 import { useSelector } from 'react-redux';
@@ -11,8 +11,6 @@ import { setAuthToken } from '../api/client';
 import { getUserProfile, getWorkouts } from '../api/endpoints';
 import moment from 'moment';
 import 'moment/locale/tr';
-
-const { width } = Dimensions.get('window');
 
 const Profile = ({ route, navigation }) => {
   const { signOut, getToken } = useAuthContext();
@@ -60,7 +58,7 @@ const Profile = ({ route, navigation }) => {
       }
     };
     fetchProfile();
-  }, [profileId, isOwnProfile]);
+  }, [getToken, isOwnProfile, profileId]);
 
   useEffect(() => {
     if (!isOwnProfile) return; // public profile handles workouts via posts
@@ -77,7 +75,7 @@ const Profile = ({ route, navigation }) => {
       }
     };
     if (currentUser) fetchUserWorkouts();
-  }, [currentUser, isOwnProfile]);
+  }, [currentUser, getToken, isOwnProfile]);
 
   useEffect(() => {
     if (!workouts || workouts.length === 0) {
@@ -145,9 +143,23 @@ const Profile = ({ route, navigation }) => {
         </Appbar.Header>
       )}
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingBottom: 28 }}
+      >
         {/* User Header */}
-        <Surface style={{ padding: 20, backgroundColor: theme.surface, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 }} elevation={2}>
+        <Surface style={{
+          margin: 12,
+          padding: 18,
+          backgroundColor: theme.surface,
+          borderRadius: 22,
+          borderWidth: 1,
+          borderColor: theme.border,
+          shadowColor: theme.shadow,
+          shadowOpacity: theme.dark ? 0.2 : 0.06,
+          shadowRadius: 14,
+          shadowOffset: { width: 0, height: 6 },
+        }} elevation={2}>
           <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 16, backgroundColor: 'transparent' }}>
             {user?.profile_picture ? (
               <Avatar.Image source={{ uri: user.profile_picture }} size={80} />
@@ -161,7 +173,9 @@ const Profile = ({ route, navigation }) => {
               <Surface elevation={0} style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, justifyContent: 'space-between', backgroundColor: 'transparent' }}>
                 <Surface elevation={0} style={{ alignItems: 'center', backgroundColor: 'transparent' }}>
                   <Text variant="labelSmall" style={{ color: theme.textMuted }}>{isOwnProfile ? t('profile.workouts') : t('feed.post', 'Posts')}</Text>
-                  <Text variant="titleMedium" style={{ color: theme.text, fontWeight: 'bold' }}>{isOwnProfile ? workouts.length : (publicProfile?.posts?.length || 0)}</Text>
+                  <Text variant="titleMedium" style={{ color: theme.text, fontWeight: 'bold' }}>
+                    {user?.statistics?.totalWorkouts ?? workouts.length}
+                  </Text>
                 </Surface>
                 <Surface elevation={0} style={{ alignItems: 'center', backgroundColor: 'transparent' }}>
                   <Text variant="labelSmall" style={{ color: theme.textMuted }}>{t('profile.followers')}</Text>
@@ -189,7 +203,7 @@ const Profile = ({ route, navigation }) => {
 
         {/* Statistics Chart Card */}
         {isOwnProfile && (
-          <Surface style={{ margin: 16, borderRadius: 24, padding: 20, backgroundColor: theme.surfaceLight }} elevation={1}>
+          <Surface style={{ marginHorizontal: 12, marginVertical: 4, borderRadius: 22, padding: 18, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }} elevation={1}>
             <Surface elevation={0} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'transparent' }}>
               <Text variant="titleMedium" style={{ color: theme.text, fontWeight: 'bold' }}>{t('profile.weekly_activity', 'Weekly Activity')}</Text>
               <Button compact mode="text" onPress={() => navigation.navigate('Statistics')}>{t('profile.statistics', 'Stats')}</Button>
@@ -283,10 +297,10 @@ const Profile = ({ route, navigation }) => {
         {/* Settings / Sign out */}
         {isOwnProfile && (
           <Surface elevation={0} style={{ marginHorizontal: 16, marginTop: 24, gap: 12, backgroundColor: 'transparent' }}>
-            <Button mode="contained-tonal" icon="shield-outline" style={{ borderRadius: 12 }} onPress={() => navigation.navigate('Privacy')}>
+            <Button mode="contained-tonal" icon="shield-outline" style={{ borderRadius: 12 }} onPress={() => navigation.navigate('PrivacyScreen')}>
               {t('settings.privacy_security')}
             </Button>
-            <Button mode="contained-tonal" icon="help-circle-outline" style={{ borderRadius: 12 }} onPress={() => navigation.navigate('Support')}>
+            <Button mode="contained-tonal" icon="help-circle-outline" style={{ borderRadius: 12 }} onPress={() => navigation.navigate('SupportScreen')}>
               {t('settings.help_support')}
             </Button>
             <Button mode="contained-tonal" buttonColor="#ef444420" textColor="#ef4444" icon="log-out-outline" style={{ borderRadius: 12 }} onPress={handleSignOut}>

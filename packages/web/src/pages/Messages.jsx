@@ -22,6 +22,7 @@ import ListItemButton from '@mui/material/ListItemButton';
 import ListItemAvatar from '@mui/material/ListItemAvatar';
 import ListItemText from '@mui/material/ListItemText';
 import Paper from '@mui/material/Paper';
+import Button from '@mui/material/Button';
 
 import { getConversations, getMessages, markSeen, deleteMessage } from '../services/messageService';
 import { getConnections } from '../services/userService';
@@ -67,6 +68,8 @@ const WebMessages = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [loadingConvs, setLoadingConvs] = useState(true);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [nextCursor, setNextCursor] = useState(null);
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [sending, setSending] = useState(false);
 
@@ -74,6 +77,7 @@ const WebMessages = () => {
   const typingTimerRef = useRef(null);
   const activeConvRef = useRef(null);
   const pendingDraftRef = useRef('');
+  const skipAutoScrollRef = useRef(false);
 
   const loadConversations = useCallback(async (token) => {
     setLoadingConvs(true);
@@ -97,13 +101,17 @@ const WebMessages = () => {
     if (!conv?.partner?._id) return;
     setActiveConv(conv);
     setMessages([]);
+    setNextCursor(null);
     setPartnerTyping(false);
     setLoadingMsgs(true);
     setConversations(prev => prev.map(c => c.partner?._id === conv.partner?._id ? { ...c, unreadCount: 0 } : c));
     try {
       const token = await getToken();
       const data = await getMessages(token, conv.partner._id);
-      if (data.success) setMessages(data.messages || []);
+      if (data.success) {
+        setMessages(data.messages || []);
+        setNextCursor(data.nextCursor);
+      }
     } catch (error) {
       toast.error(error.message || 'Messages could not be loaded');
     } finally {
@@ -120,8 +128,40 @@ const WebMessages = () => {
   }, [activeConv]);
 
   useEffect(() => {
+    if (skipAutoScrollRef.current) {
+      skipAutoScrollRef.current = false;
+      return;
+    }
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, partnerTyping]);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!activeConv?.partner?._id || !nextCursor || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const token = await getToken();
+      const data = await getMessages(
+        token,
+        activeConv.partner._id,
+        nextCursor,
+      );
+      if (data.success) {
+        skipAutoScrollRef.current = true;
+        setMessages((currentMessages) => {
+          const knownIds = new Set(currentMessages.map((message) => message._id));
+          return [
+            ...(data.messages || []).filter((message) => !knownIds.has(message._id)),
+            ...currentMessages,
+          ];
+        });
+        setNextCursor(data.nextCursor);
+      }
+    } catch (error) {
+      toast.error(error.message || 'Messages could not be loaded');
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [activeConv, getToken, loadingOlder, nextCursor]);
 
   useEffect(() => {
     return () => clearTimeout(typingTimerRef.current);
@@ -385,6 +425,17 @@ const WebMessages = () => {
           </Stack>
 
           <Box sx={{ flex: 1, overflowY: 'auto', px: 2, py: 2, bgcolor: 'background.default', display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {nextCursor && !loadingMsgs && (
+              <Button
+                size="small"
+                onClick={loadOlderMessages}
+                disabled={loadingOlder}
+                startIcon={loadingOlder ? <CircularProgress size={14} /> : null}
+                sx={{ alignSelf: 'center' }}
+              >
+                {t('common.load_more', 'Load older messages')}
+              </Button>
+            )}
             {loadingMsgs ? (
               <Stack alignItems="center" justifyContent="center" height="100%">
                 <CircularProgress size={28} />

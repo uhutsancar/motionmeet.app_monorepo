@@ -10,6 +10,7 @@ import { useAuthContext } from "../context/AuthProvider";
 import * as ImagePicker from 'expo-image-picker';
 import { setAuthToken } from '../api/client';
 import { createWorkout, createPost } from '../api/endpoints';
+import { uploadMedia } from '../api/mediaUpload';
 import moment from 'moment';
 import { Appbar, Button, Surface, Text, TextInput, Divider, List, IconButton, ActivityIndicator } from 'react-native-paper';
 
@@ -113,20 +114,18 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
 
       try {
         if (mediaUri) {
-          const formData = new FormData();
-          formData.append('content', note.trim() || '');
-          formData.append('post_type', 'workout');
-          formData.append('visibility', visibility);
-          if (savedWorkoutId) formData.append('workout', savedWorkoutId);
-
-          const ext = mediaUri.split('.').pop()?.toLowerCase() || 'jpg';
-          formData.append('images', {
+          const uploadedKey = await uploadMedia({
             uri: mediaUri,
-            name: `workout_${Date.now()}.${ext}`,
-            type: `image/${ext === 'jpg' ? 'jpeg' : ext}`
-          });
-
-          await createPost(formData, freshToken);
+            name: `workout_${Date.now()}.jpg`,
+            type: 'image/jpeg',
+          }, 'posts', freshToken);
+          await createPost({
+            content: note.trim() || '',
+            post_type: 'workout',
+            visibility,
+            workout: savedWorkoutId,
+            uploadedKeys: [uploadedKey],
+          }, freshToken);
         } else {
           await createPost({
             content: note.trim() || '',

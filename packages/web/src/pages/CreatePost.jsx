@@ -17,6 +17,7 @@ import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import api from "~/api/axios";
+import { uploadMedia } from "~/api/mediaUpload";
 
 const MediaPreview = ({ file, onRemove }) => {
   const [url, setUrl] = useState("");
@@ -79,13 +80,16 @@ const CreatePost = ({ onSuccess }) => {
             : "text";
 
     try {
-      const formData = new FormData();
-      formData.append("content", content);
-      formData.append("post_type", postType);
-      images.forEach((image) => formData.append("images", image));
-
-      const { data } = await api.post("/api/post/add", formData, {
-        headers: { Authorization: `Bearer ${await getToken()}` },
+      const token = await getToken();
+      const uploadedKeys = await Promise.all(
+        images.map((image) => uploadMedia(image, "posts", token))
+      );
+      const { data } = await api.post("/api/post/add", {
+        content,
+        post_type: postType,
+        uploadedKeys,
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (!data.success) throw new Error(data.message);
@@ -108,12 +112,19 @@ const CreatePost = ({ onSuccess }) => {
     <Box sx={onSuccess ? undefined : { minHeight: "100vh", bgcolor: "background.default", pt: 10, px: 2 }}>
       <Paper
         variant="outlined"
-        sx={{ width: "100%", maxWidth: onSuccess ? "none" : 576, mx: "auto", p: { xs: 2, sm: 2.5 }, borderRadius: 3 }}
+        sx={{
+          width: "100%",
+          maxWidth: onSuccess ? "none" : 576,
+          mx: "auto",
+          p: { xs: 1.75, sm: 2.25 },
+          borderRadius: 5,
+          boxShadow: 1,
+        }}
       >
         <Stack spacing={2}>
-          <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
+          <Stack direction="row" spacing={1.25} sx={{ alignItems: "center" }}>
             <Box sx={{ position: "relative" }}>
-              <Avatar src={user.profile_picture || undefined} alt={user.full_name} sx={{ width: 44, height: 44 }}>
+              <Avatar src={user.profile_picture || undefined} alt={user.full_name} sx={{ width: 42, height: 42 }}>
                 {user.full_name?.charAt(0)}
               </Avatar>
               <Box
@@ -132,14 +143,19 @@ const CreatePost = ({ onSuccess }) => {
 
           <TextField
             multiline
-            minRows={3}
+            minRows={2}
             maxRows={8}
             fullWidth
             variant="standard"
             placeholder={t("feed.whats_on_mind")}
             value={content}
             onChange={(event) => setContent(event.target.value)}
-            slotProps={{ input: { disableUnderline: true } }}
+            slotProps={{
+              input: {
+                disableUnderline: true,
+                sx: { fontSize: 15, lineHeight: 1.65 },
+              },
+            }}
           />
 
           {images.length > 0 && (
@@ -154,8 +170,8 @@ const CreatePost = ({ onSuccess }) => {
             </Stack>
           )}
 
-          <Stack direction="row" spacing={2} sx={{ alignItems: "center", justifyContent: "space-between", pt: 2, borderTop: 1, borderColor: "divider" }}>
-            <Button component="label" startIcon={<Image size={20} />}>
+          <Stack direction="row" spacing={2} sx={{ alignItems: "center", justifyContent: "space-between", pt: 1.75, borderTop: 1, borderColor: "divider" }}>
+            <Button component="label" color="inherit" startIcon={<Image size={19} />}>
               {t("feed.photo_video")}
               <Box
                 component="input"
@@ -171,7 +187,7 @@ const CreatePost = ({ onSuccess }) => {
             </Button>
             <Button
               variant="contained"
-              startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <Send size={17} />}
+              startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <Send size={16} />}
               onClick={handleSubmit}
               disabled={loading || (!content.trim() && !images.length)}
             >

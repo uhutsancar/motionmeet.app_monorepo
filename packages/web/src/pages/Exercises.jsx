@@ -96,20 +96,26 @@ const Exercises = () => {
     }, [searchQuery, muscleFilter, equipmentFilter, getToken]);
 
     return (
-        <Box sx={{ display: "flex", flexDirection: { xs: "column", md: "row" }, height: "100%", minHeight: "100vh", overflow: "hidden" }}>
+        <Box sx={{
+            display: "flex",
+            flexDirection: { xs: "column", md: "row" },
+            height: { xs: "auto", md: "100%" },
+            minHeight: "100%",
+            overflow: { xs: "visible", md: "hidden" },
+        }}>
 
             {/* ── Left: Detail Panel ── */}
-            <Box sx={{ flex: 1, px: { xs: 2, sm: 4 }, py: 3, overflowY: "auto" }}>
-                <Stack direction="row" alignItems="center" spacing={1.5} mb={4}>
+            <Box sx={{ order: { xs: 2, md: 1 }, flex: 1, minWidth: 0, px: { xs: 1.5, sm: 3, lg: 4 }, py: { xs: 3, md: 4 }, overflowY: { xs: "visible", md: "auto" } }}>
+                <Stack direction="row" alignItems="center" spacing={1.5} mb={{ xs: 2.5, md: 4 }}>
                     <Box sx={{ p: 1, bgcolor: "primary.main", borderRadius: 2, display: "flex" }}>
                         <Activity size={22} color="#fff" />
                     </Box>
-                    <Typography variant="h5" fontWeight={800}>{t("menu.exercises")}</Typography>
+                    <Typography variant="h4" sx={{ fontSize: { xs: 27, sm: 32 } }}>{t("menu.exercises")}</Typography>
                 </Stack>
 
                 <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "center", minHeight: 400 }}>
                     {selectedExercise ? (
-                        <Paper elevation={0} sx={{ width: "100%", maxWidth: 760, borderRadius: 4, border: 1, borderColor: "divider", p: { xs: 3, sm: 4 } }}>
+                        <Paper elevation={1} sx={{ width: "100%", maxWidth: 780, borderRadius: 5, border: 1, borderColor: "divider", p: { xs: 2, sm: 4 } }}>
                             {/* Header */}
                             <Stack direction={{ xs: "column", sm: "row" }} spacing={3} alignItems={{ sm: "center" }} mb={4}>
                                 <ExerciseImage gifUrl={selectedExercise.gifUrl} size={120} />
@@ -207,8 +213,8 @@ const Exercises = () => {
                         </Paper>
                     ) : (
                         <Paper variant="outlined" sx={{
-                            width: "100%", maxWidth: 420, height: 400,
-                            borderRadius: 6, borderStyle: "dashed",
+                            width: "100%", maxWidth: 440, height: { xs: 290, md: 400 },
+                            borderRadius: 5, borderStyle: "dashed",
                             display: "flex", flexDirection: "column",
                             alignItems: "center", justifyContent: "center", p: 5,
                         }}>
@@ -225,10 +231,15 @@ const Exercises = () => {
             {/* ── Right: Library Sidebar ── */}
             <Paper elevation={2} sx={{
                 width: { xs: "100%", md: 340, lg: 380 },
+                order: { xs: 1, md: 2 },
                 display: "flex", flexDirection: "column",
+                flexShrink: 0,
+                maxHeight: { xs: 590, md: "none" },
                 borderRadius: 0,
-                borderLeft: 1, borderColor: "divider",
-                p: 3,
+                borderLeft: { xs: 0, md: 1 },
+                borderBottom: { xs: 1, md: 0 },
+                borderColor: "divider",
+                p: { xs: 2, md: 3 },
             }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
                     <Typography variant="subtitle1" fontWeight={700}>{t("exercises.library")}</Typography>
@@ -278,7 +289,7 @@ const Exercises = () => {
                 </Stack>
 
                 {/* Exercise List */}
-                <Box sx={{ flex: 1, overflowY: "auto" }}>
+                <Box className="no-scrollbar" sx={{ flex: 1, minHeight: 0, overflowY: "auto", maxHeight: { xs: 360, md: "none" } }}>
                     {exercises.length > 0 ? (
                         exercises.map((exercise) => {
                             const isSelected = selectedExercise?._id === exercise._id;
@@ -288,7 +299,7 @@ const Exercises = () => {
                                     onClick={() => setSelectedExercise(exercise)}
                                     sx={{
                                         display: "flex", alignItems: "center", gap: 1.5,
-                                        p: 1.5, mb: 0.5, borderRadius: 2, cursor: "pointer",
+                                        p: 1.25, mb: 0.5, borderRadius: 3, cursor: "pointer",
                                         bgcolor: isSelected ? "action.selected" : "transparent",
                                         "&:hover": { bgcolor: "action.hover" },
                                         transition: "background 0.15s",

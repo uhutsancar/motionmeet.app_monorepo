@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, Dimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, ScrollView, useWindowDimensions } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
@@ -11,12 +11,13 @@ import { useAuthContext } from '../context/AuthProvider';
 import { Appbar, Text, Surface, TouchableRipple, ActivityIndicator, Divider, Chip, Button } from 'react-native-paper';
 import { useMuscleGroups } from '../hooks/useMuscleGroups';
 
-const { width } = Dimensions.get('window');
-const RADAR_SIZE = width - 80;
-const CENTER = RADAR_SIZE / 2;
-const RADIUS = RADAR_SIZE / 2 - 30;
-
 const MonthlyReportScreen = ({ navigation }) => {
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const chartWidth = Math.min(width - 32, 688);
+  const RADAR_SIZE = Math.min(width - 80, 420);
+  const CENTER = RADAR_SIZE / 2;
+  const RADIUS = RADAR_SIZE / 2 - 30;
   const { t } = useTranslation();
   const { theme } = useTheme();
 
@@ -43,7 +44,7 @@ const MonthlyReportScreen = ({ navigation }) => {
       }
     };
     fetchMonthlyStats();
-  }, []);
+  }, [getToken]);
 
   const chartLabels = statsData?.stats?.labels?.length ? statsData.stats.labels : ['', '', '', '', '', ''];
 
@@ -137,7 +138,7 @@ const MonthlyReportScreen = ({ navigation }) => {
         <Appbar.Content title={monthName} titleStyle={{ fontWeight: '700', fontSize: 18, color: theme.text }} />
       </Appbar.Header>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
 
         {/* Title & Subtitle */}
         <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12 }}>
@@ -174,7 +175,7 @@ const MonthlyReportScreen = ({ navigation }) => {
                 labels: slicedLabels,
                 datasets: [{ data: safeData }],
               }}
-              width={width - 32}
+              width={chartWidth}
               height={200}
               fromZero
               chartConfig={{
@@ -309,8 +310,8 @@ const MonthlyReportScreen = ({ navigation }) => {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, backgroundColor: theme.background, borderTopWidth: 1, borderTopColor: theme.border }}>
-        <Button mode="contained" buttonColor={theme.primary} textColor="#000" icon="share-variant" style={{ borderRadius: 12 }} contentStyle={{ paddingVertical: 6 }} labelStyle={{ fontSize: 16, fontWeight: 'bold' }}>
+      <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingTop: 14, paddingBottom: Math.max(insets.bottom, 14), backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border }}>
+        <Button mode="contained" buttonColor={theme.primary} textColor="#FFFFFF" icon="share-variant" style={{ borderRadius: 14 }} contentStyle={{ minHeight: 50 }} labelStyle={{ fontSize: 15, fontWeight: '900' }}>
             {t('monthly_report.share', 'Paylaş')}
         </Button>
       </View>

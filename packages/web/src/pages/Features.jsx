@@ -7,7 +7,7 @@ import { Box, Stack, Typography, Button, Container, Grid, Paper, useTheme } from
 
 const ICONS = [Dumbbell, TrendingUp, ListChecks, MessageSquare, BookOpen, BarChart2];
 const COLORS = [
-  { main: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' },
+  { main: '#6558F5', bg: 'rgba(101, 88, 245, 0.1)' },
   { main: '#22c55e', bg: 'rgba(34, 197, 94, 0.1)' },
   { main: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)' },
   { main: '#ec4899', bg: 'rgba(236, 72, 153, 0.1)' },
@@ -63,7 +63,7 @@ const FeatureRow = ({ index }) => {
       <Stack direction="row" alignItems="flex-end" spacing={0.5} sx={{ height: 96 }}>
         {[40, 55, 50, 72, 65, 90, 85].map((h, i) => (
           <Box key={i} sx={{ flex: 1, position: 'relative', height: `${h}%` }}>
-            <Box sx={{ width: '100%', height: '100%', borderRadius: 1, bgcolor: '#3b82f6', opacity: 0.8 }} />
+            <Box sx={{ width: '100%', height: '100%', borderRadius: 1, bgcolor: '#6558F5', opacity: 0.8 }} />
             {i === 5 && <Box sx={{ position: 'absolute', top: -20, left: '50%', transform: 'translateX(-50%)', bgcolor: '#fbbf24', color: 'white', fontSize: 9, fontWeight: 'bold', px: 0.5, py: 0.25, borderRadius: 1 }}>PR!</Box>}
           </Box>
         ))}
@@ -72,7 +72,7 @@ const FeatureRow = ({ index }) => {
         {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'].map(m => <Typography key={m} component="span" variant="inherit">{m}</Typography>)}
       </Stack>
       <Grid container spacing={1}>
-        {[{ l: 'Total Volume', v: '23,500 kg', c: '#3b82f6' }, { l: 'Personal Record', v: '90 kg', c: '#f59e0b' }].map(({ l, v, c }) => (
+        {[{ l: 'Total Volume', v: '23,500 kg', c: '#6558F5' }, { l: 'Personal Record', v: '90 kg', c: '#f59e0b' }].map(({ l, v, c }) => (
           <Grid item xs={6} key={l}>
             <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>{l}</Typography>
@@ -86,7 +86,7 @@ const FeatureRow = ({ index }) => {
     <Stack spacing={1} key="3">
       {['Push Day A', 'Pull Day B', 'Leg Day C'].map((r, i) => (
         <Stack key={i} direction="row" alignItems="center" spacing={1.5} sx={{ p: 1.5, borderRadius: 3, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
-          <Box sx={{ width: 32, height: 32, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: ['#3b82f6', '#8b5cf6', '#22c55e'][i], color: 'white', fontWeight: 'bold', fontSize: 14 }}>
+          <Box sx={{ width: 32, height: 32, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: ['#6558F5', '#8A80FF', '#12A88A'][i], color: 'white', fontWeight: 'bold', fontSize: 14 }}>
             {['P', 'P', 'L'][i]}
           </Box>
           <Box sx={{ flex: 1 }}>
@@ -134,7 +134,7 @@ const FeatureRow = ({ index }) => {
       </Stack>
       {[{ name: 'Bench Press', muscle: 'Chest', eq: 'Barbell' }, { name: 'Incline DB Press', muscle: 'Chest', eq: 'Dumbbell' }, { name: 'Cable Fly', muscle: 'Chest', eq: 'Cable' }].map((e, i) => (
         <Stack key={i} direction="row" alignItems="center" spacing={1.5} sx={{ p: 1.5, borderRadius: 3, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
-          <Box sx={{ width: 36, height: 36, borderRadius: 2, bgcolor: 'rgba(59, 130, 246, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6' }}>
+          <Box sx={{ width: 36, height: 36, borderRadius: 2, bgcolor: 'rgba(101, 88, 245, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6558F5' }}>
             <Dumbbell size={16} />
           </Box>
           <Box>
@@ -147,7 +147,7 @@ const FeatureRow = ({ index }) => {
     /* 6 – Insights */
     <Stack spacing={1.5} key="6">
       <Grid container spacing={1}>
-        {[{ l: 'Weekly Workouts', v: '5', c: '#3b82f6' }, { l: 'Avg Duration', v: '62 min', c: '#22c55e' }, { l: 'Total Volume', v: '84,200 kg', c: '#8b5cf6' }, { l: 'Calories', v: '12,400 kcal', c: '#f59e0b' }].map(({ l, v, c }) => (
+        {[{ l: 'Weekly Workouts', v: '5', c: '#6558F5' }, { l: 'Avg Duration', v: '62 min', c: '#12A88A' }, { l: 'Total Volume', v: '84,200 kg', c: '#8A80FF' }, { l: 'Calories', v: '12,400 kcal', c: '#f59e0b' }].map(({ l, v, c }) => (
           <Grid item xs={6} key={l}>
             <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
               <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: 10, mb: 0.5, display: 'block' }}>{l}</Typography>
@@ -161,7 +161,7 @@ const FeatureRow = ({ index }) => {
         <Stack direction="row" spacing={0.5}>
           {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d, i) => (
             <Box key={d} sx={{ flex: 1, textAlign: 'center' }}>
-              <Box sx={{ width: '100%', aspectRatio: '1/1', borderRadius: 0.5, mb: 0.5, bgcolor: [true, true, false, true, true, false, false][i] ? '#3b82f6' : 'divider' }} />
+              <Box sx={{ width: '100%', aspectRatio: '1/1', borderRadius: 0.5, mb: 0.5, bgcolor: [true, true, false, true, true, false, false][i] ? '#6558F5' : 'divider' }} />
               <Typography sx={{ fontSize: 9, color: 'text.secondary' }}>{d[0]}</Typography>
             </Box>
           ))}
@@ -212,7 +212,7 @@ const Features = () => {
     <PublicLayout>
       {/* Hero */}
       <Box sx={{ position: 'relative', overflow: 'hidden', py: { xs: 10, sm: 14 }, px: { xs: 2, sm: 3 }, textAlign: 'center' }}>
-        <Box sx={{ position: 'absolute', top: -128, left: '50%', transform: 'translateX(-50%)', width: 700, height: 400, borderRadius: '50%', bgcolor: 'rgba(37, 99, 235, 0.1)', filter: 'blur(80px)', pointerEvents: 'none' }} />
+        <Box sx={{ position: 'absolute', top: -128, left: '50%', transform: 'translateX(-50%)', width: 700, height: 400, borderRadius: '50%', bgcolor: 'rgba(101, 88, 245, 0.1)', filter: 'blur(80px)', pointerEvents: 'none' }} />
         
         <Container maxWidth="md" sx={{ position: 'relative', zIndex: 1 }}>
           <Stack spacing={3} alignItems="center">

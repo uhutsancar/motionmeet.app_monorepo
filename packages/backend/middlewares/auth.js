@@ -1,6 +1,7 @@
 import User from "../models/User.js";
 import { getOrCreateFreePlan } from "../utils/plans.js";
-import jwt from "jsonwebtoken";
+import { verifyAccessToken } from "../utils/authTokens.js";
+import { isUserId } from "../utils/validation.js";
 
 export const protect = async (req, res, next) => {
   try {
@@ -14,8 +15,12 @@ export const protect = async (req, res, next) => {
       return res.status(401).json({ success: false, message: "Not authenticated, no token" });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = verifyAccessToken(token);
+    if (!isUserId(decoded.id)) {
+      return res.status(401).json({ success: false, message: "Not authenticated, token failed" });
+    }
     req.userId = decoded.id;
+    req.sessionId = decoded.sid;
     next();
   } catch (error) {
     console.warn("Authentication failed:", error.message);

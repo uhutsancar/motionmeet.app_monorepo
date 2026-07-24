@@ -1,8 +1,20 @@
 import imagekit from "../configs/imageKit.js";
-import { deleteFromS3, extractS3Key, uploadToS3 } from "../utils/s3Utils.js";
+import bcrypt from "bcryptjs";
+import { extractS3Key, uploadToS3 } from "../utils/s3Utils.js";
 import { isFiniteNumber, isNonEmptyString, isOptionalString, isUserId } from "../utils/validation.js";
 import { hasValidMediaSignature } from "../utils/mediaValidation.js";
 import * as userService from "../services/userService.js";
+import * as accountService from "../services/accountService.js";
+import { parsePagination } from "../utils/pagination.js";
+import { escapeHtml } from "../utils/html.js";
+import {
+  commitReservedUploads,
+  discardReservedUploads,
+  resolveReservedUploads,
+} from "../services/mediaUploadService.js";
+import { PRIVACY_KEYS } from "@motionmeet/shared";
+import { deleteMediaOrQueue } from "../services/mediaDeletionService.js";
+import { runWithRedisLock } from "../configs/redis.js";
 
 import sendEmail from "../configs/nodeMailer.js";
 
@@ -16,11 +28,102 @@ export const getUserData = async (req, res, next) => {
   }
 };
 
+const PRIVACY_KEY_SET = new Set(PRIVACY_KEYS);
+
+export const getPrivacySettings = async (req, res, next) => {
+  try {
+    const user = await userService.getUserById(req.userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+    return res.json({ success: true, privacy: user.privacy });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const updatePrivacySettings = async (req, res, next) => {
+  try {
+    const updates = Object.entries(req.body || {});
+    if (
+      updates.length === 0 ||
+      updates.some(([key, value]) => !PRIVACY_KEY_SET.has(key) || typeof value !== "boolean")
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Privacy settings must contain supported boolean values",
+      });
+    }
+
+    const update = Object.fromEntries(
+      updates.map(([key, value]) => [`privacy.${key}`, value])
+    );
+    const user = await userService.updateUser(req.userId, update);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+    return res.json({ success: true, privacy: user.privacy });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const exportAccount = async (req, res, next) => {
+  try {
+    res.set({
+      "Cache-Control": "no-store",
+      "Content-Disposition": `attachment; filename="motionmeet-export-${new Date()
+        .toISOString()
+        .slice(0, 10)}.json"`,
+      "Content-Type": "application/json; charset=utf-8",
+    });
+    let streamed = false;
+    const acquired = await runWithRedisLock(
+      `account-export:${req.userId}`,
+      15 * 60,
+      async () => {
+        streamed = await accountService.streamAccountData(req.userId, res);
+      }
+    );
+    if (!acquired) {
+      return res.status(409).json({
+        success: false,
+        message: "An account export is already in progress",
+      });
+    }
+    if (!streamed) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+    return undefined;
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const deleteAccount = async (req, res, next) => {
+  try {
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
+    if (!password || Buffer.byteLength(password, "utf8") > 72) {
+      return res.status(400).json({ success: false, message: "Password is required" });
+    }
+
+    const user = await userService.getUserByIdWithPassword(req.userId);
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return res.status(401).json({ success: false, message: "Password is incorrect" });
+    }
+
+    await accountService.deleteAccountData(req.userId);
+    return res.json({ success: true, message: "Account permanently deleted" });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 export const updateUserData = async (req, res, next) => {
   try {
     const userId = req.userId;
     const { username, bio, location, full_name, weight, height } = req.body || {};
-    const user = await userService.getUserById(userId);
+    const user = await userService.getUserForProfileUpdate(userId);
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
     if (username !== undefined && (!isNonEmptyString(username, 30) || !/^[A-Za-z0-9._-]{3,30}$/.test(username.trim()))) {
@@ -57,30 +160,69 @@ export const updateUserData = async (req, res, next) => {
     if ((profile || cover) && !imagekit) {
       return res.status(503).json({ success: false, message: "Media service is not configured" });
     }
+    const [reservedProfiles, reservedCovers] = await Promise.all([
+      resolveReservedUploads(userId, "profiles", req.body?.uploadedProfileKey),
+      resolveReservedUploads(userId, "covers", req.body?.uploadedCoverKey),
+    ]);
+    if ((profile && reservedProfiles.length) || (cover && reservedCovers.length)) {
+      return res.status(400).json({ success: false, message: "Supply one upload for each profile field" });
+    }
 
     const oldMediaKeys = [];
-    if (profile) {
-      const { key } = await uploadToS3(profile.buffer, profile.originalname, "profiles", profile.mimetype);
-      updatedData.profile_picture = imagekit.url({
-        path: key,
-        transformation: [{ width: "512" }, { quality: "auto" }, { format: "webp" }],
-      });
-      const oldKey = extractS3Key(user.profile_picture);
+    const reservedUploads = [...reservedProfiles, ...reservedCovers];
+    const newMediaKeys = reservedUploads.map(({ key }) => key);
+    if (reservedProfiles[0]) {
+      updatedData.profile_picture = reservedProfiles[0].url;
+      updatedData.profile_picture_key = reservedProfiles[0].key;
+      const oldKey = user.profile_picture_key || extractS3Key(user.profile_picture);
       if (oldKey) oldMediaKeys.push(oldKey);
     }
-
-    if (cover) {
-      const { key } = await uploadToS3(cover.buffer, cover.originalname, "covers", cover.mimetype);
-      updatedData.cover_photo = imagekit.url({
-        path: key,
-        transformation: [{ width: "1280" }, { quality: "auto" }, { format: "webp" }],
-      });
-      const oldKey = extractS3Key(user.cover_photo);
+    if (reservedCovers[0]) {
+      updatedData.cover_photo = reservedCovers[0].url;
+      updatedData.cover_photo_key = reservedCovers[0].key;
+      const oldKey = user.cover_photo_key || extractS3Key(user.cover_photo);
       if (oldKey) oldMediaKeys.push(oldKey);
     }
+    try {
+      if (profile) {
+        const { key } = await uploadToS3(profile.buffer, profile.originalname, "profiles", profile.mimetype);
+        newMediaKeys.push(key);
+        updatedData.profile_picture = imagekit.url({
+          path: key,
+          transformation: [{ width: "512" }, { quality: "auto" }, { format: "webp" }],
+          transformationPosition: "query",
+        });
+        updatedData.profile_picture_key = key;
+        const oldKey = user.profile_picture_key || extractS3Key(user.profile_picture);
+        if (oldKey) oldMediaKeys.push(oldKey);
+      }
 
-    const updatedUser = await userService.updateUser(userId, updatedData);
-    await Promise.all(oldMediaKeys.map((key) => deleteFromS3(key)));
+      if (cover) {
+        const { key } = await uploadToS3(cover.buffer, cover.originalname, "covers", cover.mimetype);
+        newMediaKeys.push(key);
+        updatedData.cover_photo = imagekit.url({
+          path: key,
+          transformation: [{ width: "1280" }, { quality: "auto" }, { format: "webp" }],
+          transformationPosition: "query",
+        });
+        updatedData.cover_photo_key = key;
+        const oldKey = user.cover_photo_key || extractS3Key(user.cover_photo);
+        if (oldKey) oldMediaKeys.push(oldKey);
+      }
+    } catch (error) {
+      await discardReservedUploads(newMediaKeys);
+      throw error;
+    }
+
+    let updatedUser;
+    try {
+      updatedUser = await userService.updateUser(userId, updatedData);
+    } catch (error) {
+      await discardReservedUploads(newMediaKeys);
+      throw error;
+    }
+    await commitReservedUploads(reservedUploads.map(({ key }) => key));
+    await deleteMediaOrQueue(oldMediaKeys);
     return res.json({ success: true, user: updatedUser, message: "Profile updated successfully" });
   } catch (error) {
     return next(error);
@@ -104,8 +246,8 @@ export const discoverUsers = async (req, res, next) => {
 export const followUser = async (req, res, next) => {
   try {
     const targetId = req.body?.id;
-    if (!(await userService.validateTargetUser(req.userId, targetId))) {
-      return res.status(400).json({ success: false, message: "Invalid user" });
+    if (!(await userService.validateTargetUser(req.userId, targetId, "allowFollowers"))) {
+      return res.status(403).json({ success: false, message: "This user does not allow followers" });
     }
 
     await userService.followUser(req.userId, targetId);
@@ -132,8 +274,8 @@ export const unfollowUser = async (req, res, next) => {
 export const sendConnectionRequest = async (req, res, next) => {
   try {
     const targetId = req.body?.id;
-    if (!(await userService.validateTargetUser(req.userId, targetId))) {
-      return res.status(400).json({ success: false, message: "Invalid user" });
+    if (!(await userService.validateTargetUser(req.userId, targetId, "allowFollowers"))) {
+      return res.status(403).json({ success: false, message: "This user does not allow connection requests" });
     }
 
     const recentRequestCount = await userService.checkRecentConnectionRequests(req.userId);
@@ -148,21 +290,33 @@ export const sendConnectionRequest = async (req, res, next) => {
     }
     if (connection) return res.json({ success: false, message: "Connection request pending" });
 
-    await userService.createConnection(req.userId, targetId);
+    try {
+      await userService.createConnection(req.userId, targetId);
+    } catch (error) {
+      if (error?.code === 11000) {
+        return res.status(409).json({
+          success: false,
+          message: "Connection request already exists",
+        });
+      }
+      throw error;
+    }
     
     const recipient = await userService.getUserById(targetId);
     const sender = await userService.getUserById(req.userId);
     if (recipient && sender) {
-      await sendEmail({
+      void sendEmail({
         to: recipient.email,
         subject: "New Connection Request",
         body: `
           <div style="font-family: Arial, sans-serif; padding: 20px;">
-            <h2>Hi ${recipient.full_name},</h2>
-            <p>You have a new connection request from ${sender.full_name} - @${sender.username}</p>
+            <h2>Hi ${escapeHtml(recipient.full_name)},</h2>
+            <p>You have a new connection request from ${escapeHtml(sender.full_name)} - @${escapeHtml(sender.username)}</p>
             <p>Click <a href="${process.env.FRONTEND_URL}/connections">here</a> to review it.</p>
             <p>Thanks,<br/>MotionMeet</p>
           </div>`,
+      }).catch((error) => {
+        console.error("Connection email failed:", error.message);
       });
     }
 
@@ -206,10 +360,23 @@ export const getUserProfile = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Invalid profile id" });
     }
 
-    const result = await userService.getUserProfileAndPosts(profileId, req.userId);
+    const pagination = parsePagination(req.query, { defaultLimit: 30, maxLimit: 50 });
+    const result = await userService.getUserProfileAndPosts(
+      profileId,
+      req.userId,
+      pagination
+    );
     if (!result) return res.json({ success: false, message: "Profile not found" });
+    if (result.restricted) {
+      return res.status(403).json({ success: false, message: "This profile is private" });
+    }
 
-    return res.json({ success: true, profile: result.profile, posts: result.posts });
+    return res.json({
+      success: true,
+      profile: result.profile,
+      posts: result.posts,
+      nextCursor: result.nextCursor,
+    });
   } catch (error) {
     return next(error);
   }

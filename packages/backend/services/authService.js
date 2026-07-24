@@ -3,11 +3,16 @@ import { getOrCreateFreePlan } from "../utils/plans.js";
 import { v4 as uuidv4 } from "uuid";
 
 export const getUserByEmailOrUsername = async (email, username) => {
-  return await User.findOne({ $or: [{ email }, { username }] });
+  return await User.findOne({
+    $or: [
+      { email: String(email).trim().toLowerCase() },
+      { username: String(username).trim().toLowerCase() },
+    ],
+  });
 };
 
 export const getUserByEmailWithPassword = async (email) => {
-  return await User.findOne({ email }).select("+password");
+  return await User.findOne({ email: String(email).trim().toLowerCase() }).select("+password");
 };
 
 export const createUser = async (email, hashedPassword, full_name, username) => {

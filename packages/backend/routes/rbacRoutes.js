@@ -3,6 +3,11 @@ import { protect, attachDbUser, authorizeRole } from "../middlewares/auth.js";
 import User from "../models/User.js";
 import Plan from "../models/Plan.js";
 import { isObjectId, isUserId } from "../utils/validation.js";
+import {
+  cursorFilter,
+  pageFromDocuments,
+  parsePagination,
+} from "../utils/pagination.js";
 
 const router = express.Router();
 
@@ -13,8 +18,21 @@ router.use(authorizeRole("superadmin"));
 
 router.get("/users", async (req, res, next) => {
   try {
-    const users = await User.find().populate("plan").select("-__v");
-    res.status(200).json({ success: true, users });
+    const pagination = parsePagination(req.query, {
+      defaultLimit: 50,
+      maxLimit: 100,
+    });
+    const users = await User.find(cursorFilter(pagination.cursor, "createdAt"))
+      .populate("plan")
+      .select("-__v -followers -following -connections")
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(pagination.limit + 1);
+    const page = pageFromDocuments(users, pagination.limit, "createdAt");
+    res.status(200).json({
+      success: true,
+      users: page.items,
+      nextCursor: page.nextCursor,
+    });
   } catch (error) {
     next(error);
   }

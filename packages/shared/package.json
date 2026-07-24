@@ -1,0 +1,11 @@
+{
+  "name": "@motionmeet/shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.js",
+  "scripts": {
+    "build": "node --check src/index.js",
+    "typecheck": "tsc --noEmit --allowJs --checkJs --moduleResolution Bundler --module ESNext --target ES2022 src/index.js"
+  }
+}

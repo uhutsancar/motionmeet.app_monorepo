@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -16,11 +16,7 @@ const AdvancedStatisticsScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [muscleData, setMuscleData] = useState([]);
 
-  useEffect(() => {
-    fetchStats();
-  }, []);
-
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
       const token = await getToken();
       const data = await endpoints.getWorkoutStats('month', token);
@@ -35,7 +31,11 @@ const AdvancedStatisticsScreen = ({ navigation }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getToken]);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
 
   const styles = useMemo(() => ({
     container: { flex: 1, backgroundColor: theme.background },

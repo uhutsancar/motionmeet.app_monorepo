@@ -1,4 +1,5 @@
 import { useAuthContext } from "../context/AuthProvider.jsx";
+import api from "../api/axios.js";
 import {
   Accordion,
   AccordionDetails,
@@ -20,6 +21,7 @@ import {
   Switch,
   ToggleButton,
   ToggleButtonGroup,
+  TextField,
   Typography,
 } from "@mui/material";
 import {
@@ -36,9 +38,10 @@ import {
   Sun,
   User,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import { useAppTheme } from "~/context/appThemeContext";
 
 const readPreferences = (key) => {
@@ -55,7 +58,7 @@ const Section = ({ icon: Icon, title, children = null }) => (
       <Icon size={20} color="currentColor" />
       <Typography variant="h6" sx={{ fontWeight: 800 }}>{title}</Typography>
     </Stack>
-    <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: "hidden" }}>
+    <Paper variant="outlined" sx={{ borderRadius: 4, overflow: "hidden", boxShadow: 1 }}>
       <Stack divider={<Divider flexItem />}>{children}</Stack>
     </Paper>
   </Stack>
@@ -96,9 +99,11 @@ const FaqItem = ({ question, answer }) => (
 const Settings = () => {
   const { t, i18n } = useTranslation();
   const { theme, toggleTheme } = useAppTheme();
-  const { signOut, user } = useAuthContext();
+  const { signOut, user, getToken } = useAuthContext();
   const navigate = useNavigate();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [accountRequestPending, setAccountRequestPending] = useState(false);
   const [notifPrefs, setNotifPrefs] = useState({
     pushEnabled: true,
     newFollower: true,
@@ -115,7 +120,6 @@ const Settings = () => {
     allowFollowers: true,
     showInSearch: true,
     allowMessages: true,
-    ...readPreferences("@mm_privacy_prefs"),
   });
   const isTr = i18n.language.startsWith("tr");
 
@@ -132,29 +136,113 @@ const Settings = () => {
     });
   };
 
+  useEffect(() => {
+    let active = true;
+    const loadPrivacy = async () => {
+      try {
+        const token = await getToken();
+        const { data } = await api.get("/api/user/privacy", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (active && data?.privacy) setPrivacyPrefs(data.privacy);
+      } catch (error) {
+        console.error("Privacy settings could not be loaded:", error.message);
+      }
+    };
+    loadPrivacy();
+    return () => {
+      active = false;
+    };
+  }, [getToken]);
+
+  const togglePrivacy = async (key) => {
+    const previous = privacyPrefs;
+    const updated = { ...privacyPrefs, [key]: !privacyPrefs[key] };
+    setPrivacyPrefs(updated);
+    try {
+      const token = await getToken();
+      const { data } = await api.patch(
+        "/api/user/privacy",
+        { [key]: updated[key] },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (data?.privacy) setPrivacyPrefs(data.privacy);
+    } catch (error) {
+      setPrivacyPrefs(previous);
+      toast.error(error.response?.data?.message || "Privacy setting could not be saved.");
+    }
+  };
+
+  const exportData = async () => {
+    try {
+      setAccountRequestPending(true);
+      const token = await getToken();
+      const response = await api.get("/api/user/export", {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(response.data);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `motionmeet-export-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Data export failed.");
+    } finally {
+      setAccountRequestPending(false);
+    }
+  };
+
+  const deleteAccount = async () => {
+    try {
+      setAccountRequestPending(true);
+      const token = await getToken();
+      await api.delete("/api/user/account", {
+        headers: { Authorization: `Bearer ${token}` },
+        data: { password: deletePassword },
+      });
+      setDeleteDialogOpen(false);
+      setDeletePassword("");
+      await signOut();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Account could not be deleted.");
+    } finally {
+      setAccountRequestPending(false);
+    }
+  };
+
   const faqs = [
     { question: t("support.faq1_q", "Antrenman verilerim nerede saklanıyor?"), answer: t("support.faq1_a", "Tüm verileriniz güvenli bulut sunucularımızda şifrelenmiş olarak saklanır.") },
-    { question: t("support.faq2_q", "Şifremi nasıl sıfırlarım?"), answer: t("support.faq2_a", "Giriş ekranındaki Şifremi Unuttum seçeneğini kullanabilirsiniz.") },
-    { question: t("support.faq3_q", "Verilerimi dışa aktarabilir miyim?"), answer: t("support.faq3_a", "Veri dışa aktarma özelliği gelecek bir güncellemede eklenecektir.") },
+    { question: t("support.faq2_q", "Şifremi nasıl sıfırlarım?"), answer: t("support.faq2_a", "Şifre sıfırlama desteği için support@motionmeet.app adresinden bize ulaşabilirsiniz.") },
+    { question: t("support.faq3_q", "Verilerimi dışa aktarabilir miyim?"), answer: t("support.faq3_a", "Evet. Ayarlar içindeki Gizlilik ve Veri bölümünden verilerinizi dışa aktarabilirsiniz.") },
     { question: t("support.faq4_q", "Uygulama hangi platformlarda çalışıyor?"), answer: t("support.faq4_a", "MotionMeet iOS, Android ve Web üzerinde kullanılabilir.") },
     { question: t("support.faq5_q", "Bildirimler gelmiyor, ne yapmalıyım?"), answer: t("support.faq5_a", "Ayarlar bölümünden bildirimlerin açık olduğunu kontrol edin.") },
   ];
 
   return (
-    <Box sx={{ width: "100%", minHeight: "100vh", overflowY: "auto", py: { xs: 2, sm: 3 }, pb: 10 }}>
-      <Stack spacing={4} sx={{ maxWidth: 768, mx: "auto", px: { xs: 2, sm: 4 } }}>
-        <Typography variant="h4" sx={{ fontWeight: 900 }}>{t("settings.title", "Ayarlar")}</Typography>
+    <Box sx={{ width: "100%", minHeight: "100%", py: { xs: 2, md: 4 }, pb: 6 }}>
+      <Stack spacing={3.5} sx={{ maxWidth: 820, mx: "auto", px: { xs: 1.5, sm: 3, md: 4 } }}>
+        <Box>
+          <Typography variant="overline" color="primary" sx={{ fontWeight: 800, letterSpacing: "0.12em" }}>PREFERENCES</Typography>
+          <Typography variant="h4">{t("settings.title", "Ayarlar")}</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+            Manage your account, privacy and app experience.
+          </Typography>
+        </Box>
 
         <Section icon={User} title={t("settings.account", "Hesap")}>
           <ListItemButton onClick={() => navigate("/profile")} sx={{ px: 2, py: 1.5 }}>
             <ListItemAvatar>
-              <Avatar src={user?.imageUrl || undefined} alt={user?.fullName || user?.username}>
-                {user?.fullName?.charAt(0) || <User size={21} />}
+              <Avatar src={user?.profile_picture || undefined} alt={user?.full_name || user?.username}>
+                {user?.full_name?.charAt(0) || <User size={21} />}
               </Avatar>
             </ListItemAvatar>
             <ListItemText
-              primary={user?.fullName || user?.username || "—"}
-              secondary={user?.primaryEmailAddress?.emailAddress || ""}
+              primary={user?.full_name || user?.username || "—"}
+              secondary={user?.email || ""}
               slotProps={{ primary: { sx: { fontWeight: 800 } }, secondary: { variant: "caption" } }}
             />
             <ChevronRight size={17} />
@@ -208,13 +296,14 @@ const Settings = () => {
         </Section>
 
         <Section icon={Lock} title={t("settings.privacy", "Gizlilik")}>
-          <ToggleRow label={t("privacy.public_profile", "Genel Profil")} subtitle={t("privacy.public_sub", "Profiliniz herkes tarafından görülür")} value={privacyPrefs.publicProfile} onChange={() => togglePreference(setPrivacyPrefs, "@mm_privacy_prefs", "publicProfile")} />
-          <ToggleRow label={t("privacy.show_in_search", "Aramada Göster")} value={privacyPrefs.showInSearch} onChange={() => togglePreference(setPrivacyPrefs, "@mm_privacy_prefs", "showInSearch")} />
-          <ToggleRow label={t("privacy.workouts_on_feed", "Antrenmanları Akışta Göster")} subtitle={t("privacy.feed_sub", "Takipçileriniz antrenmanlarınızı görebilir")} value={privacyPrefs.showWorkoutsOnFeed} onChange={() => togglePreference(setPrivacyPrefs, "@mm_privacy_prefs", "showWorkoutsOnFeed")} />
-          <ToggleRow label={t("privacy.allow_followers", "Takipçilere İzin Ver")} value={privacyPrefs.allowFollowers} onChange={() => togglePreference(setPrivacyPrefs, "@mm_privacy_prefs", "allowFollowers")} />
-          <ToggleRow label={t("privacy.allow_messages", "Mesajlara İzin Ver")} value={privacyPrefs.allowMessages} onChange={() => togglePreference(setPrivacyPrefs, "@mm_privacy_prefs", "allowMessages")} />
+          <ToggleRow label={t("privacy.public_profile", "Genel Profil")} subtitle={t("privacy.public_sub", "Profiliniz herkes tarafından görülür")} value={privacyPrefs.publicProfile} onChange={() => togglePrivacy("publicProfile")} />
+          <ToggleRow label={t("privacy.show_in_search", "Aramada Göster")} value={privacyPrefs.showInSearch} onChange={() => togglePrivacy("showInSearch")} />
+          <ToggleRow label={t("privacy.workouts_on_feed", "Antrenmanları Akışta Göster")} subtitle={t("privacy.feed_sub", "Takipçileriniz antrenmanlarınızı görebilir")} value={privacyPrefs.showWorkoutsOnFeed} onChange={() => togglePrivacy("showWorkoutsOnFeed")} />
+          <ToggleRow label={t("privacy.allow_followers", "Takipçilere İzin Ver")} value={privacyPrefs.allowFollowers} onChange={() => togglePrivacy("allowFollowers")} />
+          <ToggleRow label={t("privacy.allow_messages", "Mesajlara İzin Ver")} value={privacyPrefs.allowMessages} onChange={() => togglePrivacy("allowMessages")} />
           <LinkRow label={t("privacy.privacy_policy", "Gizlilik Politikası")} onClick={() => window.open("https://motionmeet.app/privacy", "_blank", "noopener,noreferrer")} external />
           <LinkRow label={t("privacy.terms", "Kullanım Koşulları")} onClick={() => window.open("https://motionmeet.app/terms", "_blank", "noopener,noreferrer")} external />
+          <LinkRow label={t("privacy.export_data", "Verilerimi Dışa Aktar")} onClick={exportData} />
           <LinkRow label={t("privacy.delete_account", "Hesabı Sil")} onClick={() => setDeleteDialogOpen(true)} danger />
         </Section>
 
@@ -226,7 +315,7 @@ const Settings = () => {
           </Stack>
         </Section>
 
-        <Paper variant="outlined" sx={{ borderRadius: 2.5, borderColor: "rgba(239,68,68,.25)", overflow: "hidden" }}>
+        <Paper variant="outlined" sx={{ borderRadius: 4, borderColor: "rgba(229,72,77,.3)", overflow: "hidden" }}>
           <ListItemButton onClick={() => signOut()} sx={{ color: "error.main", p: 2 }}>
             <ListItemAvatar><Avatar variant="rounded" sx={{ bgcolor: "rgba(239,68,68,.1)", color: "error.main" }}><LogOut size={20} /></Avatar></ListItemAvatar>
             <ListItemText primary={t("settings.logout", "Çıkış Yap")} slotProps={{ primary: { variant: "body2", sx: { fontWeight: 800 } } }} />
@@ -244,16 +333,24 @@ const Settings = () => {
           <DialogContentText>
             {t("privacy.delete_confirm", "Bu işlem geri alınamaz. Devam etmek istiyor musunuz?")}
           </DialogContentText>
+          <TextField
+            autoFocus
+            fullWidth
+            margin="normal"
+            type="password"
+            label={t("auth.password", "Şifre")}
+            value={deletePassword}
+            onChange={(event) => setDeletePassword(event.target.value)}
+            autoComplete="current-password"
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDeleteDialogOpen(false)}>{t("common.cancel", "İptal")}</Button>
           <Button
             color="error"
             variant="contained"
-            onClick={() => {
-              setDeleteDialogOpen(false);
-              window.alert(t("privacy.contact_support", "Hesap silmek için lütfen destek ile iletişime geçin: support@motionmeet.app"));
-            }}
+            disabled={!deletePassword || accountRequestPending}
+            onClick={deleteAccount}
           >
             {t("common.continue", "Devam Et")}
           </Button>

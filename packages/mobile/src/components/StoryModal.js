@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthContext } from "../context/AuthProvider";
 import { createStory } from '../api/endpoints';
+import { uploadMedia } from '../api/mediaUpload';
 
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
@@ -194,21 +195,17 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
 
     try {
       setLoading(true);
-      const formData = new FormData();
-      formData.append('content', text);
-      formData.append('media_type', mediaType);
-      formData.append('background_color', background);
-
-      if (media && mode === 'media') {
-        formData.append('media', {
-          uri: media.uri,
-          type: media.type?.includes('video') ? 'video/mp4' : 'image/jpeg',
-          name: media.type?.includes('video') ? 'story_video.mp4' : 'story_image.jpg',
-        });
-      }
-
       let token = await getToken();
-      const data = await createStory(formData, token);
+      const uploadedKey =
+        media && mode === 'media'
+          ? await uploadMedia(media, 'stories', token)
+          : undefined;
+      const data = await createStory({
+        content: text,
+        media_type: mediaType,
+        background_color: background,
+        uploadedKey,
+      }, token);
 
       if (data.success) {
         Alert.alert(t('common.success'), t('feed.story_created'));
@@ -232,7 +229,7 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={styles.container}>
         <Surface elevation={0} style={styles.header}>
           <TouchableRipple onPress={onClose} style={styles.backButton} borderless>
             <Ionicons name="arrow-back" size={24} color={theme.text} />

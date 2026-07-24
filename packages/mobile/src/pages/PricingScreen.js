@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { View, ScrollView, Alert } from 'react-native';
 import { ActivityIndicator, Appbar, Button, Card, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,7 +11,7 @@ import { getPlans, updatePlan } from '../api/endpoints';
 
 const PricingScreen = ({ navigation }) => {
   const { theme } = useTheme();
-  const { session } = useAuthContext();
+  const { getToken } = useAuthContext();
   const dispatch = useDispatch();
   const currentUser = useSelector((state) => state.user.value);
 
@@ -19,11 +19,9 @@ const PricingScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState(null);
 
-  useEffect(() => { fetchPlans(); }, []);
-
-  const fetchPlans = async () => {
+  const fetchPlans = useCallback(async () => {
     try {
-      const token = await session?.getToken();
+      const token = await getToken();
       const data = await getPlans(token);
       if (data.success) setPlans(data.plans);
     } catch (err) {
@@ -32,13 +30,17 @@ const PricingScreen = ({ navigation }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getToken]);
+
+  useEffect(() => {
+    fetchPlans();
+  }, [fetchPlans]);
 
   const handleUpgrade = async (planId) => {
     if (upgrading) return;
     setUpgrading(planId);
     try {
-      const token = await session?.getToken();
+      const token = await getToken();
       if (!token) throw new Error('No token');
       const data = await updatePlan(planId, token);
       if (data.success) {

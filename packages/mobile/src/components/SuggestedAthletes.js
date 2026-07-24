@@ -1,10 +1,9 @@
-import React, { useEffect, useState, memo } from 'react';
+import React, { useCallback, useEffect, useState, memo } from 'react';
 import { ScrollView } from 'react-native';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import UserCard from './UserCard';
-import api from '../api/client';
 import { useAuthContext } from '../context/AuthProvider';
 import { getSuggestedUsers } from '../api/endpoints';
 
@@ -15,7 +14,7 @@ const SuggestedAthletes = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const { getToken } = useAuthContext();
 
-  const fetchSuggested = async () => {
+  const fetchSuggested = useCallback(async () => {
     try {
       const token = await getToken();
       const data = await getSuggestedUsers(token);
@@ -27,11 +26,11 @@ const SuggestedAthletes = ({ navigation }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getToken]);
 
   useEffect(() => {
     fetchSuggested();
-  }, []);
+  }, [fetchSuggested]);
 
   if (loading || users.length === 0) return null;
 
@@ -60,23 +59,24 @@ const SuggestedAthletes = ({ navigation }) => {
 // ✅ NO theme references here - styles are static (theme applied inline in JSX above)
 const styles = {
   container: {
-    marginVertical: 16,
-    borderRadius: 32,
-    paddingVertical: 24,
+    marginHorizontal: 12,
+    marginVertical: 6,
+    marginBottom: 12,
+    borderRadius: 22,
+    paddingVertical: 18,
     borderWidth: 1,
   },
   header: {
-    paddingHorizontal: 24,
-    marginBottom: 16,
+    paddingHorizontal: 18,
+    marginBottom: 13,
   },
   title: {
     fontSize: 16,
     fontWeight: '900',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    letterSpacing: -0.2,
   },
   scrollContent: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 18,
     paddingBottom: 4,
   },
 };

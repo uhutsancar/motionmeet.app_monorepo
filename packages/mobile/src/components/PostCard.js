@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, memo, useMemo } from 'react';
-import { Image, Dimensions, Alert, TextInput, FlatList, ActivityIndicator, StyleSheet } from 'react-native';
+import { Image, Alert, TextInput, FlatList, ActivityIndicator, StyleSheet, useWindowDimensions } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { useAuthContext } from "../context/AuthProvider";
 import { Ionicons } from '@expo/vector-icons';
-import { likePost, followUser, unfollowUser, addComment } from '../api/endpoints';
+import { likePost, followUser, unfollowUser, addComment, getPostComments } from '../api/endpoints';
 import { fetchUser } from '../features/user/userSlice';
 import api from '../api/client';
 import moment from 'moment';
@@ -12,32 +12,57 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const POST_PADDING = 16;
-const CAROUSEL_WIDTH = SCREEN_WIDTH;
 
 const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete, showDelete = false }) => {
   const { t, i18n } = useTranslation();
   const { theme, isDark } = useTheme();
+  const { width: screenWidth } = useWindowDimensions();
+  const carouselWidth = Math.min(screenWidth - 24, 696);
   const currentUser = useSelector((state) => state.user.value);
   const dispatch = useDispatch();
   const { getToken } = useAuthContext();
   
-  const [likes, setLikes] = useState(post.likes_count || []);
+  const [likeCount, setLikeCount] = useState(post.like_count ?? post.likes_count?.length ?? 0);
+  const [isLiked, setIsLiked] = useState(
+    post.liked_by_me ?? Boolean(currentUser?._id && post.likes_count?.includes(currentUser._id))
+  );
   const [isProcessing, setIsProcessing] = useState(false);
   const [followProcessing, setFollowProcessing] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [comments, setComments] = useState(post.comments || []);
+  const [commentCount, setCommentCount] = useState(
+    post.comment_count ?? post.comments?.length ?? 0
+  );
+  const [commentCursor, setCommentCursor] = useState(post.comment_next_cursor || null);
+  const [olderCommentsLoading, setOlderCommentsLoading] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
+  const onViewableItemsChanged = useRef(({ viewableItems }) => {
+    if (viewableItems.length > 0) {
+      setActiveSlide(viewableItems[0].index);
+    }
+  }).current;
+  const viewabilityConfig = useRef({
+    viewAreaCoveragePercentThreshold: 50,
+  }).current;
 
   // Memoize styles
   const s = useMemo(() => ({
     card: {
-      backgroundColor: theme.background,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-      paddingVertical: 12,
+      backgroundColor: theme.surface,
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: 22,
+      marginHorizontal: 12,
+      marginBottom: 12,
+      paddingTop: 14,
+      paddingBottom: 8,
+      overflow: 'hidden',
+      shadowColor: theme.shadow,
+      shadowOpacity: theme.dark ? 0.2 : 0.06,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 6 },
     },
     userSection: {
       flexDirection: 'row',
@@ -58,6 +83,16 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
       borderRadius: 22,
       borderWidth: 1,
       borderColor: theme.border,
+    },
+    avatarPlaceholder: {
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: theme.primarySoft,
+    },
+    avatarPlaceholderText: {
+      color: theme.primary,
+      fontSize: 16,
+      fontWeight: '900',
     },
     userInfo: {
       marginLeft: 12,
@@ -81,16 +116,20 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
       marginTop: 2,
     },
     followBtn: {
-      paddingVertical: 4,
-      paddingHorizontal: 8,
+      minHeight: 34,
+      justifyContent: 'center',
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      backgroundColor: theme.primarySoft,
     },
     followBtnText: {
       color: theme.primary,
-      fontWeight: '600',
-      fontSize: 14,
+      fontWeight: '800',
+      fontSize: 12,
     },
     followingBtn: {
-      backgroundColor: 'transparent',
+      backgroundColor: theme.surfaceLight,
     },
     followingBtnText: {
       color: theme.textMuted,
@@ -115,13 +154,16 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
       flexDirection: 'row',
       paddingHorizontal: POST_PADDING,
       marginBottom: 16,
-      gap: 20,
+      gap: 8,
       flexWrap: 'wrap',
       backgroundColor: 'transparent'
     },
     statBox: {
       justifyContent: 'center',
-      backgroundColor: 'transparent'
+      backgroundColor: theme.surfaceLight,
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
     },
     statLabel: {
       color: theme.textMuted,
@@ -145,12 +187,12 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
       backgroundColor: 'transparent'
     },
     carouselSlide: {
-      width: CAROUSEL_WIDTH,
-      height: CAROUSEL_WIDTH * 1.1,
+      width: carouselWidth,
+      height: Math.min(carouselWidth * 1.04, 620),
     },
     videoContainer: {
-      width: CAROUSEL_WIDTH,
-      height: CAROUSEL_WIDTH * 1.1,
+      width: carouselWidth,
+      height: Math.min(carouselWidth * 1.04, 620),
       backgroundColor: '#000',
       justifyContent: 'center',
     },
@@ -161,9 +203,9 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
       backgroundColor: 'transparent'
     },
     workoutSlideContainer: {
-      width: CAROUSEL_WIDTH,
-      height: CAROUSEL_WIDTH * 1.1,
-      backgroundColor: theme.background, 
+      width: carouselWidth,
+      height: Math.min(carouselWidth * 1.04, 620),
+      backgroundColor: theme.surfaceLight,
       paddingHorizontal: POST_PADDING,
       justifyContent: 'center',
       gap: 20,
@@ -228,20 +270,25 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: POST_PADDING,
-      paddingTop: 16,
+      paddingTop: 12,
       paddingBottom: 8,
       backgroundColor: 'transparent'
     },
     actionLeftGroup: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 20,
+      gap: 8,
       backgroundColor: 'transparent'
     },
     actionButton: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
+      minWidth: 42,
+      minHeight: 40,
+      justifyContent: 'center',
+      borderRadius: 14,
+      paddingHorizontal: 7,
     },
     actionText: {
       fontSize: 15,
@@ -335,7 +382,7 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
       justifyContent: 'center',
       alignItems: 'center',
     },
-  }), [theme]);
+  }), [theme, carouselWidth]);
 
   moment.locale(i18n.language.startsWith('tr') ? 'tr' : 'en');
 
@@ -348,7 +395,8 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
       const token = await getToken();
       const data = await likePost(post._id, token);
       if (data.success) {
-        setLikes(prevLikes => prevLikes.includes(currentUser._id) ? prevLikes.filter(id => id !== currentUser._id) : [...prevLikes, currentUser._id]);
+        setIsLiked(data.liked);
+        setLikeCount(data.like_count);
       }
     } catch (error) {
       console.error('Like error:', error);
@@ -382,10 +430,12 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
   const handleAddComment = async () => {
     if (!commentText.trim() || isProcessing) return;
     try {
+      setIsProcessing(true);
       const token = await getToken();
       const data = await addComment(post._id, commentText, token);
       if (data.success) {
-        setComments(data.comments);
+        setComments((currentComments) => [...currentComments, data.comment]);
+        setCommentCount(data.comment_count);
         setCommentText("");
       } else {
         Alert.alert(t('common.error'), data.message);
@@ -394,6 +444,31 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
       console.error('Comment error:', error);
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const loadOlderComments = async () => {
+    if (!commentCursor || olderCommentsLoading) return;
+    setOlderCommentsLoading(true);
+    try {
+      const token = await getToken();
+      const data = await getPostComments(post._id, token, commentCursor);
+      if (data.success) {
+        setComments((currentComments) => {
+          const knownIds = new Set(currentComments.map((comment) => comment._id));
+          return [
+            ...(data.comments || [])
+              .filter((comment) => !knownIds.has(comment._id))
+              .reverse(),
+            ...currentComments,
+          ];
+        });
+        setCommentCursor(data.nextCursor);
+      }
+    } catch (error) {
+      console.error('Comment history error:', error);
+    } finally {
+      setOlderCommentsLoading(false);
     }
   };
 
@@ -414,14 +489,6 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
   if (hasWorkout) {
     carouselData.push({ type: 'workout', data: post.workout });
   }
-
-  const onViewableItemsChanged = useRef(({ viewableItems }) => {
-    if (viewableItems.length > 0) {
-      setActiveSlide(viewableItems[0].index);
-    }
-  }).current;
-  
-  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
 
   const renderCarouselItem = ({ item }) => {
     if (item.type === 'video') {
@@ -478,7 +545,15 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
       <Surface elevation={0} style={s.userSection}>
         <TouchableRipple style={s.userInfoLeft} onPress={() => onUserPress?.(post.user?._id)}>
           <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'transparent' }}>
-            <Image source={{ uri: post.user?.profile_picture }} style={s.avatar} />
+            {post.user?.profile_picture ? (
+              <Image source={{ uri: post.user.profile_picture }} style={s.avatar} />
+            ) : (
+              <Surface elevation={0} style={[s.avatar, s.avatarPlaceholder]}>
+                <Text style={s.avatarPlaceholderText}>
+                  {post.user?.full_name?.charAt(0)?.toUpperCase() || 'U'}
+                </Text>
+              </Surface>
+            )}
             <Surface elevation={0} style={s.userInfo}>
               <Surface elevation={0} style={s.nameContainer}>
                 <Text style={s.username}>{post.user?.full_name}</Text>
@@ -581,18 +656,18 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
           <TouchableRipple style={s.actionButton} onPress={handleLike} borderless>
             <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'transparent' }}>
               <Ionicons 
-                name={likes.includes(currentUser?._id) ? "heart" : "heart-outline"} 
+                name={isLiked ? "heart" : "heart-outline"}
                 size={24} 
-                color={likes.includes(currentUser?._id) ? '#ef4444' : theme.text} 
+                color={isLiked ? '#ef4444' : theme.text}
               />
-              <Text style={[s.actionText, likes.includes(currentUser?._id) && { color: '#ef4444' }]}>{likes.length}</Text>
+              <Text style={[s.actionText, isLiked && { color: '#ef4444' }]}>{likeCount}</Text>
             </Surface>
           </TouchableRipple>
 
           <TouchableRipple style={s.actionButton} onPress={() => setShowComments(!showComments)} borderless>
             <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'transparent' }}>
               <Ionicons name="chatbubble-outline" size={24} color={theme.text} />
-              <Text style={[s.actionText, showComments && { color: theme.primary }]}>{comments.length}</Text>
+              <Text style={[s.actionText, showComments && { color: theme.primary }]}>{commentCount}</Text>
             </Surface>
           </TouchableRipple>
 
@@ -605,10 +680,10 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
       </Surface>
 
       {/* Interaction Summary */}
-      {likes.length > 0 && (
+      {likeCount > 0 && (
         <Surface elevation={0} style={s.likedByContainer}>
             <Text style={s.likedByText}>
-              {t('feed.liked_by', 'Liked by')} <Text style={{fontWeight: 'bold'}}>{likes.length}</Text> {t('feed.people', 'people')}
+              {t('feed.liked_by', 'Liked by')} <Text style={{fontWeight: 'bold'}}>{likeCount}</Text> {t('feed.people', 'people')}
             </Text>
         </Surface>
       )}
@@ -616,9 +691,29 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
       {/* Comments Section */}
       {showComments && (
         <Surface elevation={0} style={s.commentsSection}>
+          {commentCursor && (
+            <TouchableRipple
+              onPress={loadOlderComments}
+              disabled={olderCommentsLoading}
+              style={{ alignSelf: 'center', padding: 10, marginBottom: 8 }}
+            >
+              {olderCommentsLoading
+                ? <ActivityIndicator size="small" color={theme.primary} />
+                : <Text style={{ color: theme.primary }}>{t('common.load_more', 'Load older comments')}</Text>
+              }
+            </TouchableRipple>
+          )}
           {comments.map((comment, i) => (
             <Surface elevation={0} key={i} style={s.commentItem}>
-              <Image source={{ uri: comment.user?.profile_picture }} style={s.commentAvatar} />
+              {comment.user?.profile_picture ? (
+                <Image source={{ uri: comment.user.profile_picture }} style={s.commentAvatar} />
+              ) : (
+                <Surface elevation={0} style={[s.commentAvatar, s.avatarPlaceholder]}>
+                  <Text style={[s.avatarPlaceholderText, { fontSize: 12 }]}>
+                    {comment.user?.full_name?.charAt(0)?.toUpperCase() || 'U'}
+                  </Text>
+                </Surface>
+              )}
               <Surface elevation={0} style={s.commentContent}>
                 <Surface elevation={0} style={s.commentBubble}>
                   <Text style={s.commentUser}>{comment.user?.full_name}</Text>

@@ -83,7 +83,7 @@ const About = () => {
       title: t('about_page.val2_title'),
       desc: t('about_page.val2_desc'),
       iconBgColor: 'rgba(59, 130, 246, 0.1)',
-      iconColor: '#3b82f6',
+      iconColor: '#6558F5',
     },
     {
       icon: Heart,
@@ -100,7 +100,7 @@ const About = () => {
       role: t('about_page.team1_role'),
       bio: t('about_page.team1_bio'),
       initials: 'AC',
-      gradient: 'linear-gradient(to bottom right, #3b82f6, #1d4ed8)',
+      gradient: 'linear-gradient(to bottom right, #6558F5, #5145DB)',
     },
     {
       name: t('about_page.team2_name'),
@@ -114,7 +114,7 @@ const About = () => {
       role: t('about_page.team3_role'),
       bio: t('about_page.team3_bio'),
       initials: 'MJ',
-      gradient: 'linear-gradient(to bottom right, #10b981, #047857)',
+      gradient: 'linear-gradient(to bottom right, #12A88A, #087A68)',
     },
   ];
 
@@ -128,7 +128,7 @@ const About = () => {
     <PublicLayout>
       {/* ── Hero ── */}
       <Box sx={{ position: 'relative', overflow: 'hidden', py: { xs: 10, sm: 14 }, px: { xs: 2, sm: 3 }, textAlign: 'center' }}>
-        <Box sx={{ position: 'absolute', top: -128, left: '50%', transform: 'translateX(-50%)', width: 700, height: 400, borderRadius: '50%', bgcolor: 'rgba(16, 185, 129, 0.1)', filter: 'blur(80px)', pointerEvents: 'none' }} />
+        <Box sx={{ position: 'absolute', top: -128, left: '50%', transform: 'translateX(-50%)', width: 700, height: 400, borderRadius: '50%', bgcolor: 'rgba(18, 168, 138, 0.1)', filter: 'blur(80px)', pointerEvents: 'none' }} />
         
         <Container maxWidth="md" sx={{ position: 'relative', zIndex: 1 }}>
           <Stack spacing={3} alignItems="center">
@@ -245,7 +245,7 @@ const About = () => {
             elevation={0}
             sx={{ 
               borderRadius: 6, 
-              background: `linear-gradient(to bottom right, #059669, #2563eb, #4f46e5)`,
+              background: `linear-gradient(to bottom right, #12A88A, #6558F5, #3F397E)`,
               p: { xs: 6, sm: 8 }, 
               textAlign: 'center', 
               position: 'relative', 

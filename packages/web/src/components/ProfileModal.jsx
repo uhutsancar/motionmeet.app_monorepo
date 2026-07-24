@@ -1,4 +1,5 @@
 import { useAuthContext } from "../context/AuthProvider";
+import { uploadMedia } from "../api/mediaUpload";
 import {
   Avatar,
   Box,
@@ -72,10 +73,19 @@ const ProfileModal = ({ setShowEdit }) => {
       userData.append("full_name", full_name);
       userData.append("weight", weight);
       userData.append("height", height);
-      if (profile_picture) userData.append("profile", profile_picture);
-      if (cover_photo) userData.append("cover", cover_photo);
-
       const token = await getToken();
+      if (profile_picture) {
+        userData.append(
+          "uploadedProfileKey",
+          await uploadMedia(profile_picture, "profiles", token)
+        );
+      }
+      if (cover_photo) {
+        userData.append(
+          "uploadedCoverKey",
+          await uploadMedia(cover_photo, "covers", token)
+        );
+      }
       await dispatch(updateUser({ userData, token })).unwrap();
       setShowEdit(false);
     } catch (error) {

@@ -22,18 +22,32 @@ import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import api from "~/api/axios";
+import { API_ROUTES } from "@motionmeet/shared";
 
 const PostCard = ({ post }) => {
   const { t, i18n } = useTranslation();
   const currentUser = useSelector((state) => state.user.value);
   const { getToken } = useAuthContext();
   const navigate = useNavigate();
-  const [likes, setLikes] = useState(post?.likes_count || []);
+  const [likeCount, setLikeCount] = useState(
+    post?.like_count ?? post?.likes_count?.length ?? 0,
+  );
+  const [isLiked, setIsLiked] = useState(
+    post?.liked_by_me ??
+      Boolean(currentUser?._id && post?.likes_count?.includes(currentUser._id)),
+  );
   const [activeSlide, setActiveSlide] = useState(0);
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [commentLoading, setCommentLoading] = useState(false);
   const [comments, setComments] = useState(post?.comments || []);
+  const [commentCount, setCommentCount] = useState(
+    post?.comment_count ?? post?.comments?.length ?? 0,
+  );
+  const [commentCursor, setCommentCursor] = useState(
+    post?.comment_next_cursor || null,
+  );
+  const [olderCommentsLoading, setOlderCommentsLoading] = useState(false);
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -42,7 +56,6 @@ const PostCard = ({ post }) => {
 
   if (!post?.user) return null;
 
-  const isLiked = Boolean(currentUser?._id && likes.includes(currentUser._id));
   const hasWorkout = post.post_type === "workout" && post.workout;
   const isVideo = post.post_type === "video";
   const imageUrls = post.image_urls || [];
@@ -55,17 +68,14 @@ const PostCard = ({ post }) => {
   const handleLike = async () => {
     try {
       const { data } = await api.post(
-        "/api/post/like",
+        API_ROUTES.post.like,
         { postId: post._id },
         { headers: { Authorization: `Bearer ${await getToken()}` } },
       );
 
-      if (data.success && currentUser?._id) {
-        setLikes((currentLikes) =>
-          currentLikes.includes(currentUser._id)
-            ? currentLikes.filter((id) => id !== currentUser._id)
-            : [...currentLikes, currentUser._id],
-        );
+      if (data.success) {
+        setIsLiked(data.liked);
+        setLikeCount(data.like_count);
       }
     } catch (error) {
       toast.error(error.message);
@@ -78,12 +88,13 @@ const PostCard = ({ post }) => {
     setCommentLoading(true);
     try {
       const { data } = await api.post(
-        "/api/post/comment/add",
+        API_ROUTES.post.comment,
         { postId: post._id, content: commentText },
         { headers: { Authorization: `Bearer ${await getToken()}` } },
       );
       if (data.success) {
-        setComments(data.comments);
+        setComments((currentComments) => [...currentComments, data.comment]);
+        setCommentCount(data.comment_count);
         setCommentText("");
         toast.success(t("feed.comment_posted", "Comment posted!"));
       }
@@ -91,6 +102,33 @@ const PostCard = ({ post }) => {
       toast.error(error.message);
     } finally {
       setCommentLoading(false);
+    }
+  };
+
+  const loadOlderComments = async () => {
+    if (!commentCursor || olderCommentsLoading) return;
+    setOlderCommentsLoading(true);
+    try {
+      const { data } = await api.get(API_ROUTES.post.comments(post._id), {
+        headers: { Authorization: `Bearer ${await getToken()}` },
+        params: { cursor: commentCursor },
+      });
+      if (data.success) {
+        setComments((currentComments) => {
+          const knownIds = new Set(currentComments.map((comment) => comment._id));
+          return [
+            ...(data.comments || [])
+              .filter((comment) => !knownIds.has(comment._id))
+              .reverse(),
+            ...currentComments,
+          ];
+        });
+        setCommentCursor(data.nextCursor);
+      }
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setOlderCommentsLoading(false);
     }
   };
 
@@ -113,12 +151,20 @@ const PostCard = ({ post }) => {
   return (
     <Card
       variant="outlined"
-      sx={{ width: "100%", maxWidth: 500, mx: "auto", borderRadius: 3, overflow: "hidden", transition: "box-shadow .2s", "&:hover": { boxShadow: 3 } }}
+      sx={{
+        width: "100%",
+        mx: "auto",
+        borderRadius: 5,
+        overflow: "hidden",
+        boxShadow: 1,
+        transition: "transform .2s ease, box-shadow .2s ease",
+        "&:hover": { boxShadow: 3, transform: { md: "translateY(-1px)" } },
+      }}
     >
-      <Box sx={{ px: { xs: 2, sm: 2.5 }, pt: 2.5 }}>
+      <Box sx={{ px: { xs: 1.75, sm: 2.5 }, pt: { xs: 1.75, sm: 2.25 } }}>
         <ButtonBase onClick={() => navigate(`/profile/${post.user._id}`)} sx={{ borderRadius: 2, textAlign: "left" }}>
           <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-            <Avatar src={post.user.profile_picture || undefined} alt={post.user.full_name} sx={{ width: 48, height: 48, border: 1, borderColor: "divider" }}>
+            <Avatar src={post.user.profile_picture || undefined} alt={post.user.full_name} sx={{ width: 44, height: 44, border: 1, borderColor: "divider" }}>
               {post.user.full_name?.charAt(0)}
             </Avatar>
             <Stack>
@@ -144,7 +190,7 @@ const PostCard = ({ post }) => {
         </ButtonBase>
       </Box>
 
-      <Stack spacing={0.75} sx={{ px: { xs: 2, sm: 2.5 }, py: 2 }}>
+      <Stack spacing={0.75} sx={{ px: { xs: 1.75, sm: 2.5 }, py: 1.75 }}>
         {hasWorkout && post.workout?.name && (
           <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
             {post.workout.name}
@@ -166,9 +212,9 @@ const PostCard = ({ post }) => {
       </Stack>
 
       {hasWorkout && (
-        <Stack direction="row" spacing={1} useFlexGap sx={{ px: { xs: 2, sm: 2.5 }, pb: 2, flexWrap: "wrap", justifyContent: "space-between" }}>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ px: { xs: 1.75, sm: 2.5 }, pb: 2, flexWrap: "wrap" }}>
           {workoutStats.map((stat) => (
-            <Stack key={stat.label} sx={{ minWidth: 70 }}>
+            <Stack key={stat.label} sx={{ minWidth: 82, bgcolor: "action.hover", px: 1.25, py: 0.8, borderRadius: 2.5 }}>
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
                 {stat.label}
               </Typography>
@@ -190,7 +236,7 @@ const PostCard = ({ post }) => {
             {carouselData.map((item, index) => (
               <Box
                 key={`${item.type}-${item.url || index}`}
-                sx={{ width: "100%", flexShrink: 0, scrollSnapAlign: "center", position: "relative", aspectRatio: { xs: "4 / 5", sm: "1 / 1" }, bgcolor: item.type === "workout" ? "background.default" : "common.black", borderTop: 1, borderBottom: 1, borderColor: "divider" }}
+                sx={{ width: "100%", flexShrink: 0, scrollSnapAlign: "center", position: "relative", aspectRatio: { xs: "4 / 4.6", sm: "4 / 3.9" }, maxHeight: 620, bgcolor: item.type === "workout" ? "action.hover" : "common.black", borderTop: 1, borderBottom: 1, borderColor: "divider" }}
               >
                 {item.type === "video" ? (
                   <Box component="video" src={item.url} controls sx={{ width: "100%", height: "100%", objectFit: "contain" }} />
@@ -229,27 +275,38 @@ const PostCard = ({ post }) => {
         </Box>
       )}
 
-      <Stack direction="row" spacing={1} sx={{ px: { xs: 1, sm: 1.5 }, pt: 1.25, alignItems: "center" }}>
-        <Button color={isLiked ? "error" : "inherit"} startIcon={<Heart size={25} fill={isLiked ? "currentColor" : "none"} />} onClick={handleLike}>
-          {likes.length}
+      <Stack direction="row" spacing={0.5} sx={{ px: { xs: 1, sm: 1.5 }, pt: 1.25, pb: 0.5, alignItems: "center" }}>
+        <Button color={isLiked ? "error" : "inherit"} startIcon={<Heart size={22} fill={isLiked ? "currentColor" : "none"} />} onClick={handleLike}>
+          {likeCount}
         </Button>
-        <Button color="inherit" startIcon={<MessageCircle size={25} />} onClick={() => setShowComments((visible) => !visible)}>
-          {comments.length}
+        <Button color={showComments ? "primary" : "inherit"} startIcon={<MessageCircle size={22} />} onClick={() => setShowComments((visible) => !visible)}>
+          {commentCount}
         </Button>
         <IconButton aria-label={t("feed.share", "Share")} sx={{ ml: "auto" }}>
-          <Share2 size={23} />
+          <Share2 size={21} />
         </IconButton>
       </Stack>
 
-      {likes.length > 0 && (
+      {likeCount > 0 && (
         <Typography variant="caption" color="text.secondary" sx={{ display: "block", px: { xs: 2, sm: 2.5 }, pb: 0.5 }}>
-          {t("feed.liked_by", "Liked by")} <Box component="span" sx={{ color: "text.primary", fontWeight: 800 }}>{likes.length}</Box> {t("feed.people", "people")}
+          {t("feed.liked_by", "Liked by")} <Box component="span" sx={{ color: "text.primary", fontWeight: 800 }}>{likeCount}</Box> {t("feed.people", "people")}
         </Typography>
       )}
 
       <Collapse in={showComments}>
         <Stack spacing={2} sx={{ px: { xs: 2, sm: 2.5 }, pt: 1.5, pb: 2 }}>
           <Stack spacing={1.75} sx={{ maxHeight: 240, overflowY: "auto" }}>
+            {commentCursor && (
+              <Button
+                size="small"
+                onClick={loadOlderComments}
+                disabled={olderCommentsLoading}
+                startIcon={olderCommentsLoading ? <CircularProgress size={14} /> : null}
+                sx={{ alignSelf: "center" }}
+              >
+                {t("common.load_more", "Load older comments")}
+              </Button>
+            )}
             {comments.length > 0 ? (
               comments.map((comment, index) => (
                 <Stack key={comment._id || `${comment.user?._id}-${comment.createdAt}-${index}`} direction="row" spacing={1.25} sx={{ alignItems: "flex-start" }}>

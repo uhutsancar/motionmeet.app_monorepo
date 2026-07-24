@@ -6,6 +6,7 @@ RUN corepack enable && corepack prepare pnpm@11.10.0 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/backend/package.json ./packages/backend/package.json
 COPY packages/web/package.json ./packages/web/package.json
+COPY packages/shared/package.json ./packages/shared/package.json
 RUN pnpm install --frozen-lockfile --prod --filter @motionmeet/backend
 
 FROM node:22-alpine
@@ -15,11 +16,9 @@ WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY --from=dependencies /app/packages/backend/node_modules ./packages/backend/node_modules
 COPY packages/backend ./packages/backend
-# Dataset is required for the /dataset static endpoint
-COPY exercises-dataset-main ./exercises-dataset-main
+COPY packages/shared ./packages/shared
 
 WORKDIR /app/packages/backend
 EXPOSE 4000
 USER node
 CMD ["node", "server.js"]
-

@@ -160,7 +160,7 @@ const Pricing = () => {
     <PublicLayout>
       {/* ── Hero ── */}
       <Box sx={{ position: 'relative', overflow: 'hidden', py: { xs: 10, sm: 14 }, px: { xs: 2, sm: 3 }, textAlign: 'center' }}>
-        <Box sx={{ position: 'absolute', top: -128, left: '50%', transform: 'translateX(-50%)', width: 600, height: 400, borderRadius: '50%', bgcolor: 'rgba(124, 58, 237, 0.1)', filter: 'blur(80px)', pointerEvents: 'none' }} />
+        <Box sx={{ position: 'absolute', top: -128, left: '50%', transform: 'translateX(-50%)', width: 600, height: 400, borderRadius: '50%', bgcolor: 'rgba(101, 88, 245, 0.1)', filter: 'blur(80px)', pointerEvents: 'none' }} />
         
         <Container maxWidth="md" sx={{ position: 'relative', zIndex: 1 }}>
           <Stack spacing={3} alignItems="center">

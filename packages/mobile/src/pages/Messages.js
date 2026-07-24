@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { FlatList, StatusBar, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
@@ -10,7 +10,7 @@ import { fetchConnections } from '../features/connections/connectionsSlice';
 import { getUserConversations } from '../api/endpoints';
 import moment from 'moment';
 import 'moment/locale/tr';
-import { Appbar, Avatar, Text, Searchbar, TouchableRipple, Badge, useTheme as usePaperTheme, Surface } from 'react-native-paper';
+import { Appbar, Avatar, Text, Searchbar, TouchableRipple, Badge, Surface } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 
 const Messages = ({ navigation }) => {
@@ -18,8 +18,7 @@ const Messages = ({ navigation }) => {
   const { getToken } = useAuthContext();
   const { t, i18n } = useTranslation();
   const { theme, isDark } = useTheme();
-  const paperTheme = usePaperTheme();
-  const s = React.useMemo(() => getStyles(theme, paperTheme), [theme, paperTheme]);
+  const s = React.useMemo(() => getStyles(theme), [theme]);
 
   const { connections } = useSelector((state) => state.connections);
   const { socket, onlineUsers } = useSocket();
@@ -35,10 +34,6 @@ const Messages = ({ navigation }) => {
   }, [i18n.language]);
 
   useEffect(() => { connectionsRef.current = connections; }, [connections]);
-
-  useEffect(() => {
-    loadAll();
-  }, []);
 
   useEffect(() => {
     if (!socket) return;
@@ -100,20 +95,7 @@ const Messages = ({ navigation }) => {
     };
   }, [socket]);
 
-  const loadAll = async () => {
-    setLoading(true);
-    try {
-      const token = await getToken();
-      await dispatch(fetchConnections(token));
-      await loadConversations(token);
-    } catch (error) {
-      console.warn('Conversation list could not be loaded:', error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadConversations = async (token) => {
+  const loadConversations = useCallback(async (token) => {
     try {
       const data = await getUserConversations(token);
       if (data.success) {
@@ -127,7 +109,24 @@ const Messages = ({ navigation }) => {
     } catch (error) {
       console.warn('Conversation request failed:', error.message);
     }
-  };
+  }, []);
+
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    try {
+      const token = await getToken();
+      await dispatch(fetchConnections(token));
+      await loadConversations(token);
+    } catch (error) {
+      console.warn('Conversation list could not be loaded:', error.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [dispatch, getToken, loadConversations]);
+
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -239,7 +238,8 @@ const Messages = ({ navigation }) => {
         renderItem={renderConversation}
         keyExtractor={(item, i) => item.user?._id || String(i)}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 12 }}
+        style={{ width: '100%', maxWidth: 720, alignSelf: 'center' }}
+        contentContainerStyle={{ paddingTop: 4, paddingBottom: 24 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
         ListEmptyComponent={
           <Surface elevation={0} style={s.emptyState}>
@@ -253,26 +253,31 @@ const Messages = ({ navigation }) => {
   );
 };
 
-const getStyles = (theme, paperTheme) => ({
+const getStyles = (theme) => ({
   container: { flex: 1, backgroundColor: theme.background },
   header: {
-    backgroundColor: theme.background,
+    backgroundColor: theme.surface,
     elevation: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
   },
   headerTitle: { fontSize: 26, fontWeight: '800', color: theme.text },
-  searchContainer: { paddingHorizontal: 16, marginBottom: 8 },
+  searchContainer: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 14, marginBottom: 8, backgroundColor: 'transparent' },
   searchBar: {
     backgroundColor: theme.surface, borderRadius: 14, borderWidth: 1, borderColor: theme.border,
     height: 48,
   },
   convRow: {
-    paddingHorizontal: 16, paddingVertical: 14,
-    borderBottomWidth: 0.5, borderBottomColor: theme.border,
+    paddingHorizontal: 13, paddingVertical: 12,
+    marginHorizontal: 12, marginBottom: 7,
+    borderWidth: 1, borderColor: theme.border,
+    borderRadius: 17,
+    backgroundColor: theme.surface,
   },
   avatarContainer: { position: 'relative', marginRight: 12 },
   onlineDot: {
     position: 'absolute', bottom: 1, right: 1,
-    backgroundColor: '#22c55e', borderWidth: 2, borderColor: theme.background,
+    backgroundColor: theme.success, borderWidth: 2, borderColor: theme.surface,
   },
   convContent: { flex: 1, marginRight: 8, justifyContent: 'center' },
   convTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },

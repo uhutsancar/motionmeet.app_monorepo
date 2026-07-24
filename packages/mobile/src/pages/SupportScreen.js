@@ -12,8 +12,8 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 const FAQS = [
   { q: 'support.faq1_q', a: 'support.faq1_a', qFallback: 'Antrenman verilerim nerede saklanıyor?', aFallback: 'Tüm verileriniz güvenli bulut sunucularımızda şifrelenmiş olarak saklanır.' },
-  { q: 'support.faq2_q', a: 'support.faq2_a', qFallback: 'Şifremi nasıl sıfırlarım?', aFallback: 'Giriş ekranındaki "Şifremi Unuttum" seçeneğini kullanabilirsiniz.' },
-  { q: 'support.faq3_q', a: 'support.faq3_a', qFallback: 'Verilerimi dışa aktarabilir miyim?', aFallback: 'Yakında gelecek güncellemede veri dışa aktarma özelliği eklenecektir.' },
+  { q: 'support.faq2_q', a: 'support.faq2_a', qFallback: 'Şifremi nasıl sıfırlarım?', aFallback: 'Şifre sıfırlama desteği için support@motionmeet.app adresinden bize ulaşabilirsiniz.' },
+  { q: 'support.faq3_q', a: 'support.faq3_a', qFallback: 'Verilerimi dışa aktarabilir miyim?', aFallback: 'Evet. Ayarlar içindeki Gizlilik ve Veri bölümünden verilerinizi dışa aktarabilirsiniz.' },
   { q: 'support.faq4_q', a: 'support.faq4_a', qFallback: 'Uygulama hangi platformlarda çalışıyor?', aFallback: 'MotionMeet iOS, Android ve Web üzerinde kullanılabilir.' },
   { q: 'support.faq5_q', a: 'support.faq5_a', qFallback: 'Bildirimler gelmiyor, ne yapmalıyım?', aFallback: 'Ayarlar > Bildirimler bölümünden bildirimlerin açık olduğunu kontrol edin ve telefon bildirim izinlerini doğrulayın.' },
 ];

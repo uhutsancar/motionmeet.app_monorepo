@@ -1,6 +1,15 @@
+import mongoose from "mongoose";
 import Post from "../models/Post.js";
 import User from "../models/User.js";
 import Workout from "../models/Workout.js";
+import { cursorFilter, pageFromDocuments } from "../utils/pagination.js";
+import {
+  createPostComment,
+  deleteInteractionsForPost,
+  getPostComments,
+  hydratePostInteractions,
+  togglePostLike,
+} from "./postInteractionService.js";
 
 const PUBLIC_USER_FIELDS = "_id full_name username profile_picture";
 
@@ -19,54 +28,69 @@ export const createPost = async (postData) => {
   return await Post.create(postData);
 };
 
-export const getFeedPostsForUser = async (userId) => {
+export const getFeedPostsForUser = async (userId, pagination) => {
   const user = await User.findById(userId).select("connections following");
   if (!user) return null;
 
   const socialIds = [...new Set([...user.connections, ...user.following].map(String))];
+  const hiddenWorkoutOwners = await User.find({
+    _id: { $in: socialIds },
+    "privacy.showWorkoutsOnFeed": false,
+  }).distinct("_id");
   const posts = await Post.find({
-    $or: [
-      { user: userId },
-      { user: { $in: socialIds }, visibility: "public" },
-      { user: { $in: socialIds }, visibility: "followers" },
+    $and: [
+      {
+        $or: [
+          { user: userId },
+          { user: { $in: socialIds }, visibility: "public" },
+          { user: { $in: socialIds }, visibility: "followers" },
+        ],
+      },
+      cursorFilter(pagination.cursor, "createdAt"),
+    ],
+    $nor: [
+      {
+        user: { $in: hiddenWorkoutOwners },
+        post_type: "workout",
+      },
     ],
   })
+    .select("-likes_count -comments")
     .populate("user", PUBLIC_USER_FIELDS)
     .populate({ path: "workout", populate: { path: "exercises.exerciseId" } })
-    .populate("comments.user", PUBLIC_USER_FIELDS)
-    .sort({ createdAt: -1 });
+    .sort({ createdAt: -1, _id: -1 })
+    .limit(pagination.limit + 1);
 
-  return posts;
+  const page = pageFromDocuments(posts, pagination.limit, "createdAt");
+  page.items = await hydratePostInteractions(page.items, userId);
+  return page;
 };
 
 export const getPostById = async (postId) => {
-  return await Post.findById(postId);
+  return await Post.findById(postId).select("+image_keys");
 };
 
 export const getPostForLike = async (postId) => {
-  return await Post.findById(postId).select("user visibility likes_count");
+  return await Post.findById(postId).select("user visibility");
 };
 
-export const toggleLikePost = async (postId, userId, liked) => {
-  return await Post.findByIdAndUpdate(
-    postId,
-    liked ? { $pull: { likes_count: userId } } : { $addToSet: { likes_count: userId } },
-    { new: true }
-  ).select("likes_count");
-};
+export const toggleLikePost = togglePostLike;
 
 export const getPostForComment = async (postId) => {
   return await Post.findById(postId).select("user visibility");
 };
 
-export const addCommentToPost = async (postId, userId, content) => {
-  return await Post.findByIdAndUpdate(
-    postId,
-    { $push: { comments: { user: userId, content: content.trim() } } },
-    { new: true }
-  ).populate("comments.user", PUBLIC_USER_FIELDS);
-};
+export const addCommentToPost = createPostComment;
+export const getCommentsForPost = getPostComments;
 
 export const deletePostById = async (post) => {
-  await post.deleteOne();
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      await deleteInteractionsForPost(post._id, { session });
+      await post.deleteOne({ session });
+    });
+  } finally {
+    await session.endSession();
+  }
 };

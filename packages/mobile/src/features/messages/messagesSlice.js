@@ -29,6 +29,13 @@ const messagesSlice = createSlice({
         state.messages.push(message);
       }
     },
+    prependMessages: (state, action) => {
+      const knownIds = new Set(state.messages.map((message) => message._id));
+      state.messages = [
+        ...action.payload.filter((message) => !knownIds.has(message._id)),
+        ...state.messages,
+      ];
+    },
     removeMessage: (state, action) => {
       state.messages = state.messages.filter(msg => msg._id !== action.payload);
     },
@@ -55,5 +62,12 @@ const messagesSlice = createSlice({
   },
 });
 
-export const { setMessages, addMessage, removeMessage, resetMessages, setCurrentChat } = messagesSlice.actions;
+export const {
+  setMessages,
+  addMessage,
+  prependMessages,
+  removeMessage,
+  resetMessages,
+  setCurrentChat,
+} = messagesSlice.actions;
 export default messagesSlice.reducer;

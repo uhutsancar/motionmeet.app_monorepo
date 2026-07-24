@@ -1,8 +1,15 @@
 import imagekit from "../configs/imageKit.js";
-import { deleteFromS3, extractS3Key, uploadToS3 } from "../utils/s3Utils.js";
+import { extractS3Key, uploadToS3 } from "../utils/s3Utils.js";
 import { isObjectId, isOptionalString } from "../utils/validation.js";
 import { hasValidMediaSignature } from "../utils/mediaValidation.js";
 import * as postService from "../services/postService.js";
+import { parsePagination } from "../utils/pagination.js";
+import {
+  commitReservedUploads,
+  discardReservedUploads,
+  resolveReservedUploads,
+} from "../services/mediaUploadService.js";
+import { deleteMediaOrQueue } from "../services/mediaDeletionService.js";
 
 const POST_TYPES = new Set(["text", "image", "text_with_image", "video", "workout"]);
 const VISIBILITIES = new Set(["public", "followers", "private"]);
@@ -41,31 +48,63 @@ export const addPost = async (req, res, next) => {
       return res.status(503).json({ success: false, message: "Media service is not configured" });
     }
 
-    const imageUrls = await Promise.all(
-      images.map(async (image) => {
-        const { key } = await uploadToS3(image.buffer, image.originalname, "posts", image.mimetype);
-        return imagekit.url({
-          path: key,
-          transformation: [{ quality: "auto" }, { format: "webp" }],
-        });
-      })
+    const reservedImages = await resolveReservedUploads(
+      userId,
+      "posts",
+      req.body?.uploadedKeys
     );
+    if (images.length + reservedImages.length > 4) {
+      return res.status(400).json({ success: false, message: "A post can contain at most four images" });
+    }
+
+    const uploadedImages = [...reservedImages];
+    try {
+      for (const image of images) {
+        const { key } = await uploadToS3(image.buffer, image.originalname, "posts", image.mimetype);
+        uploadedImages.push({
+          key,
+          url: imagekit.url({
+            path: key,
+            ...(image.mimetype.startsWith("image/")
+              ? { transformation: [{ quality: "auto" }, { format: "webp" }] }
+              : {}),
+            transformationPosition: "query",
+          }),
+          contentType: image.mimetype,
+        });
+      }
+    } catch (error) {
+      await discardReservedUploads(uploadedImages.map(({ key }) => key));
+      throw error;
+    }
+    const imageUrls = uploadedImages.map(({ url }) => url);
 
     let resolvedType = post_type;
     if (!resolvedType) {
       if (workout) resolvedType = "workout";
+      else if (uploadedImages.some(({ contentType }) => contentType?.startsWith("video/"))) {
+        resolvedType = "video";
+      }
       else if (imageUrls.length > 0) resolvedType = content?.trim() ? "text_with_image" : "image";
       else resolvedType = "text";
     }
 
-    const post = await postService.createPost({
-      user: userId,
-      content: content?.trim() || "",
-      image_urls: imageUrls,
-      post_type: resolvedType,
-      visibility: visibility || "public",
-      workout: workout || undefined,
-    });
+    let post;
+    try {
+      post = await postService.createPost({
+        user: userId,
+        content: content?.trim() || "",
+        image_urls: imageUrls,
+        image_keys: uploadedImages.map(({ key }) => key),
+        post_type: resolvedType,
+        visibility: visibility || "public",
+        workout: workout || undefined,
+      });
+    } catch (error) {
+      await discardReservedUploads(uploadedImages.map(({ key }) => key));
+      throw error;
+    }
+    await commitReservedUploads(reservedImages.map(({ key }) => key));
 
     return res.json({ success: true, post, message: "Post created successfully" });
   } catch (error) {
@@ -75,10 +114,15 @@ export const addPost = async (req, res, next) => {
 
 export const getFeedPost = async (req, res, next) => {
   try {
-    const posts = await postService.getFeedPostsForUser(req.userId);
-    if (!posts) return res.status(404).json({ success: false, message: "User not found" });
+    const pagination = parsePagination(req.query, { defaultLimit: 30, maxLimit: 50 });
+    const page = await postService.getFeedPostsForUser(req.userId, pagination);
+    if (!page) return res.status(404).json({ success: false, message: "User not found" });
 
-    return res.json({ success: true, posts });
+    return res.json({
+      success: true,
+      posts: page.items,
+      nextCursor: page.nextCursor,
+    });
   } catch (error) {
     return next(error);
   }
@@ -97,13 +141,13 @@ export const likePost = async (req, res, next) => {
       return res.status(403).json({ success: false, message: "Post is not accessible" });
     }
 
-    const liked = post.likes_count.includes(req.userId);
-    const updatedPost = await postService.toggleLikePost(postId, req.userId, liked);
+    const result = await postService.toggleLikePost(postId, req.userId);
 
     return res.json({
       success: true,
-      message: liked ? "Post unliked" : "Post liked",
-      likes_count: updatedPost.likes_count,
+      message: result.liked ? "Post liked" : "Post unliked",
+      liked: result.liked,
+      like_count: result.likeCount,
     });
   } catch (error) {
     return next(error);
@@ -123,8 +167,37 @@ export const addComment = async (req, res, next) => {
       return res.status(403).json({ success: false, message: "Post is not accessible" });
     }
 
-    const post = await postService.addCommentToPost(postId, req.userId, content);
-    return res.json({ success: true, comments: post.comments });
+    const result = await postService.addCommentToPost(postId, req.userId, content);
+    return res.json({
+      success: true,
+      comment: result.comment,
+      comment_count: result.commentCount,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getComments = async (req, res, next) => {
+  try {
+    const { postId } = req.params;
+    if (!isObjectId(postId)) {
+      return res.status(400).json({ success: false, message: "Invalid post id" });
+    }
+
+    const post = await postService.getPostForComment(postId);
+    if (!post) return res.status(404).json({ success: false, message: "Post not found" });
+    if (!postService.canAccessPost(post, req.dbUser)) {
+      return res.status(403).json({ success: false, message: "Post is not accessible" });
+    }
+
+    const pagination = parsePagination(req.query, { defaultLimit: 30, maxLimit: 50 });
+    const page = await postService.getCommentsForPost(postId, pagination);
+    return res.json({
+      success: true,
+      comments: page.items,
+      nextCursor: page.nextCursor,
+    });
   } catch (error) {
     return next(error);
   }
@@ -143,13 +216,11 @@ export const deletePost = async (req, res, next) => {
       return res.status(403).json({ success: false, message: "Unauthorized to delete this post" });
     }
 
-    await Promise.all(
-      (post.image_urls || []).map(async (url) => {
-        const key = extractS3Key(url);
-        if (key) await deleteFromS3(key);
-      })
-    );
+    const mediaKeys = (post.image_urls || [])
+      .map((url, index) => post.image_keys?.[index] || extractS3Key(url))
+      .filter(Boolean);
     await postService.deletePostById(post);
+    await deleteMediaOrQueue(mediaKeys);
 
     return res.json({ success: true, postId, message: "Post deleted successfully" });
   } catch (error) {

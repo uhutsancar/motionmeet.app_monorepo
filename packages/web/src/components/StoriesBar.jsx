@@ -37,13 +37,22 @@ const StoriesBar = () => {
 
   return (
     <>
-      <Box sx={{ width: "100%", overflowX: "auto", pb: 0.5 }}>
-        <Stack direction="row" spacing={2} sx={{ width: "max-content", pb: 1.5 }}>
-          <Card variant="outlined" sx={{ width: 110, height: 176, flexShrink: 0, borderRadius: 3 }}>
-            <CardActionArea onClick={() => setShowModal(true)} sx={{ height: "100%", p: 2 }}>
+      <Box className="no-scrollbar" sx={{ width: "100%", overflowX: "auto", pb: 0.25 }}>
+        <Stack direction="row" spacing={1.25} sx={{ width: "max-content", pb: 1 }}>
+          <Card
+            variant="outlined"
+            sx={{
+              width: { xs: 94, sm: 104 },
+              height: { xs: 144, sm: 156 },
+              flexShrink: 0,
+              borderRadius: 4,
+              background: (theme) => `linear-gradient(155deg, ${theme.palette.background.paper}, ${theme.palette.action.hover})`,
+            }}
+          >
+            <CardActionArea onClick={() => setShowModal(true)} sx={{ height: "100%", p: 1.5 }}>
               <Stack spacing={2} sx={{ height: "100%", textAlign: "center", alignItems: "center", justifyContent: "center" }}>
-                <Box sx={{ width: 48, height: 48, borderRadius: 2, bgcolor: "primary.main", color: "primary.contrastText", display: "grid", placeItems: "center" }}>
-                  <Plus size={24} />
+                <Box sx={{ width: 44, height: 44, borderRadius: 3, bgcolor: "primary.main", color: "primary.contrastText", display: "grid", placeItems: "center", boxShadow: "0 8px 20px rgba(101,88,245,.24)" }}>
+                  <Plus size={22} />
                 </Box>
                 <Typography variant="caption" sx={{ fontWeight: 800, lineHeight: 1.25 }}>
                   {t("feed.create_story")}
@@ -56,7 +65,7 @@ const StoriesBar = () => {
             <Card
               key={story._id || `${story.user?._id}-${story.createdAt}-${index}`}
               variant="outlined"
-              sx={{ width: 110, height: 176, flexShrink: 0, borderRadius: 3, bgcolor: "common.black" }}
+              sx={{ width: { xs: 94, sm: 104 }, height: { xs: 144, sm: 156 }, flexShrink: 0, borderRadius: 4, bgcolor: "common.black" }}
             >
               <CardActionArea onClick={() => setViewStory(story)} sx={{ height: "100%", position: "relative" }}>
                 {story.media_type === "text" ? (
@@ -77,10 +86,10 @@ const StoriesBar = () => {
                   />
                 )}
                 <Box sx={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,.65), transparent 42%, rgba(0,0,0,.82))" }} />
-                <Avatar src={story.user?.profile_picture || undefined} alt={story.user?.full_name} sx={{ position: "absolute", top: 12, left: 12, width: 38, height: 38, border: 2, borderColor: "primary.main" }}>
+                <Avatar src={story.user?.profile_picture || undefined} alt={story.user?.full_name} sx={{ position: "absolute", top: 9, left: 9, width: 34, height: 34, border: 2, borderColor: "primary.main" }}>
                   {story.user?.full_name?.charAt(0)}
                 </Avatar>
-                <Stack sx={{ position: "absolute", left: 14, right: 10, bottom: 12, color: "common.white" }}>
+                <Stack sx={{ position: "absolute", left: 11, right: 9, bottom: 10, color: "common.white" }}>
                   <Typography variant="caption" noWrap sx={{ fontWeight: 800 }}>
                     {story.user?.full_name?.split(" ")[0]}
                   </Typography>

@@ -1,81 +1,132 @@
-import { useState } from 'react';
-import { Box, Button, TextField, Typography, Stack, Alert, Paper, Link as MuiLink } from '@mui/material';
-import { useAuthContext } from '../context/AuthProvider.jsx';
-import { Link, useNavigate } from 'react-router-dom';
+import LockOutlined from "@mui/icons-material/LockOutlined";
+import MailOutlineRounded from "@mui/icons-material/MailOutlineRounded";
+import VisibilityOffOutlined from "@mui/icons-material/VisibilityOffOutlined";
+import VisibilityOutlined from "@mui/icons-material/VisibilityOutlined";
+import Alert from "@mui/material/Alert";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Checkbox from "@mui/material/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import IconButton from "@mui/material/IconButton";
+import InputAdornment from "@mui/material/InputAdornment";
+import Link from "@mui/material/Link";
+import Stack from "@mui/material/Stack";
+import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
+import { useState } from "react";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
+import AuthShell from "~/components/AuthShell";
+import { useAuthContext } from "../context/AuthProvider.jsx";
 
 const Login = () => {
   const { login } = useAuthContext();
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({ email: '', password: '' });
-  const [error, setError] = useState('');
+  const [formData, setFormData] = useState({ email: "", password: "" });
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
+  const updateField = (field) => (event) => {
+    setFormData((current) => ({ ...current, [field]: event.target.value }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError("");
     setLoading(true);
-    const result = await login(formData.email, formData.password);
-    if (result.success) {
-      navigate('/');
-    } else {
-      setError(result.message || 'Login failed');
+
+    try {
+      const result = await login(formData.email.trim(), formData.password);
+      if (result.success) {
+        navigate("/feed");
+      } else {
+        setError(result.message || "We could not sign you in. Please check your details.");
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
-    <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default' }}>
-      <Paper elevation={3} sx={{ p: 4, width: '100%', maxWidth: 400 }}>
-        <Typography variant="h4" align="center" gutterBottom fontWeight="bold">
-          Welcome Back
-        </Typography>
-        <Typography variant="body2" align="center" color="text.secondary" mb={4}>
-          Sign in to your MotionMeet account
-        </Typography>
+    <AuthShell
+      eyebrow="Welcome back"
+      title="Ready for your next move?"
+      description="Sign in to continue your workouts, progress and conversations."
+    >
+      {error && <Alert severity="error" sx={{ mb: 2.5, borderRadius: 3 }}>{error}</Alert>}
 
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-
-        <form onSubmit={handleSubmit}>
-          <Stack spacing={3}>
-            <TextField
-              label="Email"
-              type="email"
-              variant="outlined"
-              fullWidth
-              required
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+      <Box component="form" onSubmit={handleSubmit} noValidate>
+        <Stack spacing={2.25}>
+          <TextField
+            label="Email address"
+            type="email"
+            fullWidth
+            required
+            autoFocus
+            autoComplete="email"
+            value={formData.email}
+            onChange={updateField("email")}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <MailOutlineRounded color="disabled" fontSize="small" />
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
+          <TextField
+            label="Password"
+            type={showPassword ? "text" : "password"}
+            fullWidth
+            required
+            autoComplete="current-password"
+            value={formData.password}
+            onChange={updateField("password")}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <LockOutlined color="disabled" fontSize="small" />
+                  </InputAdornment>
+                ),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      edge="end"
+                      onClick={() => setShowPassword((visible) => !visible)}
+                    >
+                      {showPassword ? <VisibilityOffOutlined /> : <VisibilityOutlined />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
+          <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mt: -0.5 }}>
+            <FormControlLabel
+              control={<Checkbox size="small" defaultChecked />}
+              label={<Typography variant="body2" color="text.secondary">Keep me signed in</Typography>}
             />
-            <TextField
-              label="Password"
-              type="password"
-              variant="outlined"
-              fullWidth
-              required
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-            />
-            <Button
-              type="submit"
-              variant="contained"
-              size="large"
-              fullWidth
-              disabled={loading}
-              sx={{ py: 1.5 }}
-            >
-              {loading ? 'Signing in...' : 'Sign In'}
-            </Button>
+            <Link href="mailto:support@motionmeet.app" underline="hover" variant="body2" sx={{ fontWeight: 800 }}>
+              Forgot password?
+            </Link>
           </Stack>
-        </form>
+          <Button type="submit" variant="contained" size="large" fullWidth disabled={loading} sx={{ minHeight: 52 }}>
+            {loading ? "Signing in…" : "Sign in"}
+          </Button>
+        </Stack>
+      </Box>
 
-        <Typography variant="body2" align="center" sx={{ mt: 3 }}>
-          Don't have an account?{' '}
-          <MuiLink component={Link} to="/signup" underline="hover">
-            Sign Up
-          </MuiLink>
-        </Typography>
-      </Paper>
-    </Box>
+      <Typography variant="body2" align="center" color="text.secondary" sx={{ mt: 3 }}>
+        New to MotionMeet?{" "}
+        <Link component={RouterLink} to="/signup" underline="hover" sx={{ fontWeight: 800 }}>
+          Create an account
+        </Link>
+      </Typography>
+    </AuthShell>
   );
 };
 

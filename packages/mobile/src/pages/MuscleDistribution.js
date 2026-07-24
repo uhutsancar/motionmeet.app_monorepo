@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, Dimensions, ActivityIndicator } from 'react-native';
+import { ScrollView, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,12 +10,11 @@ import { getWorkoutStats } from '../api/endpoints';
 import { useAuthContext } from '../context/AuthProvider';
 import { useMuscleGroups } from '../hooks/useMuscleGroups';
 
-const { width } = Dimensions.get('window');
-const SIZE = width - 80;
-const CENTER = SIZE / 2;
-const RADIUS = SIZE / 2 - 30;
-
 const MuscleDistribution = ({ navigation }) => {
+  const { width } = useWindowDimensions();
+  const SIZE = Math.min(width - 80, 420);
+  const CENTER = SIZE / 2;
+  const RADIUS = SIZE / 2 - 30;
   const { t } = useTranslation();
   const { theme } = useTheme();
   const styles = getStyles(theme);
@@ -45,7 +44,7 @@ const MuscleDistribution = ({ navigation }) => {
       }
     };
     fetchStats();
-  }, [period]);
+  }, [getToken, period]);
 
   const MUSCLE_KEYS = muscleGroupsList.map(mg => mg.code);
 
@@ -78,7 +77,7 @@ const MuscleDistribution = ({ navigation }) => {
         </Surface>
       </Surface>
 
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
 
         {/* Period dropdown */}
         <Surface elevation={0} style={{ alignSelf: 'center', marginTop: 10 }}>

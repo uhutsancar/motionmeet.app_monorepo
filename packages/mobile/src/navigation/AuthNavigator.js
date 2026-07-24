@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Image } from 'react-native';
-import { ActivityIndicator, Text, Surface, TouchableRipple } from 'react-native-paper';
+import { ActivityIndicator, Text, Surface } from 'react-native-paper';
 import { useAuthContext } from "../context/AuthProvider";
 import { useDispatch } from 'react-redux';
 import { fetchUser } from '../features/user/userSlice';

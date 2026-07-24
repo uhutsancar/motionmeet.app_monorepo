@@ -7,7 +7,9 @@ dist
 build
 coverage
 .expo
-.env
+**/.env
+**/.env.*
+!**/.env.example
 .DS_Store
 *.log
-packages/mobile/
+exercises-dataset-main/

@@ -7,10 +7,13 @@ export const getConversations = async (token) => {
   return data;
 };
 
-export const getMessages = async (token, toUserId) => {
+export const getMessages = async (token, toUserId, cursor) => {
   const { data } = await api.post('/api/message/get', 
     { to_user_id: toUserId },
-    { headers: { Authorization: `Bearer ${token}` } }
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      params: cursor ? { cursor } : undefined,
+    }
   );
   return data;
 };

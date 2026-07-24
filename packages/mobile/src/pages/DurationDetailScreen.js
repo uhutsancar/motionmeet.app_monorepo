@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, Dimensions } from 'react-native';
+import { ScrollView, useWindowDimensions } from 'react-native';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,9 +7,9 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { BarChart } from 'react-native-chart-kit';
 
-const { width } = Dimensions.get('window');
-
 const DurationDetailScreen = ({ navigation, route }) => {
+  const { width } = useWindowDimensions();
+  const chartWidth = Math.min(width - 32, 688);
   const { t } = useTranslation();
   const { theme } = useTheme();
   const styles = getStyles(theme);
@@ -62,7 +62,7 @@ const DurationDetailScreen = ({ navigation, route }) => {
           ) : (
             <BarChart
               data={chartData}
-              width={width - 32}
+              width={chartWidth}
               height={200}
               fromZero
               chartConfig={{
@@ -96,7 +96,7 @@ const getStyles = (theme) => ({
   },
   iconBtn: { width: 34, height: 34, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '700', color: theme.text },
-  content: { padding: 16 },
+  content: { width: '100%', maxWidth: 720, alignSelf: 'center', padding: 16 },
   summaryRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
   summaryCard: {
     flex: 1, backgroundColor: theme.surface, borderRadius: 16, padding: 16,

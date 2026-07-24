@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, FlatList, Image, ScrollView, StatusBar, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActivityIndicator, Appbar, Button, Chip, Divider, Surface, Text } from 'react-native-paper';
@@ -30,18 +30,18 @@ const Connections = ({ navigation }) => {
     Connections: connections,
   };
 
-  useEffect(() => {
-    loadConnections();
-  }, []);
-
-  const loadConnections = async () => {
+  const loadConnections = useCallback(async () => {
     try {
       const token = await getToken();
       dispatch(fetchConnections(token));
     } catch (error) {
       Alert.alert(t('common.error', 'Hata'), error.message);
     }
-  };
+  }, [dispatch, getToken, t]);
+
+  useEffect(() => {
+    loadConnections();
+  }, [loadConnections]);
 
   const handleUnfollow = async (userId) => {
     try {

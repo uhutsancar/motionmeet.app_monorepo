@@ -15,6 +15,12 @@ export const isOptionalString = (value, maxLength = 255) =>
   value === undefined || value === null || (typeof value === "string" && value.trim().length <= maxLength);
 
 export const isFiniteNumber = (value, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) => {
+  if (
+    (typeof value !== "number" && typeof value !== "string") ||
+    (typeof value === "string" && value.trim() === "")
+  ) {
+    return false;
+  }
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= min && parsed <= max;
 };
@@ -47,4 +53,3 @@ export const isExerciseList = (value, { allowEmpty = false } = {}) => {
     });
   });
 };
-

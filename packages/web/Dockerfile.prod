@@ -7,9 +7,11 @@ RUN corepack enable && corepack prepare pnpm@11.10.0 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.json ./
 COPY packages/backend/package.json ./packages/backend/package.json
 COPY packages/web/package.json ./packages/web/package.json
+COPY packages/shared/package.json ./packages/shared/package.json
 RUN pnpm install --frozen-lockfile --filter @motionmeet/web
 
 COPY packages/web ./packages/web
+COPY packages/shared ./packages/shared
 
 # VITE_ vars are baked into the JS bundle at build time — pass as build args
 ARG VITE_BASEURL

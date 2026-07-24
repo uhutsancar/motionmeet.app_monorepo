@@ -14,6 +14,7 @@ import {
     Box, Stack, Typography, IconButton, Button, Paper, TextField,
     Divider, CircularProgress, Select, MenuItem, InputLabel, FormControl
 } from '@mui/material';
+import { uploadMedia } from '~/api/mediaUpload';
 const formatTime = (seconds) => {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
@@ -83,7 +84,6 @@ const WorkoutSummary = () => {
         setSaving(true);
         try {
             const token = await getToken();
-            const authHeaders = { Authorization: `Bearer ${token}` };
 
             // 1. Save workout to DB (if not already saved from ActiveWorkout)
             let savedWorkoutId = savedWorkoutIdRef.current;
@@ -108,15 +108,14 @@ const WorkoutSummary = () => {
 
             // 2. Create workout post (ALWAYS, visibility controls who sees it)
             if (mediaFile) {
-                // With photo → multipart
-                const formData = new FormData();
-                formData.append('content', note.trim() || '');
-                formData.append('post_type', 'workout');
-                formData.append('visibility', visibility);
-                if (savedWorkoutId) formData.append('workout', savedWorkoutId);
-                formData.append('images', mediaFile);
-
-                const postRes = await createPost(formData, token);
+                const uploadedKey = await uploadMedia(mediaFile, 'posts', token);
+                const postRes = await createPost({
+                    content: note.trim() || '',
+                    post_type: 'workout',
+                    visibility,
+                    workout: savedWorkoutId,
+                    uploadedKeys: [uploadedKey],
+                }, token);
                 if (!postRes.success) throw new Error(postRes.message);
             } else {
                 // No photo → JSON

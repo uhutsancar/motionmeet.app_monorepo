@@ -10,12 +10,14 @@ const exerciseSchema = new mongoose.Schema(
     instructions: { type: Map, of: String, default: {} }, // { en, tr, es, it }
     instructionSteps: { type: Map, of: [String], default: {} },
     isCustom: { type: Boolean, default: false },
+    createdBy: { type: String, ref: "User", default: null },
   },
   { timestamps: true }
 );
 
 // Text search index
 exerciseSchema.index({ name: "text", muscleGroup: "text" });
+exerciseSchema.index({ createdBy: 1, name: 1 });
 
 const Exercise = mongoose.model("Exercise", exerciseSchema);
 

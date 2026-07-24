@@ -4,12 +4,12 @@ import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { useSelector, useDispatch } from 'react-redux';
 import { useAuthContext } from "../context/AuthProvider";
 import { Ionicons } from '@expo/vector-icons';
-import { followUser, unfollowUser, sendConnectionRequest } from '../api/endpoints';
+import { followUser, unfollowUser } from '../api/endpoints';
 import { fetchUser } from '../features/user/userSlice';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 
-const UserCard = ({ user, onPress, onMessagePress }) => {
+const UserCard = ({ user, onPress }) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
   const styles = getStyles(theme);
@@ -46,10 +46,18 @@ const UserCard = ({ user, onPress, onMessagePress }) => {
   return (
     <Surface elevation={0} style={styles.card}>
       <Surface elevation={0} style={styles.infoSection}>
-        <Image 
-          source={{ uri: user.profile_picture }}
-          style={styles.avatar}
-        />
+        {user.profile_picture ? (
+          <Image
+            source={{ uri: user.profile_picture }}
+            style={styles.avatar}
+          />
+        ) : (
+          <Surface elevation={0} style={[styles.avatar, styles.avatarPlaceholder]}>
+            <Text style={styles.avatarPlaceholderText}>
+              {user.full_name?.charAt(0)?.toUpperCase() || 'U'}
+            </Text>
+          </Surface>
+        )}
         <Text style={styles.fullName}>{user.full_name}</Text>
         {user.username && (
           <Text style={styles.username}>@{user.username}</Text>
@@ -96,10 +104,10 @@ const UserCard = ({ user, onPress, onMessagePress }) => {
 
 const getStyles = (theme) => ({
   card: {
-    width: 200,
-    padding: 16,
+    width: 184,
+    padding: 14,
     backgroundColor: theme.surface,
-    borderRadius: 24,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: theme.border,
     marginRight: 12,
@@ -114,6 +122,16 @@ const getStyles = (theme) => ({
     marginBottom: 10,
     borderWidth: 2,
     borderColor: theme.background,
+  },
+  avatarPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.primarySoft,
+  },
+  avatarPlaceholderText: {
+    color: theme.primary,
+    fontSize: 20,
+    fontWeight: '900',
   },
   fullName: {
     fontSize: 14,

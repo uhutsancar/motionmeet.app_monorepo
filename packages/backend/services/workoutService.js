@@ -1,5 +1,9 @@
 import Workout from "../models/Workout.js";
 import User from "../models/User.js";
+import {
+  cursorFilter,
+  pageFromDocuments,
+} from "../utils/pagination.js";
 
 export const countUserWorkoutsFromDate = async (userId, startDate) => {
   return await Workout.countDocuments({ 
@@ -8,36 +12,57 @@ export const countUserWorkoutsFromDate = async (userId, startDate) => {
   });
 };
 
-export const createWorkout = async (workoutData) => {
-  return await Workout.create(workoutData);
+export const createWorkoutWithStatistics = async (workoutData) => {
+  let workout;
+  try {
+    workout = await Workout.create(workoutData);
+    const result = await User.updateOne(
+      { _id: workoutData.userId },
+      {
+        $inc: {
+          "statistics.totalWorkouts": 1,
+          "statistics.totalDurationMinutes": Number(workoutData.durationMinutes || 0),
+          "statistics.totalVolumeKg": Number(workoutData.volumeKg || 0),
+        },
+      }
+    );
+    if (result.matchedCount !== 1) throw new Error("Workout owner no longer exists");
+    return workout;
+  } catch (error) {
+    if (workout?._id) await Workout.deleteOne({ _id: workout._id });
+    throw error;
+  }
 };
 
-export const updateUserStatistics = async (userId, durationMinutes, volumeKg) => {
-  await User.updateOne(
-    { _id: userId },
-    {
-      $inc: {
-        "statistics.totalWorkouts": 1,
-        "statistics.totalDurationMinutes": Number(durationMinutes || 0),
-        "statistics.totalVolumeKg": Number(volumeKg || 0),
-      },
-    }
-  );
-};
-
-export const getUserWorkoutsList = async (userId) => {
-  return await Workout.find({ userId })
+export const getUserWorkoutsList = async (userId, pagination) => {
+  const documents = await Workout.find({
+    userId,
+    ...cursorFilter(pagination.cursor, "startTime"),
+  })
     .populate("exercises.exerciseId")
-    .sort({ startTime: -1 });
+    .sort({ startTime: -1, _id: -1 })
+    .limit(pagination.limit + 1);
+  return pageFromDocuments(documents, pagination.limit, "startTime");
 };
 
 export const getWorkoutStatsData = async (userId, period) => {
-  const workouts = await Workout.find({ userId })
-    .populate("exercises.exerciseId")
-    .sort({ startTime: 1 });
+  const now = new Date();
+  const windowDays = period === "week" ? 7 : period === "month" ? 30 : 365;
+  const cutoff = new Date(now);
+  cutoff.setUTCDate(cutoff.getUTCDate() - windowDays + 1);
+  cutoff.setUTCHours(0, 0, 0, 0);
+
+  const workouts = await Workout.find({
+    userId,
+    startTime: { $gte: cutoff, $lte: now },
+  })
+    .select("startTime createdAt durationMinutes volumeKg exercises")
+    .populate("exercises.exerciseId", "name muscleGroup")
+    .sort({ startTime: 1, _id: 1 })
+    .lean();
 
   const MuscleGroup = (await import("../models/MuscleGroup.js")).default;
-  const activeMuscleGroups = await MuscleGroup.find({ isActive: true });
+  const activeMuscleGroups = await MuscleGroup.find({ isActive: true }).lean();
   
   const muscleDistribution = {};
   activeMuscleGroups.forEach((mg) => { muscleDistribution[mg.code] = 0; });
@@ -53,8 +78,6 @@ export const getWorkoutStatsData = async (userId, period) => {
 
   const grouped = {};
   const exerciseTotals = {};
-  const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   let totalSets = 0;
 
   const muscleMap = {
@@ -68,10 +91,18 @@ export const getWorkoutStatsData = async (userId, period) => {
 
   workouts.forEach((w) => {
     const d = new Date(w.startTime || w.createdAt);
-    let label;
-    if (period === "week") label = DAY_NAMES[d.getDay()];
-    else if (period === "month") label = MONTH_NAMES[d.getMonth()];
-    else label = String(d.getFullYear());
+    const label = period === "year"
+      ? d.toLocaleDateString("en-US", {
+          month: "short",
+          timeZone: "UTC",
+          year: "2-digit",
+        })
+      : d.toLocaleDateString("en-US", {
+          day: period === "month" ? "numeric" : undefined,
+          month: period === "month" ? "short" : undefined,
+          timeZone: "UTC",
+          weekday: period === "week" ? "short" : undefined,
+        });
 
     if (!grouped[label]) grouped[label] = { volume: 0, duration: 0, reps: 0 };
     grouped[label].volume += w.volumeKg || 0;

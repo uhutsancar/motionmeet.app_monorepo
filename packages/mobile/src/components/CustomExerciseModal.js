@@ -12,13 +12,14 @@ import { useTranslation } from 'react-i18next';
 import { useAuthContext } from "../context/AuthProvider";
 import { setAuthToken } from '../api/client';
 import { createExercise } from '../api/endpoints';
-import { Appbar, Text, TextInput, Button, TouchableRipple, Surface, useTheme as usePaperTheme } from 'react-native-paper';
+import { Appbar, Text, TextInput, Button, TouchableRipple, Surface } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMuscleGroups } from '../hooks/useMuscleGroups';
 import { useEquipment } from '../hooks/useEquipment';
 
 const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
   const { theme } = useTheme();
-  const paperTheme = usePaperTheme();
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { getToken } = useAuthContext();
   
@@ -152,12 +153,12 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
       justifyContent: 'space-between',
       alignItems: 'center',
     }
-  }), [theme, paperTheme]);
+  }), [theme]);
 
   return (
     <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={handleClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-        <Surface style={styles.modalContent} elevation={4}>
+        <Surface style={[styles.modalContent, { paddingBottom: insets.bottom }]} elevation={4}>
           
           <Appbar.Header style={styles.header}>
             <Appbar.Action icon="close" onPress={handleClose} color={theme.text} />

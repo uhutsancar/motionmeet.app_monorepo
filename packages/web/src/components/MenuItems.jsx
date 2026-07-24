@@ -1,57 +1,83 @@
 import Badge from "@mui/material/Badge";
+import Box from "@mui/material/Box";
 import List from "@mui/material/List";
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
-import { NavLink } from "react-router-dom";
-import { useLocation } from "react-router-dom";
-import { menuItemsData } from "~/assets/assets";
+import { alpha } from "@mui/material/styles";
 import { useTranslation } from "react-i18next";
+import { NavLink, useLocation } from "react-router-dom";
+import { menuItemsData } from "~/assets/assets";
 
 const MenuItems = ({ setSideBarOpen, unreadCount = 0 }) => {
   const { t } = useTranslation();
   const { pathname } = useLocation();
 
   return (
-    <List component="nav" aria-label="Primary navigation" sx={{ px: 2, py: 0 }}>
+    <List component="nav" aria-label="Primary navigation" sx={{ px: 1.5, py: 0 }}>
       {menuItemsData.map(({ to, label, Icon }) => {
         const isActive = pathname === to || pathname.startsWith(`${to}/`);
-        const icon = (
-          <Icon fontSize="small" color={isActive ? "primary" : "inherit"} />
-        );
+        const icon = <Icon sx={{ fontSize: 21 }} />;
 
         return (
           <ListItemButton
             key={to}
             component={NavLink}
             to={to}
-            selected={isActive}
+            aria-current={isActive ? "page" : undefined}
             onClick={() => setSideBarOpen(false)}
             sx={{
-              borderRadius: 2,
+              position: "relative",
+              borderRadius: 3,
               mb: 0.5,
-              minHeight: 44,
-              border: 1,
-              borderColor: isActive ? "divider" : "transparent",
-              "&.Mui-selected": { bgcolor: "action.selected" },
-              "&.Mui-selected:hover": { bgcolor: "action.hover" },
+              minHeight: 48,
+              px: 1.25,
+              color: isActive ? "primary.main" : "text.secondary",
+              "&::before": {
+                content: '""',
+                position: "absolute",
+                left: 0,
+                width: 3,
+                height: isActive ? 22 : 0,
+                borderRadius: 3,
+                bgcolor: "primary.main",
+                transition: "height 180ms ease",
+              },
+              "&.Mui-selected": {
+                bgcolor: (theme) => alpha(theme.palette.primary.main, 0.1),
+              },
+              "&.Mui-selected:hover": {
+                bgcolor: (theme) => alpha(theme.palette.primary.main, 0.14),
+              },
             }}
           >
-            <ListItemIcon sx={{ color: isActive ? "primary.main" : "text.secondary", minWidth: 38 }}>
-              {to === "/messages" ? (
-                <Badge badgeContent={unreadCount} color="error" max={99}>
-                  {icon}
-                </Badge>
-              ) : icon}
+            <ListItemIcon sx={{ color: "inherit", minWidth: 40 }}>
+              <Box
+                sx={{
+                  display: "grid",
+                  placeItems: "center",
+                  width: 30,
+                  height: 30,
+                  borderRadius: 2,
+                  bgcolor: isActive ? (theme) => alpha(theme.palette.primary.main, 0.1) : "transparent",
+                }}
+              >
+                {to === "/messages" ? (
+                  <Badge badgeContent={unreadCount} color="error" max={99}>
+                    {icon}
+                  </Badge>
+                ) : icon}
+              </Box>
             </ListItemIcon>
             <ListItemText
               primary={t(`menu.${label.toLowerCase()}`)}
               slotProps={{
                 primary: {
                   sx: {
-                    color: isActive ? "primary.main" : "text.secondary",
-                    fontSize: 15,
-                    fontWeight: isActive ? 700 : 500,
+                    color: "inherit",
+                    fontSize: 14,
+                    fontWeight: isActive ? 800 : 650,
+                    letterSpacing: "-0.01em",
                   },
                 },
               }}

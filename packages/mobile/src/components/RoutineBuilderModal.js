@@ -8,11 +8,13 @@ import { useAuthContext } from "../context/AuthProvider";
 import { setAuthToken } from '../api/client';
 import { getExercises, createRoutine } from '../api/endpoints';
 import Toast from 'react-native-toast-message';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
   const { getToken } = useAuthContext();
+  const insets = useSafeAreaInsets();
   const styles = getStyles(theme);
 
   const [name, setName] = useState("");
@@ -40,7 +42,7 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
     };
     const delay = searchQuery.trim().length > 0 ? setTimeout(fetchEx, 400) : (fetchEx(), undefined);
     return () => clearTimeout(delay);
-  }, [searchQuery, visible]);
+  }, [getToken, searchQuery, visible]);
 
   const addExercise = (ex) => {
     if (selectedExercises.find(e => e.exerciseId._id === ex._id)) {
@@ -123,7 +125,7 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
   return (
     <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={handleClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-        <Surface elevation={0} style={styles.modalContent}>
+        <Surface elevation={0} style={[styles.modalContent, { paddingBottom: insets.bottom }]}>
           <Surface elevation={0} style={styles.header}>
             <TouchableRipple borderless onPress={handleClose} style={styles.iconBtn}>
               <Ionicons name="close" size={24} color={theme.text} />

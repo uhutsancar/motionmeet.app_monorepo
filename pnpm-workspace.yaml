@@ -1,6 +1,10 @@
 packages:
   - "packages/*"
 
+overrides:
+  "postcss@<8.5.12": "^8.5.12"
+  "uuid@<11.1.1": "^11.1.1"
+
 allowBuilds:
   browser-tabs-lock: false
   bufferutil: false

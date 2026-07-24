@@ -6,7 +6,7 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { useAuthContext } from "../context/AuthProvider";
@@ -22,41 +22,45 @@ import SuggestedAthletes from '../components/SuggestedAthletes';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { setAuthToken } from '../api/client';
-import { Appbar, IconButton, Text, Surface, FAB, ActivityIndicator } from 'react-native-paper';
+import { IconButton, Text, Surface, FAB, ActivityIndicator } from 'react-native-paper';
 
 const Feed = ({ navigation }) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
-  const TAB_BAR_HEIGHT = 78;
-  const fabBottom = TAB_BAR_HEIGHT + insets.bottom + 16;
   const dispatch = useDispatch();
   const { getToken } = useAuthContext();
   const { stories } = useSelector((state) => state.stories);
-  const { posts, loading: postsLoading } = useSelector((state) => state.posts);
+  const {
+    posts,
+    nextCursor,
+    loading: postsLoading,
+    loadingMore,
+  } = useSelector((state) => state.posts);
   const user = useSelector((state) => state.user.value);
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [showStoryModal, setShowStoryModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('discover');
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const token = await getToken();
       // Set global auth token for api interceptor (used by SuggestedAthletes, Profile, etc.)
       if (token) setAuthToken(token);
-      dispatch(fetchUser(token));
-      dispatch(fetchStories(token));
-      dispatch(fetchPosts(token));
-      dispatch(fetchConnections(token));
+      await Promise.all([
+        dispatch(fetchUser(token)),
+        dispatch(fetchStories(token)),
+        dispatch(fetchPosts({ token })),
+        dispatch(fetchConnections(token)),
+      ]);
     } catch (error) {
       console.error('Error loading data:', error);
     }
-  };
+  }, [dispatch, getToken]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -66,6 +70,11 @@ const Feed = ({ navigation }) => {
 
   const handleComment = useCallback(() => {}, []);
   const handleShare = useCallback(() => {}, []);
+  const handleLoadMore = useCallback(async () => {
+    if (!nextCursor || loadingMore || postsLoading) return;
+    const token = await getToken();
+    await dispatch(fetchPosts({ token, cursor: nextCursor }));
+  }, [dispatch, getToken, loadingMore, nextCursor, postsLoading]);
   const handleUserPress = useCallback((userId) => {
     navigation.navigate('Profile', { userId });
   }, [navigation]);
@@ -96,30 +105,40 @@ const Feed = ({ navigation }) => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
       {/* Header */}
-      <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12, backgroundColor: theme.background }}>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 16 }}>
+      <Surface elevation={0} style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        minHeight: 62,
+        paddingHorizontal: 16,
+        paddingVertical: 9,
+        backgroundColor: theme.surface,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.border,
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18, flexShrink: 1 }}>
           <TouchableOpacity 
             style={{ paddingVertical: 4, position: 'relative' }}
             onPress={() => setActiveTab('discover')}
           >
-            <Text style={{ fontSize: 22, fontWeight: '900', color: activeTab === 'discover' ? theme.text : theme.textMuted, letterSpacing: -0.5 }}>
+            <Text style={{ fontSize: 19, fontWeight: '900', color: activeTab === 'discover' ? theme.text : theme.textMuted, letterSpacing: -0.5 }}>
               {t('feed.discover')}
             </Text>
-            {activeTab === 'discover' && <View style={{ position: 'absolute', bottom: -4, left: 0, right: 0, height: 3, borderRadius: 2, backgroundColor: theme.primary }} />}
+            {activeTab === 'discover' && <View style={{ position: 'absolute', bottom: -5, left: 0, width: 22, height: 3, borderRadius: 2, backgroundColor: theme.primary }} />}
           </TouchableOpacity>
           <TouchableOpacity 
             style={{ paddingVertical: 4, position: 'relative' }}
             onPress={() => setActiveTab('following')}
           >
-            <Text style={{ fontSize: 22, fontWeight: '900', color: activeTab === 'following' ? theme.text : theme.textMuted, letterSpacing: -0.5 }}>
+            <Text style={{ fontSize: 19, fontWeight: '900', color: activeTab === 'following' ? theme.text : theme.textMuted, letterSpacing: -0.5 }}>
               {t('feed.following')}
             </Text>
-            {activeTab === 'following' && <View style={{ position: 'absolute', bottom: -4, left: 0, right: 0, height: 3, borderRadius: 2, backgroundColor: theme.primary }} />}
+            {activeTab === 'following' && <View style={{ position: 'absolute', bottom: -5, left: 0, width: 22, height: 3, borderRadius: 2, backgroundColor: theme.primary }} />}
           </TouchableOpacity>
         </View>
-        <View style={{ flexDirection: 'row', gap: 4 }}>
-          <IconButton icon="magnify" size={24} iconColor={theme.text} style={{ backgroundColor: theme.surface, margin: 0 }} />
-          <IconButton icon="bell-outline" size={24} iconColor={theme.text} style={{ backgroundColor: theme.surface, margin: 0 }} />
+        <View style={{ flexDirection: 'row', gap: 2 }}>
+          <IconButton icon="magnify" size={21} iconColor={theme.text} style={{ backgroundColor: theme.surfaceLight, margin: 0 }} />
+          <IconButton icon="bell-outline" size={21} iconColor={theme.text} style={{ backgroundColor: theme.surfaceLight, margin: 0 }} onPress={() => navigation.navigate('NotificationsScreen')} />
         </View>
       </Surface>
 
@@ -137,7 +156,7 @@ const Feed = ({ navigation }) => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
         }
         ListHeaderComponent={
-          <View style={{ paddingVertical: 12 }}>
+          <View style={{ paddingVertical: 12, backgroundColor: theme.background }}>
             <StoriesBar onAddStory={() => setShowStoryModal(true)} />
           </View>
         }
@@ -154,15 +173,35 @@ const Feed = ({ navigation }) => {
             </View>
           )
         }
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 100 }}
+        ListFooterComponent={
+          loadingMore ? (
+            <View style={{ padding: 20, alignItems: 'center' }}>
+              <ActivityIndicator animating color={theme.primary} />
+            </View>
+          ) : null
+        }
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.4}
+        style={{ flex: 1, width: '100%', maxWidth: 720, alignSelf: 'center' }}
+        contentContainerStyle={{ paddingBottom: 24 }}
       />
 
       {/* Floating Action Button for Create Post */}
       <FAB
         icon="plus"
         color="#fff"
-        style={{ position: 'absolute', margin: 16, right: 0, bottom: fabBottom, backgroundColor: theme.primary, borderRadius: 30 }}
+        style={{
+          position: 'absolute',
+          margin: 16,
+          right: 0,
+          bottom: 16,
+          backgroundColor: theme.primary,
+          borderRadius: 18,
+          shadowColor: theme.shadow,
+          shadowOpacity: 0.24,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 6 },
+        }}
         onPress={() => setShowCreatePost(true)}
       />
 

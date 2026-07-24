@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { CheckCircle2, BarChart3, Users, Zap, ArrowRight, Star } from 'lucide-react';
 import PublicLayout from './PublicLayout';
 import { Box, Stack, Typography, Button, Container, Grid, Paper, useTheme, Avatar } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 
 const StatCard = ({ value, label }) => {
   const theme = useTheme();
@@ -170,7 +171,14 @@ const Landing = () => {
   return (
     <PublicLayout>
       {/* ── HERO ──────────────────────────────────────────── */}
-      <Box sx={{ position: 'relative', overflow: 'hidden', pt: { xs: 8, sm: 12 }, pb: { xs: 10, sm: 14 }, px: { xs: 2, sm: 3 } }}>
+      <Box sx={{
+        position: 'relative',
+        overflow: 'hidden',
+        pt: { xs: 6, sm: 10, lg: 12 },
+        pb: { xs: 9, sm: 13 },
+        px: { xs: 2, sm: 3 },
+        background: (muiTheme) => `linear-gradient(180deg, ${alpha(muiTheme.palette.primary.main, 0.055)}, transparent 48%)`,
+      }}>
         <Box sx={{ position: 'absolute', top: -160, right: -160, width: 600, height: 600, borderRadius: '50%', bgcolor: `${theme.palette.primary.main}15`, filter: 'blur(80px)', pointerEvents: 'none' }} />
         <Box sx={{ position: 'absolute', bottom: -160, left: -160, width: 500, height: 500, borderRadius: '50%', bgcolor: `${theme.palette.secondary.main}15`, filter: 'blur(80px)', pointerEvents: 'none' }} />
 
@@ -183,12 +191,12 @@ const Landing = () => {
                   <Typography variant="body2" sx={{ color: theme.palette.primary.main, fontWeight: 600 }}>{t('landing.hero_badge')}</Typography>
                 </Box>
                 
-                <Typography variant="h2" sx={{ fontWeight: 800, lineHeight: 1.1, fontSize: { xs: '3rem', sm: '3.75rem', lg: '4.5rem' }, letterSpacing: '-0.02em' }}>
+                <Typography variant="h2" sx={{ fontWeight: 800, lineHeight: 1.06, fontSize: { xs: '2.45rem', sm: '3.55rem', lg: '4.4rem' }, letterSpacing: '-0.045em', overflowWrap: 'anywhere' }}>
                   {t('landing.hero_headline')}<br />
                   <Box component="span" sx={{ color: theme.palette.primary.main }}>{t('landing.hero_headline2')}</Box>
                 </Typography>
 
-                <Typography variant="h6" sx={{ color: 'text.secondary', fontWeight: 400, maxWidth: 600, lineHeight: 1.6 }}>
+                <Typography sx={{ color: 'text.secondary', fontSize: { xs: 16, sm: 18 }, fontWeight: 500, maxWidth: 600, lineHeight: 1.7 }}>
                   {t('landing.hero_sub')}
                 </Typography>
 
@@ -198,7 +206,7 @@ const Landing = () => {
                     variant="contained" 
                     size="large"
                     endIcon={<ArrowRight size={18} />}
-                    sx={{ px: 4, py: 1.5, borderRadius: 3, fontWeight: 'bold', fontSize: '1rem', boxShadow: `0 10px 25px -5px ${theme.palette.primary.main}66` }}
+                    sx={{ px: 4, minHeight: 52, borderRadius: 3.5, fontWeight: 'bold', fontSize: '1rem', boxShadow: `0 12px 28px -7px ${theme.palette.primary.main}80` }}
                   >
                     {t('landing.hero_cta_primary')}
                   </Button>
@@ -206,7 +214,7 @@ const Landing = () => {
                     component={Link} to="/features"
                     variant="outlined" 
                     size="large"
-                    sx={{ px: 4, py: 1.5, borderRadius: 3, fontWeight: 'bold', fontSize: '1rem', bgcolor: 'background.paper' }}
+                    sx={{ px: 4, minHeight: 52, borderRadius: 3.5, fontWeight: 'bold', fontSize: '1rem', bgcolor: 'background.paper' }}
                   >
                     {t('landing.hero_cta_secondary')}
                   </Button>
@@ -242,7 +250,7 @@ const Landing = () => {
       {/* ── STATS BAR ─────────────────────────────────────── */}
       <Box sx={{ borderTop: 1, borderBottom: 1, borderColor: 'divider', py: 5, bgcolor: 'background.paper' }}>
         <Container maxWidth="md">
-          <Grid container spacing={3} divider={<Box sx={{ width: 1, height: '100%', bgcolor: 'divider' }} />}>
+          <Grid container spacing={{ xs: 1, sm: 3 }} divider={<Box sx={{ width: 1, height: '100%', bgcolor: 'divider' }} />}>
             <Grid item xs={4}><StatCard value="50k+" label={t('landing.stat_users')} /></Grid>
             <Grid item xs={4}><StatCard value="1M+" label={t('landing.stat_workouts')} /></Grid>
             <Grid item xs={4}><StatCard value="4.9★" label={t('landing.stat_rating')} /></Grid>

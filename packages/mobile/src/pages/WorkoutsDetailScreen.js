@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, Dimensions, ActivityIndicator } from 'react-native';
+import { ScrollView, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -7,9 +7,9 @@ import { useTheme } from '../context/ThemeContext';
 import { BarChart } from 'react-native-chart-kit';
 import { Appbar, Surface, Text, useTheme as usePaperTheme, TouchableRipple } from 'react-native-paper';
 
-const { width } = Dimensions.get('window');
-
 const WorkoutsDetailScreen = ({ navigation, route }) => {
+  const { width } = useWindowDimensions();
+  const chartWidth = Math.min(width - 32, 688);
   const { t } = useTranslation();
   const { theme } = useTheme();
   const paperTheme = usePaperTheme();
@@ -65,7 +65,7 @@ const WorkoutsDetailScreen = ({ navigation, route }) => {
           ) : (
             <BarChart
               data={chartData}
-              width={width - 32}
+              width={chartWidth}
               height={200}
               fromZero
               chartConfig={{
@@ -100,7 +100,7 @@ const getStyles = (theme, paperTheme) => ({
     elevation: 0,
   },
   headerTitle: { fontSize: 17, fontWeight: '700', color: theme.text },
-  content: { padding: 16 },
+  content: { width: '100%', maxWidth: 720, alignSelf: 'center', padding: 16 },
   summaryRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
   summaryCard: {
     flex: 1, backgroundColor: theme.surface, borderRadius: 16, padding: 16,

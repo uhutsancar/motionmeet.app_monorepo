@@ -19,6 +19,7 @@ const connectDB = async () => {
   const databaseName = process.env.MONGODB_DB_NAME?.trim();
   await mongoose.connect(databaseUrl, {
     ...(databaseName ? { dbName: databaseName } : {}),
+    autoIndex: process.env.NODE_ENV !== "production",
     serverSelectionTimeoutMS: 10000,
   });
 

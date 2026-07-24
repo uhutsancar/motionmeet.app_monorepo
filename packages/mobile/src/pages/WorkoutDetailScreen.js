@@ -91,7 +91,7 @@ const getStyles = (theme, paperTheme) => ({
     elevation: 0,
   },
   headerTitle: { color: theme.text, fontSize: 17, fontWeight: '700' },
-  content: { padding: 20, paddingBottom: 48 },
+  content: { width: '100%', maxWidth: 720, alignSelf: 'center', padding: 20, paddingBottom: 48 },
   title: { color: theme.text, fontWeight: '800' },
   date: { color: theme.textMuted, marginTop: 4 },
   statsRow: { flexDirection: 'row', gap: 10, marginTop: 24, marginBottom: 28 },

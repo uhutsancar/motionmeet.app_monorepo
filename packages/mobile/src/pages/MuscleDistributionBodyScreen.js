@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { ScrollView, ActivityIndicator } from 'react-native';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,11 +17,7 @@ const MuscleDistributionBodyScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [muscleData, setMuscleData] = useState([]);
 
-  useEffect(() => {
-    fetchStats();
-  }, []);
-
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
       const token = await getToken();
       const data = await getWorkoutStats('month', token);
@@ -36,7 +32,11 @@ const MuscleDistributionBodyScreen = ({ navigation }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getToken]);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
 
   const getIntensityColor = (val) => {
     if (val > 80) return '#ef4444'; // Red

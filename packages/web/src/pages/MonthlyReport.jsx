@@ -23,7 +23,7 @@ import LocalFireDepartmentRounded from '@mui/icons-material/LocalFireDepartmentR
 import ShareRounded from '@mui/icons-material/ShareRounded';
 import ChevronRightRounded from '@mui/icons-material/ChevronRightRounded';
 
-const MONTHS_TR = ['Ocak', 'Åžubat', 'Mart', 'Nisan', 'MayÄ±s', 'Haziran', 'Temmuz', 'AÄŸustos', 'EylÃ¼l', 'Ekim', 'KasÄ±m', 'AralÄ±k'];
+const MONTHS_TR = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
 
 const MonthlyReport = () => {
     const { t } = useTranslation();
@@ -90,7 +90,7 @@ const MonthlyReport = () => {
 
     const daysOfWeek = [
         t('monthly_report.days.mon', 'Pzt'), t('monthly_report.days.tue', 'Sal'),
-        t('monthly_report.days.wed', 'Ã‡ar'), t('monthly_report.days.thu', 'Per'),
+        t('monthly_report.days.wed', 'Çar'), t('monthly_report.days.thu', 'Per'),
         t('monthly_report.days.fri', 'Cum'), t('monthly_report.days.sat', 'Cts'),
         t('monthly_report.days.sun', 'Paz')
     ];
@@ -98,14 +98,14 @@ const MonthlyReport = () => {
 
     const tabs = [
         { id: 'workouts', label: t('monthly_report.workouts', 'Antrenmanlar') },
-        { id: 'duration', label: t('monthly_report.duration', 'SÃ¼re') },
+        { id: 'duration', label: t('monthly_report.duration', 'Süre') },
         { id: 'volume', label: t('monthly_report.volume', 'Hacim') },
         { id: 'sets', label: t('monthly_report.sets', 'Set') }
     ];
 
     const statCards = [
         { key: 'workouts', label: t('monthly_report.workouts', 'Antrenmanlar'), value: statsData?.totalWorkouts ?? 0, unit: '', route: '/statistics/monthly-report/workouts', color: 'primary.main' },
-        { key: 'duration', label: t('monthly_report.duration', 'SÃ¼re'), value: statsData?.totalDuration ?? 0, unit: 'min', route: '/statistics/monthly-report/duration', color: '#3b82f6' },
+        { key: 'duration', label: t('monthly_report.duration', 'Süre'), value: statsData?.totalDuration ?? 0, unit: 'min', route: '/statistics/monthly-report/duration', color: '#3b82f6' },
         { key: 'volume', label: t('monthly_report.volume', 'Hacim'), value: statsData?.totalVolume ?? 0, unit: 'kg', route: '/statistics/monthly-report/volume', color: 'primary.main' },
         { key: 'sets', label: t('monthly_report.sets', 'Set'), value: statsData?.totalSets ?? 0, unit: '', route: '/statistics/monthly-report/sets', color: '#a855f7' },
     ];
@@ -171,7 +171,7 @@ const MonthlyReport = () => {
                             </Stack>
                             {chartData.length === 0 ? (
                                 <Stack alignItems="center" justifyContent="center" height={180}>
-                                    <Typography variant="body2" color="text.secondary">{t('monthly_report.no_data', 'Bu dÃ¶nem iÃ§in veri yok')}</Typography>
+                                    <Typography variant="body2" color="text.secondary">{t('monthly_report.no_data', 'Bu dönem için veri yok')}</Typography>
                                 </Stack>
                             ) : (
                                 <Box sx={{ height: 200 }}>
@@ -196,7 +196,7 @@ const MonthlyReport = () => {
 
                 {/* Summary Grid */}
                 <Box sx={{ px: 3 }}>
-                    <Typography variant="body2" fontWeight={600} color="text.secondary" mb={2}>{t('monthly_report.summary', 'Ã–zet')}</Typography>
+                    <Typography variant="body2" fontWeight={600} color="text.secondary" mb={2}>{t('monthly_report.summary', 'Özet')}</Typography>
                     <Box display="grid" gridTemplateColumns="1fr 1fr" gap={2}>
                         {statCards.map(card => (
                             <Paper
@@ -231,10 +231,10 @@ const MonthlyReport = () => {
 
                 {/* Workout Calendar */}
                 <Box sx={{ px: 3 }}>
-                    <Typography variant="body2" fontWeight={600} color="text.secondary" mb={3}>{t('monthly_report.workout_days_log', 'Antrenman GÃ¼nleri KaydÄ±')}</Typography>
+                    <Typography variant="body2" fontWeight={600} color="text.secondary" mb={3}>{t('monthly_report.workout_days_log', 'Antrenman Günleri Kaydı')}</Typography>
                     <Stack alignItems="center" mb={3}>
                         <LocalFireDepartmentRounded sx={{ fontSize: 48, color: '#ef4444' }} />
-                        <Typography variant="body1" fontWeight={700} mt={1}>{t('monthly_report.weekly_streak', { count: 0 }, '0 HaftalÄ±k Seri')}</Typography>
+                        <Typography variant="body1" fontWeight={700} mt={1}>{t('monthly_report.weekly_streak', { count: 0 }, '0 Haftalık Seri')}</Typography>
                     </Stack>
                     <Box display="grid" gridTemplateColumns="repeat(7, 1fr)" mb={1}>
                         {daysOfWeek.map((d, i) => (
@@ -254,7 +254,7 @@ const MonthlyReport = () => {
 
                 {/* Muscle Distribution */}
                 <Box sx={{ px: 3, mb: 4 }}>
-                    <Typography variant="body2" fontWeight={600} color="text.secondary" mb={3}>{t('monthly_report.muscle_distribution', 'Kas DaÄŸÄ±lÄ±mÄ±')}</Typography>
+                    <Typography variant="body2" fontWeight={600} color="text.secondary" mb={3}>{t('monthly_report.muscle_distribution', 'Kas Dağılımı')}</Typography>
                     <Stack alignItems="center">
                         <Box sx={{ width: '100%', maxWidth: 350, aspectRatio: '1' }}>
                             <ResponsiveContainer width="100%" height="100%">
@@ -262,7 +262,7 @@ const MonthlyReport = () => {
                                     <PolarGrid />
                                     <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11 }} />
                                     <PolarRadiusAxis angle={30} domain={[0, 1.0]} tick={false} axisLine={false} />
-                                    <Radar name="Ã–nceki Ay" dataKey="A" stroke="gray" fill="none" strokeWidth={2} />
+                                    <Radar name="Önceki Ay" dataKey="A" stroke="gray" fill="none" strokeWidth={2} />
                                     <Radar name="Bu Ay" dataKey="B" stroke="var(--mui-palette-primary-main)" fill="var(--mui-palette-primary-main)" fillOpacity={0.2} strokeWidth={2} />
                                 </RadarChart>
                             </ResponsiveContainer>
@@ -286,11 +286,11 @@ const MonthlyReport = () => {
             {/* Sticky Share Button */}
             <Box sx={{ position: { xs: 'fixed', sm: 'sticky' }, bottom: 0, left: 0, right: 0, p: 2.5, bgcolor: 'background.paper', borderTop: 1, borderColor: 'divider' }}>
                 <Button fullWidth variant="contained" size="large" startIcon={<ShareRounded />} sx={{ borderRadius: 3, fontWeight: 700 }}>
-                    {t('monthly_report.share', 'PaylaÅŸ')}
+                    {t('monthly_report.share', 'Paylaş')}
                 </Button>
             </Box>
         </Box>
     );
 };
 
-export default MonthlyReport;
+export default MonthlyReport;

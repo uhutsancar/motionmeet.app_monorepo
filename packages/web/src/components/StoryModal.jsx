@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import api from "~/api/axios";
+import { uploadMedia } from "~/api/mediaUpload";
 
 const BACKGROUND_COLORS = ["#0f172a", "#1e1b4b", "#312e81", "#4c1d95", "#581c87", "#701a75", "#831843"];
 const MAX_VIDEO_DURATION = 60;
@@ -78,15 +79,18 @@ const StoryModal = ({ setShowModal, fetchStories }) => {
     if (mode === "media" && !media) return;
 
     setLoading(true);
-    const formData = new FormData();
-    formData.append("content", text);
-    formData.append("media_type", mediaType);
-    if (media) formData.append("media", media);
-    formData.append("background_color", background);
-
     try {
-      const { data } = await api.post("/api/story/create", formData, {
-        headers: { Authorization: `Bearer ${await getToken()}` },
+      const token = await getToken();
+      const uploadedKey = media
+        ? await uploadMedia(media, "stories", token)
+        : undefined;
+      const { data } = await api.post("/api/story/create", {
+        content: text,
+        media_type: mediaType,
+        background_color: background,
+        uploadedKey,
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (data.success) {

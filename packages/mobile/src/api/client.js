@@ -4,9 +4,6 @@ import { API_URL } from '../config/environment';
 const api = axios.create({
   baseURL: API_URL,
   timeout: 30000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
 });
 
 // Store token setter function
@@ -29,7 +26,17 @@ api.interceptors.request.use(
     const token = authTokenProvider ? await authTokenProvider() : authToken;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-      config.headers['Content-Type'] = 'multipart/form-data';
+    }
+
+    const isFormData =
+      typeof FormData !== 'undefined' &&
+      config.data instanceof FormData;
+    if (isFormData) {
+      if (typeof config.headers.delete === 'function') {
+        config.headers.delete('Content-Type');
+      } else {
+        delete config.headers['Content-Type'];
+      }
     }
     
     return config;

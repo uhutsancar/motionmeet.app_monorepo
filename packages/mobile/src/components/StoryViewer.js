@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Modal, Image, Dimensions, Animated } from 'react-native';
+import { Modal, Image, Animated } from 'react-native';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import moment from 'moment';
 import 'moment/locale/tr';
 
-const { width, height } = Dimensions.get('window');
 const STORY_DURATION = 5000; // 5 seconds per story
 
 /**
@@ -68,7 +67,7 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }) => {
     }, 50);
 
     return () => clearInterval(intervalRef.current);
-  }, [visible, currentIndex, currentStory]);
+  }, [currentIndex, currentStory, goNext, visible]);
 
   if (!visible || !currentStory) return null;
 
@@ -168,8 +167,8 @@ const styles = {
     alignItems: 'center',
   },
   mediaImage: {
-    width,
-    height,
+    width: '100%',
+    height: '100%',
     position: 'absolute',
   },
   videoPlaceholder: {

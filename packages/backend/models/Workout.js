@@ -26,6 +26,7 @@ const workoutSchema = new mongoose.Schema(
 );
 
 workoutSchema.index({ userId: 1, startTime: -1 });
+workoutSchema.index({ userId: 1, "exercises.exerciseId": 1, startTime: -1 });
 
 const Workout = mongoose.model("Workout", workoutSchema);
 

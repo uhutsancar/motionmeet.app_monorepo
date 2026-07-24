@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { MoreHorizontal, Plus, FileText, Search, Dumbbell, PlayCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAuthContext } from "../context/AuthProvider";
@@ -13,39 +13,54 @@ const Routines = () => {
     const navigate = useNavigate();
     const [routines, setRoutines] = useState([]);
     const [showBuilder, setShowBuilder] = useState(false);
+    const [nextCursor, setNextCursor] = useState(null);
+    const [loadingMore, setLoadingMore] = useState(false);
 
-    useEffect(() => {
-        const fetchRoutines = async () => {
-            try {
-                const token = await getToken();
-                if (!token) return;
-                const { data } = await api.get("/api/routine", {
-                    headers: { Authorization: `Bearer ${token}` }
+    const fetchRoutines = useCallback(async (cursor = null) => {
+        try {
+            if (cursor) setLoadingMore(true);
+            const token = await getToken();
+            if (!token) return;
+            const { data } = await api.get("/api/routine", {
+                headers: { Authorization: `Bearer ${token}` },
+                params: cursor ? { cursor } : undefined,
+            });
+            if (data.success) {
+                setRoutines((currentRoutines) => {
+                    if (!cursor) return data.routines || [];
+                    const knownIds = new Set(currentRoutines.map((routine) => routine._id));
+                    return [
+                        ...currentRoutines,
+                        ...(data.routines || []).filter((routine) => !knownIds.has(routine._id)),
+                    ];
                 });
-                if (data.success) {
-                    setRoutines(data.routines || []);
-                }
-            } catch (error) {
-                console.error("Error fetching routines:", error);
+                setNextCursor(data.nextCursor);
             }
-        };
-        fetchRoutines();
+        } catch (error) {
+            console.error("Error fetching routines:", error);
+        } finally {
+            if (cursor) setLoadingMore(false);
+        }
     }, [getToken]);
 
+    useEffect(() => {
+        fetchRoutines();
+    }, [fetchRoutines]);
+
     return (
-        <Box sx={{ width: '100%', minHeight: '100dvh', pt: 2, pb: { xs: 12, sm: 4 }, bgcolor: 'background.default', color: 'text.primary' }}>
-            <Box sx={{ maxWidth: 'md', mx: 'auto', px: { xs: 2, sm: 4 }, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <Box sx={{ width: '100%', minHeight: '100%', py: { xs: 2, md: 4 }, bgcolor: 'background.default', color: 'text.primary' }}>
+            <Box sx={{ maxWidth: 1040, mx: 'auto', px: { xs: 1.5, sm: 3, md: 4 }, display: 'flex', flexDirection: 'column', gap: { xs: 2.5, md: 4 } }}>
                 {/* Header */}
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                     <Stack direction="row" alignItems="center" spacing={2}>
-                        <Box sx={{ p: 1, bgcolor: 'primary.light', borderRadius: 3, border: 1, borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Box sx={{ p: 1.15, bgcolor: 'action.selected', borderRadius: 3, border: 1, borderColor: 'divider', display: { xs: 'none', sm: 'flex' }, alignItems: 'center', justifyContent: 'center' }}>
                             <Dumbbell size={24} style={{ color: 'var(--accent-primary)' }} />
                         </Box>
-                        <Typography variant="h4" fontWeight="900" letterSpacing="-0.02em">
+                        <Typography variant="h4" sx={{ fontSize: { xs: 28, sm: 34 } }}>
                             {t('routines.title', 'Rutinler')}
                         </Typography>
                     </Stack>
-                    <Chip label={t('routines.pro_level', 'Pro level')} size="small" sx={{ fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.65rem', background: 'linear-gradient(to bottom right, #fbbf24, #f97316)', color: 'common.black', border: 1, borderColor: 'rgba(255,255,255,0.2)', boxShadow: 2 }} />
+                    <Chip label={t('routines.pro_level', 'Pro level')} size="small" sx={{ fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.65rem', background: 'linear-gradient(135deg, #F7C85C, #F08A3C)', color: '#20170A', border: 1, borderColor: 'rgba(255,255,255,0.3)', boxShadow: 2 }} />
                 </Stack>
 
                 {/* Main Action Area */}
@@ -57,12 +72,12 @@ const Routines = () => {
                             fullWidth
                             sx={{
                                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                                bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 6, p: 4,
+                                background: 'linear-gradient(145deg, rgba(101,88,245,.14), rgba(18,168,138,.08))', border: 1, borderColor: 'divider', borderRadius: 5, p: { xs: 3, md: 4 },
                                 height: '100%', textTransform: 'none', color: 'text.primary',
                                 transition: 'all 0.2s', '&:hover': { bgcolor: 'action.hover', transform: 'translateY(-2px)', boxShadow: 3 }
                             }}
                         >
-                            <Box sx={{ p: 2, bgcolor: 'primary.light', borderRadius: 4, mb: 2 }}>
+                            <Box sx={{ p: 2, bgcolor: 'primary.main', color: 'primary.contrastText', borderRadius: 4, mb: 2, boxShadow: '0 10px 24px rgba(101,88,245,.24)' }}>
                                 <Plus size={32} style={{ color: 'var(--accent-primary)' }} />
                             </Box>
                             <Typography variant="h6" fontWeight="bold">{t('routines.start_empty', 'Boş Başla')}</Typography>
@@ -78,7 +93,7 @@ const Routines = () => {
                                 fullWidth
                                 sx={{
                                     display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 2,
-                                    bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 6, p: 3, flex: 1,
+                                    bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 5, p: { xs: 2.25, sm: 3 }, flex: 1,
                                     textTransform: 'none', color: 'text.primary', textAlign: 'left',
                                     transition: 'all 0.2s', '&:hover': { bgcolor: 'action.hover', transform: 'translateY(-2px)', boxShadow: 2 }
                                 }}
@@ -97,7 +112,7 @@ const Routines = () => {
                                 fullWidth
                                 sx={{
                                     display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 2,
-                                    bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 6, p: 3, flex: 1,
+                                    bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 5, p: { xs: 2.25, sm: 3 }, flex: 1,
                                     textTransform: 'none', color: 'text.primary', textAlign: 'left',
                                     transition: 'all 0.2s', '&:hover': { bgcolor: 'action.hover', transform: 'translateY(-2px)', boxShadow: 2 }
                                 }}
@@ -132,7 +147,7 @@ const Routines = () => {
                             {routines.map(routine => (
                                 <Grid item xs={12} sm={6} key={routine._id}>
                                     <Paper variant="outlined" sx={{
-                                        p: 3, borderRadius: 6, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%',
+                                        p: { xs: 2.25, sm: 3 }, borderRadius: 5, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%',
                                         transition: 'all 0.2s', '&:hover': { boxShadow: 4, borderColor: 'primary.main' }
                                     }}>
                                         <Box>
@@ -171,7 +186,7 @@ const Routines = () => {
                             ))}
                         </Grid>
                     ) : (
-                        <Paper variant="outlined" sx={{ p: 6, borderRadius: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                        <Paper variant="outlined" sx={{ p: { xs: 4, sm: 6 }, borderRadius: 5, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
                             <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: '50%', mb: 2 }}>
                                 <FileText size={40} color="var(--text-muted)" />
                             </Box>
@@ -183,6 +198,16 @@ const Routines = () => {
                                 {t('common.get_started', 'Hemen Başla')}
                             </Button>
                         </Paper>
+                    )}
+                    {nextCursor && (
+                        <Button
+                            variant="outlined"
+                            onClick={() => fetchRoutines(nextCursor)}
+                            disabled={loadingMore}
+                            sx={{ alignSelf: 'center' }}
+                        >
+                            {loadingMore ? t('common.loading', 'Loading...') : t('common.load_more', 'Load more')}
+                        </Button>
                     )}
                 </Box>
             </Box>

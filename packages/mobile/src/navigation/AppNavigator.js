@@ -9,6 +9,8 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useSocket } from '../hooks/useSocket';
 import Toast from 'react-native-toast-message';
@@ -17,31 +19,30 @@ import Feed from '../pages/Feed';
 import Routines from '../pages/Routines';
 import Exercises from '../pages/Exercises';
 import Profile from '../pages/Profile';
-import Settings from '../pages/Settings';
 import Messages from '../pages/Messages';
-import ChatBox from '../pages/ChatBox';
-import Statistics from '../pages/Statistics';
-import Connections from '../pages/Connections';
-import ExerciseDetail from '../pages/ExerciseDetail';
-import MuscleDistribution from '../pages/MuscleDistribution';
-import WorkoutSummaryScreen from '../pages/WorkoutSummaryScreen';
-import WorkoutDetailScreen from '../pages/WorkoutDetailScreen';
-import ActiveWorkoutScreen from '../pages/ActiveWorkoutScreen';
-import MonthlyReportScreen from '../pages/MonthlyReportScreen';
-import WorkoutsDetailScreen from '../pages/WorkoutsDetailScreen';
-import DurationDetailScreen from '../pages/DurationDetailScreen';
-import VolumeDetailScreen from '../pages/VolumeDetailScreen';
-import SetsDetailScreen from '../pages/SetsDetailScreen';
-import NotificationsScreen from '../pages/NotificationsScreen';
-import PrivacyScreen from '../pages/PrivacyScreen';
-import SupportScreen from '../pages/SupportScreen';
-import PricingScreen from '../pages/PricingScreen';
 
-// Missing Statistics Screens
-import AdvancedStatisticsScreen from '../pages/AdvancedStatisticsScreen';
-import MuscleDistributionBodyScreen from '../pages/MuscleDistributionBodyScreen';
-import MainExercisesScreen from '../pages/MainExercisesScreen';
-import LeaderboardScreen from '../pages/LeaderboardScreen';
+const loadSettings = () => require('../pages/Settings').default;
+const loadChatBox = () => require('../pages/ChatBox').default;
+const loadStatistics = () => require('../pages/Statistics').default;
+const loadConnections = () => require('../pages/Connections').default;
+const loadExerciseDetail = () => require('../pages/ExerciseDetail').default;
+const loadMuscleDistribution = () => require('../pages/MuscleDistribution').default;
+const loadWorkoutSummary = () => require('../pages/WorkoutSummaryScreen').default;
+const loadWorkoutDetail = () => require('../pages/WorkoutDetailScreen').default;
+const loadActiveWorkout = () => require('../pages/ActiveWorkoutScreen').default;
+const loadMonthlyReport = () => require('../pages/MonthlyReportScreen').default;
+const loadWorkoutsDetail = () => require('../pages/WorkoutsDetailScreen').default;
+const loadDurationDetail = () => require('../pages/DurationDetailScreen').default;
+const loadVolumeDetail = () => require('../pages/VolumeDetailScreen').default;
+const loadSetsDetail = () => require('../pages/SetsDetailScreen').default;
+const loadNotifications = () => require('../pages/NotificationsScreen').default;
+const loadPrivacy = () => require('../pages/PrivacyScreen').default;
+const loadSupport = () => require('../pages/SupportScreen').default;
+const loadPricing = () => require('../pages/PricingScreen').default;
+const loadAdvancedStatistics = () => require('../pages/AdvancedStatisticsScreen').default;
+const loadMuscleDistributionBody = () => require('../pages/MuscleDistributionBodyScreen').default;
+const loadMainExercises = () => require('../pages/MainExercisesScreen').default;
+const loadLeaderboard = () => require('../pages/LeaderboardScreen').default;
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -57,9 +58,9 @@ const MessagesStack = () => (
 const ProfileStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="ProfileMain" component={Profile} />
-    <Stack.Screen name="Settings" component={Settings} />
-    <Stack.Screen name="Statistics" component={Statistics} />
-    <Stack.Screen name="Connections" component={Connections} />
+    <Stack.Screen name="Settings" getComponent={loadSettings} />
+    <Stack.Screen name="Statistics" getComponent={loadStatistics} />
+    <Stack.Screen name="Connections" getComponent={loadConnections} />
   </Stack.Navigator>
 );
 
@@ -68,28 +69,28 @@ const MainStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="Tabs" component={TabNavigator} />
     <Stack.Screen name="Profile" component={Profile} />
-    <Stack.Screen name="Settings" component={Settings} />
-    <Stack.Screen name="Statistics" component={Statistics} />
-    <Stack.Screen name="ChatBox" component={ChatBox} />
-    <Stack.Screen name="Connections" component={Connections} />
-    <Stack.Screen name="ExerciseDetail" component={ExerciseDetail} />
-    <Stack.Screen name="MuscleDistribution" component={MuscleDistribution} />
-    <Stack.Screen name="WorkoutSummaryScreen" component={WorkoutSummaryScreen} />
-    <Stack.Screen name="WorkoutDetailScreen" component={WorkoutDetailScreen} />
-    <Stack.Screen name="ActiveWorkoutScreen" component={ActiveWorkoutScreen} />
-    <Stack.Screen name="MonthlyReportScreen" component={MonthlyReportScreen} />
-    <Stack.Screen name="WorkoutsDetailScreen" component={WorkoutsDetailScreen} />
-    <Stack.Screen name="DurationDetailScreen" component={DurationDetailScreen} />
-    <Stack.Screen name="VolumeDetailScreen" component={VolumeDetailScreen} />
-    <Stack.Screen name="SetsDetailScreen" component={SetsDetailScreen} />
-    <Stack.Screen name="NotificationsScreen" component={NotificationsScreen} />
-    <Stack.Screen name="PrivacyScreen" component={PrivacyScreen} />
-    <Stack.Screen name="SupportScreen" component={SupportScreen} />
-    <Stack.Screen name="PricingScreen" component={PricingScreen} />
-    <Stack.Screen name="AdvancedStatisticsScreen" component={AdvancedStatisticsScreen} />
-    <Stack.Screen name="MuscleDistributionBodyScreen" component={MuscleDistributionBodyScreen} />
-    <Stack.Screen name="MainExercisesScreen" component={MainExercisesScreen} />
-    <Stack.Screen name="LeaderboardScreen" component={LeaderboardScreen} />
+    <Stack.Screen name="Settings" getComponent={loadSettings} />
+    <Stack.Screen name="Statistics" getComponent={loadStatistics} />
+    <Stack.Screen name="ChatBox" getComponent={loadChatBox} />
+    <Stack.Screen name="Connections" getComponent={loadConnections} />
+    <Stack.Screen name="ExerciseDetail" getComponent={loadExerciseDetail} />
+    <Stack.Screen name="MuscleDistribution" getComponent={loadMuscleDistribution} />
+    <Stack.Screen name="WorkoutSummaryScreen" getComponent={loadWorkoutSummary} />
+    <Stack.Screen name="WorkoutDetailScreen" getComponent={loadWorkoutDetail} />
+    <Stack.Screen name="ActiveWorkoutScreen" getComponent={loadActiveWorkout} />
+    <Stack.Screen name="MonthlyReportScreen" getComponent={loadMonthlyReport} />
+    <Stack.Screen name="WorkoutsDetailScreen" getComponent={loadWorkoutsDetail} />
+    <Stack.Screen name="DurationDetailScreen" getComponent={loadDurationDetail} />
+    <Stack.Screen name="VolumeDetailScreen" getComponent={loadVolumeDetail} />
+    <Stack.Screen name="SetsDetailScreen" getComponent={loadSetsDetail} />
+    <Stack.Screen name="NotificationsScreen" getComponent={loadNotifications} />
+    <Stack.Screen name="PrivacyScreen" getComponent={loadPrivacy} />
+    <Stack.Screen name="SupportScreen" getComponent={loadSupport} />
+    <Stack.Screen name="PricingScreen" getComponent={loadPricing} />
+    <Stack.Screen name="AdvancedStatisticsScreen" getComponent={loadAdvancedStatistics} />
+    <Stack.Screen name="MuscleDistributionBodyScreen" getComponent={loadMuscleDistributionBody} />
+    <Stack.Screen name="MainExercisesScreen" getComponent={loadMainExercises} />
+    <Stack.Screen name="LeaderboardScreen" getComponent={loadLeaderboard} />
   </Stack.Navigator>
 );
 
@@ -98,6 +99,7 @@ const TabNavigator = () => {
   const { theme } = useTheme();
   const { t } = useTranslation();
   const { socket } = useSocket();
+  const insets = useSafeAreaInsets();
   const [unreadMessages, setUnreadMessages] = useState(0);
 
   // Listen for new messages globally to show badge
@@ -133,54 +135,70 @@ const TabNavigator = () => {
   const screenOptions = useCallback(({ route }) => ({
     tabBarIcon: ({ focused, color, size }) => {
       const iconName = iconForRoute(route.name, focused);
-      const iconSize = 26; // Increased size as requested
-      
-      if (route.name === 'MessagesTab' && unreadMessages > 0) {
-        return (
-          <Surface elevation={0} style={{ width: iconSize, height: iconSize, justifyContent: 'center', alignItems: 'center' }}>
-            <Ionicons name={iconName} size={iconSize} color={color} />
-            <Surface elevation={0} style={{
-              position: 'absolute', top: -1, right: -3,
-              backgroundColor: theme.primary, borderRadius: 6,
-              minWidth: 14, height: 14, justifyContent: 'center', alignItems: 'center',
-              borderWidth: 1.5, borderColor: theme.surfaceLight
+      const iconSize = 23;
+      const showBadge = route.name === 'MessagesTab' && unreadMessages > 0;
+
+      return (
+        <View style={{
+          width: 42,
+          height: 32,
+          borderRadius: 13,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: focused ? theme.primarySoft : 'transparent',
+        }}>
+          <Ionicons name={iconName} size={iconSize} color={color} />
+          {showBadge && (
+            <View style={{
+              position: 'absolute',
+              top: 0,
+              right: 2,
+              backgroundColor: theme.danger,
+              borderRadius: 7,
+              minWidth: 15,
+              height: 15,
+              paddingHorizontal: 3,
+              justifyContent: 'center',
+              alignItems: 'center',
+              borderWidth: 1.5,
+              borderColor: theme.surface,
             }}>
-              <Text style={{ color: '#fff', fontSize: 8, fontWeight: '900' }}>
+              <Text style={{ color: '#FFFFFF', fontSize: 8, fontWeight: '900' }}>
                 {unreadMessages > 9 ? '9+' : unreadMessages}
               </Text>
-            </Surface>
-          </Surface>
-        );
-      }
-      return <Ionicons name={iconName} size={iconSize} color={color} />;
+            </View>
+          )}
+        </View>
+      );
     },
     tabBarActiveTintColor: theme.primary,
     tabBarInactiveTintColor: theme.textMuted,
     tabBarShowLabel: true,
-    tabBarLabelStyle: { fontSize: 10, fontWeight: '700', marginBottom: 2 },
+    tabBarHideOnKeyboard: true,
+    tabBarLabelStyle: {
+      fontSize: 10,
+      fontWeight: '800',
+      marginTop: 1,
+      marginBottom: 0,
+    },
     tabBarStyle: {
-      backgroundColor: theme.surfaceLight,
+      backgroundColor: theme.surface,
       borderTopColor: theme.border,
-      borderTopWidth: 0.5,
-      height: 78,
-      elevation: 8,
-      shadowColor: '#000',
-      shadowOpacity: 0.12,
-      shadowRadius: 12,
-      shadowOffset: { width: 0, height: -3 },
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
+      borderTopWidth: 1,
+      height: 64 + insets.bottom,
+      paddingTop: 6,
+      paddingBottom: Math.max(insets.bottom, 6),
+      elevation: 0,
+      shadowOpacity: 0,
     },
     tabBarItemStyle: {
       justifyContent: 'center',
       alignItems: 'center',
-      paddingTop: 10,
-      paddingBottom: 8,
     },
     headerShown: false,
-  }), [theme, unreadMessages, iconForRoute]);
+    lazy: true,
+    freezeOnBlur: true,
+  }), [theme, unreadMessages, iconForRoute, insets.bottom]);
 
   return (
     <Tab.Navigator screenOptions={screenOptions}>

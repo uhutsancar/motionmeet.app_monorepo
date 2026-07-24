@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Modal, ScrollView, TextInput, Image, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useDispatch, useSelector } from 'react-redux';
 import { useAuthContext } from "../context/AuthProvider";
 import { createNewPost } from '../features/posts/postsSlice';
+import { uploadMedia } from '../api/mediaUpload';
 
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
@@ -59,28 +61,12 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
     try {
       setLoading(true);
       
-      const formData = new FormData();
-      formData.append('content', content);
-      
       let postType = 'text';
       if (images.length > 0 && content.trim()) {
         postType = 'text_with_image';
       } else if (images.length > 0) {
         postType = 'image';
       }
-      formData.append('post_type', postType);
-
-      images.forEach((image, index) => {
-        const uriParts = image.uri.split('.');
-        const fileType = uriParts[uriParts.length - 1];
-        
-        formData.append('images', {
-          uri: image.uri,
-          name: `post_${index}.${fileType}`,
-          type: `image/${fileType}`,
-        });
-      });
-
       // Retry once if token is stale on first call
       let token = await getToken();
       if (!token) {
@@ -88,7 +74,13 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
         token = await getToken();
       }
 
-      await dispatch(createNewPost({ postData: formData, token })).unwrap();
+      const uploadedKeys = await Promise.all(
+        images.map((image) => uploadMedia(image, 'posts', token))
+      );
+      await dispatch(createNewPost({
+        postData: { content, post_type: postType, uploadedKeys },
+        token,
+      })).unwrap();
       
       Alert.alert(t('common.success'), t('feed.post_published'));
       setContent('');
@@ -118,7 +110,7 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <Surface elevation={0} style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <Surface elevation={0} style={styles.header}>
           <TouchableRipple borderless onPress={onClose} style={styles.closeButton}>
             <Ionicons name="close" size={28} color={theme.text} />
@@ -187,7 +179,7 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
             )}
           </TouchableRipple>
         </Surface>
-      </Surface>
+      </SafeAreaView>
       </KeyboardAvoidingView>
     </Modal>
   );
