@@ -2,32 +2,36 @@ import { createTheme } from "@mui/material/styles";
 
 const palettes = {
   light: {
-    background: "#F5F6FA",
+    background: "#F7F7F5",
     paper: "#FFFFFF",
-    surfaceLight: "#EEF1F7",
-    divider: "#E2E6EF",
-    textPrimary: "#171A2B",
-    textSecondary: "#61677A",
-    textMuted: "#9298AA",
+    surfaceLight: "#F0F1EE",
+    divider: "#E2E4DE",
+    textPrimary: "#17191F",
+    textSecondary: "#646B78",
+    textMuted: "#959BA7",
     primary: "#6558F5",
-    primaryHover: "#5145DB",
-    secondary: "#12A88A",
+    primaryHover: "#5145DC",
+    secondary: "#00A98F",
+    energy: "#B5E853",
+    coral: "#F7695E",
     success: "#0E9F6E",
     error: "#E5484D",
     warning: "#E89614",
     shadow: "rgba(22, 28, 45, 0.09)",
   },
   dark: {
-    background: "#090D18",
-    paper: "#121827",
-    surfaceLight: "#1A2234",
-    divider: "#273247",
-    textPrimary: "#F7F8FC",
-    textSecondary: "#AEB7C9",
-    textMuted: "#747F96",
-    primary: "#8A80FF",
-    primaryHover: "#A199FF",
-    secondary: "#38D2B0",
+    background: "#090A0D",
+    paper: "#15171B",
+    surfaceLight: "#1D2025",
+    divider: "#2B2F36",
+    textPrimary: "#F7F7F5",
+    textSecondary: "#A8AFBA",
+    textMuted: "#737B88",
+    primary: "#9187FF",
+    primaryHover: "#AAA2FF",
+    secondary: "#3BD7B5",
+    energy: "#C8F768",
+    coral: "#FF7468",
     success: "#33C795",
     error: "#FF6B70",
     warning: "#F7B955",
@@ -63,6 +67,7 @@ export const createAppTheme = (mode) => {
       success: { main: colors.success },
       error: { main: colors.error },
       warning: { main: colors.warning },
+      info: { main: colors.energy },
       background: {
         default: colors.background,
         paper: colors.paper,
@@ -80,24 +85,26 @@ export const createAppTheme = (mode) => {
       },
     },
     typography: {
-      fontFamily: '"Manrope", "Segoe UI", sans-serif',
-      h1: { fontFamily: '"Sora", "Manrope", sans-serif', fontWeight: 800, letterSpacing: "-0.045em" },
-      h2: { fontFamily: '"Sora", "Manrope", sans-serif', fontWeight: 800, letterSpacing: "-0.04em" },
-      h3: { fontFamily: '"Sora", "Manrope", sans-serif', fontWeight: 750, letterSpacing: "-0.035em" },
-      h4: { fontFamily: '"Sora", "Manrope", sans-serif', fontWeight: 750, letterSpacing: "-0.03em" },
-      h5: { fontFamily: '"Sora", "Manrope", sans-serif', fontWeight: 700, letterSpacing: "-0.025em" },
-      h6: { fontFamily: '"Sora", "Manrope", sans-serif', fontWeight: 700, letterSpacing: "-0.02em" },
+      fontFamily: '"DM Sans", "Segoe UI", sans-serif',
+      h1: { fontFamily: '"Manrope", "DM Sans", sans-serif', fontWeight: 800, letterSpacing: "-0.035em" },
+      h2: { fontFamily: '"Manrope", "DM Sans", sans-serif', fontWeight: 800, letterSpacing: "-0.032em" },
+      h3: { fontFamily: '"Manrope", "DM Sans", sans-serif', fontWeight: 800, letterSpacing: "-0.03em", fontSize: "2rem" },
+      h4: { fontFamily: '"Manrope", "DM Sans", sans-serif', fontWeight: 800, letterSpacing: "-0.028em", fontSize: "1.75rem" },
+      h5: { fontFamily: '"Manrope", "DM Sans", sans-serif', fontWeight: 750, letterSpacing: "-0.024em", fontSize: "1.375rem" },
+      h6: { fontFamily: '"Manrope", "DM Sans", sans-serif', fontWeight: 750, letterSpacing: "-0.02em", fontSize: "1.0625rem" },
       subtitle1: { fontWeight: 700 },
       subtitle2: { fontWeight: 700 },
-      body1: { lineHeight: 1.65 },
-      body2: { lineHeight: 1.55 },
+      body1: { lineHeight: 1.55 },
+      body2: { lineHeight: 1.5, fontSize: "0.875rem" },
       button: {
         textTransform: "none",
         fontWeight: 800,
         letterSpacing: "-0.01em",
       },
     },
-    shape: { borderRadius: 16 },
+    // MUI multiplies numeric sx borderRadius values by this base. Keeping the
+    // token at 4 makes legacy 2/3/4 values resolve to a compact 8/12/16px.
+    shape: { borderRadius: 4 },
     shadows: buildShadows(colors.shadow),
     transitions: {
       easing: {
@@ -112,15 +119,15 @@ export const createAppTheme = (mode) => {
         defaultProps: { disableElevation: true },
         styleOverrides: {
           root: {
-            borderRadius: 14,
-            minHeight: 42,
-            paddingInline: 18,
-            transition: "transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease",
+            borderRadius: 10,
+            minHeight: 40,
+            paddingInline: 16,
+            transition: "transform 180ms cubic-bezier(.16,1,.3,1), box-shadow 180ms ease, background-color 180ms ease",
             "&:active": { transform: "translateY(1px)" },
           },
           containedPrimary: {
-            boxShadow: "0 8px 22px rgba(101, 88, 245, 0.22)",
-            "&:hover": { boxShadow: "0 11px 28px rgba(101, 88, 245, 0.30)" },
+            boxShadow: "none",
+            "&:hover": { boxShadow: "none" },
           },
           outlined: {
             borderColor: colors.divider,
@@ -131,7 +138,7 @@ export const createAppTheme = (mode) => {
       MuiPaper: {
         styleOverrides: {
           root: { backgroundImage: "none" },
-          rounded: { borderRadius: 20 },
+          rounded: { borderRadius: 14 },
         },
       },
       MuiCard: {
@@ -139,7 +146,9 @@ export const createAppTheme = (mode) => {
           root: {
             backgroundImage: "none",
             border: `1px solid ${colors.divider}`,
-            borderRadius: 20,
+            borderRadius: 14,
+            boxShadow: "none",
+            transition: "transform 180ms cubic-bezier(.16,1,.3,1), border-color 180ms ease, box-shadow 180ms ease",
           },
         },
       },
@@ -149,8 +158,8 @@ export const createAppTheme = (mode) => {
       MuiOutlinedInput: {
         styleOverrides: {
           root: {
-            borderRadius: 14,
-            backgroundColor: mode === "dark" ? "rgba(9, 13, 24, 0.38)" : "rgba(248, 249, 252, 0.82)",
+            borderRadius: 10,
+            backgroundColor: colors.surfaceLight,
             transition: "background-color 160ms ease, box-shadow 160ms ease",
             "&:hover": { backgroundColor: colors.paper },
             "&.Mui-focused": {
@@ -162,7 +171,7 @@ export const createAppTheme = (mode) => {
         },
       },
       MuiIconButton: {
-        styleOverrides: { root: { borderRadius: 13 } },
+        styleOverrides: { root: { borderRadius: 10, transition: "transform 160ms ease, background-color 160ms ease", "&:active": { transform: "scale(.94)" } } },
       },
       MuiChip: {
         styleOverrides: { root: { borderRadius: 10, fontWeight: 700 } },
@@ -170,7 +179,7 @@ export const createAppTheme = (mode) => {
       MuiDialog: {
         styleOverrides: {
           paper: {
-            borderRadius: 24,
+            borderRadius: 16,
             border: `1px solid ${colors.divider}`,
           },
         },
@@ -178,7 +187,7 @@ export const createAppTheme = (mode) => {
       MuiDialogTitle: {
         styleOverrides: {
           root: {
-            fontFamily: '"Sora", "Manrope", sans-serif',
+            fontFamily: '"Manrope", "DM Sans", sans-serif',
             fontWeight: 750,
           },
         },

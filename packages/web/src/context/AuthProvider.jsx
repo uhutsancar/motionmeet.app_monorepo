@@ -1,6 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import axios from "axios";
-import { BASEURL } from "~/config/env";
+import api from "~/api/axios";
 import { API_ROUTES } from "@motionmeet/shared";
 
 const AuthContext = createContext();
@@ -35,13 +34,23 @@ export const AuthProvider = ({ children }) => {
   const refreshAccessToken = useCallback(async () => {
     if (refreshPromiseRef.current) return refreshPromiseRef.current;
 
-    refreshPromiseRef.current = axios
-      .post(`${BASEURL}${API_ROUTES.auth.refresh}`, {}, { withCredentials: true })
-      .then((response) => applySession(response.data))
+    refreshPromiseRef.current = api
+      .post(API_ROUTES.auth.refresh)
+      .then((response) => {
+        if (!response.data?.success || !response.data?.token || !response.data?.user) {
+          throw Object.assign(new Error("Invalid refresh response"), {
+            code: "INVALID_AUTH_RESPONSE",
+          });
+        }
+        return applySession(response.data);
+      })
       .catch((error) => {
-        clearSession();
-        if (error.response?.status !== 401) {
-          console.error("Session refresh failed:", error.message);
+        if (
+          error.code === "INVALID_AUTH_RESPONSE" ||
+          error.response?.status === 401 ||
+          error.response?.status === 403
+        ) {
+          clearSession();
         }
         return null;
       })
@@ -69,11 +78,10 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await axios.post(
-        `${BASEURL}${API_ROUTES.auth.login}`,
-        { email, password },
-        { withCredentials: true }
-      );
+      const response = await api.post(API_ROUTES.auth.login, { email, password });
+      if (!response.data?.success || !response.data?.token || !response.data?.user) {
+        return { success: false, message: "Invalid login response" };
+      }
       applySession(response.data);
       return { success: true };
     } catch (error) {
@@ -86,11 +94,10 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (userData) => {
     try {
-      const response = await axios.post(
-        `${BASEURL}${API_ROUTES.auth.register}`,
-        userData,
-        { withCredentials: true }
-      );
+      const response = await api.post(API_ROUTES.auth.register, userData);
+      if (!response.data?.success || !response.data?.token || !response.data?.user) {
+        return { success: false, message: "Invalid registration response" };
+      }
       applySession(response.data);
       return { success: true };
     } catch (error) {
@@ -104,7 +111,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = useCallback(async () => {
     try {
-      await axios.post(`${BASEURL}${API_ROUTES.auth.logout}`, {}, { withCredentials: true });
+      await api.post(API_ROUTES.auth.logout);
     } catch {
       // Local logout must still complete if the server is unreachable.
     } finally {

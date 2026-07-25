@@ -256,7 +256,7 @@ const getStyles = (theme) => ({
     top: -8,
     right: -8,
     backgroundColor: theme.background,
-    borderRadius: 14,
+    borderRadius: 10,
   },
   bottomBar: {
     flexDirection: 'row',

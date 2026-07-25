@@ -1,5 +1,6 @@
 import { useAuthContext } from "../context/AuthProvider";
-import { Box, Button, CircularProgress, Paper, Stack, Typography } from "@mui/material";
+import { Box, Button, CircularProgress, Stack } from "@mui/material";
+import { Dumbbell, Newspaper } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
@@ -12,6 +13,8 @@ import StoriesBar from "~/components/StoriesBar";
 import SuggestedAthletes from "~/components/SuggestedAthletes";
 import CreatePost from "./CreatePost";
 import { API_ROUTES } from "@motionmeet/shared";
+import { useNavigate } from "react-router-dom";
+import { EmptyState, PageHeader, PageShell } from "~/components/AppPage";
 
 const Feed = () => {
   const { t } = useTranslation();
@@ -20,6 +23,7 @@ const Feed = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState(null);
   const { getToken } = useAuthContext();
+  const navigate = useNavigate();
 
   const fetchFeeds = useCallback(async ({ cursor = null, append = false } = {}) => {
     try {
@@ -63,43 +67,42 @@ const Feed = () => {
   if (loading) return <Loading />;
 
   return (
-    <Box sx={{ minHeight: "100%", py: { xs: 2, md: 4 }, px: { xs: 1.5, sm: 2.5, md: 3 } }}>
+    <PageShell maxWidth={1200} sx={{ gap: 2.5 }}>
       <Box
         sx={{
-          mx: "auto",
-          maxWidth: 1120,
           display: "grid",
-          gridTemplateColumns: { xs: "minmax(0, 680px)", xl: "minmax(0, 680px) 328px" },
+          gridTemplateColumns: { xs: "minmax(0, 720px)", xl: "minmax(0, 2fr) minmax(292px, 1fr)" },
           justifyContent: "center",
           alignItems: "start",
-          gap: { md: 3, xl: 4 },
+          gap: 3,
         }}
       >
-        <Stack spacing={{ xs: 1.5, sm: 2.25 }} sx={{ minWidth: 0 }}>
-          <Box sx={{ display: { xs: "none", md: "block" }, mb: 0.5 }}>
-            <Typography variant="overline" color="primary" sx={{ fontWeight: 800, letterSpacing: "0.12em" }}>
-              YOUR COMMUNITY
-            </Typography>
-            <Typography variant="h4" sx={{ mt: 0.25 }}>
-              Keep moving together.
-            </Typography>
-            <Typography color="text.secondary" sx={{ mt: 0.75 }}>
-              Fresh sessions, progress and ideas from athletes you follow.
-            </Typography>
-          </Box>
+        <Stack spacing={2} sx={{ minWidth: 0 }}>
+          <PageHeader
+            title={t("menu.feed", "Feed")}
+            description="Recent training updates from your community."
+            action={(
+              <Button
+                variant="contained"
+                onClick={() => navigate("/routines")}
+                startIcon={<Dumbbell size={17} />}
+                sx={{ alignSelf: { xs: "stretch", sm: "center" } }}
+              >
+                Start workout
+              </Button>
+            )}
+          />
           <StoriesBar />
           <CreatePost onSuccess={() => fetchFeeds()} />
           {feeds.length > 0 ? (
             feeds.map((post) => <PostCard key={post._id} post={post} />)
           ) : (
-            <Paper variant="outlined" sx={{ py: 10, px: 3, borderRadius: 5, textAlign: "center" }}>
-              <Typography variant="h6" sx={{ mb: 0.5 }}>
-                {t("feed.no_posts")}
-              </Typography>
-              <Typography color="text.secondary" variant="body2">
-                Follow athletes or publish the first update in your community.
-              </Typography>
-            </Paper>
+            <EmptyState
+              icon={Newspaper}
+              title={t("feed.no_posts")}
+              description="Follow athletes or publish the first update in your community."
+              minHeight={220}
+            />
           )}
           {nextCursor && (
             <Button
@@ -115,15 +118,15 @@ const Feed = () => {
         </Stack>
 
         <Stack
-          spacing={3}
-          sx={{ display: { xs: "none", xl: "flex" }, position: "sticky", top: 32, minWidth: 0 }}
+          spacing={2}
+          sx={{ display: { xs: "none", xl: "flex" }, position: "sticky", top: 24, minWidth: 0 }}
         >
           <QuickProfile />
           <SuggestedAthletes />
           <RecentMessages />
         </Stack>
       </Box>
-    </Box>
+    </PageShell>
   );
 };
 

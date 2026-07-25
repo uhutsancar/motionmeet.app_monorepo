@@ -1,90 +1,99 @@
-import React, { useCallback, useState, useEffect } from 'react';
-import { ScrollView } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ScrollView, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActivityIndicator, Appbar, Button, Chip, Divider, Surface, Text } from 'react-native-paper';
-import { useTheme } from '../context/ThemeContext';
+import {
+  ActivityIndicator,
+  Appbar,
+  Button,
+  Divider,
+  Surface,
+  Text,
+} from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
-import { useAuthContext } from "../context/AuthProvider";
+import { useTheme } from '../context/ThemeContext';
+import { useAuthContext } from '../context/AuthProvider';
 import { getRoutines } from '../api/endpoints';
 import RoutineBuilderModal from '../components/RoutineBuilderModal';
 
-/* ── Routine Card ─────────────────────────────────────────────────────────── */
 const RoutineCard = ({ routine, theme, navigation }) => {
   const { t } = useTranslation();
-
-  const totalVolume = routine.exercises.reduce(
-    (total, ex) => total + ex.sets.reduce((t, s) => t + (s.weight || 0) * (s.reps || 0), 0),
-    0
-  );
-  const totalSets = routine.exercises.reduce((t, ex) => t + ex.sets.length, 0);
+  const exercises = routine.exercises || [];
+  const totalSets = exercises.reduce((sum, exercise) => sum + (exercise.sets?.length || 0), 0);
 
   return (
-    <Surface style={{
-      borderRadius: 20,
-      padding: 16,
-      gap: 12,
-      backgroundColor: theme.surface,
-      borderWidth: 1,
-      borderColor: theme.border,
-      shadowColor: theme.shadow,
-      shadowOpacity: theme.dark ? 0.2 : 0.06,
-      shadowRadius: 12,
-      shadowOffset: { width: 0, height: 6 },
-    }} elevation={1}>
-      {/* Title row */}
-      <Surface elevation={0} style={{ backgroundColor: 'transparent' }}>
-        <Text variant="titleMedium" style={{ color: theme.text, fontWeight: 'bold' }}>
+    <Surface
+      elevation={0}
+      style={{
+        padding: 16,
+        gap: 14,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: theme.border,
+        backgroundColor: theme.surface,
+      }}
+    >
+      <View>
+        <Text style={{ color: theme.text, fontSize: 17, fontWeight: '800' }}>
           {routine.name}
         </Text>
-        <Text variant="bodySmall" style={{ color: theme.textMuted, marginTop: 2 }}>
-          {totalSets} {t('routines.sets', 'set')} • {Math.round(totalVolume)} {t('common.kg', 'kg')} {t('common.total', 'total')}
+        <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 3 }}>
+          {exercises.length} {t('workout.exercises', 'exercises')} · {totalSets} {t('routines.sets', 'sets')}
         </Text>
-      </Surface>
+      </View>
 
-      {/* Exercise list */}
-      <Surface elevation={0} style={{ gap: 6, backgroundColor: 'transparent' }}>
-        {routine.exercises.slice(0, 4).map((ex, exIdx) => (
-          <Surface elevation={0} key={exIdx} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 2, backgroundColor: 'transparent' }}>
-            <Surface elevation={0} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.primary, marginTop: 6 }} />
-            <Surface elevation={0} style={{ flex: 1, backgroundColor: 'transparent' }}>
-              <Text variant="bodyMedium" style={{ color: theme.text, fontWeight: '600' }}>
-                {ex.exerciseId?.name || t('routines.exercise', 'Exercise')}
+      <View style={{ gap: 9 }}>
+        {exercises.slice(0, 3).map((exercise, index) => (
+          <View key={exercise._id || index} style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+            <Text
+              style={{
+                width: 28,
+                color: theme.textMuted,
+                fontSize: 11,
+                fontWeight: '800',
+                paddingTop: 1,
+              }}
+            >
+              {String(index + 1).padStart(2, '0')}
+            </Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: theme.text, fontSize: 13, fontWeight: '700' }} numberOfLines={1}>
+                {exercise.exerciseId?.name || t('routines.exercise', 'Exercise')}
               </Text>
-              <Text variant="bodySmall" style={{ color: theme.textMuted, marginTop: 2 }}>
-                {ex.sets.map((s, i) => `${i + 1}: ${s.weight}${t('common.kg', 'kg')} × ${s.reps}`).join('  ')}
+              <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
+                {(exercise.sets || [])
+                  .map((set) => `${set.weight || 0} ${t('common.kg', 'kg')} × ${set.reps || 0}`)
+                  .join('  ·  ')}
               </Text>
-            </Surface>
-          </Surface>
+            </View>
+          </View>
         ))}
-        {routine.exercises.length > 4 && (
-          <Text variant="labelMedium" style={{ color: theme.primary, fontWeight: '800', marginLeft: 16 }}>
-            +{routine.exercises.length - 4} {t('profile.more_exercises', 'more exercises')}
+        {exercises.length > 3 && (
+          <Text style={{ color: theme.primary, fontSize: 12, fontWeight: '700', marginLeft: 28 }}>
+            +{exercises.length - 3} {t('profile.more_exercises', 'more exercises')}
           </Text>
         )}
-      </Surface>
+      </View>
 
-      <Divider style={{ marginVertical: 4, backgroundColor: theme.border }} />
-
+      <Divider style={{ backgroundColor: theme.border }} />
       <Button
         mode="contained"
-        icon="play-circle"
+        icon="play"
         onPress={() => navigation.navigate('ActiveWorkoutScreen', { routine })}
-        style={{ borderRadius: 14 }}
-        contentStyle={{ paddingVertical: 4 }}
-        labelStyle={{ fontWeight: 'bold', fontSize: 15 }}
+        style={{ borderRadius: 10 }}
+        contentStyle={{ minHeight: 44 }}
+        labelStyle={{ fontWeight: '800', fontSize: 14 }}
       >
-        {t('routines.start_routine', 'Start Routine')}
+        {t('routines.start_routine', 'Start routine')}
       </Button>
     </Surface>
   );
 };
 
-/* ── Main Routines Page ─────────────────────────────────────────────────────── */
 const Routines = ({ navigation }) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
   const { getToken } = useAuthContext();
-
   const [routines, setRoutines] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -96,17 +105,14 @@ const Routines = ({ navigation }) => {
       if (cursor) setLoadingMore(true);
       else setLoading(true);
       const token = await getToken();
-      const routinesData = await getRoutines(token, cursor);
-      if (routinesData.success) {
-        setRoutines((currentRoutines) => {
-          if (!cursor) return routinesData.routines;
-          const knownIds = new Set(currentRoutines.map((routine) => routine._id));
-          return [
-            ...currentRoutines,
-            ...routinesData.routines.filter((routine) => !knownIds.has(routine._id)),
-          ];
+      const data = await getRoutines(token, cursor);
+      if (data.success) {
+        setRoutines((current) => {
+          if (!cursor) return data.routines || [];
+          const knownIds = new Set(current.map((routine) => routine._id));
+          return [...current, ...(data.routines || []).filter((routine) => !knownIds.has(routine._id))];
         });
-        setNextCursor(routinesData.nextCursor);
+        setNextCursor(data.nextCursor);
       }
     } catch (error) {
       console.error('Error fetching routines:', error);
@@ -122,95 +128,154 @@ const Routines = ({ navigation }) => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
-      <Appbar.Header style={{ backgroundColor: theme.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+      <Appbar.Header
+        style={{
+          backgroundColor: theme.surface,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.border,
+          elevation: 0,
+        }}
+      >
         <Appbar.Content
           title={t('routines.title', 'Routines')}
-          titleStyle={{ color: theme.text, fontWeight: '900', fontSize: 24 }}
+          titleStyle={{ color: theme.text, fontSize: 23, fontWeight: '800' }}
         />
-        <Chip compact style={{ backgroundColor: '#fbbf24', marginRight: 12 }} textStyle={{ color: '#000', fontWeight: 'bold', fontSize: 11 }}>
-          PRO
-        </Chip>
-        <Appbar.Action icon="plus" color={theme.primary} onPress={() => setShowModal(true)} />
+        <Appbar.Action icon="plus" color={theme.text} onPress={() => setShowModal(true)} />
       </Appbar.Header>
 
       <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ width: '100%', maxWidth: 720, alignSelf: 'center', padding: 16, paddingBottom: 28 }}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          width: '100%',
+          maxWidth: 720,
+          alignSelf: 'center',
+          paddingHorizontal: 16,
+          paddingTop: 20,
+          paddingBottom: 32,
+        }}
       >
+        <View style={{ marginBottom: 16 }}>
+          <Text style={{ color: theme.text, fontSize: 22, lineHeight: 28, fontWeight: '800', letterSpacing: -0.4 }}>
+            {t('routines.ready_title', 'Ready to train?')}
+          </Text>
+          <Text style={{ color: theme.textSecondary, fontSize: 14, lineHeight: 20, marginTop: 4 }}>
+            {t('routines.ready_subtitle', 'Start a blank workout or continue with one of your plans.')}
+          </Text>
+        </View>
 
-        <Surface elevation={0} style={{ backgroundColor: 'transparent', marginBottom: 18 }}>
-          <Text style={{ color: theme.primary, fontSize: 11, fontWeight: '900', letterSpacing: 1.2 }}>
-            TRAIN WITH INTENT
-          </Text>
-          <Text style={{ color: theme.text, fontSize: 27, lineHeight: 34, fontWeight: '900', letterSpacing: -0.8, marginTop: 4 }}>
-            What are we training today?
-          </Text>
-          <Text style={{ color: theme.textSecondary, fontSize: 14, lineHeight: 21, marginTop: 5 }}>
-            Start quickly or choose a routine built around your goals.
-          </Text>
+        <Surface
+          elevation={0}
+          style={{
+            padding: 16,
+            marginBottom: 12,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: theme.border,
+            backgroundColor: theme.surface,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 10,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: theme.energySoft,
+              }}
+            >
+              <Ionicons name="barbell-outline" size={22} color={theme.text} />
+            </View>
+            <View style={{ flex: 1, paddingHorizontal: 12 }}>
+              <Text style={{ color: theme.text, fontSize: 16, fontWeight: '800' }}>
+                {t('routines.start_empty', 'Start empty workout')}
+              </Text>
+              <Text style={{ color: theme.textMuted, fontSize: 12, lineHeight: 17, marginTop: 2 }}>
+                {t('routines.empty_subtitle', 'Add exercises as you train.')}
+              </Text>
+            </View>
+            <Button
+              compact
+              mode="contained"
+              onPress={() => setShowModal(true)}
+              style={{ borderRadius: 9 }}
+              contentStyle={{ minHeight: 38 }}
+              labelStyle={{ fontSize: 12, fontWeight: '800' }}
+            >
+              {t('common.start', 'Start')}
+            </Button>
+          </View>
         </Surface>
 
-        {/* Quick action buttons */}
-        <Button
-          mode="contained"
-          icon="plus"
-          onPress={() => setShowModal(true)}
-          style={{ borderRadius: 16, marginBottom: 12 }}
-          contentStyle={{ minHeight: 52 }}
-          labelStyle={{ fontWeight: '900' }}
-        >
-          {t('routines.start_empty', 'Start Empty Workout')}
-        </Button>
-
-        <Surface elevation={0} style={{ flexDirection: 'row', gap: 10, marginBottom: 24, backgroundColor: 'transparent' }}>
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 24 }}>
           <Button
             mode="outlined"
             icon="clipboard-outline"
             onPress={() => setShowModal(true)}
-            style={{ flex: 1, borderRadius: 12, borderColor: theme.border }}
-            labelStyle={{ fontWeight: '600', fontSize: 13, color: theme.textSecondary }}
+            style={{ flex: 1, borderRadius: 10, borderColor: theme.border }}
+            labelStyle={{ color: theme.textSecondary, fontSize: 12, fontWeight: '700' }}
           >
-            {t('routines.new_routine', 'New Routine')}
+            {t('routines.new_routine', 'New routine')}
           </Button>
           <Button
             mode="outlined"
             icon="magnify"
             onPress={() => navigation.navigate('Exercises')}
-            style={{ flex: 1, borderRadius: 12, borderColor: theme.border }}
-            labelStyle={{ fontWeight: '600', fontSize: 13, color: theme.textSecondary }}
+            style={{ flex: 1, borderRadius: 10, borderColor: theme.border }}
+            labelStyle={{ color: theme.textSecondary, fontSize: 12, fontWeight: '700' }}
           >
-            {t('routines.discover', 'Discover')}
+            {t('routines.discover', 'Explore')}
           </Button>
-        </Surface>
+        </View>
 
-        {/* Section header */}
-        <Surface elevation={0} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, backgroundColor: 'transparent' }}>
-          <Text variant="labelSmall" style={{ color: theme.textMuted, letterSpacing: 1.5, fontWeight: 'bold' }}>
-            {t('routines.my_routines', 'MY ROUTINES')} ({routines.length})
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 12,
+          }}
+        >
+          <Text style={{ color: theme.text, fontSize: 17, fontWeight: '800' }}>
+            {t('routines.my_routines', 'My routines')}
           </Text>
-        </Surface>
+          <Text style={{ color: theme.textMuted, fontSize: 12, fontWeight: '700' }}>{routines.length}</Text>
+        </View>
 
-        {/* Routines list */}
         {loading ? (
-          <ActivityIndicator color={theme.primary} style={{ marginTop: 40 }} />
+          <ActivityIndicator color={theme.primary} style={{ marginTop: 36 }} />
         ) : routines.length === 0 ? (
-          <Surface elevation={0} style={{ alignItems: 'center', paddingVertical: 48, gap: 12, backgroundColor: 'transparent' }}>
-            <Text variant="headlineMedium" style={{ color: theme.border }}>🏋️</Text>
-            <Text variant="bodyLarge" style={{ color: theme.textMuted, fontWeight: '600' }}>
+          <Surface
+            elevation={0}
+            style={{
+              alignItems: 'center',
+              padding: 24,
+              gap: 8,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+            }}
+          >
+            <Ionicons name="clipboard-outline" size={28} color={theme.textMuted} />
+            <Text style={{ color: theme.text, fontSize: 15, fontWeight: '700' }}>
               {t('routines.no_routines', 'No routines yet')}
+            </Text>
+            <Text style={{ color: theme.textMuted, fontSize: 13, lineHeight: 18, textAlign: 'center' }}>
+              {t('routines.no_routines_hint', 'Create a repeatable plan for your next session.')}
             </Text>
             <Button
               mode="contained"
               onPress={() => setShowModal(true)}
-              style={{ borderRadius: 12, marginTop: 8 }}
-              labelStyle={{ fontWeight: 'bold' }}
+              style={{ borderRadius: 10, marginTop: 6 }}
+              labelStyle={{ fontWeight: '800' }}
             >
-              {t('routines.new_routine', 'Create Routine')}
+              {t('routines.new_routine', 'Create routine')}
             </Button>
           </Surface>
         ) : (
-          <Surface elevation={0} style={{ gap: 16, backgroundColor: 'transparent' }}>
+          <View style={{ gap: 12 }}>
             {routines.map((routine) => (
               <RoutineCard
                 key={routine._id}
@@ -225,20 +290,20 @@ const Routines = ({ navigation }) => {
                 onPress={() => fetchRoutines(nextCursor)}
                 loading={loadingMore}
                 disabled={loadingMore}
+                style={{ borderRadius: 10 }}
               >
                 {t('common.load_more', 'Load more')}
               </Button>
             )}
-          </Surface>
+          </View>
         )}
-
       </ScrollView>
 
       <RoutineBuilderModal
         visible={showModal}
         onClose={() => setShowModal(false)}
-        onRoutineCreated={(r) => {
-          setRoutines((prev) => [r, ...prev]);
+        onRoutineCreated={(routine) => {
+          setRoutines((current) => [routine, ...current]);
           setShowModal(false);
         }}
       />

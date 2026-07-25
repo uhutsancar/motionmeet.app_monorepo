@@ -135,17 +135,17 @@ const TabNavigator = () => {
   const screenOptions = useCallback(({ route }) => ({
     tabBarIcon: ({ focused, color, size }) => {
       const iconName = iconForRoute(route.name, focused);
-      const iconSize = 23;
+      const iconSize = 22;
       const showBadge = route.name === 'MessagesTab' && unreadMessages > 0;
 
       return (
         <View style={{
           width: 42,
-          height: 32,
-          borderRadius: 13,
+          height: 30,
           justifyContent: 'center',
           alignItems: 'center',
-          backgroundColor: focused ? theme.primarySoft : 'transparent',
+          borderTopWidth: focused ? 2 : 0,
+          borderTopColor: focused ? theme.primary : 'transparent',
         }}>
           <Ionicons name={iconName} size={iconSize} color={color} />
           {showBadge && (
@@ -177,19 +177,18 @@ const TabNavigator = () => {
     tabBarHideOnKeyboard: true,
     tabBarLabelStyle: {
       fontSize: 10,
-      fontWeight: '800',
-      marginTop: 1,
+      fontWeight: '700',
+      marginTop: 2,
       marginBottom: 0,
     },
     tabBarStyle: {
       backgroundColor: theme.surface,
-      borderTopColor: theme.border,
+      borderColor: theme.border,
       borderTopWidth: 1,
-      height: 64 + insets.bottom,
-      paddingTop: 6,
-      paddingBottom: Math.max(insets.bottom, 6),
+      height: 60 + insets.bottom,
+      paddingTop: 5,
+      paddingBottom: Math.max(insets.bottom, 5),
       elevation: 0,
-      shadowOpacity: 0,
     },
     tabBarItemStyle: {
       justifyContent: 'center',

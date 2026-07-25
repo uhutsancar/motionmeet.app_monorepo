@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
   Alert,
-  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -12,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Surface, Text, TextInput, TouchableRipple } from 'react-native-paper';
 import { useAuthContext } from '../context/AuthProvider';
 import { useTheme } from '../context/ThemeContext';
+import MotionMark from '../components/MotionMark';
 
 const Login = () => {
   const { theme } = useTheme();
@@ -70,8 +70,6 @@ const Login = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View pointerEvents="none" style={styles.ambientTop} />
-      <View pointerEvents="none" style={styles.ambientBottom} />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -82,16 +80,10 @@ const Login = () => {
           contentContainerStyle={styles.scrollContent}
         >
           <View style={styles.brandRow}>
-            <View style={styles.logoTile}>
-              <Image
-                source={require('../../assets/icon.png')}
-                style={styles.logo}
-                resizeMode="contain"
-              />
-            </View>
+            <MotionMark size={46} />
             <View>
               <Text style={styles.brandName}>MotionMeet</Text>
-              <Text style={styles.brandTag}>TRAIN · TRACK · CONNECT</Text>
+              <Text style={styles.brandTag}>MOVE WITH PURPOSE</Text>
             </View>
           </View>
 
@@ -104,12 +96,12 @@ const Login = () => {
             </Text>
             <Text style={styles.subtitle}>
               {isLogin
-                ? 'Your workouts, progress and community are waiting.'
-                : 'Bring your training, progress and people into one place.'}
+                ? 'Your sessions, progress and people are waiting.'
+                : 'Bring the work and the people behind it into one place.'}
             </Text>
           </View>
 
-          <Surface elevation={2} style={styles.formCard}>
+          <Surface elevation={0} style={styles.formCard}>
             <View style={styles.segment}>
               <TouchableRipple
                 borderless
@@ -218,32 +210,12 @@ const createStyles = (theme) => StyleSheet.create({
     flex: 1,
     backgroundColor: theme.background,
   },
-  ambientTop: {
-    position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    top: -150,
-    right: -100,
-    backgroundColor: theme.primarySoft,
-    opacity: 0.72,
-  },
-  ambientBottom: {
-    position: 'absolute',
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    bottom: -160,
-    left: -120,
-    backgroundColor: theme.secondarySoft,
-    opacity: 0.58,
-  },
   scrollContent: {
     flexGrow: 1,
     width: '100%',
     maxWidth: 520,
     alignSelf: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 18,
     paddingBottom: 28,
     justifyContent: 'center',
@@ -252,21 +224,7 @@ const createStyles = (theme) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 11,
-    marginBottom: 36,
-  },
-  logoTile: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 15,
-    backgroundColor: theme.primarySoft,
-    borderWidth: 1,
-    borderColor: theme.border,
-  },
-  logo: {
-    width: 31,
-    height: 31,
+    marginBottom: 28,
   },
   brandName: {
     color: theme.text,
@@ -281,7 +239,7 @@ const createStyles = (theme) => StyleSheet.create({
     letterSpacing: 1.05,
   },
   intro: {
-    marginBottom: 24,
+    marginBottom: 18,
   },
   eyebrow: {
     color: theme.primary,
@@ -292,7 +250,7 @@ const createStyles = (theme) => StyleSheet.create({
   },
   title: {
     color: theme.text,
-    fontSize: 31,
+    fontSize: 29,
     fontWeight: '900',
     lineHeight: 38,
     letterSpacing: -1.1,
@@ -306,20 +264,16 @@ const createStyles = (theme) => StyleSheet.create({
   },
   formCard: {
     backgroundColor: theme.surface,
-    borderRadius: 24,
+    borderRadius: 12,
     padding: 18,
     borderWidth: 1,
     borderColor: theme.border,
-    shadowColor: theme.shadow,
-    shadowOpacity: theme.dark ? 0.24 : 0.08,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
   },
   segment: {
     flexDirection: 'row',
     padding: 4,
     marginBottom: 20,
-    borderRadius: 14,
+    borderRadius: 10,
     backgroundColor: theme.surfaceLight,
   },
   segmentButton: {
@@ -327,14 +281,13 @@ const createStyles = (theme) => StyleSheet.create({
     minHeight: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 11,
+    borderRadius: 8,
   },
   segmentButtonActive: {
     backgroundColor: theme.surface,
-    shadowColor: theme.shadow,
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
+    boxShadow: theme.dark
+      ? '0px 2px 6px rgba(0,0,0,0.20)'
+      : '0px 2px 6px rgba(18,24,42,0.08)',
   },
   segmentText: {
     color: theme.textMuted,
@@ -351,7 +304,7 @@ const createStyles = (theme) => StyleSheet.create({
     backgroundColor: theme.background,
   },
   inputOutline: {
-    borderRadius: 14,
+    borderRadius: 10,
   },
   helper: {
     color: theme.textMuted,
@@ -360,12 +313,8 @@ const createStyles = (theme) => StyleSheet.create({
     marginLeft: 4,
   },
   submitButton: {
-    borderRadius: 15,
+    borderRadius: 10,
     marginTop: 4,
-    shadowColor: theme.primary,
-    shadowOpacity: 0.24,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
   },
   submitContent: {
     minHeight: 52,

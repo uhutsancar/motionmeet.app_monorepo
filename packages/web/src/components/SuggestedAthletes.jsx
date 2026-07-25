@@ -53,7 +53,7 @@ const SuggestedAthletes = () => {
 
   if (loading) {
     return (
-      <Card variant="outlined" sx={{ borderRadius: 3 }}>
+      <Card variant="outlined">
         <CardContent>
           <Skeleton width="55%" height={30} />
           <Stack spacing={2} sx={{ mt: 2 }}>
@@ -72,9 +72,9 @@ const SuggestedAthletes = () => {
   if (users.length === 0) return null;
 
   return (
-    <Card variant="outlined" sx={{ borderRadius: 3 }}>
-      <CardContent sx={{ p: 3, "&:last-child": { pb: 3 } }}>
-        <Typography variant="h6" sx={{ mb: 2.5, fontWeight: 800 }}>
+    <Card variant="outlined">
+      <CardContent sx={{ p: 2.5, "&:last-child": { pb: 2.5 } }}>
+        <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 800 }}>
           {t("feed.suggested_athletes")}
         </Typography>
         <Stack spacing={2}>
@@ -85,7 +85,7 @@ const SuggestedAthletes = () => {
                 sx={{ minWidth: 0, borderRadius: 2, justifyContent: "flex-start", textAlign: "left" }}
               >
                 <Stack direction="row" spacing={1.5} sx={{ minWidth: 0, alignItems: "center" }}>
-                  <Avatar src={user.profile_picture || undefined} alt={user.full_name} sx={{ width: 48, height: 48 }}>
+                  <Avatar src={user.profile_picture || undefined} alt={user.full_name} sx={{ width: 42, height: 42 }}>
                     {user.username?.charAt(0).toUpperCase()}
                   </Avatar>
                   <Stack sx={{ minWidth: 0 }}>

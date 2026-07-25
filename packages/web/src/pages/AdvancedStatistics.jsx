@@ -1,184 +1,221 @@
-import { useState, useEffect } from "react";
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { ChevronLeft, TrendingUp, Clock, Activity } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { Activity, BarChart3, Clock, TrendingUp } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuthContext } from "../context/AuthProvider";
 import api from "~/api/axios";
-import { Box, Stack, Typography, IconButton, Paper, Grid, ToggleButtonGroup, ToggleButton, Skeleton } from "@mui/material";
+import { Box, Paper, Skeleton, Stack, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
+import { PageHeader, PageShell } from "~/components/AppPage";
+
+const ChartTooltip = ({ active, payload, label, unit }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <Paper elevation={3} sx={{ p: 1.5, border: 1, borderColor: "divider" }}>
+      <Typography variant="caption" color="text.secondary">{label}</Typography>
+      <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+        {Number(payload[0].value || 0).toLocaleString()}{" "}
+        <Typography component="span" variant="caption" color="text.secondary">{unit}</Typography>
+      </Typography>
+    </Paper>
+  );
+};
+
+const Metric = ({ icon: Icon, label, value, unit, color }) => (
+  <Paper variant="outlined" sx={{ p: 2 }}>
+    <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
+      <Box sx={{ width: 38, height: 38, display: "grid", placeItems: "center", borderRadius: 2, bgcolor: "action.hover", color }}>
+        <Icon size={19} />
+      </Box>
+      <Box>
+        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>{label}</Typography>
+        <Typography variant="h6" sx={{ mt: 0.15, fontWeight: 800 }}>
+          {Number(value || 0).toLocaleString()}{" "}
+          <Typography component="span" variant="caption" color="text.secondary">{unit}</Typography>
+        </Typography>
+      </Box>
+    </Stack>
+  </Paper>
+);
+
+const ChartCard = ({ icon: Icon, title, children, color = "primary.main" }) => (
+  <Paper variant="outlined" sx={{ p: { xs: 2, sm: 2.5 }, minWidth: 0 }}>
+    <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 2 }}>
+      <Box sx={{ color, display: "flex" }}><Icon size={18} /></Box>
+      <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{title}</Typography>
+    </Stack>
+    {children}
+  </Paper>
+);
 
 const AdvancedStatistics = () => {
-    const { t } = useTranslation();
-    const navigate = useNavigate();
-    const { getToken } = useAuthContext();
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { getToken } = useAuthContext();
+  const [period, setPeriod] = useState("month");
+  const [statsData, setStatsData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-    const [period, setPeriod] = useState("month");
-    const [statsData, setStatsData] = useState(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const fetchStats = async () => {
-            setLoading(true);
-            try {
-                const token = await getToken();
-                const { data } = await api.get(`/api/workout/stats?period=${period}`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                if (data.success) {
-                    setStatsData(data.stats);
-                }
-            } catch (error) {
-                console.error("Error fetching stats:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchStats();
-    }, [period, getToken]);
-
-    const chartData = statsData?.labels.map((label, index) => ({
-        name: label,
-        volume: statsData.volumes[index] || 0,
-        reps: statsData.reps[index] || 0,
-        duration: statsData.durations[index] || 0,
-    })) || [];
-
-    const CustomTooltip = ({ active, payload, label, unit }) => {
-        if (active && payload && payload.length) {
-            return (
-                <Paper elevation={3} sx={{ p: 2, borderRadius: 2, bgcolor: 'background.paper', border: 1, borderColor: 'divider' }}>
-                    <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 1, mb: 1, display: 'block' }}>
-                        {label}
-                    </Typography>
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                        <Box sx={{ w: 8, h: 8, borderRadius: '50%', bgcolor: 'primary.main', width: 8, height: 8 }} />
-                        <Typography variant="subtitle2" fontWeight="bold">
-                            {payload[0].value.toLocaleString()}
-                            <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>{unit}</Typography>
-                        </Typography>
-                    </Stack>
-                </Paper>
-            );
-        }
-        return null;
+  useEffect(() => {
+    let active = true;
+    const fetchStats = async () => {
+      setLoading(true);
+      try {
+        const token = await getToken();
+        const { data } = await api.get(`/api/workout/stats?period=${period}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (active && data.success) setStatsData(data.stats);
+      } catch (error) {
+        console.error("Error fetching stats:", error);
+      } finally {
+        if (active) setLoading(false);
+      }
     };
+    fetchStats();
+    return () => {
+      active = false;
+    };
+  }, [period, getToken]);
 
-    return (
-        <Box sx={{ width: '100%', minHeight: '100dvh', bgcolor: 'background.default', p: { xs: 2, sm: 4 }, pb: { xs: 12, sm: 4 } }}>
-            <Box sx={{ maxWidth: 'md', mx: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {/* Header */}
-                <Stack direction="row" alignItems="center" spacing={2}>
-                    <IconButton
-                        onClick={() => navigate('/statistics')}
-                        sx={{ bgcolor: 'background.paper', border: 1, borderColor: 'divider', '&:hover': { bgcolor: 'action.hover', borderColor: 'primary.main' } }}
-                    >
-                        <ChevronLeft size={24} />
-                    </IconButton>
-                    <Box>
-                        <Typography variant="h4" fontWeight="900" letterSpacing="-0.02em">{t("statistics.advanced", "Gelişmiş İstatistikler")}</Typography>
-                        <Typography variant="body2" color="text.secondary">{t("statistics.advanced_desc", "Hacim, Set, Rep detayları")}</Typography>
-                    </Box>
-                </Stack>
+  const chartData = useMemo(() => (
+    statsData?.labels?.map((label, index) => ({
+      name: label,
+      volume: statsData.volumes?.[index] || 0,
+      reps: statsData.reps?.[index] || 0,
+      duration: statsData.durations?.[index] || 0,
+    })) || []
+  ), [statsData]);
 
-                {/* Period Selector */}
-                <ToggleButtonGroup
-                    value={period}
-                    exclusive
-                    onChange={(e, newPeriod) => { if (newPeriod) setPeriod(newPeriod); }}
-                    sx={{ alignSelf: 'flex-start', bgcolor: 'background.paper', p: 0.5, borderRadius: 3, border: 1, borderColor: 'divider', '& .MuiToggleButton-root': { border: 'none', borderRadius: 2.5, px: 3, py: 1, fontWeight: 'bold', textTransform: 'none', color: 'text.secondary', '&.Mui-selected': { bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.dark' } } } }}
-                >
-                    {["week", "month", "year"].map((p) => (
-                        <ToggleButton key={p} value={p}>
-                            {t(`statistics.${p}`)}
-                        </ToggleButton>
-                    ))}
-                </ToggleButtonGroup>
+  const totals = useMemo(() => chartData.reduce(
+    (result, item) => ({
+      volume: result.volume + item.volume,
+      reps: result.reps + item.reps,
+      duration: result.duration + item.duration,
+    }),
+    { volume: 0, reps: 0, duration: 0 },
+  ), [chartData]);
 
-                {loading ? (
-                    <Grid container spacing={3}>
-                        <Grid item xs={12}><Skeleton variant="rounded" height={250} sx={{ borderRadius: 6 }} /></Grid>
-                        <Grid item xs={12} md={6}><Skeleton variant="rounded" height={250} sx={{ borderRadius: 6 }} /></Grid>
-                        <Grid item xs={12} md={6}><Skeleton variant="rounded" height={250} sx={{ borderRadius: 6 }} /></Grid>
-                    </Grid>
-                ) : (
-                    <Stack spacing={3}>
-                        {/* Volume Chart */}
-                        <Paper variant="outlined" sx={{ p: 3, borderRadius: 6, bgcolor: 'background.paper', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: 4 } }}>
-                            <Stack direction="row" alignItems="center" spacing={1} mb={3}>
-                                <TrendingUp size={20} color="var(--accent-primary)" />
-                                <Typography variant="h6" fontWeight="bold">{t('statistics.volume', 'Hacim')} {t('statistics.total_uppercase', '(Total)')}</Typography>
-                            </Stack>
-                            <Box sx={{ height: 250, width: '100%' }}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart data={chartData}>
-                                        <defs>
-                                            <linearGradient id="colorVolume" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="var(--accent-primary)" stopOpacity={0.5} />
-                                                <stop offset="95%" stopColor="var(--accent-primary)" stopOpacity={0} />
-                                            </linearGradient>
-                                        </defs>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" opacity={0.5} />
-                                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "var(--text-secondary)", fontSize: 12 }} dy={10} />
-                                        <YAxis axisLine={false} tickLine={false} tick={{ fill: "var(--text-secondary)", fontSize: 12 }} dx={-10} />
-                                        <Tooltip content={<CustomTooltip unit="kg" />} cursor={{ fill: 'transparent' }} />
-                                        <Area type="monotone" dataKey="volume" stroke="var(--accent-primary)" strokeWidth={3} fillOpacity={1} fill="url(#colorVolume)" />
-                                    </AreaChart>
-                                </ResponsiveContainer>
-                            </Box>
-                        </Paper>
+  const periodSelector = (
+    <ToggleButtonGroup
+      value={period}
+      exclusive
+      size="small"
+      onChange={(_, nextPeriod) => nextPeriod && setPeriod(nextPeriod)}
+      sx={{
+        bgcolor: "background.paper",
+        p: 0.5,
+        border: 1,
+        borderColor: "divider",
+        borderRadius: 2.5,
+        "& .MuiToggleButton-root": {
+          minWidth: 72,
+          border: 0,
+          borderRadius: 2,
+          px: 2,
+          py: 0.75,
+          fontWeight: 700,
+          textTransform: "none",
+          "&.Mui-selected": { bgcolor: "primary.main", color: "primary.contrastText" },
+        },
+      }}
+    >
+      {["week", "month", "year"].map((item) => (
+        <ToggleButton key={item} value={item}>{t(`statistics.${item}`, item)}</ToggleButton>
+      ))}
+    </ToggleButtonGroup>
+  );
 
-                        <Grid container spacing={3}>
-                            {/* Reps Chart */}
-                            <Grid item xs={12} md={6}>
-                                <Paper variant="outlined" sx={{ p: 3, borderRadius: 6, bgcolor: 'background.paper', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: 4 }, height: '100%' }}>
-                                    <Stack direction="row" alignItems="center" spacing={1} mb={3}>
-                                        <Activity size={20} color="#22c55e" />
-                                        <Typography variant="h6" fontWeight="bold">Reps {t('statistics.total_uppercase', '(Total)')}</Typography>
-                                    </Stack>
-                                    <Box sx={{ height: 250, width: '100%' }}>
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={chartData}>
-                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" opacity={0.5} />
-                                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "var(--text-secondary)", fontSize: 12 }} dy={10} />
-                                                <Tooltip content={<CustomTooltip unit="reps" />} cursor={{ fill: 'var(--surface-light)' }} />
-                                                <Bar dataKey="reps" fill="#22c55e" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                                            </BarChart>
-                                        </ResponsiveContainer>
-                                    </Box>
-                                </Paper>
-                            </Grid>
+  return (
+    <PageShell maxWidth={1180}>
+      <PageHeader
+        icon={BarChart3}
+        title={t("statistics.advanced", "Advanced Statistics")}
+        description={t("statistics.advanced_desc", "Volume, set and rep details")}
+        onBack={() => navigate("/statistics")}
+        action={periodSelector}
+      />
 
-                            {/* Duration Chart */}
-                            <Grid item xs={12} md={6}>
-                                <Paper variant="outlined" sx={{ p: 3, borderRadius: 6, bgcolor: 'background.paper', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: 4 }, height: '100%' }}>
-                                    <Stack direction="row" alignItems="center" spacing={1} mb={3}>
-                                        <Clock size={20} color="#3b82f6" />
-                                        <Typography variant="h6" fontWeight="bold">{t('statistics.duration', 'Süre')} {t('statistics.mins_uppercase', '(Mins)')}</Typography>
-                                    </Stack>
-                                    <Box sx={{ height: 250, width: '100%' }}>
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <AreaChart data={chartData}>
-                                                <defs>
-                                                    <linearGradient id="colorDuration" x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.5} />
-                                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                                    </linearGradient>
-                                                </defs>
-                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" opacity={0.5} />
-                                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "var(--text-secondary)", fontSize: 12 }} dy={10} />
-                                                <Tooltip content={<CustomTooltip unit="min" />} cursor={{ fill: 'transparent' }} />
-                                                <Area type="monotone" dataKey="duration" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorDuration)" />
-                                            </AreaChart>
-                                        </ResponsiveContainer>
-                                    </Box>
-                                </Paper>
-                            </Grid>
-                        </Grid>
-                    </Stack>
-                )}
+      {loading ? (
+        <Stack spacing={2}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" }, gap: 2 }}>
+            {[0, 1, 2].map((item) => <Skeleton key={item} variant="rounded" height={78} />)}
+          </Box>
+          <Skeleton variant="rounded" height={330} />
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 2 }}>
+            <Skeleton variant="rounded" height={290} />
+            <Skeleton variant="rounded" height={290} />
+          </Box>
+        </Stack>
+      ) : (
+        <Stack spacing={2}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" }, gap: 2 }}>
+            <Metric icon={TrendingUp} label={t("statistics.volume", "Volume")} value={totals.volume} unit="kg" color="primary.main" />
+            <Metric icon={Activity} label="Reps" value={totals.reps} unit="reps" color="success.main" />
+            <Metric icon={Clock} label={t("statistics.duration", "Duration")} value={totals.duration} unit="min" color="info.dark" />
+          </Box>
+
+          <ChartCard icon={TrendingUp} title={`${t("statistics.volume", "Volume")} (${t("statistics.total_uppercase", "Total")})`}>
+            <Box sx={{ height: 270, width: "100%" }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="volumeGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--accent-primary)" stopOpacity={0.28} />
+                      <stop offset="95%" stopColor="var(--accent-primary)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "var(--text-secondary)", fontSize: 11 }} dy={8} />
+                  <YAxis width={54} axisLine={false} tickLine={false} tick={{ fill: "var(--text-secondary)", fontSize: 11 }} />
+                  <Tooltip content={<ChartTooltip unit="kg" />} />
+                  <Area type="monotone" dataKey="volume" stroke="var(--accent-primary)" strokeWidth={2.5} fill="url(#volumeGradient)" />
+                </AreaChart>
+              </ResponsiveContainer>
             </Box>
-        </Box>
-    );
+          </ChartCard>
+
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 2 }}>
+            <ChartCard icon={Activity} title={`Reps (${t("statistics.total_uppercase", "Total")})`} color="success.main">
+              <Box sx={{ height: 220 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "var(--text-secondary)", fontSize: 11 }} dy={8} />
+                    <Tooltip content={<ChartTooltip unit="reps" />} />
+                    <Bar dataKey="reps" fill="#22A06B" radius={[4, 4, 0, 0]} maxBarSize={34} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </ChartCard>
+
+            <ChartCard icon={Clock} title={t("statistics.duration", "Duration")} color="info.dark">
+              <Box sx={{ height: 220 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "var(--text-secondary)", fontSize: 11 }} dy={8} />
+                    <Tooltip content={<ChartTooltip unit="min" />} />
+                    <Area type="monotone" dataKey="duration" stroke="#3284FF" strokeWidth={2.5} fill="#3284FF" fillOpacity={0.08} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </Box>
+            </ChartCard>
+          </Box>
+        </Stack>
+      )}
+    </PageShell>
+  );
 };
 
 export default AdvancedStatistics;

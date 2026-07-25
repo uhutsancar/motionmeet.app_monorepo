@@ -9,6 +9,7 @@ import React, {
   useState,
 } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import { API_URL } from '../config/environment';
 import { API_ROUTES } from '@motionmeet/shared';
 
@@ -17,6 +18,38 @@ const REFRESH_TOKEN_KEY = 'motionmeet_refresh_token';
 const ACCESS_EXPIRY_KEY = 'motionmeet_access_expiry';
 const LEGACY_TOKEN_KEY = 'token';
 const REFRESH_EARLY_MS = 60 * 1000;
+const isWeb = Platform.OS === 'web';
+
+const isCompleteSession = (data) =>
+  Boolean(
+    data?.success &&
+    data?.token &&
+    data?.refreshToken &&
+    data?.user
+  );
+
+const tokenStorage = {
+  getItemAsync: async (key) => {
+    if (isWeb) {
+      return typeof localStorage === 'undefined' ? null : localStorage.getItem(key);
+    }
+    return SecureStore.getItemAsync(key);
+  },
+  setItemAsync: async (key, value) => {
+    if (isWeb) {
+      if (typeof localStorage !== 'undefined') localStorage.setItem(key, value);
+      return;
+    }
+    await SecureStore.setItemAsync(key, value);
+  },
+  deleteItemAsync: async (key) => {
+    if (isWeb) {
+      if (typeof localStorage !== 'undefined') localStorage.removeItem(key);
+      return;
+    }
+    await SecureStore.deleteItemAsync(key);
+  },
+};
 
 const authApi = axios.create({
   baseURL: API_URL,
@@ -45,14 +78,20 @@ export const AuthProvider = ({ children }) => {
     setToken(null);
     setUser(null);
     await Promise.all([
-      SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY),
-      SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY),
-      SecureStore.deleteItemAsync(ACCESS_EXPIRY_KEY),
-      SecureStore.deleteItemAsync(LEGACY_TOKEN_KEY),
+      tokenStorage.deleteItemAsync(ACCESS_TOKEN_KEY),
+      tokenStorage.deleteItemAsync(REFRESH_TOKEN_KEY),
+      tokenStorage.deleteItemAsync(ACCESS_EXPIRY_KEY),
+      tokenStorage.deleteItemAsync(LEGACY_TOKEN_KEY),
     ]);
   }, []);
 
   const saveSession = useCallback(async (data) => {
+    if (!isCompleteSession(data)) {
+      throw Object.assign(new Error('Invalid authentication response'), {
+        code: 'INVALID_AUTH_RESPONSE',
+      });
+    }
+
     const expiresAt = Number(data.accessTokenExpiresAt) || 0;
     accessTokenRef.current = data.token;
     refreshTokenRef.current = data.refreshToken;
@@ -61,10 +100,10 @@ export const AuthProvider = ({ children }) => {
     setUser(data.user);
 
     await Promise.all([
-      SecureStore.setItemAsync(ACCESS_TOKEN_KEY, data.token),
-      SecureStore.setItemAsync(REFRESH_TOKEN_KEY, data.refreshToken),
-      SecureStore.setItemAsync(ACCESS_EXPIRY_KEY, String(expiresAt)),
-      SecureStore.deleteItemAsync(LEGACY_TOKEN_KEY),
+      tokenStorage.setItemAsync(ACCESS_TOKEN_KEY, data.token),
+      tokenStorage.setItemAsync(REFRESH_TOKEN_KEY, data.refreshToken),
+      tokenStorage.setItemAsync(ACCESS_EXPIRY_KEY, String(expiresAt)),
+      tokenStorage.deleteItemAsync(LEGACY_TOKEN_KEY),
     ]);
   }, []);
 
@@ -73,20 +112,24 @@ export const AuthProvider = ({ children }) => {
 
     const refreshToken =
       refreshTokenRef.current ||
-      await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+      await tokenStorage.getItemAsync(REFRESH_TOKEN_KEY);
     if (!refreshToken) return null;
 
     refreshInFlightRef.current = authApi
       .post(API_ROUTES.auth.refresh, { refreshToken })
       .then(async ({ data }) => {
-        if (!data?.success || !data.token || !data.refreshToken) {
-          throw new Error('Invalid refresh response');
-        }
         await saveSession(data);
         return data.token;
       })
-      .catch(async () => {
-        await clearSession();
+      .catch(async (error) => {
+        const status = error.response?.status;
+        if (
+          error.code === 'INVALID_AUTH_RESPONSE' ||
+          status === 401 ||
+          status === 403
+        ) {
+          await clearSession();
+        }
         return null;
       })
       .finally(() => {
@@ -113,9 +156,9 @@ export const AuthProvider = ({ children }) => {
       try {
         const [storedAccessToken, storedRefreshToken, storedExpiry] =
           await Promise.all([
-            SecureStore.getItemAsync(ACCESS_TOKEN_KEY),
-            SecureStore.getItemAsync(REFRESH_TOKEN_KEY),
-            SecureStore.getItemAsync(ACCESS_EXPIRY_KEY),
+            tokenStorage.getItemAsync(ACCESS_TOKEN_KEY),
+            tokenStorage.getItemAsync(REFRESH_TOKEN_KEY),
+            tokenStorage.getItemAsync(ACCESS_EXPIRY_KEY),
           ]);
 
         accessTokenRef.current = storedAccessToken;
@@ -161,11 +204,11 @@ export const AuthProvider = ({ children }) => {
   const login = useCallback(async (email, password) => {
     try {
       const { data } = await authApi.post(API_ROUTES.auth.login, { email, password });
-      if (data?.success) {
+      if (isCompleteSession(data)) {
         await saveSession(data);
         return { success: true };
       }
-      return { success: false, message: data?.message };
+      return { success: false, message: data?.message || 'Invalid login response' };
     } catch (error) {
       return {
         success: false,
@@ -177,11 +220,11 @@ export const AuthProvider = ({ children }) => {
   const register = useCallback(async (userData) => {
     try {
       const { data } = await authApi.post(API_ROUTES.auth.register, userData);
-      if (data?.success) {
+      if (isCompleteSession(data)) {
         await saveSession(data);
         return { success: true };
       }
-      return { success: false, message: data?.message };
+      return { success: false, message: data?.message || 'Invalid registration response' };
     } catch (error) {
       return {
         success: false,

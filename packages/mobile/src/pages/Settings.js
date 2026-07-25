@@ -30,7 +30,7 @@ const SettingsSection = ({ title, children, theme }) => (
       elevation={0}
       style={{
         overflow: 'hidden',
-        borderRadius: 20,
+        borderRadius: 12,
         borderWidth: 1,
         borderColor: theme.border,
         backgroundColor: theme.surface,
@@ -62,7 +62,7 @@ const SettingsRow = ({
       <View style={{
         width: 40,
         height: 40,
-        borderRadius: 13,
+        borderRadius: 9,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: `${iconColor}18`,
@@ -138,7 +138,7 @@ const Settings = ({ navigation }) => {
       }}>
         <Appbar.Content
           title={t('settings.title', 'Settings')}
-          titleStyle={{ color: theme.text, fontWeight: '900', fontSize: 24 }}
+          titleStyle={{ color: theme.text, fontWeight: '800', fontSize: 23 }}
         />
       </Appbar.Header>
 
@@ -150,17 +150,14 @@ const Settings = ({ navigation }) => {
           alignSelf: 'center',
           padding: 16,
           paddingBottom: 32,
-          gap: 24,
+          gap: 20,
         }}
       >
         <View>
-          <Text style={{ color: theme.primary, fontSize: 11, fontWeight: '900', letterSpacing: 1.2 }}>
-            YOUR SPACE
+          <Text style={{ color: theme.text, fontSize: 22, lineHeight: 28, fontWeight: '800', letterSpacing: -0.4 }}>
+            Make MotionMeet yours
           </Text>
-          <Text style={{ color: theme.text, fontSize: 27, lineHeight: 34, fontWeight: '900', letterSpacing: -0.8, marginTop: 4 }}>
-            Make MotionMeet yours.
-          </Text>
-          <Text style={{ color: theme.textSecondary, fontSize: 14, lineHeight: 21, marginTop: 5 }}>
+          <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 4 }}>
             Manage your account, privacy and app experience.
           </Text>
         </View>
@@ -240,7 +237,7 @@ const Settings = ({ navigation }) => {
           onPress={() => signOut()}
           contentStyle={{ minHeight: 50 }}
           labelStyle={{ fontWeight: '900' }}
-          style={{ borderRadius: 16, borderColor: `${theme.danger}55` }}
+          style={{ borderRadius: 10, borderColor: `${theme.danger}55` }}
         >
           {t('settings.logout', 'Sign out')}
         </Button>

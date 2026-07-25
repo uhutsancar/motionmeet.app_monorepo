@@ -1,42 +1,34 @@
 import React, { useState } from 'react';
-import { Image, Alert } from 'react-native';
-import { Surface, TouchableRipple, Text } from 'react-native-paper';
-import { useSelector, useDispatch } from 'react-redux';
-import { useAuthContext } from "../context/AuthProvider";
+import { Alert, Image, View } from 'react-native';
+import { Surface, Text, TouchableRipple } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
+import { useDispatch, useSelector } from 'react-redux';
+import { useTranslation } from 'react-i18next';
+import { useAuthContext } from '../context/AuthProvider';
+import { useTheme } from '../context/ThemeContext';
 import { followUser, unfollowUser } from '../api/endpoints';
 import { fetchUser } from '../features/user/userSlice';
-import { useTheme } from '../context/ThemeContext';
-import { useTranslation } from 'react-i18next';
 
 const UserCard = ({ user, onPress }) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
-  const styles = getStyles(theme);
   const dispatch = useDispatch();
   const currentUser = useSelector((state) => state.user.value);
   const { connections } = useSelector((state) => state.connections);
   const { getToken } = useAuthContext();
   const [processing, setProcessing] = useState(false);
-
   const isFollowing = currentUser?.following?.includes(user._id);
-  const isConnected = connections?.some(conn => conn._id === user._id);
+  const isConnected = connections?.some((connection) => connection._id === user._id);
 
   const handleFollow = async () => {
     if (processing) return;
-    
     try {
       setProcessing(true);
       const token = await getToken();
-      
-      if (isFollowing) {
-        await unfollowUser(user._id, token);
-      } else {
-        await followUser(user._id, token);
-      }
-      
+      if (isFollowing) await unfollowUser(user._id, token);
+      else await followUser(user._id, token);
       dispatch(fetchUser(token));
-    } catch (error) {
+    } catch {
       Alert.alert(t('common.error'), t('feed.follow_failed'));
     } finally {
       setProcessing(false);
@@ -44,153 +36,88 @@ const UserCard = ({ user, onPress }) => {
   };
 
   return (
-    <Surface elevation={0} style={styles.card}>
-      <Surface elevation={0} style={styles.infoSection}>
+    <Surface
+      elevation={0}
+      style={{
+        width: 220,
+        padding: 12,
+        marginRight: 10,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: theme.border,
+        backgroundColor: theme.surface,
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         {user.profile_picture ? (
           <Image
             source={{ uri: user.profile_picture }}
-            style={styles.avatar}
+            style={{ width: 46, height: 46, borderRadius: 23 }}
           />
         ) : (
-          <Surface elevation={0} style={[styles.avatar, styles.avatarPlaceholder]}>
-            <Text style={styles.avatarPlaceholderText}>
+          <View
+            style={{
+              width: 46,
+              height: 46,
+              borderRadius: 23,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: theme.primarySoft,
+            }}
+          >
+            <Text style={{ color: theme.primary, fontSize: 17, fontWeight: '800' }}>
               {user.full_name?.charAt(0)?.toUpperCase() || 'U'}
             </Text>
-          </Surface>
+          </View>
         )}
-        <Text style={styles.fullName}>{user.full_name}</Text>
-        {user.username && (
-          <Text style={styles.username}>@{user.username}</Text>
-        )}
-        {user.bio && (
-          <Text style={styles.bio} numberOfLines={1}>{user.bio}</Text>
-        )}
-      </Surface>
+        <View style={{ flex: 1, minWidth: 0, marginLeft: 10 }}>
+          <Text style={{ color: theme.text, fontSize: 13, fontWeight: '800' }} numberOfLines={1}>
+            {user.full_name}
+          </Text>
+          <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
+            @{user.username || 'member'}
+          </Text>
+          <Text style={{ color: theme.textMuted, fontSize: 10, marginTop: 3 }} numberOfLines={1}>
+            {user.followers_count ?? user.followers?.length ?? 0} {t('feed.followers', 'followers')}
+            {isConnected ? ` · ${t('feed.connected', 'connected')}` : ''}
+          </Text>
+        </View>
+      </View>
 
-      <Surface elevation={0} style={styles.metaContainer}>
-        <Surface elevation={0} style={[styles.metaBadge, { borderColor: theme.border }]}>
-          <Text style={styles.metaText}>{user.followers_count ?? user.followers?.length ?? 0} {t('feed.followers')}</Text>
-        </Surface>
-      </Surface>
-
-      <Surface elevation={0} style={styles.actionsContainer}>
-        <TouchableRipple borderless 
-          style={[
-            styles.followButton,
-            { backgroundColor: isFollowing ? theme.surfaceLight : theme.primary }
-          ]}
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+        <TouchableRipple
           onPress={handleFollow}
           disabled={processing}
+          style={{
+            flex: 1,
+            height: 36,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: 9,
+            backgroundColor: isFollowing ? theme.surfaceLight : theme.primary,
+          }}
         >
-          <Text style={[styles.followButtonText, { color: isFollowing ? theme.text : '#fff' }]}>
-            {isFollowing ? t('feed.following_status') : t('feed.follow')}
+          <Text style={{ color: isFollowing ? theme.text : '#FFFFFF', fontSize: 12, fontWeight: '800' }}>
+            {isFollowing ? t('feed.following_status', 'Following') : t('feed.follow', 'Follow')}
           </Text>
         </TouchableRipple>
-
-        <TouchableRipple borderless 
-          style={[styles.iconButton, { borderColor: theme.border }]}
+        <TouchableRipple
           onPress={() => onPress?.(user)}
+          style={{
+            width: 36,
+            height: 36,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: 9,
+            borderWidth: 1,
+            borderColor: theme.border,
+          }}
         >
-          <Ionicons 
-            name="eye-outline"
-            size={18} 
-            color={theme.textMuted} 
-          />
+          <Ionicons name="arrow-forward" size={17} color={theme.textSecondary} />
         </TouchableRipple>
-      </Surface>
+      </View>
     </Surface>
   );
 };
-
-const getStyles = (theme) => ({
-  card: {
-    width: 184,
-    padding: 14,
-    backgroundColor: theme.surface,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: theme.border,
-    marginRight: 12,
-  },
-  infoSection: {
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    marginBottom: 10,
-    borderWidth: 2,
-    borderColor: theme.background,
-  },
-  avatarPlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.primarySoft,
-  },
-  avatarPlaceholderText: {
-    color: theme.primary,
-    fontSize: 20,
-    fontWeight: '900',
-  },
-  fullName: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: theme.text,
-    textAlign: 'center',
-  },
-  username: {
-    fontSize: 12,
-    color: theme.textMuted,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  bio: {
-    fontSize: 11,
-    color: theme.textMuted,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  metaContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  metaBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderRadius: 12,
-  },
-  metaText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: theme.textMuted,
-    textTransform: 'uppercase',
-  },
-  actionsContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  followButton: {
-    flex: 1,
-    height: 36,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  followButtonText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  iconButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderRadius: 12,
-  },
-});
 
 export default UserCard;

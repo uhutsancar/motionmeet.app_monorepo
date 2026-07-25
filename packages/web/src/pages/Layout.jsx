@@ -35,12 +35,17 @@ const MobileNavigation = ({ unreadCount }) => {
         display: { xs: "flex", md: "none" },
         flexShrink: 0,
         justifyContent: "space-around",
-        minHeight: 66,
+        minHeight: 68,
+        mx: 1.25,
+        mb: 1,
+        px: 0.5,
         pb: "env(safe-area-inset-bottom)",
-        bgcolor: (theme) => alpha(theme.palette.background.paper, 0.96),
+        bgcolor: (theme) => alpha(theme.palette.background.paper, 0.94),
         backdropFilter: "blur(18px)",
-        borderTop: 1,
+        border: 1,
         borderColor: "divider",
+        borderRadius: 4,
+        boxShadow: 3,
         zIndex: (theme) => theme.zIndex.appBar,
       }}
     >
@@ -58,7 +63,7 @@ const MobileNavigation = ({ unreadCount }) => {
               color: active ? "primary.main" : "text.disabled",
               flex: 1,
               minWidth: 0,
-              maxWidth: 88,
+              maxWidth: 90,
               py: 0.75,
               flexDirection: "column",
               gap: 0.35,
@@ -69,8 +74,8 @@ const MobileNavigation = ({ unreadCount }) => {
               sx={{
                 display: "grid",
                 placeItems: "center",
-                width: 38,
-                height: 30,
+                width: 40,
+                height: 31,
                 borderRadius: 2.5,
                 bgcolor: active ? (theme) => alpha(theme.palette.primary.main, 0.12) : "transparent",
                 transition: "background-color 160ms ease",
@@ -134,7 +139,7 @@ const Layout = ({ unreadCount = 0 }) => {
             display: { xs: "flex", md: "none" },
             alignItems: "center",
             flexShrink: 0,
-            minHeight: 64,
+            minHeight: 66,
             px: 1.5,
             pt: "env(safe-area-inset-top)",
             bgcolor: (theme) => alpha(theme.palette.background.paper, 0.94),
@@ -149,7 +154,7 @@ const Layout = ({ unreadCount = 0 }) => {
           </IconButton>
           <Stack direction="row" spacing={1} sx={{ alignItems: "center", ml: 0.5, minWidth: 0 }}>
             <Box component="img" src={motionmeetLogo} alt="" sx={{ width: 28, height: 28 }} />
-            <Typography variant="subtitle1" noWrap sx={{ fontFamily: '"Sora", sans-serif' }}>
+            <Typography variant="subtitle1" noWrap sx={{ fontFamily: '"Manrope", sans-serif' }}>
               {pageTitle}
             </Typography>
           </Stack>
@@ -171,6 +176,7 @@ const Layout = ({ unreadCount = 0 }) => {
           component="main"
           role="main"
           sx={{
+            position: "relative",
             flex: 1,
             minWidth: 0,
             minHeight: 0,

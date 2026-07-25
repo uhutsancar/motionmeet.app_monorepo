@@ -221,7 +221,7 @@ const Messages = ({ navigation }) => {
 
       <Surface elevation={0} style={s.searchContainer}>
         <Searchbar
-          placeholder={t('messages.search', 'Ara...')}
+          placeholder={t('messages.search', 'Search conversations')}
           onChangeText={setSearchQuery}
           value={searchQuery}
           style={s.searchBar}
@@ -243,7 +243,7 @@ const Messages = ({ navigation }) => {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
         ListEmptyComponent={
           <Surface elevation={0} style={s.emptyState}>
-            <Ionicons name="chatbubbles-outline" size={52} color={theme.border} />
+            <Ionicons name="chatbubbles-outline" size={28} color={theme.textMuted} />
             <Text variant="titleMedium" style={s.emptyTitle}>{t('messages.no_messages', 'No messages yet')}</Text>
             <Text variant="bodyMedium" style={s.emptySubtitle}>{t('messages.connect_hint', 'Connect with athletes to start chatting')}</Text>
           </Surface>
@@ -261,17 +261,16 @@ const getStyles = (theme) => ({
     borderBottomWidth: 1,
     borderBottomColor: theme.border,
   },
-  headerTitle: { fontSize: 26, fontWeight: '800', color: theme.text },
+  headerTitle: { fontSize: 23, fontWeight: '800', color: theme.text },
   searchContainer: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 14, marginBottom: 8, backgroundColor: 'transparent' },
   searchBar: {
-    backgroundColor: theme.surface, borderRadius: 14, borderWidth: 1, borderColor: theme.border,
-    height: 48,
+    backgroundColor: theme.surface, borderRadius: 10, borderWidth: 1, borderColor: theme.border,
+    height: 46,
   },
   convRow: {
-    paddingHorizontal: 13, paddingVertical: 12,
-    marginHorizontal: 12, marginBottom: 7,
-    borderWidth: 1, borderColor: theme.border,
-    borderRadius: 17,
+    paddingHorizontal: 16, paddingVertical: 12,
+    marginHorizontal: 16,
+    borderBottomWidth: 1, borderBottomColor: theme.border,
     backgroundColor: theme.surface,
   },
   avatarContainer: { position: 'relative', marginRight: 12 },
@@ -285,7 +284,17 @@ const getStyles = (theme) => ({
   convTime: { color: theme.textMuted, flexShrink: 0 },
   convPreview: { color: theme.textMuted },
   unreadBadge: { justifyContent: 'center', alignItems: 'center' },
-  emptyState: { flex: 1, paddingTop: 80, alignItems: 'center', gap: 8 },
+  emptyState: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 24,
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 12,
+    backgroundColor: theme.surface,
+  },
   emptyTitle: { fontWeight: '700', color: theme.text, marginTop: 8 },
   emptySubtitle: { color: theme.textMuted, textAlign: 'center', maxWidth: 220 },
 });

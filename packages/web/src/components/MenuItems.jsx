@@ -14,7 +14,7 @@ const MenuItems = ({ setSideBarOpen, unreadCount = 0 }) => {
   const { pathname } = useLocation();
 
   return (
-    <List component="nav" aria-label="Primary navigation" sx={{ px: 1.5, py: 0 }}>
+    <List component="nav" aria-label="Primary navigation" sx={{ px: 0, py: 0 }}>
       {menuItemsData.map(({ to, label, Icon }) => {
         const isActive = pathname === to || pathname.startsWith(`${to}/`);
         const icon = <Icon sx={{ fontSize: 21 }} />;
@@ -28,23 +28,23 @@ const MenuItems = ({ setSideBarOpen, unreadCount = 0 }) => {
             onClick={() => setSideBarOpen(false)}
             sx={{
               position: "relative",
-              borderRadius: 3,
+              borderRadius: 2,
               mb: 0.5,
-              minHeight: 48,
-              px: 1.25,
+              minHeight: 44,
+              px: 0.75,
               color: isActive ? "primary.main" : "text.secondary",
               "&::before": {
                 content: '""',
                 position: "absolute",
                 left: 0,
                 width: 3,
-                height: isActive ? 22 : 0,
-                borderRadius: 3,
+                height: isActive ? 20 : 0,
+                borderRadius: 2,
                 bgcolor: "primary.main",
                 transition: "height 180ms ease",
               },
               "&.Mui-selected": {
-                bgcolor: (theme) => alpha(theme.palette.primary.main, 0.1),
+                bgcolor: (theme) => alpha(theme.palette.primary.main, 0.11),
               },
               "&.Mui-selected:hover": {
                 bgcolor: (theme) => alpha(theme.palette.primary.main, 0.14),

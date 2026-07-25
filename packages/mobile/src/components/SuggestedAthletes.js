@@ -59,24 +59,24 @@ const SuggestedAthletes = ({ navigation }) => {
 // ✅ NO theme references here - styles are static (theme applied inline in JSX above)
 const styles = {
   container: {
-    marginHorizontal: 12,
+    marginHorizontal: 16,
     marginVertical: 6,
     marginBottom: 12,
-    borderRadius: 22,
-    paddingVertical: 18,
+    borderRadius: 12,
+    paddingVertical: 14,
     borderWidth: 1,
   },
   header: {
-    paddingHorizontal: 18,
-    marginBottom: 13,
+    paddingHorizontal: 14,
+    marginBottom: 10,
   },
   title: {
-    fontSize: 16,
-    fontWeight: '900',
+    fontSize: 15,
+    fontWeight: '800',
     letterSpacing: -0.2,
   },
   scrollContent: {
-    paddingHorizontal: 18,
+    paddingHorizontal: 14,
     paddingBottom: 4,
   },
 };

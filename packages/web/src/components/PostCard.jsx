@@ -154,11 +154,11 @@ const PostCard = ({ post }) => {
       sx={{
         width: "100%",
         mx: "auto",
-        borderRadius: 5,
+        borderRadius: 3.5,
         overflow: "hidden",
-        boxShadow: 1,
-        transition: "transform .2s ease, box-shadow .2s ease",
-        "&:hover": { boxShadow: 3, transform: { md: "translateY(-1px)" } },
+        boxShadow: "none",
+        transition: "border-color .18s ease",
+        "&:hover": { borderColor: "text.disabled" },
       }}
     >
       <Box sx={{ px: { xs: 1.75, sm: 2.5 }, pt: { xs: 1.75, sm: 2.25 } }}>
@@ -214,7 +214,7 @@ const PostCard = ({ post }) => {
       {hasWorkout && (
         <Stack direction="row" spacing={1} useFlexGap sx={{ px: { xs: 1.75, sm: 2.5 }, pb: 2, flexWrap: "wrap" }}>
           {workoutStats.map((stat) => (
-            <Stack key={stat.label} sx={{ minWidth: 82, bgcolor: "action.hover", px: 1.25, py: 0.8, borderRadius: 2.5 }}>
+            <Stack key={stat.label} sx={{ minWidth: 82, bgcolor: "action.hover", px: 1.25, py: 0.8, borderRadius: 2 }}>
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
                 {stat.label}
               </Typography>

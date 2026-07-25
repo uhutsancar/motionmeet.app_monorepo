@@ -1,35 +1,40 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  View, 
+import React, { useCallback, useEffect, useState } from 'react';
+import {
   FlatList,
-  TouchableOpacity,
   RefreshControl,
-  Alert,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
-import { useAuthContext } from "../context/AuthProvider";
+import {
+  ActivityIndicator,
+  Avatar,
+  IconButton,
+  Surface,
+  Text,
+} from 'react-native-paper';
+import { useTranslation } from 'react-i18next';
+import { useAuthContext } from '../context/AuthProvider';
+import { useTheme } from '../context/ThemeContext';
 import { fetchPosts } from '../features/posts/postsSlice';
 import { fetchStories } from '../features/stories/storiesSlice';
 import { fetchUser } from '../features/user/userSlice';
 import { fetchConnections } from '../features/connections/connectionsSlice';
+import { setAuthToken } from '../api/client';
 import StoriesBar from '../components/StoriesBar';
 import PostCard from '../components/PostCard';
 import CreatePostModal from '../components/CreatePostModal';
 import StoryModal from '../components/StoryModal';
 import SuggestedAthletes from '../components/SuggestedAthletes';
-import { useTheme } from '../context/ThemeContext';
-import { useTranslation } from 'react-i18next';
-import { setAuthToken } from '../api/client';
-import { IconButton, Text, Surface, FAB, ActivityIndicator } from 'react-native-paper';
+import MotionMark from '../components/MotionMark';
 
 const Feed = ({ navigation }) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
   const dispatch = useDispatch();
   const { getToken } = useAuthContext();
-  const { stories } = useSelector((state) => state.stories);
   const {
     posts,
     nextCursor,
@@ -45,7 +50,6 @@ const Feed = ({ navigation }) => {
   const loadData = useCallback(async () => {
     try {
       const token = await getToken();
-      // Set global auth token for api interceptor (used by SuggestedAthletes, Profile, etc.)
       if (token) setAuthToken(token);
       await Promise.all([
         dispatch(fetchUser(token)),
@@ -68,115 +72,216 @@ const Feed = ({ navigation }) => {
     setRefreshing(false);
   };
 
-  const handleComment = useCallback(() => {}, []);
-  const handleShare = useCallback(() => {}, []);
   const handleLoadMore = useCallback(async () => {
     if (!nextCursor || loadingMore || postsLoading) return;
     const token = await getToken();
     await dispatch(fetchPosts({ token, cursor: nextCursor }));
   }, [dispatch, getToken, loadingMore, nextCursor, postsLoading]);
+
   const handleUserPress = useCallback((userId) => {
     navigation.navigate('Profile', { userId });
   }, [navigation]);
 
-  // Build FlatList data: first 2 posts, then suggested athletes marker, then rest
-  const validPosts = (posts || []).filter(post => post && post._id && post.user && post.user._id);
+  const validPosts = (posts || []).filter((post) => post?._id && post.user?._id);
   const listData = [
-    ...validPosts.slice(0, 2).map(p => ({ type: 'post', item: p })),
-    ...(validPosts.length > 0 ? [{ type: 'suggested', id: 'suggested' }] : []),
-    ...validPosts.slice(2).map(p => ({ type: 'post', item: p })),
+    ...validPosts.slice(0, 2).map((post) => ({ type: 'post', item: post })),
+    ...(validPosts.length ? [{ type: 'suggested', id: 'suggested' }] : []),
+    ...validPosts.slice(2).map((post) => ({ type: 'post', item: post })),
   ];
 
   const renderItem = useCallback(({ item: row }) => {
-    if (row.type === 'suggested') {
-      return <SuggestedAthletes navigation={navigation} />;
-    }
+    if (row.type === 'suggested') return <SuggestedAthletes navigation={navigation} />;
     return (
       <PostCard
         post={row.item}
-        onComment={handleComment}
-        onShare={handleShare}
+        onComment={() => {}}
+        onShare={() => {}}
         onUserPress={handleUserPress}
         navigation={navigation}
       />
     );
-  }, [handleComment, handleShare, handleUserPress, navigation]);
+  }, [handleUserPress, navigation]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
-      {/* Header */}
-      <Surface elevation={0} style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        minHeight: 62,
-        paddingHorizontal: 16,
-        paddingVertical: 9,
-        backgroundColor: theme.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: theme.border,
-      }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18, flexShrink: 1 }}>
-          <TouchableOpacity 
-            style={{ paddingVertical: 4, position: 'relative' }}
-            onPress={() => setActiveTab('discover')}
-          >
-            <Text style={{ fontSize: 19, fontWeight: '900', color: activeTab === 'discover' ? theme.text : theme.textMuted, letterSpacing: -0.5 }}>
-              {t('feed.discover')}
-            </Text>
-            {activeTab === 'discover' && <View style={{ position: 'absolute', bottom: -5, left: 0, width: 22, height: 3, borderRadius: 2, backgroundColor: theme.primary }} />}
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={{ paddingVertical: 4, position: 'relative' }}
-            onPress={() => setActiveTab('following')}
-          >
-            <Text style={{ fontSize: 19, fontWeight: '900', color: activeTab === 'following' ? theme.text : theme.textMuted, letterSpacing: -0.5 }}>
-              {t('feed.following')}
-            </Text>
-            {activeTab === 'following' && <View style={{ position: 'absolute', bottom: -5, left: 0, width: 22, height: 3, borderRadius: 2, backgroundColor: theme.primary }} />}
-          </TouchableOpacity>
+      <Surface
+        elevation={0}
+        style={{
+          minHeight: 58,
+          paddingHorizontal: 16,
+          flexDirection: 'row',
+          alignItems: 'center',
+          borderBottomWidth: 1,
+          borderBottomColor: theme.border,
+          backgroundColor: theme.surface,
+        }}
+      >
+        <MotionMark size={30} />
+        <View style={{ flex: 1, flexDirection: 'row', alignSelf: 'stretch', marginLeft: 14, gap: 18 }}>
+          {[
+            { key: 'discover', label: t('feed.discover', 'Discover') },
+            { key: 'following', label: t('feed.following', 'Following') },
+          ].map((tab) => {
+            const active = activeTab === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                onPress={() => setActiveTab(tab.key)}
+                style={{
+                  justifyContent: 'center',
+                  borderBottomWidth: active ? 2 : 0,
+                  borderBottomColor: theme.primary,
+                }}
+              >
+                <Text style={{ color: active ? theme.text : theme.textMuted, fontSize: 15, fontWeight: '800' }}>
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
-        <View style={{ flexDirection: 'row', gap: 2 }}>
-          <IconButton icon="magnify" size={21} iconColor={theme.text} style={{ backgroundColor: theme.surfaceLight, margin: 0 }} />
-          <IconButton icon="bell-outline" size={21} iconColor={theme.text} style={{ backgroundColor: theme.surfaceLight, margin: 0 }} onPress={() => navigation.navigate('NotificationsScreen')} />
-        </View>
+        <IconButton
+          icon="bell-outline"
+          size={20}
+          iconColor={theme.text}
+          style={{ margin: 0 }}
+          onPress={() => navigation.navigate('NotificationsScreen')}
+        />
       </Surface>
 
       <FlatList
         data={listData}
         renderItem={renderItem}
-        keyExtractor={(row, i) => row.id || row.item?._id || String(i)}
+        keyExtractor={(row, index) => row.id || row.item?._id || String(index)}
         showsVerticalScrollIndicator={false}
-        removeClippedSubviews={true}
+        removeClippedSubviews
         windowSize={5}
         maxToRenderPerBatch={4}
         updateCellsBatchingPeriod={50}
         initialNumToRender={3}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
         ListHeaderComponent={
-          <View style={{ paddingVertical: 12, backgroundColor: theme.background }}>
+          <View style={{ paddingTop: 12, paddingBottom: 4 }}>
+            <Surface
+              elevation={0}
+              style={{
+                marginHorizontal: 16,
+                padding: 14,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: theme.border,
+                backgroundColor: theme.surface,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View
+                  style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 10,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: theme.energySoft,
+                  }}
+                >
+                  <Ionicons name="barbell-outline" size={21} color={theme.text} />
+                </View>
+                <View style={{ flex: 1, paddingHorizontal: 11 }}>
+                  <Text style={{ color: theme.text, fontSize: 15, fontWeight: '800' }}>
+                    {t('feed.next_session', 'Your next session')}
+                  </Text>
+                  <Text style={{ color: theme.textMuted, fontSize: 12, lineHeight: 17, marginTop: 2 }}>
+                    {t('feed.next_session_hint', 'Choose a routine and start logging.')}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  onPress={() => navigation.navigate('Routines')}
+                  style={{
+                    minHeight: 38,
+                    paddingHorizontal: 13,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 9,
+                    backgroundColor: theme.primary,
+                  }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>
+                    {t('common.start', 'Start')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </Surface>
+
             <StoriesBar onAddStory={() => setShowStoryModal(true)} />
+
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={() => setShowCreatePost(true)}
+              style={{
+                minHeight: 58,
+                marginHorizontal: 16,
+                marginBottom: 10,
+                paddingHorizontal: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: theme.border,
+                backgroundColor: theme.surface,
+              }}
+            >
+              {user?.profile_picture ? (
+                <Avatar.Image source={{ uri: user.profile_picture }} size={36} />
+              ) : (
+                <Avatar.Text
+                  label={user?.full_name?.charAt(0)?.toUpperCase() || 'U'}
+                  size={36}
+                  style={{ backgroundColor: theme.primary }}
+                />
+              )}
+              <Text style={{ flex: 1, color: theme.textMuted, fontSize: 13, marginHorizontal: 11 }}>
+                {t('feed.share_progress', 'Share an update with your community')}
+              </Text>
+              <Ionicons name="image-outline" size={20} color={theme.textSecondary} />
+            </TouchableOpacity>
           </View>
         }
         ListEmptyComponent={
           postsLoading ? (
-            <View style={{ padding: 40, alignItems: 'center' }}>
-              <ActivityIndicator animating={true} color={theme.primary} />
-              <Text style={{ color: theme.textMuted, marginTop: 16 }}>{t('common.loading', 'Loading...')}</Text>
+            <View style={{ padding: 36, alignItems: 'center' }}>
+              <ActivityIndicator color={theme.primary} />
+              <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 10 }}>
+                {t('common.loading', 'Loading...')}
+              </Text>
             </View>
           ) : (
-            <View style={{ padding: 80, alignItems: 'center' }}>
-              <Ionicons name="document-text-outline" size={64} color={theme.border} />
-              <Text style={{ fontSize: 16, fontWeight: 'bold', marginTop: 16, textAlign: 'center', color: theme.text }}>{t('feed.no_posts', 'No posts yet')}</Text>
-            </View>
+            <Surface
+              elevation={0}
+              style={{
+                marginHorizontal: 16,
+                padding: 24,
+                alignItems: 'center',
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: theme.border,
+                backgroundColor: theme.surface,
+              }}
+            >
+              <Ionicons name="people-outline" size={28} color={theme.textMuted} />
+              <Text style={{ color: theme.text, fontSize: 15, fontWeight: '700', marginTop: 9 }}>
+                {t('feed.no_posts', 'No posts yet')}
+              </Text>
+              <Text style={{ color: theme.textMuted, fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: 4 }}>
+                {t('feed.no_posts_hint', 'Follow athletes or share the first update.')}
+              </Text>
+            </Surface>
           )
         }
         ListFooterComponent={
           loadingMore ? (
-            <View style={{ padding: 20, alignItems: 'center' }}>
-              <ActivityIndicator animating color={theme.primary} />
+            <View style={{ padding: 18, alignItems: 'center' }}>
+              <ActivityIndicator color={theme.primary} />
             </View>
           ) : null
         }
@@ -186,36 +291,15 @@ const Feed = ({ navigation }) => {
         contentContainerStyle={{ paddingBottom: 24 }}
       />
 
-      {/* Floating Action Button for Create Post */}
-      <FAB
-        icon="plus"
-        color="#fff"
-        style={{
-          position: 'absolute',
-          margin: 16,
-          right: 0,
-          bottom: 16,
-          backgroundColor: theme.primary,
-          borderRadius: 18,
-          shadowColor: theme.shadow,
-          shadowOpacity: 0.24,
-          shadowRadius: 12,
-          shadowOffset: { width: 0, height: 6 },
-        }}
-        onPress={() => setShowCreatePost(true)}
-      />
-
-      {/* Modals */}
-      <CreatePostModal 
+      <CreatePostModal
         visible={showCreatePost}
         onClose={() => setShowCreatePost(false)}
         onSuccess={() => {
-            setShowCreatePost(false);
-            loadData();
+          setShowCreatePost(false);
+          loadData();
         }}
       />
-
-      <StoryModal 
+      <StoryModal
         visible={showStoryModal}
         onClose={() => setShowStoryModal(false)}
         onSuccess={() => {

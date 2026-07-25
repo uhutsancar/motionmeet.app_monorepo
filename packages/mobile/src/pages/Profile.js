@@ -1,34 +1,38 @@
-import React, { useState, useEffect } from 'react';
-import { ScrollView, Alert } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, ScrollView, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuthContext } from "../context/AuthProvider";
 import { useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
-import { Appbar, Avatar, Button, Surface, Text, ActivityIndicator, Divider, Chip } from 'react-native-paper';
-import { useTheme } from '../context/ThemeContext';
+import {
+  ActivityIndicator,
+  Appbar,
+  Avatar,
+  Button,
+  Divider,
+  Surface,
+  Text,
+} from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
-import { setAuthToken } from '../api/client';
-import { getUserProfile, getWorkouts } from '../api/endpoints';
 import moment from 'moment';
 import 'moment/locale/tr';
+import { useAuthContext } from '../context/AuthProvider';
+import { useTheme } from '../context/ThemeContext';
+import { setAuthToken } from '../api/client';
+import { getUserProfile, getWorkouts } from '../api/endpoints';
 
 const Profile = ({ route, navigation }) => {
   const { signOut, getToken } = useAuthContext();
   const currentUser = useSelector((state) => state.user.value);
   const loading = useSelector((state) => state.user.loading);
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
   const { t, i18n } = useTranslation();
-
   const profileId = route?.params?.userId;
   const isOwnProfile = !profileId || profileId === currentUser?._id;
-
   const [activeStatTab, setActiveStatTab] = useState('duration');
   const [workouts, setWorkouts] = useState([]);
   const [chartData, setChartData] = useState(null);
-  
   const [publicProfile, setPublicProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(!isOwnProfile);
-
   const user = isOwnProfile ? currentUser : publicProfile;
 
   useEffect(() => {
@@ -45,14 +49,14 @@ const Profile = ({ route, navigation }) => {
         const data = await getUserProfile(profileId, token);
         if (data.success) {
           setPublicProfile(data.profile);
-          // extract workouts from posts
-          const profileWorkouts = data.posts
-            ?.filter(p => p.post_type === 'workout' && p.workout)
-            .map(p => p.workout);
-          setWorkouts(profileWorkouts || []);
+          setWorkouts(
+            (data.posts || [])
+              .filter((post) => post.post_type === 'workout' && post.workout)
+              .map((post) => post.workout),
+          );
         }
-      } catch (err) {
-        console.error("Failed to fetch public profile", err);
+      } catch (error) {
+        console.error('Failed to fetch public profile', error);
       } finally {
         setProfileLoading(false);
       }
@@ -61,56 +65,41 @@ const Profile = ({ route, navigation }) => {
   }, [getToken, isOwnProfile, profileId]);
 
   useEffect(() => {
-    if (!isOwnProfile) return; // public profile handles workouts via posts
+    if (!isOwnProfile) return;
     const fetchUserWorkouts = async () => {
       try {
         const token = await getToken();
         if (token) setAuthToken(token);
         const data = await getWorkouts(token);
-        if (data.success) {
-          setWorkouts(data.workouts || []);
-        }
+        if (data.success) setWorkouts(data.workouts || []);
       } catch (error) {
-        console.error("Failed to fetch workouts on mobile", error);
+        console.error('Failed to fetch workouts on mobile', error);
       }
     };
     if (currentUser) fetchUserWorkouts();
   }, [currentUser, getToken, isOwnProfile]);
 
   useEffect(() => {
-    if (!workouts || workouts.length === 0) {
+    if (!workouts.length) {
       setChartData(null);
       return;
     }
     const grouped = {};
-    workouts.forEach(w => {
-      const week = moment(w.createdAt || w.startTime).format("MMM DD");
+    workouts.forEach((workout) => {
+      const week = moment(workout.createdAt || workout.startTime).format('MMM DD');
       if (!grouped[week]) grouped[week] = { duration: 0, volume: 0, reps: 0 };
-      grouped[week].duration += (w.durationMinutes || Math.floor((w.duration || 0) / 60) || 0); 
-      grouped[week].volume += (w.volumeKg || w.totalVolume || 0);
-      
-      let totalReps = 0;
-      if (w.exercises) {
-        w.exercises.forEach(ex => {
-          if (ex.sets) {
-            ex.sets.forEach(s => {
-              if (s.completed !== false) totalReps += (s.reps || 0);
-            });
-          }
+      grouped[week].duration += workout.durationMinutes || Math.floor((workout.duration || 0) / 60) || 0;
+      grouped[week].volume += workout.volumeKg || workout.totalVolume || 0;
+      (workout.exercises || []).forEach((exercise) => {
+        (exercise.sets || []).forEach((set) => {
+          if (set.completed !== false) grouped[week].reps += set.reps || 0;
         });
-      }
-      grouped[week].reps += totalReps;
+      });
     });
-
-    const weeks = Object.keys(grouped).slice(-5);
-    const datasets = weeks.map(week => grouped[week][activeStatTab] || 0);
-    const hasData = datasets.some(d => d > 0);
-
-    setChartData({
-      labels: weeks,
-      datasets: [{ data: hasData ? datasets : [0] }] 
-    });
-  }, [workouts, activeStatTab]);
+    const labels = Object.keys(grouped).slice(-5);
+    const values = labels.map((label) => grouped[label][activeStatTab] || 0);
+    setChartData({ labels, values });
+  }, [activeStatTab, workouts]);
 
   const handleSignOut = () => {
     Alert.alert(
@@ -118,195 +107,350 @@ const Profile = ({ route, navigation }) => {
       t('common.confirm_logout', 'Are you sure you want to sign out?'),
       [
         { text: t('common.cancel', 'Cancel'), style: 'cancel' },
-        { text: t('settings.logout'), style: 'destructive', onPress: async () => await signOut() },
-      ]
+        { text: t('settings.logout'), style: 'destructive', onPress: signOut },
+      ],
     );
   };
 
   if ((!user && loading) || profileLoading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={theme.primary} />
+      <SafeAreaView
+        style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background }}
+      >
+        <ActivityIndicator color={theme.primary} />
       </SafeAreaView>
     );
   }
 
   const followersCount = user?.followers_count ?? user?.followers?.length ?? 0;
   const followingCount = user?.following_count ?? user?.following?.length ?? 0;
+  const latestValue = chartData?.values?.[chartData.values.length - 1] || 0;
+  const unit = activeStatTab === 'duration'
+    ? t('common.min', 'min')
+    : activeStatTab === 'volume'
+      ? t('common.kg', 'kg')
+      : t('routines.reps', 'reps');
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
-      {!isOwnProfile && (
-        <Appbar.Header style={{ backgroundColor: theme.surface, elevation: 0 }}>
-          <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
-          <Appbar.Content title={user?.username || 'Profile'} titleStyle={{ color: theme.text, fontWeight: '700' }} />
-        </Appbar.Header>
-      )}
+      <Appbar.Header
+        style={{
+          backgroundColor: theme.surface,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.border,
+          elevation: 0,
+        }}
+      >
+        {!isOwnProfile && <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />}
+        <Appbar.Content
+          title={isOwnProfile ? t('tabs.profile', 'Profile') : user?.username || t('tabs.profile', 'Profile')}
+          titleStyle={{ color: theme.text, fontSize: 23, fontWeight: '800' }}
+        />
+        {isOwnProfile && (
+          <Appbar.Action icon="cog-outline" color={theme.text} onPress={() => navigation.navigate('Settings')} />
+        )}
+      </Appbar.Header>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingBottom: 28 }}
+        contentContainerStyle={{
+          width: '100%',
+          maxWidth: 720,
+          alignSelf: 'center',
+          paddingHorizontal: 16,
+          paddingTop: 16,
+          paddingBottom: 32,
+        }}
       >
-        {/* User Header */}
-        <Surface style={{
-          margin: 12,
-          padding: 18,
-          backgroundColor: theme.surface,
-          borderRadius: 22,
-          borderWidth: 1,
-          borderColor: theme.border,
-          shadowColor: theme.shadow,
-          shadowOpacity: theme.dark ? 0.2 : 0.06,
-          shadowRadius: 14,
-          shadowOffset: { width: 0, height: 6 },
-        }} elevation={2}>
-          <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 16, backgroundColor: 'transparent' }}>
+        <Surface
+          elevation={0}
+          style={{
+            padding: 16,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: theme.border,
+            backgroundColor: theme.surface,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             {user?.profile_picture ? (
-              <Avatar.Image source={{ uri: user.profile_picture }} size={80} />
+              <Avatar.Image source={{ uri: user.profile_picture }} size={72} />
             ) : (
-              <Avatar.Text label={user?.full_name?.charAt(0).toUpperCase() || "U"} size={80} style={{ backgroundColor: theme.primary }} />
+              <Avatar.Text
+                label={user?.full_name?.charAt(0).toUpperCase() || 'U'}
+                size={72}
+                style={{ backgroundColor: theme.primary }}
+              />
             )}
-            
-            <Surface elevation={0} style={{ flex: 1, backgroundColor: 'transparent' }}>
-              <Text variant="titleLarge" style={{ color: theme.text, fontWeight: 'bold' }}>{user?.full_name || user?.username}</Text>
-              
-              <Surface elevation={0} style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, justifyContent: 'space-between', backgroundColor: 'transparent' }}>
-                <Surface elevation={0} style={{ alignItems: 'center', backgroundColor: 'transparent' }}>
-                  <Text variant="labelSmall" style={{ color: theme.textMuted }}>{isOwnProfile ? t('profile.workouts') : t('feed.post', 'Posts')}</Text>
-                  <Text variant="titleMedium" style={{ color: theme.text, fontWeight: 'bold' }}>
-                    {user?.statistics?.totalWorkouts ?? workouts.length}
-                  </Text>
-                </Surface>
-                <Surface elevation={0} style={{ alignItems: 'center', backgroundColor: 'transparent' }}>
-                  <Text variant="labelSmall" style={{ color: theme.textMuted }}>{t('profile.followers')}</Text>
-                  <Text variant="titleMedium" style={{ color: theme.text, fontWeight: 'bold' }}>{followersCount}</Text>
-                </Surface>
-                <Surface elevation={0} style={{ alignItems: 'center', backgroundColor: 'transparent' }}>
-                  <Text variant="labelSmall" style={{ color: theme.textMuted }}>{t('profile.following')}</Text>
-                  <Text variant="titleMedium" style={{ color: theme.text, fontWeight: 'bold' }}>{followingCount}</Text>
-                </Surface>
-              </Surface>
-            </Surface>
-          </Surface>
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <Text style={{ color: theme.text, fontSize: 20, fontWeight: '800' }} numberOfLines={1}>
+                {user?.full_name || user?.username}
+              </Text>
+              <Text style={{ color: theme.textMuted, fontSize: 13, marginTop: 2 }} numberOfLines={1}>
+                @{user?.username || 'member'}
+              </Text>
+              {!!user?.biography && (
+                <Text style={{ color: theme.textSecondary, fontSize: 12, lineHeight: 17, marginTop: 6 }} numberOfLines={2}>
+                  {user.biography}
+                </Text>
+              )}
+            </View>
+          </View>
+
+          <Divider style={{ marginVertical: 16, backgroundColor: theme.border }} />
+          <View style={{ flexDirection: 'row' }}>
+            {[
+              {
+                label: isOwnProfile ? t('profile.workouts', 'Workouts') : t('feed.post', 'Posts'),
+                value: user?.statistics?.totalWorkouts ?? workouts.length,
+              },
+              { label: t('profile.followers', 'Followers'), value: followersCount },
+              { label: t('profile.following', 'Following'), value: followingCount },
+            ].map((stat, index) => (
+              <React.Fragment key={stat.label}>
+                {index > 0 && <Divider style={{ width: 1, height: 38, backgroundColor: theme.border }} />}
+                <View style={{ flex: 1, alignItems: 'center' }}>
+                  <Text style={{ color: theme.text, fontSize: 17, fontWeight: '800' }}>{stat.value}</Text>
+                  <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: 3 }}>{stat.label}</Text>
+                </View>
+              </React.Fragment>
+            ))}
+          </View>
 
           {isOwnProfile && (
-            <Surface elevation={0} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 24, backgroundColor: 'transparent' }}>
-              <Button mode="outlined" style={{ flex: 1, borderColor: theme.primary }} textColor={theme.primary} onPress={() => navigation.navigate('Settings')}>
-                {t('profile.edit_profile', 'Edit Profile')}
-              </Button>
-              <Button mode="contained" style={{ flex: 1 }} onPress={() => navigation.navigate('Settings')}>
-                <Ionicons name="settings-outline" size={16} /> {t('settings.title')}
-              </Button>
-            </Surface>
+            <Button
+              mode="outlined"
+              icon="pencil-outline"
+              onPress={() => navigation.navigate('Settings')}
+              style={{ marginTop: 16, borderRadius: 10, borderColor: theme.border }}
+              contentStyle={{ minHeight: 42 }}
+              labelStyle={{ color: theme.text, fontWeight: '700' }}
+            >
+              {t('profile.edit_profile', 'Edit profile')}
+            </Button>
           )}
         </Surface>
 
-        {/* Statistics Chart Card */}
         {isOwnProfile && (
-          <Surface style={{ marginHorizontal: 12, marginVertical: 4, borderRadius: 22, padding: 18, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }} elevation={1}>
-            <Surface elevation={0} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'transparent' }}>
-              <Text variant="titleMedium" style={{ color: theme.text, fontWeight: 'bold' }}>{t('profile.weekly_activity', 'Weekly Activity')}</Text>
-              <Button compact mode="text" onPress={() => navigation.navigate('Statistics')}>{t('profile.statistics', 'Stats')}</Button>
-            </Surface>
-            
-            <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 8, backgroundColor: 'transparent' }}>
-              <Text variant="displaySmall" style={{ color: theme.primary, fontWeight: '900' }}>
-                {chartData ? chartData.datasets[0].data[chartData.datasets[0].data.length - 1] : 0} 
-              </Text>
-              <Text variant="labelMedium" style={{ color: theme.textMuted, fontWeight: 'bold', textTransform: 'uppercase' }}>
-                {activeStatTab === 'duration' ? t('common.min', 'min') : activeStatTab === 'volume' ? t('common.kg', 'kg') : t('routines.reps', 'Reps')}
-              </Text>
-            </Surface>
+          <Surface
+            elevation={0}
+            style={{
+              marginTop: 16,
+              padding: 16,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+            }}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View>
+                <Text style={{ color: theme.text, fontSize: 17, fontWeight: '800' }}>
+                  {t('profile.weekly_activity', 'Training activity')}
+                </Text>
+                <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 3 }}>
+                  {t('profile.last_five_weeks', 'Last five weeks')}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => navigation.navigate('Statistics')}>
+                <Text style={{ color: theme.primary, fontSize: 13, fontWeight: '800' }}>
+                  {t('profile.statistics', 'Details')}
+                </Text>
+              </TouchableOpacity>
+            </View>
 
-            {chartData && chartData.datasets[0].data.some(d => d > 0) ? (
-              <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'flex-end', height: 120, gap: 6, marginTop: 16, backgroundColor: 'transparent' }}>
-                {chartData.datasets[0].data.map((val, i) => {
-                  const maxVal = Math.max(...chartData.datasets[0].data, 1);
-                  const barH = Math.max(4, (val / maxVal) * 100);
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 16 }}>
+              <Text style={{ color: theme.text, fontSize: 28, fontWeight: '800' }}>{latestValue}</Text>
+              <Text style={{ color: theme.textMuted, fontSize: 12, fontWeight: '700', marginLeft: 5 }}>
+                {unit}
+              </Text>
+            </View>
+
+            {chartData?.values.some((value) => value > 0) ? (
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 96, gap: 8, marginTop: 12 }}>
+                {chartData.values.map((value, index) => {
+                  const maxValue = Math.max(...chartData.values, 1);
                   return (
-                    <Surface elevation={0} key={i} style={{ flex: 1, alignItems: 'center', gap: 4, backgroundColor: 'transparent' }}>
-                      <Text style={{ color: theme.textMuted, fontSize: 9, fontWeight: 'bold' }}>{val > 0 ? val : ''}</Text>
-                      <Surface elevation={0} style={{ width: '100%', height: barH, backgroundColor: theme.primary, borderRadius: 6, opacity: 0.8 + (i / chartData.datasets[0].data.length) * 0.2 }} />
-                      <Text style={{ color: theme.textMuted, fontSize: 9 }} numberOfLines={1}>{chartData.labels[i]}</Text>
-                    </Surface>
+                    <View key={`${chartData.labels[index]}-${index}`} style={{ flex: 1, alignItems: 'center' }}>
+                      <View
+                        style={{
+                          width: '100%',
+                          maxWidth: 34,
+                          height: Math.max(4, (value / maxValue) * 66),
+                          borderRadius: 4,
+                          backgroundColor: index === chartData.values.length - 1 ? theme.primary : theme.primarySoft,
+                        }}
+                      />
+                      <Text style={{ color: theme.textMuted, fontSize: 8, marginTop: 5 }} numberOfLines={1}>
+                        {chartData.labels[index]}
+                      </Text>
+                    </View>
                   );
                 })}
-              </Surface>
+              </View>
             ) : (
-              <Surface elevation={0} style={{ height: 120, justifyContent: 'center', alignItems: 'center', backgroundColor: 'transparent' }}>
-                <Ionicons name="stats-chart" size={32} color={theme.border} />
-                <Text style={{ color: theme.textMuted, marginTop: 8 }}>{t('common.no_data', 'No data yet')}</Text>
-              </Surface>
+              <View style={{ height: 88, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: theme.textMuted, fontSize: 12 }}>
+                  {t('common.no_data', 'No activity recorded yet')}
+                </Text>
+              </View>
             )}
 
-            <Surface elevation={0} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16, backgroundColor: 'transparent' }}>
-              {['duration', 'volume', 'reps'].map(tab => (
-                <Chip 
-                  key={tab}
-                  selected={activeStatTab === tab} 
-                  onPress={() => setActiveStatTab(tab)}
-                  style={{ flex: 1, backgroundColor: activeStatTab === tab ? theme.primary : theme.background }}
-                  textStyle={{ color: activeStatTab === tab ? '#fff' : theme.textMuted, textAlign: 'center', fontSize: 11 }}
-                >
-                  {t(`profile.${tab}`)}
-                </Chip>
-              ))}
-            </Surface>
+            <View
+              style={{
+                flexDirection: 'row',
+                marginTop: 14,
+                padding: 3,
+                borderRadius: 10,
+                backgroundColor: theme.surfaceLight,
+              }}
+            >
+              {['duration', 'volume', 'reps'].map((tab) => {
+                const active = activeStatTab === tab;
+                return (
+                  <TouchableOpacity
+                    key={tab}
+                    onPress={() => setActiveStatTab(tab)}
+                    style={{
+                      flex: 1,
+                      minHeight: 34,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: 8,
+                      backgroundColor: active ? theme.surface : 'transparent',
+                    }}
+                  >
+                    <Text style={{ color: active ? theme.text : theme.textMuted, fontSize: 11, fontWeight: '700' }}>
+                      {t(`profile.${tab}`, tab)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </Surface>
         )}
 
-        {/* Recent Workouts */}
-        <Surface elevation={0} style={{ marginHorizontal: 16, marginTop: 8, backgroundColor: 'transparent' }}>
-          <Text variant="titleMedium" style={{ color: theme.textMuted, fontWeight: 'bold', marginBottom: 12 }}>{t('profile.recent_workouts', 'RECENT WORKOUTS')}</Text>
-          
-          {workouts.length > 0 ? (
-             workouts.slice(0, 3).map((w, i) => (
-              <Surface key={i} style={{ borderRadius: 16, padding: 16, marginBottom: 12, backgroundColor: theme.surfaceLight }} elevation={1}>
-                <Surface elevation={0} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', backgroundColor: 'transparent' }}>
-                  <Surface elevation={0} style={{ flex: 1, backgroundColor: 'transparent' }}>
-                    <Text variant="titleMedium" style={{ color: theme.text, fontWeight: 'bold' }}>{w.name || t('workout.my_workout')}</Text>
-                    <Text variant="bodySmall" style={{ color: theme.textMuted, marginTop: 4 }}>
-                      {moment(w.createdAt || w.startTime).fromNow()}
-                    </Text>
-                  </Surface>
-                  <Surface elevation={0} style={{ backgroundColor: theme.primary + '20', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }}>
-                    <Text style={{ color: theme.primary, fontWeight: 'bold', fontSize: 12 }}>{w.exercises?.length || 0} {t('workout.exercises')}</Text>
-                  </Surface>
-                </Surface>
-                <Divider style={{ marginVertical: 12, backgroundColor: theme.border }} />
-                <Surface elevation={0} style={{ flexDirection: 'row', gap: 16, backgroundColor: 'transparent' }}>
-                  <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'transparent' }}>
-                      <Ionicons name="time-outline" size={16} color={theme.primary} />
-                      <Text variant="bodyMedium" style={{ color: theme.text, fontWeight: '600' }}>{w.durationMinutes || 0} {t('common.min', 'min')}</Text>
-                  </Surface>
-                  <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'transparent' }}>
-                      <Ionicons name="barbell-outline" size={16} color={theme.primary} />
-                      <Text variant="bodyMedium" style={{ color: theme.text, fontWeight: '600' }}>{w.volumeKg || 0} {t('common.kg', 'kg')}</Text>
-                  </Surface>
-                </Surface>
-              </Surface>
+        <View style={{ marginTop: 24, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between' }}>
+          <Text style={{ color: theme.text, fontSize: 17, fontWeight: '800' }}>
+            {t('profile.recent_workouts', 'Recent workouts')}
+          </Text>
+          <Text style={{ color: theme.textMuted, fontSize: 12, fontWeight: '700' }}>
+            {Math.min(workouts.length, 3)}
+          </Text>
+        </View>
+
+        <Surface
+          elevation={0}
+          style={{
+            overflow: 'hidden',
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: theme.border,
+            backgroundColor: theme.surface,
+          }}
+        >
+          {workouts.length ? (
+            workouts.slice(0, 3).map((workout, index) => (
+              <TouchableOpacity
+                key={workout._id || index}
+                activeOpacity={0.72}
+                onPress={() => navigation.navigate('WorkoutDetailScreen', { workout })}
+                style={{
+                  minHeight: 76,
+                  padding: 14,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  borderBottomWidth: index < Math.min(workouts.length, 3) - 1 ? 1 : 0,
+                  borderBottomColor: theme.border,
+                }}
+              >
+                <View
+                  style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 9,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: theme.primarySoft,
+                  }}
+                >
+                  <Ionicons name="barbell-outline" size={20} color={theme.primary} />
+                </View>
+                <View style={{ flex: 1, paddingHorizontal: 12 }}>
+                  <Text style={{ color: theme.text, fontSize: 14, fontWeight: '700' }} numberOfLines={1}>
+                    {workout.name || t('workout.my_workout', 'Workout')}
+                  </Text>
+                  <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: 3 }}>
+                    {moment(workout.createdAt || workout.startTime).fromNow()} · {workout.exercises?.length || 0} {t('workout.exercises', 'exercises')}
+                  </Text>
+                </View>
+                <Text style={{ color: theme.textSecondary, fontSize: 12, fontWeight: '700' }}>
+                  {workout.durationMinutes || 0} {t('common.min', 'min')}
+                </Text>
+              </TouchableOpacity>
             ))
           ) : (
-            <Surface style={{ padding: 32, alignItems: 'center', borderRadius: 16, backgroundColor: theme.surfaceLight }} elevation={0}>
-              <Ionicons name="barbell-outline" size={48} color={theme.border} />
-              <Text variant="bodyLarge" style={{ color: theme.textMuted, marginTop: 12, fontWeight: '500' }}>{t('profile.no_workouts_yet', 'No workouts yet')}</Text>
-            </Surface>
+            <View style={{ alignItems: 'center', padding: 24 }}>
+              <Ionicons name="barbell-outline" size={26} color={theme.textMuted} />
+              <Text style={{ color: theme.text, fontSize: 14, fontWeight: '700', marginTop: 9 }}>
+                {t('profile.no_workouts_yet', 'No workouts yet')}
+              </Text>
+              <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 3, textAlign: 'center' }}>
+                {t('profile.no_workouts_hint', 'Your completed sessions will appear here.')}
+              </Text>
+            </View>
           )}
         </Surface>
 
-        {/* Settings / Sign out */}
         {isOwnProfile && (
-          <Surface elevation={0} style={{ marginHorizontal: 16, marginTop: 24, gap: 12, backgroundColor: 'transparent' }}>
-            <Button mode="contained-tonal" icon="shield-outline" style={{ borderRadius: 12 }} onPress={() => navigation.navigate('PrivacyScreen')}>
-              {t('settings.privacy_security')}
-            </Button>
-            <Button mode="contained-tonal" icon="help-circle-outline" style={{ borderRadius: 12 }} onPress={() => navigation.navigate('SupportScreen')}>
-              {t('settings.help_support')}
-            </Button>
-            <Button mode="contained-tonal" buttonColor="#ef444420" textColor="#ef4444" icon="log-out-outline" style={{ borderRadius: 12 }} onPress={handleSignOut}>
-              {t('settings.logout')}
-            </Button>
+          <Surface
+            elevation={0}
+            style={{
+              marginTop: 16,
+              overflow: 'hidden',
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+            }}
+          >
+            {[
+              { icon: 'shield-checkmark-outline', label: t('settings.privacy_security'), route: 'PrivacyScreen' },
+              { icon: 'help-circle-outline', label: t('settings.help_support'), route: 'SupportScreen' },
+            ].map((item, index) => (
+              <TouchableOpacity
+                key={item.route}
+                onPress={() => navigation.navigate(item.route)}
+                style={{
+                  minHeight: 52,
+                  paddingHorizontal: 14,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  borderBottomWidth: index === 0 ? 1 : 0,
+                  borderBottomColor: theme.border,
+                }}
+              >
+                <Ionicons name={item.icon} size={19} color={theme.textSecondary} />
+                <Text style={{ flex: 1, color: theme.text, fontSize: 14, fontWeight: '600', marginLeft: 11 }}>
+                  {item.label}
+                </Text>
+                <Ionicons name="chevron-forward" size={17} color={theme.textMuted} />
+              </TouchableOpacity>
+            ))}
           </Surface>
+        )}
+
+        {isOwnProfile && (
+          <Button
+            mode="text"
+            icon="log-out-outline"
+            textColor={theme.danger}
+            onPress={handleSignOut}
+            style={{ marginTop: 12, borderRadius: 10 }}
+            labelStyle={{ fontWeight: '700' }}
+          >
+            {t('settings.logout')}
+          </Button>
         )}
       </ScrollView>
     </SafeAreaView>

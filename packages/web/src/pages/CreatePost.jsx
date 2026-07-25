@@ -116,9 +116,8 @@ const CreatePost = ({ onSuccess }) => {
           width: "100%",
           maxWidth: onSuccess ? "none" : 576,
           mx: "auto",
-          p: { xs: 1.75, sm: 2.25 },
-          borderRadius: 5,
-          boxShadow: 1,
+          p: { xs: 1.5, sm: 2 },
+          borderRadius: 3.5,
         }}
       >
         <Stack spacing={2}>
@@ -143,7 +142,7 @@ const CreatePost = ({ onSuccess }) => {
 
           <TextField
             multiline
-            minRows={2}
+            minRows={1}
             maxRows={8}
             fullWidth
             variant="standard"
@@ -153,7 +152,7 @@ const CreatePost = ({ onSuccess }) => {
             slotProps={{
               input: {
                 disableUnderline: true,
-                sx: { fontSize: 15, lineHeight: 1.65 },
+                sx: { fontSize: 14, lineHeight: 1.55 },
               },
             }}
           />
@@ -170,7 +169,7 @@ const CreatePost = ({ onSuccess }) => {
             </Stack>
           )}
 
-          <Stack direction="row" spacing={2} sx={{ alignItems: "center", justifyContent: "space-between", pt: 1.75, borderTop: 1, borderColor: "divider" }}>
+          <Stack direction="row" spacing={2} sx={{ alignItems: "center", justifyContent: "space-between", pt: 1.25, borderTop: 1, borderColor: "divider" }}>
             <Button component="label" color="inherit" startIcon={<Image size={19} />}>
               {t("feed.photo_video")}
               <Box

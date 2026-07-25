@@ -26,6 +26,7 @@ import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis } from "rechar
 import api from "~/api/axios";
 import Loading from "~/components/Loading";
 import ProfileModal from "~/components/ProfileModal";
+import { EmptyState, PageShell, SectionHeader } from "~/components/AppPage";
 
 const EMPTY_WORKOUTS = [];
 
@@ -229,9 +230,14 @@ const Profile = () => {
   const currentUnit = activeStatTab === "duration" ? t("common.minutes_short") : activeStatTab === "volume" ? t("common.kg") : t("profile.reps");
 
   return (
-    <Box sx={{ width: "100%", minHeight: "100%", py: { xs: 2, md: 4 }, pb: { xs: 4, md: 6 } }}>
-      <Stack spacing={3} sx={{ maxWidth: 896, mx: "auto", px: { xs: 1.5, sm: 3, md: 4 } }}>
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ py: 2, alignItems: { xs: "center", sm: "center" }, justifyContent: "space-between", textAlign: { xs: "center", sm: "left" } }}>
+    <PageShell maxWidth={1120}>
+        <Stack
+          component={Paper}
+          variant="outlined"
+          direction={{ xs: "column", sm: "row" }}
+          spacing={2}
+          sx={{ p: { xs: 2, sm: 3 }, alignItems: { xs: "center", sm: "center" }, justifyContent: "space-between", textAlign: { xs: "center", sm: "left" } }}
+        >
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2.5} sx={{ alignItems: "center" }}>
             <Box sx={{ position: "relative" }}>
               <Avatar src={user.profile_picture || undefined} alt={user.full_name} variant="rounded" sx={{ width: 80, height: 80, borderRadius: 3, fontSize: 30, fontWeight: 800, border: 1, borderColor: "divider", boxShadow: 2 }}>
@@ -264,7 +270,7 @@ const Profile = () => {
           )}
         </Stack>
 
-        <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 }, borderRadius: 5, boxShadow: 1 }}>
+        <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
           <Stack direction="row" spacing={1.5} sx={{ mb: 3, alignItems: "flex-start" }}>
             <Avatar variant="rounded" sx={{ bgcolor: "action.hover", color: "primary.main" }}>
               <TrendingUp size={20} />
@@ -326,8 +332,8 @@ const Profile = () => {
           </Stack>
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, 1fr)", sm: "repeat(4, 1fr)" }, gap: 2 }}>
             {insights.map(({ label, icon: Icon }) => (
-              <Card key={label} variant="outlined" sx={{ borderRadius: 4 }}>
-                <CardActionArea sx={{ p: 2.5, height: "100%" }}>
+              <Card key={label} variant="outlined">
+                <CardActionArea sx={{ p: 2, height: "100%" }}>
                   <Stack spacing={1.5} sx={{ alignItems: "center" }}>
                     <Avatar variant="rounded" sx={{ bgcolor: "action.hover", color: "text.secondary" }}>
                       <Icon size={20} />
@@ -343,16 +349,15 @@ const Profile = () => {
         </Stack>
 
         <Stack spacing={2}>
-          <Stack direction="row" sx={{ px: 1, alignItems: "center", justifyContent: "space-between" }}>
-            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>
-              {t("profile.workouts")}
-            </Typography>
-            <Chip label={user?.statistics?.totalWorkouts ?? visibleWorkouts.length} size="small" />
-          </Stack>
+          <SectionHeader
+            title={t("profile.workouts")}
+            description="Your latest completed sessions"
+            action={<Chip label={user?.statistics?.totalWorkouts ?? visibleWorkouts.length} size="small" />}
+          />
 
           {visibleWorkouts.length > 0 ? (
             visibleWorkouts.map((workout) => (
-              <Paper key={workout._id} variant="outlined" sx={{ p: { xs: 2, sm: 3 }, borderRadius: 4 }}>
+              <Paper key={workout._id} variant="outlined" sx={{ p: { xs: 2, sm: 2.5 } }}>
                 <Stack spacing={2}>
                   <Stack direction="row" spacing={2} sx={{ alignItems: "center", justifyContent: "space-between" }}>
                     <Typography variant="h6" sx={{ fontWeight: 800 }}>
@@ -380,17 +385,11 @@ const Profile = () => {
               </Paper>
             ))
           ) : (
-            <Paper variant="outlined" sx={{ p: { xs: 4, sm: 6 }, borderRadius: 5, textAlign: "center" }}>
-              <Avatar sx={{ width: 72, height: 72, mx: "auto", mb: 2, bgcolor: "action.hover", color: "text.disabled" }}>
-                <Dumbbell size={36} />
-              </Avatar>
-              <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                {t("profile.no_workouts_yet")}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                {t("profile.start_journey")}
-              </Typography>
-            </Paper>
+            <EmptyState
+              icon={Dumbbell}
+              title={t("profile.no_workouts_yet")}
+              description={t("profile.start_journey")}
+            />
           )}
           {isOwnProfile && workoutCursor && (
             <Button
@@ -405,10 +404,8 @@ const Profile = () => {
             </Button>
           )}
         </Stack>
-      </Stack>
-
       {isOwnProfile && showEdit && <ProfileModal setShowEdit={setShowEdit} />}
-    </Box>
+    </PageShell>
   );
 };
 

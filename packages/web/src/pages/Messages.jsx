@@ -330,14 +330,27 @@ const WebMessages = () => {
   };
 
   return (
-    <Box sx={{ display: 'flex', height: '100%', bgcolor: 'background.default', overflow: 'hidden', minHeight: 0, flex: 1 }}>
-      <Box sx={{ display: { xs: activeConv ? 'none' : 'flex', md: 'flex' }, flexDirection: 'column', width: { xs: '100%', md: 320, lg: 384 }, borderRight: 1, borderColor: 'divider', flexShrink: 0 }}>
-        <Box sx={{ px: 2.5, py: 2, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
+    <Box sx={{ height: '100%', p: { xs: 0, md: 3 }, minHeight: 0 }}>
+      <Paper
+        variant="outlined"
+        sx={{
+          display: 'flex',
+          height: '100%',
+          maxWidth: 1200,
+          mx: 'auto',
+          bgcolor: 'background.paper',
+          overflow: 'hidden',
+          borderRadius: { xs: 0, md: 3.5 },
+        }}
+      >
+      <Box sx={{ display: { xs: activeConv ? 'none' : 'flex', md: 'flex' }, flexDirection: 'column', width: { xs: '100%', md: 336, lg: 360 }, borderRight: 1, borderColor: 'divider', flexShrink: 0, bgcolor: 'background.paper' }}>
+        <Box sx={{ px: 2.5, py: 2.25, borderBottom: 1, borderColor: 'divider' }}>
           <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
             <Typography variant="h6" fontWeight={800}>{t('messages.title', 'Messages')}</Typography>
-            <Box sx={{ px: 1, py: 0.25, borderRadius: 4, bgcolor: connected ? 'success.main' : 'error.main', opacity: 0.8 }}>
-              <Typography variant="caption" fontWeight={800} color="white" sx={{ fontSize: 10 }}>{connected ? 'LIVE' : 'OFFLINE'}</Typography>
-            </Box>
+            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+              <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: connected ? 'success.main' : 'error.main' }} />
+              <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ fontSize: 10 }}>{connected ? 'LIVE' : 'OFFLINE'}</Typography>
+            </Stack>
           </Stack>
           <TextField
             variant="outlined"
@@ -353,7 +366,7 @@ const WebMessages = () => {
                   <IconButton size="small" onClick={() => setSearchQuery('')}><X size={14} /></IconButton>
                 </InputAdornment>
               ) : null,
-              sx: { borderRadius: 3, bgcolor: 'background.default' }
+              sx: { borderRadius: 2.5, bgcolor: 'background.default' }
             }}
           />
         </Box>
@@ -371,9 +384,12 @@ const WebMessages = () => {
               ))}
             </Stack>
           ) : displayedConvs.length === 0 ? (
-            <Stack alignItems="center" justifyContent="center" height={192} spacing={1} px={4} textAlign="center">
-              <MessageSquare size={40} color="var(--mui-palette-text-disabled)" />
-              <Typography variant="body2" color="text.secondary">{searchQuery ? t('messages.no_results', 'No users found') : t('messages.no_conversations', 'No conversations yet')}</Typography>
+            <Stack alignItems="center" justifyContent="center" height={220} spacing={1.25} px={4} textAlign="center">
+              <Box sx={{ width: 42, height: 42, borderRadius: 2.5, bgcolor: 'action.hover', display: 'grid', placeItems: 'center', color: 'text.secondary' }}>
+                <MessageSquare size={20} />
+              </Box>
+              <Typography variant="subtitle2" fontWeight={800}>{searchQuery ? t('messages.no_results', 'No users found') : t('messages.no_conversations', 'No conversations yet')}</Typography>
+              <Typography variant="caption" color="text.secondary">{searchQuery ? 'Try a different name or username.' : 'Your conversations will appear here.'}</Typography>
             </Stack>
           ) : (
             <List disablePadding>
@@ -412,8 +428,8 @@ const WebMessages = () => {
       </Box>
 
       {activeConv ? (
-        <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-          <Stack direction="row" alignItems="center" spacing={2} sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, bgcolor: 'background.default' }}>
+          <Stack direction="row" alignItems="center" spacing={2} sx={{ px: 2.5, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
             <IconButton sx={{ display: { xs: 'flex', md: 'none' } }} onClick={() => navigate('/messages')} size="small">
               <ArrowLeft size={20} />
             </IconButton>
@@ -424,7 +440,7 @@ const WebMessages = () => {
             </Box>
           </Stack>
 
-          <Box sx={{ flex: 1, overflowY: 'auto', px: 2, py: 2, bgcolor: 'background.default', display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <Box sx={{ flex: 1, overflowY: 'auto', px: { xs: 1.5, sm: 3 }, py: 2.5, display: 'flex', flexDirection: 'column', gap: 1 }}>
             {nextCursor && !loadingMsgs && (
               <Button
                 size="small"
@@ -453,7 +469,7 @@ const WebMessages = () => {
                   <Box sx={{ maxWidth: '70%' }}>
                     {msg.message_type === 'image' && msg.media_url && <Box component="img" src={msg.media_url} alt="media" sx={{ borderRadius: 3, mb: 0.5, maxHeight: 240, objectFit: 'cover' }} />}
                     {msg.text && (
-                      <Paper elevation={0} sx={{ px: 2, py: 1.25, borderRadius: 3, borderBottomRightRadius: mine ? 4 : undefined, borderBottomLeftRadius: !mine ? 4 : undefined, bgcolor: mine ? 'primary.main' : 'background.paper', color: mine ? 'primary.contrastText' : 'text.primary', border: !mine ? 1 : 0, borderColor: 'divider' }}>
+                      <Paper elevation={0} sx={{ px: 1.75, py: 1.1, borderRadius: 2.5, bgcolor: mine ? 'primary.main' : 'background.paper', color: mine ? 'primary.contrastText' : 'text.primary', border: !mine ? 1 : 0, borderColor: 'divider' }}>
                         <Typography variant="body2" sx={{ lineHeight: 1.5, wordBreak: 'break-word' }}>{msg.text}</Typography>
                       </Paper>
                     )}
@@ -475,7 +491,7 @@ const WebMessages = () => {
           </Box>
 
           <Box sx={{ px: 2, py: 1.5, borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
-            <Stack direction="row" alignItems="flex-end" spacing={1} sx={{ px: 2, py: 1, borderRadius: 4, bgcolor: 'background.default', border: 1, borderColor: 'divider' }}>
+            <Stack direction="row" alignItems="flex-end" spacing={1} sx={{ px: 1.5, py: 0.75, borderRadius: 2.5, bgcolor: 'background.default', border: 1, borderColor: 'divider' }}>
               <TextField
                 multiline
                 maxRows={4}
@@ -499,10 +515,11 @@ const WebMessages = () => {
           </Box>
         </Box>
       ) : (
-        <Box sx={{ display: { xs: 'none', md: 'flex' }, flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Stack alignItems="center" spacing={2} textAlign="center">
-            <Box sx={{ borderRadius: 4, bgcolor: 'primary.main', opacity: 0.1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 64, height: 64, position: 'absolute' }} />
-            <MessageSquare size={32} color="var(--mui-palette-primary-main)" />
+        <Box sx={{ display: { xs: 'none', md: 'flex' }, flex: 1, alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default', p: 4 }}>
+          <Stack alignItems="center" spacing={1.5} textAlign="center">
+            <Box sx={{ borderRadius: 3, bgcolor: 'action.hover', color: 'primary.main', display: 'grid', placeItems: 'center', width: 52, height: 52, border: 1, borderColor: 'divider' }}>
+              <MessageSquare size={24} />
+            </Box>
             <Box>
               <Typography variant="subtitle1" fontWeight={700}>{t('messages.select_conversation', 'Select a conversation')}</Typography>
               <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 260 }}>{t('messages.select_hint', 'Choose from your conversations to start chatting.')}</Typography>
@@ -510,6 +527,7 @@ const WebMessages = () => {
           </Stack>
         </Box>
       )}
+      </Paper>
     </Box>
   );
 };

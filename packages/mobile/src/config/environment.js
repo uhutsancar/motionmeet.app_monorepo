@@ -9,7 +9,36 @@ const normalizeBackendUrl = (url) => url
   .replace(/\/+$/, '')
   .replace(/\/api$/i, '');
 
-export const API_URL = normalizeBackendUrl(configuredApiUrl || developmentFallback);
+const isLoopbackHost = (hostname) =>
+  hostname === 'localhost' ||
+  hostname === '127.0.0.1' ||
+  hostname === '[::1]' ||
+  hostname === '::1';
+
+const alignWebLoopbackHost = (value) => {
+  const normalized = normalizeBackendUrl(value);
+  if (
+    Platform.OS !== 'web' ||
+    typeof window === 'undefined' ||
+    !isLoopbackHost(window.location.hostname)
+  ) {
+    return normalized;
+  }
+
+  try {
+    const url = new URL(normalized);
+    if (isLoopbackHost(url.hostname)) {
+      url.hostname = window.location.hostname;
+      return normalizeBackendUrl(url.toString());
+    }
+  } catch {
+    // Relative same-origin URLs do not need host alignment.
+  }
+
+  return normalized;
+};
+
+export const API_URL = alignWebLoopbackHost(configuredApiUrl || developmentFallback);
 export const SOCKET_URL = API_URL;
 
 if (!configuredApiUrl) {

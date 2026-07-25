@@ -1,5 +1,5 @@
 import { useAuthContext } from "../context/AuthProvider";
-import { Avatar, Box, Card, CardActionArea, Stack, Typography } from "@mui/material";
+import { Avatar, Box, Card, CardActionArea, Paper, Stack, Typography } from "@mui/material";
 import { Plus } from "lucide-react";
 import moment from "moment";
 import { useCallback, useEffect, useState } from "react";
@@ -37,22 +37,26 @@ const StoriesBar = () => {
 
   return (
     <>
-      <Box className="no-scrollbar" sx={{ width: "100%", overflowX: "auto", pb: 0.25 }}>
-        <Stack direction="row" spacing={1.25} sx={{ width: "max-content", pb: 1 }}>
+      <Paper variant="outlined" sx={{ p: 1.25 }}>
+        <Typography variant="subtitle2" sx={{ px: 0.25, mb: 1, fontWeight: 800 }}>
+          {t("feed.stories", "Stories")}
+        </Typography>
+      <Box className="no-scrollbar" sx={{ width: "100%", overflowX: "auto" }}>
+        <Stack direction="row" spacing={1} sx={{ width: "max-content", pb: 0.75 }}>
           <Card
             variant="outlined"
             sx={{
-              width: { xs: 94, sm: 104 },
-              height: { xs: 144, sm: 156 },
+              width: 88,
+              height: 96,
               flexShrink: 0,
-              borderRadius: 4,
-              background: (theme) => `linear-gradient(155deg, ${theme.palette.background.paper}, ${theme.palette.action.hover})`,
+              borderRadius: 3,
+              bgcolor: "background.paper",
             }}
           >
-            <CardActionArea onClick={() => setShowModal(true)} sx={{ height: "100%", p: 1.5 }}>
-              <Stack spacing={2} sx={{ height: "100%", textAlign: "center", alignItems: "center", justifyContent: "center" }}>
-                <Box sx={{ width: 44, height: 44, borderRadius: 3, bgcolor: "primary.main", color: "primary.contrastText", display: "grid", placeItems: "center", boxShadow: "0 8px 20px rgba(101,88,245,.24)" }}>
-                  <Plus size={22} />
+            <CardActionArea onClick={() => setShowModal(true)} sx={{ height: "100%", p: 1 }}>
+              <Stack spacing={1} sx={{ height: "100%", textAlign: "center", alignItems: "center", justifyContent: "center" }}>
+                <Box sx={{ width: 38, height: 38, borderRadius: 2, bgcolor: "primary.main", color: "primary.contrastText", display: "grid", placeItems: "center" }}>
+                  <Plus size={19} />
                 </Box>
                 <Typography variant="caption" sx={{ fontWeight: 800, lineHeight: 1.25 }}>
                   {t("feed.create_story")}
@@ -65,7 +69,7 @@ const StoriesBar = () => {
             <Card
               key={story._id || `${story.user?._id}-${story.createdAt}-${index}`}
               variant="outlined"
-              sx={{ width: { xs: 94, sm: 104 }, height: { xs: 144, sm: 156 }, flexShrink: 0, borderRadius: 4, bgcolor: "common.black" }}
+              sx={{ width: 88, height: 96, flexShrink: 0, borderRadius: 3, bgcolor: "common.black" }}
             >
               <CardActionArea onClick={() => setViewStory(story)} sx={{ height: "100%", position: "relative" }}>
                 {story.media_type === "text" ? (
@@ -86,7 +90,7 @@ const StoriesBar = () => {
                   />
                 )}
                 <Box sx={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,.65), transparent 42%, rgba(0,0,0,.82))" }} />
-                <Avatar src={story.user?.profile_picture || undefined} alt={story.user?.full_name} sx={{ position: "absolute", top: 9, left: 9, width: 34, height: 34, border: 2, borderColor: "primary.main" }}>
+                <Avatar src={story.user?.profile_picture || undefined} alt={story.user?.full_name} sx={{ position: "absolute", top: 7, left: 7, width: 28, height: 28, border: 2, borderColor: "primary.main" }}>
                   {story.user?.full_name?.charAt(0)}
                 </Avatar>
                 <Stack sx={{ position: "absolute", left: 11, right: 9, bottom: 10, color: "common.white" }}>
@@ -102,6 +106,7 @@ const StoriesBar = () => {
           ))}
         </Stack>
       </Box>
+      </Paper>
 
       {showModal && <StoryModal setShowModal={setShowModal} fetchStories={fetchStories} />}
       {viewStory && <StoryViewer viewStory={viewStory} setViewStory={setViewStory} />}

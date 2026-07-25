@@ -1,5 +1,5 @@
 @layer theme, base, mui, components, utilities;
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap");
 @import "tailwindcss";
 
 @theme {
@@ -17,18 +17,20 @@
 }
 
 :root {
-  --bg-base: #f5f6fa;
+  --bg-base: #f7f7f5;
   --bg-surface: #ffffff;
-  --bg-surface-light: #eef1f7;
-  --border-subtle: #e2e6ef;
-  --text-primary: #171a2b;
-  --text-secondary: #61677a;
-  --text-muted: #9298aa;
+  --bg-surface-light: #f0f1ee;
+  --border-subtle: #e2e4de;
+  --text-primary: #17191f;
+  --text-secondary: #646b78;
+  --text-muted: #959ba7;
   --accent-primary: #6558f5;
-  --accent-hover: #5145db;
-  --accent-secondary: #12a88a;
-  --glass-bg: rgba(255, 255, 255, 0.82);
-  --glass-border: rgba(226, 230, 239, 0.82);
+  --accent-hover: #5145dc;
+  --accent-secondary: #00a98f;
+  --accent-energy: #b5e853;
+  --accent-coral: #f7695e;
+  --glass-bg: rgba(255, 255, 255, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.68);
   --background: var(--bg-base);
   --surface-color: var(--bg-surface);
   --surface-light: var(--bg-surface-light);
@@ -36,18 +38,20 @@
 }
 
 .dark {
-  --bg-base: #090d18;
-  --bg-surface: #121827;
-  --bg-surface-light: #1a2234;
-  --border-subtle: #273247;
-  --text-primary: #f7f8fc;
-  --text-secondary: #aeb7c9;
-  --text-muted: #747f96;
-  --accent-primary: #8a80ff;
-  --accent-hover: #a199ff;
-  --accent-secondary: #38d2b0;
-  --glass-bg: rgba(18, 24, 39, 0.78);
-  --glass-border: rgba(39, 50, 71, 0.82);
+  --bg-base: #090a0d;
+  --bg-surface: #15171b;
+  --bg-surface-light: #1d2025;
+  --border-subtle: #2b2f36;
+  --text-primary: #f7f7f5;
+  --text-secondary: #a8afba;
+  --text-muted: #737b88;
+  --accent-primary: #9187ff;
+  --accent-hover: #aaa2ff;
+  --accent-secondary: #3bd7b5;
+  --accent-energy: #c8f768;
+  --accent-coral: #ff7468;
+  --glass-bg: rgba(16, 23, 39, 0.76);
+  --glass-border: rgba(255, 255, 255, 0.08);
 }
 
 *,
@@ -68,8 +72,13 @@ body {
   transition: background-color 0.22s ease, color 0.22s ease;
 }
 
+* {
+  scrollbar-color: var(--border-subtle) transparent;
+  scrollbar-width: thin;
+}
+
 body {
-  font-family: "Manrope", "Segoe UI", sans-serif;
+  font-family: "DM Sans", "Segoe UI", sans-serif;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -114,7 +123,7 @@ svg {
 }
 
 .animate-in {
-  animation: fadeIn 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: fadeIn 0.55s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes fadeIn {
@@ -126,6 +135,48 @@ svg {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+.motion-grid {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--border-subtle) 38%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--border-subtle) 38%, transparent) 1px, transparent 1px);
+  background-size: 52px 52px;
+  mask-image: linear-gradient(to bottom, black, transparent 82%);
+}
+
+.motion-float {
+  animation: motionFloat 6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.motion-float-delayed {
+  animation: motionFloat 7s cubic-bezier(0.45, 0, 0.55, 1) -2.2s infinite;
+}
+
+.motion-pulse {
+  animation: motionPulse 3.6s ease-in-out infinite;
+}
+
+@keyframes motionFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(var(--float-rotate, 0deg));
+  }
+
+  50% {
+    transform: translate3d(0, -10px, 0) rotate(var(--float-rotate, 0deg));
+  }
+}
+
+@keyframes motionPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-primary) 0%, transparent);
+  }
+
+  50% {
+    box-shadow: 0 0 0 12px color-mix(in srgb, var(--accent-primary) 8%, transparent);
   }
 }
 

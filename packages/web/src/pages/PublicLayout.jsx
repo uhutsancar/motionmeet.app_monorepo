@@ -53,14 +53,14 @@ const PublicNavbar = () => {
         color="transparent"
         elevation={0}
         sx={{
-          bgcolor: (muiTheme) => alpha(muiTheme.palette.background.paper, 0.88),
-          backdropFilter: "blur(20px)",
-          borderBottom: 1,
-          borderColor: "divider",
+          bgcolor: (muiTheme) => alpha(muiTheme.palette.background.paper, 0.78),
+          backdropFilter: "blur(24px)",
+          borderBottom: "1px solid",
+          borderColor: (muiTheme) => alpha(muiTheme.palette.divider, 0.72),
         }}
       >
         <Container maxWidth="lg">
-          <Toolbar disableGutters sx={{ minHeight: 72 }}>
+          <Toolbar disableGutters sx={{ minHeight: 78 }}>
             <Stack
               component={RouterLink}
               to="/"
@@ -68,8 +68,8 @@ const PublicNavbar = () => {
               spacing={1.25}
               sx={{ alignItems: "center", color: "inherit", textDecoration: "none" }}
             >
-              <Box component="img" src={motionmeetLogo} alt="MotionMeet" sx={{ height: 34, width: 34 }} />
-              <Typography variant="h6" sx={{ display: { xs: "none", sm: "block" }, fontFamily: '"Sora", sans-serif', fontWeight: 800, letterSpacing: "-0.04em" }}>
+              <Box component="img" src={motionmeetLogo} alt="MotionMeet" sx={{ height: 38, width: 38 }} />
+              <Typography variant="h6" sx={{ display: { xs: "none", sm: "block" }, fontFamily: '"Manrope", sans-serif', fontWeight: 800, letterSpacing: "-0.05em" }}>
                 MotionMeet
               </Typography>
             </Stack>

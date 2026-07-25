@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import api from "~/api/axios";
+import { MessageSquare } from "lucide-react";
 
 const RecentMessages = () => {
   const { t } = useTranslation();
@@ -53,12 +54,22 @@ const RecentMessages = () => {
   }, [fetchRecentMessages, user]);
 
   return (
-    <Card variant="outlined" sx={{ borderRadius: 3 }}>
+    <Card variant="outlined">
       <CardContent sx={{ p: 2.5, "&:last-child": { pb: 2.5 } }}>
         <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 800 }}>
           {t("chat.recent_messages", "Recent Messages")}
         </Typography>
         <List disablePadding sx={{ maxHeight: 260, overflowY: "auto" }}>
+          {messages.length === 0 && (
+            <Stack direction="row" spacing={1.25} sx={{ alignItems: "center", py: 1.25 }}>
+              <Stack sx={{ width: 34, height: 34, flexShrink: 0, borderRadius: 2, bgcolor: "action.hover", color: "text.secondary", alignItems: "center", justifyContent: "center" }}>
+                <MessageSquare size={16} />
+              </Stack>
+              <Typography variant="caption" color="text.secondary">
+                {t("chat.no_recent_messages", "No recent messages yet")}
+              </Typography>
+            </Stack>
+          )}
           {messages.map((message) => (
             <ListItemButton
               component={Link}

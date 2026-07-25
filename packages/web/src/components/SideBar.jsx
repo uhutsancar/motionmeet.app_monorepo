@@ -28,7 +28,7 @@ const SideBar = ({ sideBarOpen, setSideBarOpen, unreadCount = 0 }) => {
   const { theme: themeMode, toggleTheme } = useAppTheme();
   const theme = useTheme();
   const desktop = useMediaQuery(theme.breakpoints.up("md"));
-  const drawerWidth = 272;
+  const drawerWidth = 248;
 
   const goTo = (route) => {
     navigate(route);
@@ -46,40 +46,30 @@ const SideBar = ({ sideBarOpen, setSideBarOpen, unreadCount = 0 }) => {
         flexShrink: 0,
         width: desktop ? drawerWidth : 0,
         "& .MuiDrawer-paper": {
-          bgcolor: "background.paper",
+          bgcolor: (muiTheme) => alpha(muiTheme.palette.background.paper, 0.96),
+          backdropFilter: "blur(20px)",
           borderRightColor: "divider",
           boxSizing: "border-box",
           width: drawerWidth,
-          p: 1,
+          p: 1.5,
         },
       }}
     >
       <Box sx={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
         <Stack
           direction="row"
-          sx={{ alignItems: "center", justifyContent: "space-between", px: 1.25, py: 1.25, mb: 1 }}
+          sx={{ alignItems: "center", justifyContent: "space-between", px: 0.5, py: 0.75, mb: 2 }}
         >
           <ButtonBase
             aria-label="Go to feed"
             onClick={() => goTo("/feed")}
-            sx={{ borderRadius: 3, gap: 1.25, px: 0.75, py: 0.5 }}
+            sx={{ borderRadius: 2, gap: 1, px: 0.25, py: 0.25 }}
           >
-            <Box
-              sx={{
-                display: "grid",
-                placeItems: "center",
-                width: 38,
-                height: 38,
-                borderRadius: 3,
-                bgcolor: (muiTheme) => alpha(muiTheme.palette.primary.main, 0.1),
-              }}
-            >
-              <Box component="img" src={motionmeetLogo} alt="" sx={{ height: 28, width: 28 }} />
-            </Box>
+            <Box component="img" src={motionmeetLogo} alt="" sx={{ height: 36, width: 36 }} />
             <Box sx={{ textAlign: "left" }}>
               <Typography
                 sx={{
-                  fontFamily: '"Sora", sans-serif',
+                  fontFamily: '"Manrope", sans-serif',
                   fontSize: 17,
                   fontWeight: 800,
                   letterSpacing: "-0.04em",
@@ -89,7 +79,7 @@ const SideBar = ({ sideBarOpen, setSideBarOpen, unreadCount = 0 }) => {
                 MotionMeet
               </Typography>
               <Typography sx={{ color: "text.disabled", fontSize: 10, fontWeight: 800, letterSpacing: "0.12em" }}>
-                TRAIN · TRACK · CONNECT
+                MOVE WITH PURPOSE
               </Typography>
             </Box>
           </ButtonBase>
@@ -104,7 +94,15 @@ const SideBar = ({ sideBarOpen, setSideBarOpen, unreadCount = 0 }) => {
           variant="contained"
           startIcon={<AddRounded />}
           onClick={() => goTo("/routines")}
-          sx={{ mx: 1.25, mb: 2, minHeight: 46 }}
+          sx={{
+            mb: 3,
+            minHeight: 44,
+            justifyContent: "flex-start",
+            bgcolor: "info.main",
+            color: "#12182A",
+            boxShadow: "none",
+            "&:hover": { bgcolor: "#C8F768", boxShadow: "none" },
+          }}
         >
           Start a workout
         </Button>
@@ -112,7 +110,7 @@ const SideBar = ({ sideBarOpen, setSideBarOpen, unreadCount = 0 }) => {
         <Box className="no-scrollbar" sx={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
           <Typography
             variant="overline"
-            sx={{ display: "block", px: 2.5, mb: 0.75, color: "text.disabled", fontWeight: 800, letterSpacing: "0.12em" }}
+            sx={{ display: "block", px: 1, mb: 0.75, color: "text.disabled", fontSize: 10, fontWeight: 800, letterSpacing: "0.12em" }}
           >
             Workspace
           </Typography>
@@ -121,10 +119,10 @@ const SideBar = ({ sideBarOpen, setSideBarOpen, unreadCount = 0 }) => {
 
         <Box
           sx={{
-            m: 1,
+            mt: 1.5,
             p: 1,
-            borderRadius: 3.5,
-            bgcolor: (muiTheme) => alpha(muiTheme.palette.action.hover, 0.72),
+            borderRadius: 2.5,
+            bgcolor: (muiTheme) => alpha(muiTheme.palette.action.hover, 0.55),
             border: 1,
             borderColor: "divider",
           }}
@@ -132,7 +130,7 @@ const SideBar = ({ sideBarOpen, setSideBarOpen, unreadCount = 0 }) => {
           <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
             <ButtonBase
               onClick={() => goTo("/profile")}
-              sx={{ minWidth: 0, flex: 1, justifyContent: "flex-start", borderRadius: 2.5, p: 0.5, gap: 1 }}
+              sx={{ minWidth: 0, flex: 1, justifyContent: "flex-start", borderRadius: 2, p: 0.25, gap: 1 }}
             >
               <Avatar
                 src={user?.profile_picture}

@@ -43,6 +43,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useAppTheme } from "~/context/appThemeContext";
+import { PageHeader, PageShell } from "~/components/AppPage";
 
 const readPreferences = (key) => {
   try {
@@ -53,12 +54,12 @@ const readPreferences = (key) => {
 };
 
 const Section = ({ icon: Icon, title, children = null }) => (
-  <Stack component="section" spacing={1.5}>
+  <Stack component="section" spacing={1.5} sx={{ mb: 2.5, breakInside: "avoid" }}>
     <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
       <Icon size={20} color="currentColor" />
       <Typography variant="h6" sx={{ fontWeight: 800 }}>{title}</Typography>
     </Stack>
-    <Paper variant="outlined" sx={{ borderRadius: 4, overflow: "hidden", boxShadow: 1 }}>
+    <Paper variant="outlined" sx={{ overflow: "hidden" }}>
       <Stack divider={<Divider flexItem />}>{children}</Stack>
     </Paper>
   </Stack>
@@ -223,15 +224,15 @@ const Settings = () => {
   ];
 
   return (
-    <Box sx={{ width: "100%", minHeight: "100%", py: { xs: 2, md: 4 }, pb: 6 }}>
-      <Stack spacing={3.5} sx={{ maxWidth: 820, mx: "auto", px: { xs: 1.5, sm: 3, md: 4 } }}>
-        <Box>
-          <Typography variant="overline" color="primary" sx={{ fontWeight: 800, letterSpacing: "0.12em" }}>PREFERENCES</Typography>
-          <Typography variant="h4">{t("settings.title", "Ayarlar")}</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-            Manage your account, privacy and app experience.
-          </Typography>
-        </Box>
+    <PageShell maxWidth={1120}>
+        <PageHeader
+          icon={Monitor}
+          eyebrow="PREFERENCES"
+          title={t("settings.title", "Settings")}
+          description="Manage your account, privacy and app experience."
+        />
+
+        <Box sx={{ columnCount: { xs: 1, lg: 2 }, columnGap: 2.5 }}>
 
         <Section icon={User} title={t("settings.account", "Hesap")}>
           <ListItemButton onClick={() => navigate("/profile")} sx={{ px: 2, py: 1.5 }}>
@@ -315,18 +316,17 @@ const Settings = () => {
           </Stack>
         </Section>
 
-        <Paper variant="outlined" sx={{ borderRadius: 4, borderColor: "rgba(229,72,77,.3)", overflow: "hidden" }}>
+        <Paper variant="outlined" sx={{ borderColor: "rgba(229,72,77,.3)", overflow: "hidden", mb: 2.5, breakInside: "avoid" }}>
           <ListItemButton onClick={() => signOut()} sx={{ color: "error.main", p: 2 }}>
             <ListItemAvatar><Avatar variant="rounded" sx={{ bgcolor: "rgba(239,68,68,.1)", color: "error.main" }}><LogOut size={20} /></Avatar></ListItemAvatar>
             <ListItemText primary={t("settings.logout", "Çıkış Yap")} slotProps={{ primary: { variant: "body2", sx: { fontWeight: 800 } } }} />
           </ListItemButton>
         </Paper>
+        </Box>
 
         <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
           MotionMeet v1.0.0 · © 2026 MotionMeet Studios
         </Typography>
-      </Stack>
-
       <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
         <DialogTitle>{t("privacy.delete_account", "Hesabı Sil")}</DialogTitle>
         <DialogContent>
@@ -356,7 +356,7 @@ const Settings = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </PageShell>
   );
 };
 
