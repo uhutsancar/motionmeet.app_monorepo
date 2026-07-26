@@ -61,10 +61,11 @@ export const addPost = async (req, res, next) => {
     try {
       for (const image of images) {
         const { key } = await uploadToS3(image.buffer, image.originalname, "posts", image.mimetype);
+        const cleanKey = key.startsWith('/') ? key.slice(1) : key;
         uploadedImages.push({
           key,
           url: imagekit.url({
-            path: key,
+            path: cleanKey,
             ...(image.mimetype.startsWith("image/")
               ? { transformation: [{ quality: "auto" }, { format: "webp" }] }
               : {}),
@@ -114,8 +115,12 @@ export const addPost = async (req, res, next) => {
 
 export const getFeedPost = async (req, res, next) => {
   try {
+    const mode = req.query?.mode || "discover";
+    if (!["discover", "following"].includes(mode)) {
+      return res.status(400).json({ success: false, message: "Invalid feed mode" });
+    }
     const pagination = parsePagination(req.query, { defaultLimit: 30, maxLimit: 50 });
-    const page = await postService.getFeedPostsForUser(req.userId, pagination);
+    const page = await postService.getFeedPostsForUser(req.userId, pagination, mode);
     if (!page) return res.status(404).json({ success: false, message: "User not found" });
 
     return res.json({

@@ -15,9 +15,11 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import api from "~/api/axios";
 import { uploadMedia } from "~/api/mediaUpload";
+import { API_ROUTES } from "@motionmeet/shared";
+
 
 const MediaPreview = ({ file, onRemove }) => {
   const [url, setUrl] = useState("");
@@ -84,7 +86,7 @@ const CreatePost = ({ onSuccess }) => {
       const uploadedKeys = await Promise.all(
         images.map((image) => uploadMedia(image, "posts", token))
       );
-      const { data } = await api.post("/api/post/add", {
+      const { data } = await api.post(API_ROUTES.post.add, {
         content,
         post_type: postType,
         uploadedKeys,
@@ -178,7 +180,21 @@ const CreatePost = ({ onSuccess }) => {
                 accept="image/*,video/*"
                 multiple
                 onChange={(event) => {
-                  setImages((current) => [...current, ...Array.from(event.target.files || [])]);
+                  const selected = Array.from(event.target.files || []);
+                  const oversized = selected.find((file) => file.size > 20 * 1024 * 1024);
+                  if (oversized) {
+                    toast.error("Each media file must be 20 MB or smaller.");
+                    event.target.value = "";
+                    return;
+                  }
+                  setImages((current) => {
+                    const next = [...current, ...selected].slice(0, 4);
+                    if (current.length + selected.length > 4) {
+                      toast.error("A post can contain at most four media files.");
+                    }
+                    return next;
+                  });
+                  event.target.value = "";
                   event.target.value = "";
                 }}
                 sx={{ display: "none" }}

@@ -1,7 +1,7 @@
 import { Avatar, Button, Card, CardContent, Stack, Typography } from "@mui/material";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 
 const QuickProfile = () => {
   const user = useSelector((state) => state.user.value);

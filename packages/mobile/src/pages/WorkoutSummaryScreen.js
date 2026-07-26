@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import {
-  View, ScrollView, Image, Alert, KeyboardAvoidingView, Platform
+  View, ScrollView, Image, Alert, KeyboardAvoidingView, Platform, StyleSheet
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from "../context/AuthProvider";
@@ -24,7 +24,8 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
     followers: t('workout_summary.friends', 'Takipçiler'), 
     private: t('workout_summary.only_me', 'Gizli') 
   };
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
+  const styles = getStyles(theme);
   const { getToken } = useAuthContext();
 
   const workoutData = route?.params?.workoutData || {};
@@ -159,85 +160,85 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
-      <Appbar.Header style={{ backgroundColor: theme.background, elevation: 0 }}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <Appbar.Header style={styles.header} statusBarHeight={0}>
         <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
-        <Appbar.Content title={t('workout.save_workout', 'Antrenmanı Kaydet')} titleStyle={{ fontSize: 18, fontWeight: 'bold', color: theme.text }} />
+        <Appbar.Content title={t('workout.save_workout', 'Antrenmanı Kaydet')} titleStyle={styles.headerTitle} />
         {saving ? (
-          <ActivityIndicator size="small" color={theme.primary} style={{ marginRight: 16 }} />
+          <ActivityIndicator size="small" color={theme.primary} style={styles.activityIndicator} />
         ) : (
-          <Button mode="contained" compact onPress={handleSave} style={{ marginRight: 8, borderRadius: 8 }}>
+          <Button mode="contained" compact onPress={handleSave} style={styles.saveButton}>
             {t('common.save', 'Kaydet')}
           </Button>
         )}
       </Appbar.Header>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView style={styles.flex1} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           
-          <Text variant="headlineSmall" style={{ color: theme.text, fontWeight: 'bold', marginTop: 16 }}>
+          <Text variant="headlineSmall" style={styles.workoutName}>
             {workoutData.name || t('workout.my_workout', 'Antrenmanım')}
           </Text>
 
           {/* Stats */}
-          <View style={{ flexDirection: 'row', marginTop: 16, gap: 12 }}>
-            <Surface style={{ flex: 1, padding: 12, borderRadius: 12, backgroundColor: theme.surfaceLight }} elevation={1}>
-              <Text variant="labelMedium" style={{ color: theme.textMuted }}>{t('statistics.duration', 'Süre')}</Text>
-              <Text variant="titleMedium" style={{ color: theme.primary, fontWeight: 'bold', marginTop: 4 }}>{stats.duration}</Text>
+          <View style={styles.statsContainer}>
+            <Surface style={styles.statCard} elevation={1}>
+              <Text variant="labelMedium" style={styles.statLabel}>{t('statistics.duration', 'Süre')}</Text>
+              <Text variant="titleMedium" style={styles.statValuePrimary}>{stats.duration}</Text>
             </Surface>
-            <Surface style={{ flex: 1, padding: 12, borderRadius: 12, backgroundColor: theme.surfaceLight }} elevation={1}>
-              <Text variant="labelMedium" style={{ color: theme.textMuted }}>{t('statistics.volume', 'Hacim')}</Text>
-              <Text variant="titleMedium" style={{ color: theme.text, fontWeight: 'bold', marginTop: 4 }}>{stats.volume}</Text>
+            <Surface style={styles.statCard} elevation={1}>
+              <Text variant="labelMedium" style={styles.statLabel}>{t('statistics.volume', 'Hacim')}</Text>
+              <Text variant="titleMedium" style={styles.statValue}>{stats.volume}</Text>
             </Surface>
-            <Surface style={{ flex: 1, padding: 12, borderRadius: 12, backgroundColor: theme.surfaceLight }} elevation={1}>
-              <Text variant="labelMedium" style={{ color: theme.textMuted }}>{t('statistics.sets', 'Set')}</Text>
-              <Text variant="titleMedium" style={{ color: theme.text, fontWeight: 'bold', marginTop: 4 }}>{stats.sets}</Text>
+            <Surface style={styles.statCard} elevation={1}>
+              <Text variant="labelMedium" style={styles.statLabel}>{t('statistics.sets', 'Set')}</Text>
+              <Text variant="titleMedium" style={styles.statValue}>{stats.sets}</Text>
             </Surface>
           </View>
 
-          <Divider style={{ marginVertical: 20, backgroundColor: theme.border }} />
+          <Divider style={styles.divider} />
 
           {/* Date */}
           <View>
-            <Text variant="labelMedium" style={{ color: theme.textMuted, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 4 }}>
+            <Text variant="labelMedium" style={styles.sectionTitle}>
               {t('workout.when', 'Ne Zaman')}
             </Text>
-            <Text variant="titleMedium" style={{ color: theme.primary, fontWeight: '600' }}>
+            <Text variant="titleMedium" style={styles.dateValue}>
               {moment(stats.date).format('D MMM YYYY, HH:mm')}
             </Text>
           </View>
 
-          <Divider style={{ marginVertical: 20, backgroundColor: theme.border }} />
+          <Divider style={styles.divider} />
 
           {/* Media upload */}
           {mediaUri ? (
-            <View style={{ position: 'relative' }}>
-              <Image source={{ uri: mediaUri }} style={{ width: '100%', height: 200, borderRadius: 16 }} resizeMode="cover" />
-              <IconButton 
-                icon="close-circle" 
-                iconColor="#ef4444" 
-                size={28} 
-                style={{ position: 'absolute', top: 0, right: 0, backgroundColor: theme.surface, margin: 8 }} 
-                onPress={() => setMediaUri(null)} 
+            <View style={styles.mediaContainer}>
+              <Image source={{ uri: mediaUri }} style={styles.mediaImage} resizeMode="cover" />
+              <IconButton
+                icon="close-circle"
+                iconColor="#ef4444"
+                size={28}
+                style={styles.mediaCloseButton}
+                onPress={() => setMediaUri(null)}
               />
             </View>
           ) : (
-            <Surface style={{ borderRadius: 16, backgroundColor: theme.surfaceLight }} elevation={1}>
+            <Surface style={styles.cardSurface} elevation={1}>
               <List.Item
                 title={t('workout.add_photo_video', 'Bir fotoğraf / video ekle')}
-                titleStyle={{ color: theme.text, fontWeight: '500' }}
+                titleStyle={styles.listItemTitle}
                 left={props => <List.Icon {...props} icon="image-plus" color={theme.textMuted} />}
                 onPress={pickMedia}
-                style={{ paddingVertical: 12 }}
+                style={styles.listItemPadding}
               />
             </Surface>
           )}
 
-          <Divider style={{ marginVertical: 20, backgroundColor: theme.border }} />
+          <Divider style={styles.divider} />
 
           {/* Note */}
           <View>
-            <Text variant="labelMedium" style={{ color: theme.textMuted, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 8 }}>
+            <Text variant="labelMedium" style={styles.sectionTitleBottomMargin}>
               {t('workout.description', 'Açıklama')}
             </Text>
             <TextInput
@@ -247,52 +248,57 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
               numberOfLines={4}
               value={note}
               onChangeText={setNote}
-              style={{ backgroundColor: theme.surfaceLight }}
+              style={styles.textInputStyle}
               outlineColor={theme.border}
               activeOutlineColor={theme.primary}
               textColor={theme.text}
             />
           </View>
 
-          <Divider style={{ marginVertical: 20, backgroundColor: theme.border }} />
+          <Divider style={styles.divider} />
 
           {/* Visibility */}
-          <Surface style={{ borderRadius: 16, backgroundColor: theme.surfaceLight }} elevation={1}>
+          <Surface style={styles.cardSurface} elevation={1}>
             <List.Item
               title={t('settings.visibility', 'Görünürlük')}
               description={VISIBILITY_LABELS[visibility]}
-              descriptionStyle={{ color: theme.textMuted }}
-              left={props => <List.Icon {...props} icon={visibility === 'public' ? 'globe' : visibility === 'followers' ? 'account-multiple' : 'lock'} color={theme.textMuted} />}
+              descriptionStyle={styles.listItemDescription}
+              left={props => <List.Icon {...props} icon={visibility === 'public' ? 'earth' : visibility === 'followers' ? 'account-multiple' : 'lock'} color={theme.textMuted} />}
               right={props => <List.Icon {...props} icon="chevron-right" color={theme.textMuted} />}
               onPress={pickVisibility}
             />
           </Surface>
 
-          <Divider style={{ marginVertical: 20, backgroundColor: theme.border }} />
+          <Divider style={styles.divider} />
 
           {/* Exercise summary */}
           {workoutData.exercises?.length > 0 && (
-            <View style={{ marginBottom: 20 }}>
-              <Text variant="labelMedium" style={{ color: theme.textMuted, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 12 }}>
+            <View style={styles.exercisesContainer}>
+              <Text variant="labelMedium" style={styles.sectionTitleBottomMargin12}>
                 {t('workout.exercises', 'Egzersizler')}
               </Text>
-              <Surface style={{ borderRadius: 16, backgroundColor: theme.surfaceLight, overflow: 'hidden' }} elevation={1}>
-                {workoutData.exercises.map((ex, i) => (
-                  <List.Item
-                    key={i}
-                    title={ex.name}
-                    titleStyle={{ color: theme.text, fontWeight: 'bold' }}
-                    description={`${ex.sets.length} ${t('statistics.sets', 'set')} ${ex.sets[0]?.weight ? ` • ${ex.sets[0].weight}kg` : ''}`}
-                    descriptionStyle={{ color: theme.textMuted }}
-                    style={{ borderBottomWidth: i === workoutData.exercises.length - 1 ? 0 : 1, borderBottomColor: theme.border }}
-                  />
-                ))}
+              <Surface style={styles.cardSurface} elevation={1}>
+                <View style={styles.cardInner}>
+                  {workoutData.exercises.map((ex, i) => (
+                    <List.Item
+                      key={i}
+                      title={ex.name}
+                      titleStyle={styles.listItemTitleBold}
+                      description={`${ex.sets.length} ${t('statistics.sets', 'set')} ${ex.sets[0]?.weight ? ` • ${ex.sets[0].weight}kg` : ''}`}
+                      descriptionStyle={styles.listItemDescription}
+                      style={[
+                        styles.exerciseItem,
+                        i === workoutData.exercises.length - 1 ? styles.exerciseItemLast : { borderBottomColor: theme.border }
+                      ]}
+                    />
+                  ))}
+                </View>
               </Surface>
             </View>
           )}
 
           {/* Delete */}
-          <Button mode="text" textColor="#ef4444" onPress={handleDiscard} style={{ marginTop: 8 }}>
+          <Button mode="text" textColor="#ef4444" onPress={handleDiscard} style={styles.deleteButton}>
             {t('workout.delete', 'Antrenmanı Sil')}
           </Button>
 
@@ -301,5 +307,40 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
     </SafeAreaView>
   );
 };
+
+const getStyles = (theme) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: theme.background },
+  flex1: { flex: 1 },
+  header: { backgroundColor: theme.background, elevation: 0 },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: theme.text },
+  activityIndicator: { marginRight: 16 },
+  saveButton: { marginRight: 8, borderRadius: 8 },
+  scrollContent: { paddingHorizontal: 16, paddingBottom: 60 },
+  workoutName: { color: theme.text, fontWeight: 'bold', marginTop: 16 },
+  statsContainer: { flexDirection: 'row', marginTop: 16, gap: 12 },
+  statCard: { flex: 1, padding: 12, borderRadius: 12, backgroundColor: theme.surfaceLight },
+  statLabel: { color: theme.textMuted },
+  statValuePrimary: { color: theme.primary, fontWeight: 'bold', marginTop: 4 },
+  statValue: { color: theme.text, fontWeight: 'bold', marginTop: 4 },
+  divider: { marginVertical: 20, backgroundColor: theme.border },
+  sectionTitle: { color: theme.textMuted, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 4 },
+  sectionTitleBottomMargin: { color: theme.textMuted, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 8 },
+  sectionTitleBottomMargin12: { color: theme.textMuted, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 12 },
+  dateValue: { color: theme.primary, fontWeight: '600' },
+  mediaContainer: { position: 'relative' },
+  mediaImage: { width: '100%', height: 200, borderRadius: 16 },
+  mediaCloseButton: { position: 'absolute', top: 0, right: 0, backgroundColor: theme.surface, margin: 8 },
+  cardSurface: { borderRadius: 16, backgroundColor: theme.surfaceLight },
+  listItemPadding: { paddingVertical: 12 },
+  listItemTitle: { color: theme.text, fontWeight: '500' },
+  listItemTitleBold: { color: theme.text, fontWeight: 'bold' },
+  listItemDescription: { color: theme.textMuted },
+  textInputStyle: { backgroundColor: theme.surfaceLight },
+  exercisesContainer: { marginBottom: 20 },
+  cardInner: { overflow: 'hidden', borderRadius: 16 },
+  exerciseItem: { borderBottomWidth: 1 },
+  exerciseItemLast: { borderBottomWidth: 0 },
+  deleteButton: { marginTop: 8 },
+});
 
 export default WorkoutSummaryScreen;

@@ -79,13 +79,29 @@ export const getExerciseStats = async (id, userId) => {
     { $unwind: "$exercises" },
     { $match: { "exercises.exerciseId": exerciseId } },
     {
+      $set: {
+        completedSets: {
+          $filter: {
+            input: "$exercises.sets",
+            as: "set",
+            cond: {
+              $or: [
+                { $ne: ["$metricsVersion", 2] },
+                { $eq: ["$$set.completed", true] },
+              ],
+            },
+          },
+        },
+      },
+    },
+    {
       $project: {
         date: { $ifNull: ["$startTime", "$createdAt"] },
-        maxWeight: { $max: "$exercises.sets.weight" },
+        maxWeight: { $max: "$completedSets.weight" },
         volume: {
           $sum: {
             $map: {
-              input: "$exercises.sets",
+              input: "$completedSets",
               as: "set",
               in: { $multiply: ["$$set.weight", "$$set.reps"] },
             },
@@ -118,4 +134,57 @@ export const getExerciseStats = async (id, userId) => {
     totalSessions: summary.totalSessions || 0,
     history: (result?.history || []).reverse(),
   };
+};
+
+export const getPersonalRecords = async (userId, limit = 50) => {
+  const Workout = (await import("../models/Workout.js")).default;
+  return Workout.aggregate([
+    { $match: { userId } },
+    { $unwind: "$exercises" },
+    { $unwind: "$exercises.sets" },
+    {
+      $match: {
+        $or: [
+          { metricsVersion: { $ne: 2 } },
+          { "exercises.sets.completed": true },
+        ],
+      },
+    },
+    {
+      $sort: {
+        "exercises.sets.weight": -1,
+        startTime: -1,
+        createdAt: -1,
+      },
+    },
+    {
+      $group: {
+        _id: "$exercises.exerciseId",
+        value: { $first: "$exercises.sets.weight" },
+        reps: { $first: "$exercises.sets.reps" },
+        recordedAt: { $first: { $ifNull: ["$startTime", "$createdAt"] } },
+      },
+    },
+    { $sort: { value: -1, recordedAt: -1 } },
+    { $limit: Math.min(Math.max(Number(limit) || 50, 1), 100) },
+    {
+      $lookup: {
+        from: "exercises",
+        localField: "_id",
+        foreignField: "_id",
+        as: "exercise",
+      },
+    },
+    { $unwind: "$exercise" },
+    {
+      $project: {
+        _id: 0,
+        exerciseId: "$_id",
+        name: "$exercise.name",
+        value: 1,
+        reps: 1,
+        recordedAt: 1,
+      },
+    },
+  ]);
 };

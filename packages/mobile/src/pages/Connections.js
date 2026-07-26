@@ -87,10 +87,22 @@ const Connections = ({ navigation }) => {
       elevation={1}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <Image
-          source={{ uri: user.profile_picture || 'https://via.placeholder.com/48' }}
-          style={{ width: 48, height: 48, borderRadius: 24 }}
-        />
+        {user.profile_picture ? (
+          <Image
+            source={{ uri: user.profile_picture }}
+            style={{ width: 48, height: 48, borderRadius: 24 }}
+            accessibilityLabel={user.full_name}
+          />
+        ) : (
+          <Surface
+            elevation={0}
+            style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.primarySoft }}
+          >
+            <Text style={{ color: theme.primary, fontWeight: '900' }}>
+              {(user.full_name || user.username || '?').charAt(0).toUpperCase()}
+            </Text>
+          </Surface>
+        )}
         <View style={{ flex: 1 }}>
           <Text variant="titleSmall" style={{ color: theme.text, fontWeight: '700' }}>
             {user.full_name}
@@ -138,6 +150,17 @@ const Connections = ({ navigation }) => {
               {t('common.message', 'Mesaj')}
             </Button>
           )}
+          {currentTab === 'Following' && (
+            <Button
+              mode="text"
+              compact
+              onPress={() => handleUnfollow(user._id)}
+              disabled={loading}
+              labelStyle={{ fontSize: 11, fontWeight: '700' }}
+            >
+              {t('connections.unfollow', 'Unfollow')}
+            </Button>
+          )}
         </View>
       </View>
     </Surface>
@@ -147,7 +170,7 @@ const Connections = ({ navigation }) => {
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      <Appbar.Header style={{ backgroundColor: theme.surface, elevation: 0 }}>
+      <Appbar.Header statusBarHeight={0} style={{ backgroundColor: theme.surface, elevation: 0 }}>
         <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
         <Appbar.Content
           title="Connections"

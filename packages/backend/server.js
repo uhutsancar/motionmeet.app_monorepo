@@ -5,11 +5,6 @@ import rateLimit from "express-rate-limit";
 import "dotenv/config";
 import { createServer } from "http";
 import { Server } from "socket.io";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 import connectDB, { disconnectDB } from "./configs/db.js";
 import userRouter from "./routes/userRoutes.js";
 import postRouter from "./routes/postRoutes.js";
@@ -37,11 +32,13 @@ import { createAdapter } from "@socket.io/redis-adapter";
 import {
   createRateLimitStore,
   disconnectRedis,
+  getRedisStatus,
   initializeRedis,
   isRedisReady,
 } from "./configs/redis.js";
 import mongoose from "mongoose";
 import { requestContext } from "./middlewares/requestContext.js";
+import { ensureApplicationData } from "./services/bootstrapService.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -63,6 +60,7 @@ const isAllowedOrigin = (origin) => {
 const corsOptions = {
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  optionsSuccessStatus: 200,
   origin(origin, callback) {
     if (isAllowedOrigin(origin)) return callback(null, true);
     const error = Object.assign(new Error("Origin is not allowed by CORS"), { status: 403 });
@@ -70,12 +68,14 @@ const corsOptions = {
   },
 };
 
-if (isProduction) app.set("trust proxy", 1);
-app.disable("x-powered-by");
-app.use(helmet());
+app.set("trust proxy", 1); // Trust first proxy (useful for ngrok/Expo in dev too)
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 app.use(requestContext);
 app.use(cors(corsOptions));
-app.use(express.json({ limit: "100kb", strict: true }));
+app.use(express.json({ limit: "500kb", strict: true }));
+app.use(express.urlencoded({ extended: true, limit: "500kb" }));
 
 
 const globalLimiter = rateLimit({
@@ -96,16 +96,22 @@ app.get("/health/live", (req, res) => {
 app.get("/health/ready", (req, res) => {
   const databaseReady = mongoose.connection.readyState === 1;
   const redisReady = isRedisReady();
-  const ready = databaseReady && redisReady;
+  const redisStatus = getRedisStatus();
+  const ready = databaseReady && (redisReady || (!isProduction && redisStatus === "disabled"));
+  const mediaEnabled = process.env.MEDIA_UPLOADS_ENABLED !== "false";
+  const emailEnabled = process.env.EMAIL_ENABLED !== "false";
+  const backgroundJobsEnabled = process.env.RUN_SCHEDULED_JOBS === "true";
   res.status(ready ? 200 : 503).json({
     status: ready ? "ready" : "not-ready",
     database: databaseReady ? "ready" : "not-ready",
-    redis: redisReady ? "ready" : "not-ready",
+    redis: redisStatus,
+    capabilities: {
+      mediaUploads: mediaEnabled ? "configured" : "disabled",
+      email: emailEnabled ? "configured" : "disabled",
+      backgroundJobs: backgroundJobsEnabled ? "enabled" : "disabled",
+    },
   });
 });
-if (!isProduction) {
-  app.use("/dataset", express.static(path.join(__dirname, "../../../exercises-dataset-main")));
-}
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRouter);
 app.use("/api/post", postRouter);
@@ -188,6 +194,7 @@ process.once("unhandledRejection", (error) => {
 
 try {
   await connectDB();
+  await ensureApplicationData();
   const redis = await initializeRedis();
   if (redis) {
     io.adapter(createAdapter(redis.publisher, redis.subscriber));
@@ -195,6 +202,18 @@ try {
   initCronJobs();
   httpServer.listen(port, "0.0.0.0", () => {
     console.log(`Server + Socket.io running on port ${port}`);
+  });
+
+  httpServer.on("error", (error) => {
+    if ("code" in error && error.code === "EADDRINUSE") {
+      console.error(`\n❌ Port ${port} is already in use by another process.`);
+      console.error(`   Run: netstat -ano | findstr :${port}  to find the process.`);
+      console.error(`   Or set a different PORT in your .env file.\n`);
+      process.exit(1);
+    } else {
+      console.error("HTTP server error:", error.message);
+      process.exit(1);
+    }
   });
 } catch (error) {
   console.error("Server startup failed:", error.message);

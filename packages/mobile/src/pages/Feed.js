@@ -6,7 +6,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   ActivityIndicator,
@@ -54,13 +54,13 @@ const Feed = ({ navigation }) => {
       await Promise.all([
         dispatch(fetchUser(token)),
         dispatch(fetchStories(token)),
-        dispatch(fetchPosts({ token })),
+        dispatch(fetchPosts({ token, mode: activeTab })),
         dispatch(fetchConnections(token)),
       ]);
     } catch (error) {
       console.error('Error loading data:', error);
     }
-  }, [dispatch, getToken]);
+  }, [activeTab, dispatch, getToken]);
 
   useEffect(() => {
     loadData();
@@ -75,8 +75,8 @@ const Feed = ({ navigation }) => {
   const handleLoadMore = useCallback(async () => {
     if (!nextCursor || loadingMore || postsLoading) return;
     const token = await getToken();
-    await dispatch(fetchPosts({ token, cursor: nextCursor }));
-  }, [dispatch, getToken, loadingMore, nextCursor, postsLoading]);
+    await dispatch(fetchPosts({ token, cursor: nextCursor, mode: activeTab }));
+  }, [activeTab, dispatch, getToken, loadingMore, nextCursor, postsLoading]);
 
   const handleUserPress = useCallback((userId) => {
     navigation.navigate('Profile', { userId });
@@ -94,8 +94,6 @@ const Feed = ({ navigation }) => {
     return (
       <PostCard
         post={row.item}
-        onComment={() => {}}
-        onShare={() => {}}
         onUserPress={handleUserPress}
         navigation={navigation}
       />
@@ -127,6 +125,9 @@ const Feed = ({ navigation }) => {
               <TouchableOpacity
                 key={tab.key}
                 onPress={() => setActiveTab(tab.key)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={tab.label}
                 style={{
                   justifyContent: 'center',
                   borderBottomWidth: active ? 2 : 0,
@@ -146,6 +147,7 @@ const Feed = ({ navigation }) => {
           iconColor={theme.text}
           style={{ margin: 0 }}
           onPress={() => navigation.navigate('NotificationsScreen')}
+          accessibilityLabel={t('menu.notifications', 'Notifications')}
         />
       </Surface>
 
@@ -197,6 +199,8 @@ const Feed = ({ navigation }) => {
                 <TouchableOpacity
                   activeOpacity={0.75}
                   onPress={() => navigation.navigate('Routines')}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('feed.next_session', 'Start your next session')}
                   style={{
                     minHeight: 38,
                     paddingHorizontal: 13,
@@ -218,6 +222,8 @@ const Feed = ({ navigation }) => {
             <TouchableOpacity
               activeOpacity={0.75}
               onPress={() => setShowCreatePost(true)}
+              accessibilityRole="button"
+              accessibilityLabel={t('feed.create_post', 'Create post')}
               style={{
                 minHeight: 58,
                 marginHorizontal: 16,

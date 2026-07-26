@@ -13,7 +13,7 @@ import StoriesBar from "~/components/StoriesBar";
 import SuggestedAthletes from "~/components/SuggestedAthletes";
 import CreatePost from "./CreatePost";
 import { API_ROUTES } from "@motionmeet/shared";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { EmptyState, PageHeader, PageShell } from "~/components/AppPage";
 
 const Feed = () => {

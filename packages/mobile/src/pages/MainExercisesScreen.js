@@ -1,6 +1,6 @@
 import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { ScrollView } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from "../context/AuthProvider";
@@ -78,7 +78,7 @@ const MainExercisesScreen = ({ navigation }) => {
              <Text variant="bodyLarge" style={styles.emptyText}>{t('common.no_data', 'Veri bulunamadı')}</Text>
           </Surface>
         ) : (
-          <Surface style={styles.list} elevation={1}>
+          <Surface style={styles.list} elevation={0}>
              {exercises.map((item, index) => {
                 const tKey = item.name.toLowerCase().replace(/[\s-]/g, '_').replace('pull_up', 'pullup');
                 const translatedName = t(`statistics.ex_${tKey}`, item.name);
@@ -89,9 +89,10 @@ const MainExercisesScreen = ({ navigation }) => {
                     </Surface>
                     <Surface style={styles.itemInfo} elevation={0}>
                         <Text variant="titleMedium" style={styles.itemName}>{translatedName}</Text>
-                        <Text variant="bodyMedium" style={styles.itemValue}>{item.total.toLocaleString()} {t('statistics.total_reps', 'total reps')}</Text>
+                        <Text variant="bodyMedium" style={styles.itemValue}>
+                          {(item.volume || 0).toLocaleString()} {t('common.kg', 'kg')} · {(item.reps || 0).toLocaleString()} {t('routines.reps', 'reps').toLowerCase()} · {item.sets || 0} {t('statistics.sets', 'sets').toLowerCase()}
+                        </Text>
                     </Surface>
-                    <Ionicons name="chevron-forward" size={20} color={theme.border} />
                 </Surface>
              )})}
           </Surface>

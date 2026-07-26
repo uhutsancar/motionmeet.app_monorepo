@@ -1,0 +1,17 @@
+FROM node:24-alpine
+
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@11.10.0 --activate
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.json ./
+COPY patches ./patches
+COPY packages/web/package.json ./packages/web/package.json
+COPY packages/shared/package.json ./packages/shared/package.json
+RUN pnpm install --frozen-lockfile
+
+COPY packages/shared ./packages/shared
+COPY packages/web ./packages/web
+
+WORKDIR /app/packages/web
+EXPOSE 5173
+CMD ["pnpm", "dev", "--host", "0.0.0.0"]

@@ -1,5 +1,5 @@
 
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { CheckCircle2, Dumbbell, TrendingUp, ListChecks, MessageSquare, BookOpen, BarChart2, ArrowRight } from 'lucide-react';
 import PublicLayout from './PublicLayout';
@@ -29,7 +29,7 @@ const FeatureRow = ({ index }) => {
     t(`features_page.f${index + 1}_b4`),
   ];
 
-  const fakeUIs = [
+  const productPreviews = [
     /* 1 – Workout Logging */
     <Stack spacing={1.5} key="1">
       {[{ ex: 'Bench Press', done: true, val: '80 kg × 8' }, { ex: 'Squat', done: true, val: '100 kg × 5' }, { ex: 'Deadlift', done: false, val: '120 kg × 3' }].map((r, i) => (
@@ -73,7 +73,7 @@ const FeatureRow = ({ index }) => {
       </Stack>
       <Grid container spacing={1}>
         {[{ l: 'Total Volume', v: '23,500 kg', c: '#6558F5' }, { l: 'Personal Record', v: '90 kg', c: '#f59e0b' }].map(({ l, v, c }) => (
-          <Grid item xs={6} key={l}>
+          <Grid size={{ xs: 6 }} key={l}>
             <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>{l}</Typography>
               <Typography variant="subtitle2" sx={{ fontWeight: 800, color: c }}>{v}</Typography>
@@ -147,8 +147,8 @@ const FeatureRow = ({ index }) => {
     /* 6 – Insights */
     <Stack spacing={1.5} key="6">
       <Grid container spacing={1}>
-        {[{ l: 'Weekly Workouts', v: '5', c: '#6558F5' }, { l: 'Avg Duration', v: '62 min', c: '#12A88A' }, { l: 'Total Volume', v: '84,200 kg', c: '#8A80FF' }, { l: 'Calories', v: '12,400 kcal', c: '#f59e0b' }].map(({ l, v, c }) => (
-          <Grid item xs={6} key={l}>
+        {[{ l: 'Weekly Workouts', v: '5', c: '#6558F5' }, { l: 'Avg Duration', v: '62 min', c: '#12A88A' }, { l: 'Total Volume', v: '84,200 kg', c: '#8A80FF' }, { l: 'Completed Sets', v: '74', c: '#f59e0b' }].map(({ l, v, c }) => (
+          <Grid size={{ xs: 6 }} key={l}>
             <Box sx={{ p: 1.5, borderRadius: 3, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
               <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: 10, mb: 0.5, display: 'block' }}>{l}</Typography>
               <Typography variant="subtitle2" sx={{ fontWeight: 800, color: c }}>{v}</Typography>
@@ -173,7 +173,7 @@ const FeatureRow = ({ index }) => {
   return (
     <Grid container spacing={{ xs: 6, lg: 8 }} alignItems="center" direction={isReversed ? 'row-reverse' : 'row'}>
       {/* Text */}
-      <Grid item xs={12} lg={6}>
+      <Grid size={{ xs: 12, lg: 6 }}>
         <Stack spacing={3}>
           <Box sx={{ display: 'inline-flex', p: 1.5, borderRadius: 4, bgcolor: color.bg, color: color.main, alignSelf: 'flex-start' }}>
             <Icon size={28} />
@@ -195,9 +195,9 @@ const FeatureRow = ({ index }) => {
         </Stack>
       </Grid>
       {/* Visual */}
-      <Grid item xs={12} lg={6}>
+      <Grid size={{ xs: 12, lg: 6 }}>
         <Paper elevation={0} sx={{ p: 3, borderRadius: 6, border: `1px solid ${theme.palette.divider}`, bgcolor: 'background.paper', boxShadow: '0 20px 40px -10px rgba(0,0,0,0.1)' }}>
-          {fakeUIs[index]}
+          {productPreviews[index]}
         </Paper>
       </Grid>
     </Grid>

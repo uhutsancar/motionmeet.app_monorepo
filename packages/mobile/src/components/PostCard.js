@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, memo, useMemo } from 'react';
-import { Image, Alert, TextInput, FlatList, ActivityIndicator, StyleSheet, useWindowDimensions } from 'react-native';
+import { Image, Alert, TextInput, FlatList, ActivityIndicator, Share, StyleSheet, useWindowDimensions } from 'react-native';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { useSelector, useDispatch } from 'react-redux';
 import { useAuthContext } from "../context/AuthProvider";
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { likePost, followUser, unfollowUser, addComment, getPostComments } from '../api/endpoints';
 import { fetchUser } from '../features/user/userSlice';
 import api from '../api/client';
@@ -13,12 +14,43 @@ import { useTheme } from '../context/ThemeContext';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
 
 const POST_PADDING = 16;
+const normalizeUri = (value) => (
+  typeof value === 'string' ? value.trim() : ''
+);
+
+const PostVideo = ({ source, style }) => {
+  const player = useVideoPlayer(source, (instance) => {
+    instance.loop = false;
+  });
+
+  return (
+    <VideoView
+      player={player}
+      style={style}
+      contentFit="contain"
+      nativeControls
+      accessibilityLabel="Video"
+    />
+  );
+};
 
 const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete, showDelete = false }) => {
   const { t, i18n } = useTranslation();
   const { theme, isDark } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
   const carouselWidth = Math.min(screenWidth - 32, 688);
+  const hasWorkout = post?.post_type === 'workout' && post.workout && typeof post.workout === 'object';
+  const isVideo = post?.post_type === 'video';
+  const imageUrls = (Array.isArray(post?.image_urls) ? post.image_urls : [])
+    .map(normalizeUri)
+    .filter(Boolean);
+  const postProfilePicture = normalizeUri(post?.user?.profile_picture);
+  const mediaSlideHeight = Math.min(carouselWidth * 1.04, 620);
+  const workoutOnly = Boolean(hasWorkout && imageUrls.length === 0);
+  const workoutExerciseCount = Math.min(post?.workout?.exercises?.length || 0, 4);
+  const workoutSlideHeight = workoutOnly
+    ? Math.max(160, Math.min(306, 58 + workoutExerciseCount * 58))
+    : mediaSlideHeight;
   const currentUser = useSelector((state) => state.user.value);
   const dispatch = useDispatch();
   const { getToken } = useAuthContext();
@@ -184,11 +216,11 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
     },
     carouselSlide: {
       width: carouselWidth,
-      height: Math.min(carouselWidth * 1.04, 620),
+      height: mediaSlideHeight,
     },
     videoContainer: {
       width: carouselWidth,
-      height: Math.min(carouselWidth * 1.04, 620),
+      height: mediaSlideHeight,
       backgroundColor: '#000',
       justifyContent: 'center',
     },
@@ -200,22 +232,22 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
     },
     workoutSlideContainer: {
       width: carouselWidth,
-      height: Math.min(carouselWidth * 1.04, 620),
+      height: workoutSlideHeight,
       backgroundColor: theme.surfaceLight,
       paddingHorizontal: POST_PADDING,
       justifyContent: 'center',
-      gap: 20,
+      gap: 12,
     },
     workoutSlideItem: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 16,
+      gap: 12,
       backgroundColor: 'transparent'
     },
     workoutSlideIcon: {
-      width: 60,
-      height: 60,
-      borderRadius: 12,
+      width: 48,
+      height: 48,
+      borderRadius: 10,
       backgroundColor: theme.surfaceLight,
       justifyContent: 'center',
       alignItems: 'center',
@@ -228,9 +260,9 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
     },
     workoutSlideText: {
       color: theme.text,
-      fontSize: 15,
-      fontWeight: '500',
-      lineHeight: 20,
+      fontSize: 14,
+      fontWeight: '600',
+      lineHeight: 19,
     },
     moreExercisesText: {
       textAlign: 'center',
@@ -378,7 +410,7 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
       justifyContent: 'center',
       alignItems: 'center',
     },
-  }), [theme, carouselWidth]);
+  }), [carouselWidth, mediaSlideHeight, theme, workoutSlideHeight]);
 
   moment.locale(i18n.language.startsWith('tr') ? 'tr' : 'en');
 
@@ -468,10 +500,17 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
     }
   };
 
-  const hasWorkout = post.post_type === 'workout' && post.workout && typeof post.workout === 'object';
-  const isVideo = post.post_type === 'video';
-  const imageUrls = post.image_urls || [];
-  
+  const handleShare = async () => {
+    if (onShare) {
+      await onShare(post);
+      return;
+    }
+
+    await Share.share({
+      message: [post.content, post.workout?.name].filter(Boolean).join('\n') || 'MotionMeet',
+    });
+  };
+
   const carouselData = [];
 
   // 1) Add photos/videos so they appear first
@@ -490,13 +529,11 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
     if (item.type === 'video') {
       return (
         <Surface elevation={0} style={s.videoContainer}>
-           <Image source={{ uri: item.url }} style={s.carouselSlide} blurRadius={10} />
-           <Surface elevation={0} style={s.playOverlay}>
-              <Ionicons name="play" size={50} color="#fff" />
-           </Surface>
+          <PostVideo source={item.url} style={s.carouselSlide} />
         </Surface>
       );
     } else if (item.type === 'image') {
+      if (!item.url) return null;
       return (
         <Image source={{ uri: item.url }} style={s.carouselSlide} resizeMode="cover" />
       );
@@ -539,10 +576,10 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
     <Surface elevation={0} style={s.card}>
       {/* User Info & Follow Button */}
       <Surface elevation={0} style={s.userSection}>
-        <TouchableRipple style={s.userInfoLeft} onPress={() => onUserPress?.(post.user?._id)}>
+        <TouchableRipple style={s.userInfoLeft} onPress={() => onUserPress?.(post.user?._id)} accessibilityLabel={post.user?.full_name}>
           <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'transparent' }}>
-            {post.user?.profile_picture ? (
-              <Image source={{ uri: post.user.profile_picture }} style={s.avatar} />
+            {postProfilePicture ? (
+              <Image source={{ uri: postProfilePicture }} style={s.avatar} />
             ) : (
               <Surface elevation={0} style={[s.avatar, s.avatarPlaceholder]}>
                 <Text style={s.avatarPlaceholderText}>
@@ -560,13 +597,13 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
                 {post.visibility === 'private' && (
                   <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'transparent' }}>
                     <Ionicons name="lock-closed" size={10} color={theme.textMuted} />
-                    <Text style={{ fontSize: 10, color: theme.textMuted }}>Sadece siz</Text>
+                    <Text style={{ fontSize: 10, color: theme.textMuted }}>{t('privacy.only_me', 'Only you')}</Text>
                   </Surface>
                 )}
                 {post.visibility === 'followers' && (
                   <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'transparent' }}>
                     <Ionicons name="people" size={10} color={theme.textMuted} />
-                    <Text style={{ fontSize: 10, color: theme.textMuted }}>Takipçiler</Text>
+                    <Text style={{ fontSize: 10, color: theme.textMuted }}>{t('feed.followers', 'Followers')}</Text>
                   </Surface>
                 )}
               </Surface>
@@ -579,6 +616,7 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
             style={[s.followBtn, currentUser?.following?.includes(post.user?._id) && s.followingBtn]} 
             onPress={handleFollow}
             disabled={followProcessing}
+            accessibilityLabel={currentUser?.following?.includes(post.user?._id) ? t('feed.unfollow', 'Unfollow') : t('feed.follow', 'Follow')}
           >
             {followProcessing ? (
                <ActivityIndicator size="small" color={theme.primary} />
@@ -649,7 +687,7 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
       {/* Actions Bar */}
       <Surface elevation={0} style={s.actionsBar}>
         <Surface elevation={0} style={s.actionLeftGroup}>
-          <TouchableRipple style={s.actionButton} onPress={handleLike} borderless>
+          <TouchableRipple style={s.actionButton} onPress={handleLike} accessibilityLabel={t('feed.like', 'Like')} accessibilityState={{ selected: isLiked }} borderless>
             <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'transparent' }}>
               <Ionicons 
                 name={isLiked ? "heart" : "heart-outline"}
@@ -660,14 +698,19 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
             </Surface>
           </TouchableRipple>
 
-          <TouchableRipple style={s.actionButton} onPress={() => setShowComments(!showComments)} borderless>
+          <TouchableRipple style={s.actionButton} onPress={() => setShowComments(!showComments)} accessibilityLabel={t('feed.comments', 'Comments')} accessibilityState={{ expanded: showComments }} borderless>
             <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'transparent' }}>
               <Ionicons name="chatbubble-outline" size={24} color={theme.text} />
               <Text style={[s.actionText, showComments && { color: theme.primary }]}>{commentCount}</Text>
             </Surface>
           </TouchableRipple>
 
-          <TouchableRipple style={s.actionButton} onPress={() => onShare?.(post)} borderless>
+          <TouchableRipple
+            style={s.actionButton}
+            onPress={handleShare}
+            accessibilityLabel={t('feed.share', 'Share')}
+            borderless
+          >
             <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'transparent' }}>
               <Ionicons name="arrow-redo-outline" size={24} color={theme.text} style={{ transform: [{rotateY: '180deg'}] }} />
             </Surface>
@@ -701,8 +744,8 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
           )}
           {comments.map((comment, i) => (
             <Surface elevation={0} key={i} style={s.commentItem}>
-              {comment.user?.profile_picture ? (
-                <Image source={{ uri: comment.user.profile_picture }} style={s.commentAvatar} />
+              {normalizeUri(comment.user?.profile_picture) ? (
+                <Image source={{ uri: normalizeUri(comment.user.profile_picture) }} style={s.commentAvatar} />
               ) : (
                 <Surface elevation={0} style={[s.commentAvatar, s.avatarPlaceholder]}>
                   <Text style={[s.avatarPlaceholderText, { fontSize: 12 }]}>
@@ -733,6 +776,7 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
             <TouchableRipple 
               onPress={handleAddComment}
               disabled={!commentText.trim() || isProcessing}
+              accessibilityLabel={t('feed.send_comment', 'Send comment')}
               style={[s.commentSendBtn, !commentText.trim() && { opacity: 0.5 }]}
               borderless
             >

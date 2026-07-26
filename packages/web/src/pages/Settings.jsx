@@ -1,5 +1,6 @@
 import { useAuthContext } from "../context/AuthProvider.jsx";
 import api from "../api/axios.js";
+import { API_ROUTES } from "@motionmeet/shared";
 import {
   Accordion,
   AccordionDetails,
@@ -40,7 +41,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import toast from "react-hot-toast";
 import { useAppTheme } from "~/context/appThemeContext";
 import { PageHeader, PageShell } from "~/components/AppPage";
@@ -71,7 +72,7 @@ const ToggleRow = ({ label, subtitle = "", value, onChange }) => (
       <Typography variant="body2" sx={{ fontWeight: 700 }}>{label}</Typography>
       {subtitle && <Typography variant="caption" color="text.secondary">{subtitle}</Typography>}
     </Stack>
-    <Switch checked={value} onChange={onChange} inputProps={{ "aria-label": label }} />
+    <Switch checked={value} onChange={onChange} slotProps={{ input: { "aria-label": label } }} />
   </Stack>
 );
 
@@ -106,13 +107,7 @@ const Settings = () => {
   const [deletePassword, setDeletePassword] = useState("");
   const [accountRequestPending, setAccountRequestPending] = useState(false);
   const [notifPrefs, setNotifPrefs] = useState({
-    pushEnabled: true,
-    newFollower: true,
-    postLike: true,
-    postComment: true,
     newMessage: true,
-    workoutReminder: false,
-    weeklyReport: true,
     ...readPreferences("@mm_notif_prefs"),
   });
   const [privacyPrefs, setPrivacyPrefs] = useState({
@@ -142,7 +137,7 @@ const Settings = () => {
     const loadPrivacy = async () => {
       try {
         const token = await getToken();
-        const { data } = await api.get("/api/user/privacy", {
+        const { data } = await api.get(API_ROUTES.user.privacy, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (active && data?.privacy) setPrivacyPrefs(data.privacy);
@@ -163,7 +158,7 @@ const Settings = () => {
     try {
       const token = await getToken();
       const { data } = await api.patch(
-        "/api/user/privacy",
+        API_ROUTES.user.privacy,
         { [key]: updated[key] },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -178,7 +173,7 @@ const Settings = () => {
     try {
       setAccountRequestPending(true);
       const token = await getToken();
-      const response = await api.get("/api/user/export", {
+      const response = await api.get(API_ROUTES.user.export, {
         headers: { Authorization: `Bearer ${token}` },
         responseType: "blob",
       });
@@ -201,7 +196,7 @@ const Settings = () => {
     try {
       setAccountRequestPending(true);
       const token = await getToken();
-      await api.delete("/api/user/account", {
+      await api.delete(API_ROUTES.user.account, {
         headers: { Authorization: `Bearer ${token}` },
         data: { password: deletePassword },
       });
@@ -287,13 +282,12 @@ const Settings = () => {
         </Section>
 
         <Section icon={Bell} title={t("settings.notifications", "Bildirimler")}>
-          <ToggleRow label={t("notifications.push", "Anlık Bildirimler")} subtitle={t("notifications.push_sub", "Tüm bildirimleri aç veya kapat")} value={notifPrefs.pushEnabled} onChange={() => togglePreference(setNotifPrefs, "@mm_notif_prefs", "pushEnabled")} />
-          <ToggleRow label={t("notifications.new_follower", "Yeni Takipçi")} value={notifPrefs.newFollower} onChange={() => togglePreference(setNotifPrefs, "@mm_notif_prefs", "newFollower")} />
-          <ToggleRow label={t("notifications.post_like", "Gönderi Beğenisi")} value={notifPrefs.postLike} onChange={() => togglePreference(setNotifPrefs, "@mm_notif_prefs", "postLike")} />
-          <ToggleRow label={t("notifications.post_comment", "Gönderi Yorumu")} value={notifPrefs.postComment} onChange={() => togglePreference(setNotifPrefs, "@mm_notif_prefs", "postComment")} />
-          <ToggleRow label={t("notifications.new_message", "Yeni Mesaj")} value={notifPrefs.newMessage} onChange={() => togglePreference(setNotifPrefs, "@mm_notif_prefs", "newMessage")} />
-          <ToggleRow label={t("notifications.workout_reminder", "Antrenman Hatırlatıcısı")} subtitle={t("notifications.reminder_sub", "Günlük antrenman hatırlatması")} value={notifPrefs.workoutReminder} onChange={() => togglePreference(setNotifPrefs, "@mm_notif_prefs", "workoutReminder")} />
-          <ToggleRow label={t("notifications.weekly_report", "Haftalık Rapor")} subtitle={t("notifications.weekly_sub", "Her Pazartesi gönderilir")} value={notifPrefs.weeklyReport} onChange={() => togglePreference(setNotifPrefs, "@mm_notif_prefs", "weeklyReport")} />
+          <ToggleRow
+            label={t("notifications.new_message", "Yeni Mesaj")}
+            subtitle={t("notifications.in_app_message_sub", "Yeni mesajlar için uygulama içi bildirim göster")}
+            value={notifPrefs.newMessage}
+            onChange={() => togglePreference(setNotifPrefs, "@mm_notif_prefs", "newMessage")}
+          />
         </Section>
 
         <Section icon={Lock} title={t("settings.privacy", "Gizlilik")}>

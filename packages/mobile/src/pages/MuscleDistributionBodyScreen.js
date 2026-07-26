@@ -2,7 +2,7 @@ import React, { useCallback, useState, useEffect } from 'react';
 import { ScrollView, ActivityIndicator } from 'react-native';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from "../context/AuthProvider";
@@ -28,7 +28,7 @@ const MuscleDistributionBodyScreen = ({ navigation }) => {
         setMuscleData(formatted);
       }
     } catch (error) {
-      console.log('Error fetching muscle body stats', error);
+      console.error('Error fetching muscle body stats', error);
     } finally {
       setLoading(false);
     }
@@ -51,7 +51,7 @@ const MuscleDistributionBodyScreen = ({ navigation }) => {
         <TouchableRipple borderless style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableRipple>
-        <Text style={styles.headerTitle}>{t('statistics.muscle_dist_body', 'Kas dağılımı (Vücut)')}</Text>
+        <Text style={styles.headerTitle}>{t('statistics.muscle_dist_body', 'Muscle load grid')}</Text>
         <Surface elevation={0} style={{ width: 40 }} />
       </Surface>
 
@@ -73,7 +73,7 @@ const MuscleDistributionBodyScreen = ({ navigation }) => {
                       <Ionicons name="fitness-outline" size={28} color={getIntensityColor(item.value)} />
                    </Surface>
                    <Text style={styles.itemName}>{translatedName}</Text>
-                   <Text style={[styles.itemValue, { color: getIntensityColor(item.value) }]}>{item.value}{t('statistics.intensity_percent', '% Intensity')}</Text>
+                   <Text style={[styles.itemValue, { color: getIntensityColor(item.value) }]}>{item.value}{t('statistics.training_share_percent', '% share')}</Text>
                 </Surface>
              )})}
           </Surface>

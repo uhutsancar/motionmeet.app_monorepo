@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { useAuthContext } from "../context/AuthProvider";
 import api from "~/api/axios";
 import { useMuscleGroups } from "../hooks/useMuscleGroups";
@@ -12,13 +12,15 @@ import CircularProgress from "@mui/material/CircularProgress";
 import Button from "@mui/material/Button";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
+import { alpha, useTheme } from "@mui/material/styles";
 import KeyboardArrowDownRounded from "@mui/icons-material/KeyboardArrowDownRounded";
-import ArrowUpwardRounded from "@mui/icons-material/ArrowUpwardRounded";
 import { Dumbbell } from "lucide-react";
+import { API_ROUTES } from "@motionmeet/shared";
 import { PageHeader, PageShell } from "~/components/AppPage";
 
 const MuscleDistribution = () => {
   const { t } = useTranslation();
+  const muiTheme = useTheme();
   const navigate = useNavigate();
   const { getToken } = useAuthContext();
   const { data: muscleGroupsList, isLoading: isMusclesLoading } = useMuscleGroups();
@@ -39,8 +41,9 @@ const MuscleDistribution = () => {
       setLoading(true);
       try {
         const token = await getToken();
-        const { data } = await api.get(`/api/workout/stats?period=${period}`, {
+        const { data } = await api.get(API_ROUTES.workout.stats, {
           headers: { Authorization: `Bearer ${token}` },
+          params: { period }
         });
         if (active && data.success) setStats(data);
       } catch (error) {
@@ -67,6 +70,8 @@ const MuscleDistribution = () => {
   };
   const currentPolygon = values.map((value, index) => getPoint(value, index)).join(" ");
   const gridLevels = [0.2, 0.4, 0.6, 0.8, 1];
+  const hasDistribution = values.some((value) => value > 0);
+  const chartAccent = muiTheme.palette.mode === "dark" ? "#60A5FA" : "#2563EB";
 
   const periodAction = (
     <>
@@ -118,7 +123,16 @@ const MuscleDistribution = () => {
       />
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1.35fr) minmax(300px, .65fr)" }, gap: 2 }}>
-        <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 }, minHeight: 430, display: "grid", placeItems: "center" }}>
+        <Paper
+          variant="outlined"
+          sx={{
+            p: { xs: 2, sm: 3 },
+            minHeight: 430,
+            display: "grid",
+            placeItems: "center",
+            background: `radial-gradient(circle at 50% 46%, ${alpha(chartAccent, 0.1)}, transparent 48%), ${muiTheme.palette.background.paper}`,
+          }}
+        >
           {loading || isMusclesLoading ? (
             <CircularProgress size={30} />
           ) : (
@@ -128,9 +142,9 @@ const MuscleDistribution = () => {
                   <polygon
                     key={level}
                     points={muscleKeys.map((_, index) => getPoint(level, index)).join(" ")}
-                    stroke="var(--mui-palette-divider)"
+                    stroke={muiTheme.palette.divider}
                     strokeWidth="1"
-                    fill="none"
+                    fill={level === 1 ? alpha(chartAccent, 0.025) : "none"}
                   />
                 ))}
                 {muscleKeys.map((key, index) => (
@@ -140,17 +154,37 @@ const MuscleDistribution = () => {
                     y1={center}
                     x2={center + radius * Math.cos(angles[index])}
                     y2={center + radius * Math.sin(angles[index])}
-                    stroke="var(--mui-palette-divider)"
+                    stroke={muiTheme.palette.divider}
                     strokeWidth="1"
                   />
                 ))}
-                <polygon
-                  points={currentPolygon}
-                  stroke="var(--mui-palette-primary-main)"
-                  strokeWidth="2.5"
-                  fill="var(--mui-palette-primary-main)"
-                  fillOpacity="0.14"
-                />
+                {hasDistribution && (
+                  <>
+                    <polygon
+                      points={currentPolygon}
+                      stroke={chartAccent}
+                      strokeWidth="3"
+                      strokeLinejoin="round"
+                      fill={chartAccent}
+                      fillOpacity="0.18"
+                    />
+                    {values.map((value, index) => {
+                      const [x, y] = getPoint(value, index).split(",");
+                      return (
+                        <circle
+                          key={`${muscleKeys[index]}-point`}
+                          cx={x}
+                          cy={y}
+                          r="3.5"
+                          fill={muiTheme.palette.background.paper}
+                          stroke={chartAccent}
+                          strokeWidth="2.5"
+                        />
+                      );
+                    })}
+                  </>
+                )}
+                <circle cx={center} cy={center} r="2.5" fill={chartAccent} />
                 {muscleKeys.map((key, index) => {
                   const x = center + (radius + 30) * Math.cos(angles[index]);
                   const y = center + (radius + 30) * Math.sin(angles[index]);
@@ -162,7 +196,7 @@ const MuscleDistribution = () => {
                       y={y + 4}
                       fontSize="11"
                       fontWeight="600"
-                      fill="var(--mui-palette-text-secondary)"
+                      fill={muiTheme.palette.text.secondary}
                       textAnchor="middle"
                     >
                       {t(`muscle_groups.${key}`, group?.name || key)}
@@ -170,15 +204,16 @@ const MuscleDistribution = () => {
                   );
                 })}
               </Box>
-              <Stack direction="row" spacing={2.5}>
+              <Stack direction="row" spacing={2.5} sx={{ minHeight: 22, alignItems: "center" }}>
                 <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
-                  <Box sx={{ width: 9, height: 9, borderRadius: "50%", bgcolor: "primary.main" }} />
+                  <Box sx={{ width: 9, height: 9, borderRadius: "50%", bgcolor: chartAccent, boxShadow: `0 0 0 4px ${alpha(chartAccent, 0.12)}` }} />
                   <Typography variant="caption" color="text.secondary">{t("statistics.current", "Current")}</Typography>
                 </Stack>
-                <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
-                  <Box sx={{ width: 9, height: 9, borderRadius: "50%", bgcolor: "text.disabled" }} />
-                  <Typography variant="caption" color="text.secondary">{t("statistics.previous", "Previous")}</Typography>
-                </Stack>
+                {!hasDistribution && (
+                  <Typography variant="caption" color="text.secondary">
+                    {t("monthly_report.no_data", "No training data for this period")}
+                  </Typography>
+                )}
               </Stack>
             </Stack>
           )}
@@ -192,8 +227,8 @@ const MuscleDistribution = () => {
                 {Number(item.value).toLocaleString()}{" "}
                 {item.unit && <Typography component="span" variant="caption" color="text.secondary">{item.unit}</Typography>}
               </Typography>
-              <Stack direction="row" spacing={0.4} sx={{ mt: 0.75, alignItems: "center", color: "success.main" }}>
-                <ArrowUpwardRounded sx={{ fontSize: 14 }} />
+              <Stack direction="row" spacing={0.6} sx={{ mt: 0.75, alignItems: "center", color: "text.secondary" }}>
+                <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: chartAccent }} />
                 <Typography variant="caption" sx={{ fontWeight: 700 }}>{t("statistics.current_period", "Current period")}</Typography>
               </Stack>
             </Paper>

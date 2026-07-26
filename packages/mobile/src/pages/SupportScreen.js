@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { ScrollView, StatusBar, Linking, LayoutAnimation, UIManager, Platform } from 'react-native';
-import { Surface, TouchableRipple, Text } from 'react-native-paper';
+import { ScrollView, StatusBar, Linking, LayoutAnimation, UIManager, Platform, TouchableOpacity, StyleSheet } from 'react-native';
+import { Surface, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 
@@ -28,13 +28,13 @@ const FaqItem = ({ item, theme, styles }) => {
   };
 
   return (
-    <TouchableRipple borderless style={styles.faqItem} onPress={handleToggle} activeOpacity={0.8}>
+    <TouchableOpacity borderless style={styles.faqItem} onPress={handleToggle} activeOpacity={0.8}>
       <Surface elevation={0} style={styles.faqHeader}>
         <Text style={styles.faqQ}>{t(item.q, item.qFallback)}</Text>
         <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={theme.textMuted} />
       </Surface>
       {open && <Text style={styles.faqA}>{t(item.a, item.aFallback)}</Text>}
-    </TouchableRipple>
+    </TouchableOpacity>
   );
 };
 
@@ -69,9 +69,9 @@ const SupportScreen = ({ navigation }) => {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       <Surface elevation={0} style={styles.header}>
-        <TouchableRipple borderless style={styles.backBtn} onPress={() => navigation.goBack()}>
+        <TouchableOpacity borderless style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </TouchableRipple>
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('settings.support', 'Destek')}</Text>
         <Surface elevation={0} style={{ width: 40 }} />
       </Surface>
@@ -82,7 +82,7 @@ const SupportScreen = ({ navigation }) => {
           <Text style={styles.sectionLabel}>{t('support.contact_section', 'İLETİŞİM')}</Text>
           <Surface elevation={0} style={styles.card}>
             {contactItems.map((item, i) => (
-              <TouchableRipple borderless
+              <TouchableOpacity borderless
                 key={i}
                 style={[styles.row, i !== contactItems.length - 1 && styles.rowBorder]}
                 onPress={item.onPress}
@@ -98,7 +98,7 @@ const SupportScreen = ({ navigation }) => {
                   </Surface>
                 </Surface>
                 <Ionicons name="open-outline" size={16} color={theme.textMuted} />
-              </TouchableRipple>
+              </TouchableOpacity>
             ))}
           </Surface>
         </Surface>

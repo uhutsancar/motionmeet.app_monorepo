@@ -1,11 +1,7 @@
 import cron from "node-cron";
 import Story from "../models/Story.js";
-import Message from "../models/Message.js";
-import User from "../models/User.js";
-import sendEmail from "../configs/nodeMailer.js";
 import { extractS3Key } from "../utils/s3Utils.js";
 import { runWithRedisLock } from "../configs/redis.js";
-import { escapeHtml } from "../utils/html.js";
 import UploadReservation from "../models/UploadReservation.js";
 import {
   deleteMediaOrQueue,
@@ -32,40 +28,6 @@ const deleteExpiredStories = async () => {
   }
 
   if (deleted) console.log(`Deleted ${deleted} expired stories.`);
-};
-
-const sendUnseenMessageEmails = async () => {
-  const counts = await Message.aggregate([
-    { $match: { seen: false } },
-    { $group: { _id: "$to_user_id", count: { $sum: 1 } } },
-  ]);
-  const countByUser = new Map(
-    counts.map(({ _id, count }) => [_id.toString(), count])
-  );
-  const users = await User.find({
-    _id: { $in: [...countByUser.keys()] },
-  })
-    .select("email full_name")
-    .lean();
-
-  for (let index = 0; index < users.length; index += 20) {
-    const batch = users.slice(index, index + 20);
-    await Promise.allSettled(
-      batch.map((user) =>
-        sendEmail({
-          to: user.email,
-          subject: `You have ${countByUser.get(user._id)} unseen messages`,
-          body: `
-            <div style="font-family: Arial, sans-serif; padding: 20px;">
-              <h2>Hi ${escapeHtml(user.full_name)},</h2>
-              <p>You have ${countByUser.get(user._id)} unseen messages waiting for you.</p>
-              <p>Click <a href="${process.env.FRONTEND_URL}/messages">here</a> to view them.</p>
-              <p>Thanks,<br/>MotionMeet</p>
-            </div>`,
-        })
-      )
-    );
-  }
 };
 
 const deleteAbandonedUploads = async () => {
@@ -104,20 +66,6 @@ export const initCronJobs = () => {
       );
   });
 
-  const unseenMessageTask = cron.schedule(
-    "0 9 * * *",
-    () => {
-      void runWithRedisLock(
-        "unseen-message-email",
-        23 * 60 * 60,
-        sendUnseenMessageEmails
-      ).catch((error) =>
-        console.error("Error in unseen messages cron:", error.message)
-      );
-    },
-    { timezone: "Europe/Istanbul" }
-  );
-
   const abandonedUploadTask = cron.schedule("*/15 * * * *", () => {
     void runWithRedisLock(
       "abandoned-uploads",
@@ -141,7 +89,6 @@ export const initCronJobs = () => {
   console.log("Background cron jobs initialized successfully.");
   return [
     storyTask,
-    unseenMessageTask,
     abandonedUploadTask,
     mediaDeletionTask,
   ];

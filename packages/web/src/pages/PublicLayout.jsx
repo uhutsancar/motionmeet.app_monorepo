@@ -19,7 +19,7 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link as RouterLink, useLocation } from "react-router-dom";
+import { Link as RouterLink, useLocation } from "react-router";
 import motionmeetLogo from "../assets/motionmeet_logo.svg";
 import { useAppTheme } from "../context/appThemeContext";
 import { alpha } from "@mui/material/styles";

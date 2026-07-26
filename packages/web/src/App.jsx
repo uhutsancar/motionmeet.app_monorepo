@@ -7,7 +7,7 @@ import { useAuthContext } from "./context/AuthProvider";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import { useDispatch } from "react-redux";
-import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import Notification from "./components/Notification";
 import { SocketProvider } from "./context/SocketProvider";
 import { fetchConnections } from "./features/connections/connectionsSlice";
@@ -19,6 +19,8 @@ const Landing = lazy(() => import("./pages/Landing"));
 const Layout = lazy(() => import("./pages/Layout"));
 const Login = lazy(() => import("./pages/Login"));
 const Signup = lazy(() => import("./pages/Signup"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Features = lazy(() => import("./pages/Features"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const About = lazy(() => import("./pages/About"));
@@ -98,6 +100,12 @@ const AppContent = () => {
       if (pathnameRef.current.startsWith("/messages")) return;
 
       setUnreadCount((count) => count + 1);
+      try {
+        const preferences = JSON.parse(localStorage.getItem("@mm_notif_prefs") || "{}");
+        if (preferences.newMessage === false) return;
+      } catch {
+        // Invalid local preferences fall back to enabled.
+      }
       toast.custom(
         (toastInstance) => <Notification toastInstance={toastInstance} message={message} />,
         { position: "bottom-right" },
@@ -116,6 +124,8 @@ const AppContent = () => {
           <Route path="/" element={user ? <Navigate to="/feed" replace /> : <Landing />} />
           <Route path="/login/*" element={user ? <Navigate to="/feed" replace /> : <Login />} />
           <Route path="/signup/*" element={user ? <Navigate to="/feed" replace /> : <Signup />} />
+          <Route path="/forgot-password" element={user ? <Navigate to="/feed" replace /> : <ForgotPassword />} />
+          <Route path="/reset-password" element={user ? <Navigate to="/feed" replace /> : <ResetPassword />} />
           <Route path="/sign-in/*" element={<Navigate to="/login" replace />} />
           <Route path="/sign-up/*" element={<Navigate to="/signup" replace />} />
           <Route path="/features" element={<Features />} />

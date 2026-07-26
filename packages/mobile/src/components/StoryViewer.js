@@ -1,11 +1,37 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Modal, Image, Animated } from 'react-native';
-import { Surface, TouchableRipple, Text } from 'react-native-paper';
-import { Ionicons } from '@expo/vector-icons';
+import { Modal, Image, Pressable, View } from 'react-native';
+import { Surface, Text } from 'react-native-paper';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { VideoView, useVideoPlayer } from 'expo-video';
+import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import moment from 'moment';
 import 'moment/locale/tr';
 
 const STORY_DURATION = 5000; // 5 seconds per story
+
+const StoryVideo = ({ source, onEnded }) => {
+  const player = useVideoPlayer(source, (instance) => {
+    instance.loop = false;
+    instance.play();
+  });
+
+  useEffect(() => {
+    const subscription = player.addListener('playToEnd', onEnded);
+    return () => subscription.remove();
+  }, [onEnded, player]);
+
+  return (
+    <VideoView
+      player={player}
+      style={styles.mediaImage}
+      contentFit="contain"
+      nativeControls={false}
+      surfaceType="textureView"
+      accessibilityLabel="Story video"
+    />
+  );
+};
 
 /**
  * Instagram-style StoryViewer
@@ -16,92 +42,148 @@ const STORY_DURATION = 5000; // 5 seconds per story
  *   onClose: () => void
  */
 const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }) => {
+  const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const [currentIndex, setCurrentIndex] = useState(startIndex);
   const [progress, setProgress] = useState(0);
   const intervalRef = useRef(null);
+  const nextFrameRef = useRef(null);
+  const currentIndexRef = useRef(startIndex);
+  const closingRef = useRef(false);
 
   const currentStory = stories[currentIndex];
+
+  const clearPlaybackTimers = useCallback(() => {
+    clearInterval(intervalRef.current);
+    clearTimeout(nextFrameRef.current);
+    intervalRef.current = null;
+    nextFrameRef.current = null;
+  }, []);
+
+  const closeViewer = useCallback(() => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    clearPlaybackTimers();
+    currentIndexRef.current = startIndex;
+    setCurrentIndex(startIndex);
+    setProgress(0);
+    onClose?.();
+  }, [clearPlaybackTimers, onClose, startIndex]);
 
   // Reset when opening
   useEffect(() => {
     if (visible) {
-      setCurrentIndex(startIndex);
-      setProgress(0);
-    }
-  }, [visible, startIndex]);
-
-  const goNext = useCallback(() => {
-    if (currentIndex < stories.length - 1) {
-      setCurrentIndex(prev => prev + 1);
+      const initialIndex = Math.min(
+        Math.max(startIndex, 0),
+        Math.max(stories.length - 1, 0),
+      );
+      closingRef.current = false;
+      currentIndexRef.current = initialIndex;
+      setCurrentIndex(initialIndex);
       setProgress(0);
     } else {
-      // All stories done
-      onClose();
+      clearPlaybackTimers();
     }
-  }, [currentIndex, stories.length, onClose]);
+  }, [clearPlaybackTimers, startIndex, stories.length, visible]);
+
+  const goNext = useCallback(() => {
+    if (!visible || closingRef.current) return;
+    clearPlaybackTimers();
+    const nextIndex = currentIndexRef.current + 1;
+    if (nextIndex < stories.length) {
+      currentIndexRef.current = nextIndex;
+      setCurrentIndex(nextIndex);
+      setProgress(0);
+    } else {
+      closeViewer();
+    }
+  }, [clearPlaybackTimers, closeViewer, stories.length, visible]);
 
   const goPrev = useCallback(() => {
-    if (currentIndex > 0) {
-      setCurrentIndex(prev => prev - 1);
+    if (!visible || closingRef.current) return;
+    clearPlaybackTimers();
+    const previousIndex = currentIndexRef.current - 1;
+    if (previousIndex >= 0) {
+      currentIndexRef.current = previousIndex;
+      setCurrentIndex(previousIndex);
+      setProgress(0);
+    } else {
+      // Instagram-style behavior: tapping left on the first story restarts it.
       setProgress(0);
     }
-  }, [currentIndex]);
+  }, [clearPlaybackTimers, visible]);
 
   // Progress timer per story
   useEffect(() => {
-    if (!visible || !currentStory) return;
+    if (!visible || !currentStory || currentStory.media_type === 'video') return;
 
     setProgress(0);
-    clearInterval(intervalRef.current);
+    clearPlaybackTimers();
 
     const step = 100 / (STORY_DURATION / 50); // how much to increment each 50ms
     intervalRef.current = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(intervalRef.current);
-          goNext();
-          return 0;
-        }
-        return prev + step;
-      });
+      setProgress(prev => Math.min(prev + step, 100));
     }, 50);
 
-    return () => clearInterval(intervalRef.current);
-  }, [currentIndex, currentStory, goNext, visible]);
+    return clearPlaybackTimers;
+  }, [clearPlaybackTimers, currentIndex, currentStory, visible]);
+
+  useEffect(() => {
+    if (!visible || progress < 100 || currentStory?.media_type === 'video') return;
+    clearInterval(intervalRef.current);
+    nextFrameRef.current = setTimeout(goNext, 0);
+    return () => clearTimeout(nextFrameRef.current);
+  }, [currentStory?.media_type, goNext, progress, visible]);
 
   if (!visible || !currentStory) return null;
 
   const backgroundColor = currentStory.background_color || '#4f46e5';
+  const mediaUrl =
+    typeof currentStory.media_url === 'string'
+      ? currentStory.media_url.trim()
+      : '';
+  const profilePicture =
+    typeof currentStory.user?.profile_picture === 'string'
+      ? currentStory.user.profile_picture.trim()
+      : '';
+  const displayName =
+    currentStory.user?.full_name || currentStory.user?.username || 'MotionMeet';
+  const avatarLabel = displayName.charAt(0).toUpperCase();
 
   return (
     <Modal
       visible={visible}
       animationType="fade"
       transparent={false}
-      onRequestClose={onClose}
+      onRequestClose={closeViewer}
     >
       <Surface elevation={0} style={styles.container}>
         {/* Story Background / Media */}
         <Surface elevation={0} style={[styles.storyContent, { backgroundColor }]}>
-          {currentStory.media_type === 'image' && currentStory.media_url && (
+          {currentStory.media_type === 'image' && mediaUrl && (
             <Image
-              source={{ uri: currentStory.media_url }}
+              source={{ uri: mediaUrl }}
               style={styles.mediaImage}
               resizeMode="cover"
             />
           )}
-          {currentStory.media_type === 'video' && currentStory.media_url && (
-            <Surface elevation={0} style={styles.videoPlaceholder}>
-              <Ionicons name="play-circle" size={72} color="#fff" />
-            </Surface>
+          {currentStory.media_type === 'video' && mediaUrl && (
+            <StoryVideo
+              key={currentStory._id || mediaUrl}
+              source={mediaUrl}
+              onEnded={goNext}
+            />
           )}
-          {(currentStory.media_type === 'text' || !currentStory.media_url) && currentStory.content && (
+          {(currentStory.media_type === 'text' || !mediaUrl) && currentStory.content && (
             <Text style={styles.storyText}>{currentStory.content}</Text>
           )}
         </Surface>
 
         {/* Progress Bars — one per story */}
-        <Surface elevation={0} style={styles.progressBarsRow}>
+        <Surface
+          elevation={0}
+          style={[styles.progressBarsRow, { top: Math.max(insets.top + 8, 16) }]}
+        >
           {stories.map((_, i) => (
             <Surface elevation={0} key={i} style={[styles.progressBarBg, { flex: 1 }]}>
               <Surface elevation={0}
@@ -121,36 +203,59 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }) => {
           ))}
         </Surface>
 
-        {/* Header */}
-        <Surface elevation={0} style={styles.header}>
-          <Surface elevation={0} style={styles.userInfo}>
-            <Image
-              source={{ uri: currentStory.user?.profile_picture }}
-              style={styles.avatar}
-            />
-            <Surface elevation={0}>
-              <Text style={styles.userName}>{currentStory.user?.full_name}</Text>
-              <Text style={styles.timeAgo}>{moment(currentStory.createdAt).fromNow()}</Text>
-            </Surface>
-          </Surface>
-          <TouchableRipple borderless onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={28} color="#fff" />
-          </TouchableRipple>
-        </Surface>
-
-        {/* Tap Areas: left = prev, right = next */}
-        <Surface elevation={0} style={styles.tapAreas} pointerEvents="box-none">
-          <TouchableRipple borderless
+        {/* Tap Areas: left = previous/restart, right = next */}
+        <View style={styles.tapAreas} pointerEvents="box-none">
+          <Pressable
             style={styles.tapLeft}
             onPress={goPrev}
-            activeOpacity={1}
+            accessibilityRole="button"
+            accessibilityLabel="Previous story"
           />
-          <TouchableRipple borderless
+          <Pressable
             style={styles.tapRight}
             onPress={goNext}
-            activeOpacity={1}
+            accessibilityRole="button"
+            accessibilityLabel="Next story"
           />
-        </Surface>
+        </View>
+
+        {/* Header */}
+        <View
+          style={[styles.header, { top: Math.max(insets.top + 20, 34) }]}
+          pointerEvents="box-none"
+        >
+          <View style={styles.userInfo} pointerEvents="none">
+            {profilePicture ? (
+              <Image
+                source={{ uri: profilePicture }}
+                style={styles.avatar}
+              />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Text style={styles.avatarPlaceholderText}>{avatarLabel}</Text>
+              </View>
+            )}
+            <View>
+              <Text style={styles.userName}>{displayName}</Text>
+              <Text style={styles.timeAgo}>{moment(currentStory.createdAt).fromNow()}</Text>
+            </View>
+          </View>
+          <Pressable
+            onPress={(event) => {
+              event.stopPropagation?.();
+              closeViewer();
+            }}
+            hitSlop={14}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.close', 'Close')}
+            style={({ pressed }) => [
+              styles.closeButton,
+              pressed && styles.closeButtonPressed,
+            ]}
+          >
+            <Ionicons name="close" size={28} color="#fff" />
+          </Pressable>
+        </View>
       </Surface>
     </Modal>
   );
@@ -171,10 +276,6 @@ const styles = {
     height: '100%',
     position: 'absolute',
   },
-  videoPlaceholder: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   storyText: {
     fontSize: 30,
     fontWeight: 'bold',
@@ -186,7 +287,6 @@ const styles = {
   // Progress bars row
   progressBarsRow: {
     position: 'absolute',
-    top: 56,
     left: 8,
     right: 8,
     flexDirection: 'row',
@@ -207,14 +307,14 @@ const styles = {
   // Header
   header: {
     position: 'absolute',
-    top: 68,
     left: 0,
     right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    zIndex: 10,
+    zIndex: 30,
+    elevation: 30,
   },
   userInfo: {
     flexDirection: 'row',
@@ -228,6 +328,16 @@ const styles = {
     borderWidth: 2,
     borderColor: '#fff',
   },
+  avatarPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#312e81',
+  },
+  avatarPlaceholderText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+  },
   userName: {
     fontSize: 15,
     fontWeight: '700',
@@ -238,7 +348,17 @@ const styles = {
     color: 'rgba(255,255,255,0.75)',
   },
   closeButton: {
-    padding: 6,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    zIndex: 40,
+    elevation: 40,
+  },
+  closeButtonPressed: {
+    backgroundColor: 'rgba(0,0,0,0.48)',
   },
   // Tap areas
   tapAreas: {
@@ -248,7 +368,8 @@ const styles = {
     left: 0,
     right: 0,
     flexDirection: 'row',
-    zIndex: 5,
+    zIndex: 20,
+    elevation: 20,
   },
   tapLeft: {
     width: '35%',

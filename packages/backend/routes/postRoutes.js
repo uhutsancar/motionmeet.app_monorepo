@@ -11,6 +11,7 @@ postRouter.post('/like', protect, attachDbUser, likePost);
 postRouter.post('/comment/add', protect, attachDbUser, addComment);
 postRouter.get('/:postId/comments', protect, attachDbUser, getComments);
 postRouter.post('/delete', protect, attachDbUser, deletePost);
+postRouter.delete('/:postId', protect, attachDbUser, deletePost);
 postRouter.delete('/delete/:postId', protect, attachDbUser, deletePost);
 
 export default postRouter

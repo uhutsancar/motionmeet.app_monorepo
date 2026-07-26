@@ -1,28 +1,41 @@
-import { isExerciseList, isFiniteNumber, isNonEmptyString, isOptionalString } from "../utils/validation.js";
+import { isExerciseList, isNonEmptyString, isOptionalString } from "../utils/validation.js";
 import * as workoutService from "../services/workoutService.js";
 import * as quotaService from "../services/quotaService.js";
 import { parsePagination } from "../utils/pagination.js";
 import { validateExerciseReferences } from "../services/exerciseService.js";
+import {
+  buildCanonicalWorkout,
+  normalizeCompletedExercises,
+} from "../utils/workoutMetrics.js";
 
 // Log a completed workout
 export const logWorkout = async (req, res, next) => {
   try {
     const userId = req.userId;
-    const { name, startTime, endTime, durationMinutes, volumeKg, exercises } = req.body || {};
+    const { name, startTime, endTime, exercises } = req.body || {};
 
     const parsedStartTime = new Date(startTime);
-    const parsedEndTime = endTime ? new Date(endTime) : undefined;
+    const parsedEndTime = new Date(endTime);
+    const nowWithClockSkew = Date.now() + 5 * 60 * 1000;
     if (
       !isNonEmptyString(name, 120) ||
       Number.isNaN(parsedStartTime.getTime()) ||
-      (parsedEndTime && (Number.isNaN(parsedEndTime.getTime()) || parsedEndTime < parsedStartTime)) ||
-      !isFiniteNumber(durationMinutes || 0, { min: 0, max: 10080 }) ||
-      !isFiniteNumber(volumeKg || 0, { min: 0, max: 100000000 }) ||
+      Number.isNaN(parsedEndTime.getTime()) ||
+      parsedEndTime < parsedStartTime ||
+      parsedEndTime.getTime() > nowWithClockSkew ||
+      parsedEndTime.getTime() - parsedStartTime.getTime() > 10_080 * 60_000 ||
       !isExerciseList(exercises)
     ) {
       return res.status(400).json({ success: false, message: "Invalid workout data" });
     }
-    if (!(await validateExerciseReferences(exercises, userId))) {
+    const completedExercises = normalizeCompletedExercises(exercises);
+    if (completedExercises.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "A workout must contain at least one completed set",
+      });
+    }
+    if (!(await validateExerciseReferences(completedExercises, userId))) {
       return res.status(400).json({ success: false, message: "Workout contains unavailable exercises" });
     }
 
@@ -54,21 +67,21 @@ export const logWorkout = async (req, res, next) => {
 
     let newWorkout;
     try {
-      newWorkout = await workoutService.createWorkoutWithStatistics({
+      const canonicalWorkout = buildCanonicalWorkout({
         userId,
         name: name.trim(),
         startTime: parsedStartTime,
         endTime: parsedEndTime,
-        durationMinutes: Number(durationMinutes || 0),
-        volumeKg: Number(volumeKg || 0),
-        exercises,
+        exercises: completedExercises,
       });
+      newWorkout =
+        await workoutService.createWorkoutWithStatistics(canonicalWorkout);
     } catch (error) {
       if (reservedBucket) await quotaService.releaseQuota(userId, reservedBucket);
       throw error;
     }
 
-    res.json({ success: true, workout: newWorkout, message: "Workout logged successfully" });
+    res.status(201).json({ success: true, workout: newWorkout, message: "Workout logged successfully" });
   } catch (error) {
     next(error);
   }
@@ -92,9 +105,12 @@ export const getUserWorkouts = async (req, res, next) => {
 export const getWorkoutStats = async (req, res, next) => {
   try {
     const userId = req.userId;
-    const { period = "month" } = req.query; // "week" | "month" | "year"
+    const { period = "month" } = req.query;
 
-    if (!isOptionalString(period, 10) || !["week", "month", "year"].includes(period)) {
+    if (
+      !isOptionalString(period, 20) ||
+      !["week", "month", "calendar_month", "year"].includes(period)
+    ) {
       return res.status(400).json({ success: false, message: "Invalid statistics period" });
     }
 

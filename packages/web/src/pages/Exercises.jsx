@@ -23,12 +23,11 @@ import moment from "moment";
 import { useMuscleGroups } from "../hooks/useMuscleGroups";
 import { useEquipment } from "../hooks/useEquipment";
 import { getExercises, getExerciseStats } from "../services/exerciseService";
-import { BASEURL } from "~/config/env";
+import { resolvePublicMediaUrl } from "@motionmeet/shared";
 import { EmptyState, PageHeader, PageShell } from "~/components/AppPage";
 
 const getMediaUrl = (gifUrl) => {
-  if (!gifUrl) return null;
-  return `${BASEURL}/dataset/${gifUrl.replace(".gif", ".jpg").replace("videos/", "images/")}`;
+  return resolvePublicMediaUrl(gifUrl);
 };
 
 const ExerciseImage = ({ gifUrl, size = 56 }) => {

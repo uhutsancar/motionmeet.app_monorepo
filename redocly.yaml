@@ -1,0 +1,7 @@
+extends:
+  - recommended
+
+rules:
+  # Several read-only reference and health operations intentionally have no
+  # client-error outcome. Document only responses the server can emit.
+  operation-4xx-response: off

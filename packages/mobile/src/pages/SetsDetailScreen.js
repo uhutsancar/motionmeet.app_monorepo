@@ -2,7 +2,7 @@ import React from 'react';
 import { ScrollView, useWindowDimensions } from 'react-native';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { BarChart } from 'react-native-chart-kit';
@@ -17,15 +17,16 @@ const SetsDetailScreen = ({ navigation, route }) => {
   const statsData = route?.params?.statsData ?? null;
   const totalSets = statsData?.totalSets ?? 0;
   const labels = statsData?.stats?.labels ?? [];
-  const reps = statsData?.stats?.reps ?? [];
-  const avgSets = labels.length > 0
-    ? Math.round(reps.reduce((a, b) => a + (b || 0), 0) / labels.length)
+  const sets = statsData?.stats?.sets ?? [];
+  const totalWorkouts = statsData?.totalWorkouts ?? 0;
+  const avgSets = totalWorkouts > 0
+    ? Math.round(totalSets / totalWorkouts)
     : 0;
   const hasData = labels.length > 0;
 
   const chartData = {
     labels: labels.slice(-6),
-    datasets: [{ data: reps.slice(-6).map(v => v || 0) }],
+    datasets: [{ data: sets.slice(-6).map(v => v || 0) }],
   };
 
   return (

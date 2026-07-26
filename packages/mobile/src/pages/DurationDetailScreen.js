@@ -2,7 +2,7 @@ import React from 'react';
 import { ScrollView, useWindowDimensions } from 'react-native';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { BarChart } from 'react-native-chart-kit';
@@ -18,8 +18,9 @@ const DurationDetailScreen = ({ navigation, route }) => {
   const totalDuration = statsData?.totalDuration ?? 0;
   const labels = statsData?.stats?.labels ?? [];
   const durations = statsData?.stats?.durations ?? [];
-  const avgDuration = labels.length > 0
-    ? Math.round(durations.reduce((a, b) => a + (b || 0), 0) / labels.length)
+  const totalWorkouts = statsData?.totalWorkouts ?? 0;
+  const avgDuration = totalWorkouts > 0
+    ? Math.round(totalDuration / totalWorkouts)
     : 0;
   const hasData = labels.length > 0;
 

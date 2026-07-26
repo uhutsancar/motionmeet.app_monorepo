@@ -100,8 +100,8 @@ export const sendMessage = async (messageData, token) => {
   return data;
 };
 
-export const markMessageSeen = async (messageId, token) => {
-  const { data } = await api.post('/api/message/seen', { id: messageId }, {
+export const markMessageSeen = async (fromUserId, token) => {
+  const { data } = await api.post('/api/message/seen', { from_user_id: fromUserId }, {
     headers: { Authorization: `Bearer ${token}` }
   });
   return data;
@@ -137,7 +137,7 @@ export const likePost = async (postId, token) => {
 };
 
 export const deletePost = async (postId, token) => {
-  const { data } = await api.delete(`/api/post/delete/${postId}`, {
+  const { data } = await api.delete(`/api/post/${postId}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
   return data;
@@ -251,12 +251,16 @@ export const updatePlan = async (planId, token) => {
 };
 
 // METADATA
-export const getMuscleGroups = async () => {
-  const { data } = await api.get('/api/muscle-groups');
+export const getMuscleGroups = async (token) => {
+  const { data } = await api.get('/api/muscle-groups', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   return data;
 };
 
-export const getEquipment = async () => {
-  const { data } = await api.get('/api/equipment');
+export const getEquipment = async (token) => {
+  const { data } = await api.get('/api/equipment', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   return data;
 };

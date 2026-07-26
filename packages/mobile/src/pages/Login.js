@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -12,6 +13,7 @@ import { Button, Surface, Text, TextInput, TouchableRipple } from 'react-native-
 import { useAuthContext } from '../context/AuthProvider';
 import { useTheme } from '../context/ThemeContext';
 import MotionMark from '../components/MotionMark';
+import { WEB_URL } from '../config/environment';
 
 const Login = () => {
   const { theme } = useTheme();
@@ -179,7 +181,17 @@ const Login = () => {
                 )}
               />
               {!isLogin && (
-                <Text style={styles.helper}>Use at least 8 characters.</Text>
+                <Text style={styles.helper}>Use at least 10 characters.</Text>
+              )}
+              {isLogin && (
+                <Button
+                  mode="text"
+                  compact
+                  onPress={() => Linking.openURL(`${WEB_URL}/forgot-password`)}
+                  style={{ alignSelf: 'flex-end' }}
+                >
+                  Forgot password?
+                </Button>
               )}
               <Button
                 mode="contained"

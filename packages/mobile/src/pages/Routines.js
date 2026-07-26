@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
@@ -129,6 +129,7 @@ const Routines = ({ navigation }) => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
       <Appbar.Header
+        statusBarHeight={0}
         style={{
           backgroundColor: theme.surface,
           borderBottomWidth: 1,
@@ -198,7 +199,12 @@ const Routines = ({ navigation }) => {
             <Button
               compact
               mode="contained"
-              onPress={() => setShowModal(true)}
+              onPress={() => navigation.navigate('ActiveWorkoutScreen', {
+                routine: {
+                  name: t('routines.quick_workout', 'Quick workout'),
+                  exercises: [],
+                },
+              })}
               style={{ borderRadius: 9 }}
               contentStyle={{ minHeight: 38 }}
               labelStyle={{ fontSize: 12, fontWeight: '800' }}

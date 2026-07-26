@@ -1,4 +1,4 @@
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
@@ -18,15 +18,16 @@ const SetsDetail = () => {
     const statsData = location.state?.statsData ?? null;
 
     const labels = statsData?.stats?.labels ?? [];
-    const reps = statsData?.stats?.reps ?? [];
+    const sets = statsData?.stats?.sets ?? [];
     const totalSets = statsData?.totalSets ?? 0;
-    const avgSets = labels.length > 0
-        ? Math.round(reps.reduce((a, b) => a + (b || 0), 0) / labels.length)
+    const totalWorkouts = statsData?.totalWorkouts ?? 0;
+    const avgSets = totalWorkouts > 0
+        ? Math.round(totalSets / totalWorkouts)
         : 0;
 
     const chartData = labels.map((label, i) => ({
         name: label,
-        value: reps[i] || 0,
+        value: sets[i] || 0,
     }));
 
     const hasData = chartData.length > 0;

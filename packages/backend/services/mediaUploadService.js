@@ -14,6 +14,7 @@ import { deleteMediaOrQueue } from "./mediaDeletionService.js";
 
 const IMAGE_TYPES = new Set([
   "image/jpeg",
+  "image/jpg",
   "image/png",
   "image/webp",
   "image/gif",
@@ -35,8 +36,10 @@ const PURPOSES = {
 };
 
 const transformedUrl = (purpose, key, contentType) => {
+  // Ensure no leading slash to prevent double-slash in the generated URL
+  const cleanKey = key.startsWith('/') ? key.slice(1) : key;
   if (contentType.startsWith("video/")) {
-    return imagekit.url({ path: key });
+    return imagekit.url({ path: cleanKey });
   }
   const transformations = {
     profiles: [{ width: "512" }, { quality: "auto" }, { format: "webp" }],
@@ -46,7 +49,7 @@ const transformedUrl = (purpose, key, contentType) => {
     stories: [{ quality: "auto" }, { format: "webp" }],
   };
   return imagekit.url({
-    path: key,
+    path: cleanKey,
     transformation: transformations[purpose],
     transformationPosition: "query",
   });
@@ -59,6 +62,11 @@ export const createUploadReservation = async ({
   contentType,
   size,
 }) => {
+  if (process.env.MEDIA_UPLOADS_ENABLED === "false") {
+    throw Object.assign(new Error("Media uploads are disabled"), {
+      status: 503,
+    });
+  }
   const rules = PURPOSES[purpose];
   const numericSize = Number(size);
   if (
@@ -134,6 +142,11 @@ export const resolveReservedUploads = async (userId, purpose, value) => {
     throw error;
   }
   if (!keys.length) return [];
+  if (process.env.MEDIA_UPLOADS_ENABLED === "false") {
+    throw Object.assign(new Error("Media uploads are disabled"), {
+      status: 503,
+    });
+  }
   if (keys.some((key) => typeof key !== "string" || key.length > 1024)) {
     const error = Object.assign(new Error("Invalid uploaded media reference"), {
       status: 400,

@@ -22,8 +22,19 @@ export const reserveQuota = async ({
 }) => {
   if (limit === -1) return true;
 
-  const usage = await ensureCounter(userId, bucket, getCurrentCount);
+  let usage = await ensureCounter(userId, bucket, getCurrentCount);
   if (!usage) throw new Error("Quota counter could not be initialized");
+
+  if (usage.count >= limit) {
+    const actualCount = await getCurrentCount();
+    if (actualCount < usage.count) {
+      usage = await Usage.findOneAndUpdate(
+        { _id: usage._id },
+        { count: actualCount },
+        { new: true }
+      );
+    }
+  }
 
   const reserved = await Usage.findOneAndUpdate(
     { _id: usage._id, count: { $lt: limit } },

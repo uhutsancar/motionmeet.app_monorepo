@@ -12,12 +12,12 @@ const initialState = {
 export const fetchPosts = createAsyncThunk(
   'posts/fetchPosts',
   async (argument) => {
-    const { token, cursor = null } =
+    const { token, cursor = null, mode = 'discover' } =
       typeof argument === 'string' ? { token: argument } : argument;
-    const data = await getPosts(token, cursor);
+    const data = await getPosts(token, cursor, mode);
     return data.success
-      ? { posts: data.posts, nextCursor: data.nextCursor, append: Boolean(cursor) }
-      : { posts: [], nextCursor: null, append: Boolean(cursor) };
+      ? { posts: data.posts, nextCursor: data.nextCursor, append: Boolean(cursor), mode }
+      : { posts: [], nextCursor: null, append: Boolean(cursor), mode };
   }
 );
 

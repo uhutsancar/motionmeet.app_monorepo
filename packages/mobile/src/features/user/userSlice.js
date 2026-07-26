@@ -14,13 +14,18 @@ export const fetchUser = createAsyncThunk("user/fetchUser", async (token) => {
 
 export const updateUser = createAsyncThunk(
   "user/update",
-  async ({ userData, token }) => {
-    const { updateUserProfile } = await import("../../api/endpoints");
-    const data = await updateUserProfile(userData, token);
-    if (data.success) {
-      return data.user;
-    } else {
-      throw new Error(data.message);
+  async ({ userData, token }, { rejectWithValue }) => {
+    try {
+      const { updateUserProfile } = await import("../../api/endpoints");
+      const data = await updateUserProfile(userData, token);
+      if (data.success) return data.user;
+      return rejectWithValue(data.message || "Profile update failed");
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message ||
+        error.message ||
+        "Profile update failed",
+      );
     }
   }
 );
@@ -55,7 +60,7 @@ const userSlice = createSlice({
       })
       .addCase(updateUser.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.error.message;
+        state.error = action.payload || action.error.message;
       });
   },
 });

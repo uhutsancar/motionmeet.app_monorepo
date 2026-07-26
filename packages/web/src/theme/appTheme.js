@@ -56,6 +56,7 @@ export const createAppTheme = (mode) => {
     : "rgba(101, 88, 245, 0.10)";
 
   return createTheme({
+    cssVariables: true,
     palette: {
       mode,
       primary: {

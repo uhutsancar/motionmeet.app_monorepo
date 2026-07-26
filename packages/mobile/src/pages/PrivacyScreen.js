@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Alert, Linking, ScrollView, Share, StatusBar, StyleSheet, Switch } from 'react-native';
-import { Button, Dialog, Portal, Surface, Text, TextInput, TouchableRipple } from 'react-native-paper';
+import { Alert, Linking, ScrollView, Share, StatusBar, StyleSheet, Switch , TouchableOpacity} from 'react-native';
+import { Button, Dialog, Portal, Surface, Text, TextInput } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from '../context/AuthProvider';
+import { API_ROUTES } from '@motionmeet/shared';
 import api from '../api/client';
 
 const DEFAULT_PREFS = {
@@ -28,7 +29,7 @@ const PrivacyScreen = ({ navigation }) => {
 
   useEffect(() => {
     let active = true;
-    api.get('/api/user/privacy')
+    api.get(API_ROUTES.user.privacy)
       .then(({ data }) => {
         if (active && data?.privacy) setPrefs(data.privacy);
       })
@@ -48,7 +49,7 @@ const PrivacyScreen = ({ navigation }) => {
     const updated = { ...prefs, [key]: !prefs[key] };
     setPrefs(updated);
     try {
-      const { data } = await api.patch('/api/user/privacy', {
+      const { data } = await api.patch(API_ROUTES.user.privacy, {
         [key]: updated[key],
       });
       if (data?.privacy) setPrefs(data.privacy);
@@ -68,7 +69,7 @@ const PrivacyScreen = ({ navigation }) => {
   const confirmDeleteAccount = async () => {
     try {
       setRequestPending(true);
-      await api.delete('/api/user/account', {
+      await api.delete(API_ROUTES.user.account, {
         data: { password: deletePassword },
       });
       setDeleteDialogOpen(false);
@@ -87,7 +88,7 @@ const PrivacyScreen = ({ navigation }) => {
   const exportData = async () => {
     try {
       setRequestPending(true);
-      const { data } = await api.get('/api/user/export');
+      const { data } = await api.get(API_ROUTES.user.export);
       await Share.share({
         title: `MotionMeet ${t('privacy.export_data', 'Veri Dışa Aktarımı')}`,
         message: typeof data === 'string' ? data : JSON.stringify(data, null, 2),
@@ -123,14 +124,14 @@ const PrivacyScreen = ({ navigation }) => {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       <Surface elevation={0} style={styles.header}>
-        <TouchableRipple borderless style={styles.backBtn} onPress={() => navigation.goBack()}>
+        <TouchableOpacity borderless style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </TouchableRipple>
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('settings.privacy', 'Gizlilik')}</Text>
-        <Surface elevation={0} style={{ width: 40 }} />
+        <Surface elevation={0} style={styles.headerRight} />
       </Surface>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Profile Visibility */}
         <Surface elevation={0} style={styles.section}>
           <Text style={styles.sectionLabel}>{t('privacy.profile_section', 'PROFİL GÖRÜNÜRLÜĞü').toUpperCase()}</Text>
@@ -184,28 +185,28 @@ const PrivacyScreen = ({ navigation }) => {
         <Surface elevation={0} style={styles.section}>
           <Text style={styles.sectionLabel}>{t('privacy.legal_section', 'YASAL').toUpperCase()}</Text>
           <Surface elevation={0} style={styles.card}>
-            <TouchableRipple borderless
+            <TouchableOpacity borderless
               style={[styles.row, styles.rowBorder]}
               onPress={() => Linking.openURL('https://motionmeet.app/privacy')}
             >
               <Text style={styles.rowLabel}>{t('privacy.privacy_policy', 'Gizlilik Politikası')}</Text>
               <Ionicons name="open-outline" size={18} color={theme.textMuted} />
-            </TouchableRipple>
-            <TouchableRipple borderless
+            </TouchableOpacity>
+            <TouchableOpacity borderless
               style={[styles.row, styles.rowBorder]}
               onPress={() => Linking.openURL('https://motionmeet.app/terms')}
             >
               <Text style={styles.rowLabel}>{t('privacy.terms', 'Kullanım Koşulları')}</Text>
               <Ionicons name="open-outline" size={18} color={theme.textMuted} />
-            </TouchableRipple>
-            <TouchableRipple borderless style={[styles.row, styles.rowBorder]} onPress={exportData} disabled={requestPending}>
+            </TouchableOpacity>
+            <TouchableOpacity borderless style={[styles.row, styles.rowBorder]} onPress={exportData} disabled={requestPending}>
               <Text style={styles.rowLabel}>{t('privacy.export_data', 'Verilerimi Dışa Aktar')}</Text>
               <Ionicons name="download-outline" size={18} color={theme.textMuted} />
-            </TouchableRipple>
-            <TouchableRipple borderless style={styles.row} onPress={handleDeleteAccount}>
-              <Text style={[styles.rowLabel, { color: '#ef4444' }]}>{t('privacy.delete_account', 'Hesabı Sil')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity borderless style={styles.row} onPress={handleDeleteAccount}>
+              <Text style={[styles.rowLabel, styles.dangerText]}>{t('privacy.delete_account', 'Hesabı Sil')}</Text>
               <Ionicons name="chevron-forward" size={18} color="#ef4444" />
-            </TouchableRipple>
+            </TouchableOpacity>
           </Surface>
         </Surface>
       </ScrollView>
@@ -270,6 +271,9 @@ const getStyles = (theme) => ({
   rowLabel: { fontSize: 15, fontWeight: '600', color: theme.text },
   rowSub: { fontSize: 12, color: theme.textMuted, marginTop: 2 },
   passwordInput: { marginTop: 16 },
+  headerRight: { width: 40 },
+  scrollContent: { paddingBottom: 40 },
+  dangerText: { color: '#ef4444' },
 });
 
 export default PrivacyScreen;

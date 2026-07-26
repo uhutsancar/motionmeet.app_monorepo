@@ -91,7 +91,7 @@ const CustomExerciseModal = ({ setShowModal, onExerciseCreated }) => {
                             placeholder="e.g. Incline Bench Press"
                             value={form.name}
                             onChange={(e) => setForm({ ...form, name: e.target.value })}
-                            InputProps={{ sx: { borderRadius: 3 } }}
+                            slotProps={{ input: { sx: { borderRadius: 3 } } }}
                         />
 
                         <TextField
@@ -100,7 +100,7 @@ const CustomExerciseModal = ({ setShowModal, onExerciseCreated }) => {
                             fullWidth
                             value={form.muscleGroup}
                             onChange={(e) => setForm({ ...form, muscleGroup: e.target.value })}
-                            InputProps={{ sx: { borderRadius: 3 } }}
+                            slotProps={{ input: { sx: { borderRadius: 3 } } }}
                         >
                             <MenuItem disabled value="All Muscles">All Muscles</MenuItem>
                             {muscleGroupsList.map((mg) => (
@@ -116,7 +116,7 @@ const CustomExerciseModal = ({ setShowModal, onExerciseCreated }) => {
                             fullWidth
                             value={form.equipment}
                             onChange={(e) => setForm({ ...form, equipment: e.target.value })}
-                            InputProps={{ sx: { borderRadius: 3 } }}
+                            slotProps={{ input: { sx: { borderRadius: 3 } } }}
                         >
                             <MenuItem disabled value="All Equipment">All Equipment</MenuItem>
                             {equipmentListItems.map((eq) => (

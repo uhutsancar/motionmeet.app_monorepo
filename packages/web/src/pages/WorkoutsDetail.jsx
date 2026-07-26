@@ -1,4 +1,4 @@
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
@@ -18,8 +18,7 @@ const WorkoutsDetail = () => {
     const statsData = location.state?.statsData ?? null;
 
     const labels = statsData?.stats?.labels ?? [];
-    const volumes = statsData?.stats?.volumes ?? [];
-    const workoutsPerLabel = volumes.map(v => (v > 0 ? 1 : 0));
+    const workoutsPerLabel = statsData?.stats?.workouts ?? [];
     const totalWorkouts = statsData?.totalWorkouts ?? 0;
     const avgPerSession = labels.length > 0 ? (totalWorkouts / labels.length).toFixed(1) : 0;
 
@@ -63,7 +62,7 @@ const WorkoutsDetail = () => {
                         <Typography variant="caption" color="text.secondary">{t('monthly_report.chart_unit_workouts', 'seans')}</Typography>
                     </Paper>
                     <Paper variant="outlined" sx={{ p: 3, borderRadius: 4 }}>
-                        <Typography variant="body2" fontWeight={600} color="text.secondary" mb={2}>{t('monthly_report.avg_per_session', 'Seans Başına Ort.')}</Typography>
+                        <Typography variant="body2" fontWeight={600} color="text.secondary" mb={2}>{t('monthly_report.avg_per_active_day', 'Aktif Gün Başına Ort.')}</Typography>
                         <Typography variant="h4" fontWeight={900}>{avgPerSession}</Typography>
                         <Typography variant="caption" color="text.secondary">{t('monthly_report.chart_unit_workouts', 'seans')}</Typography>
                     </Paper>

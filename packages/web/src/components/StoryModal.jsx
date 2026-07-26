@@ -20,7 +20,7 @@ import { uploadMedia } from "~/api/mediaUpload";
 
 const BACKGROUND_COLORS = ["#0f172a", "#1e1b4b", "#312e81", "#4c1d95", "#581c87", "#701a75", "#831843"];
 const MAX_VIDEO_DURATION = 60;
-const MAX_MEDIA_SIZE_MB = 50;
+const MAX_MEDIA_SIZE_MB = 20;
 
 const StoryModal = ({ setShowModal, fetchStories }) => {
   const { t } = useTranslation();

@@ -4,7 +4,7 @@ import moment from "moment";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import api from "~/api/axios";
 import { MessageSquare } from "lucide-react";
 

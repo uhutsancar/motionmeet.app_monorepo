@@ -4,6 +4,8 @@ packages:
 overrides:
   "postcss@<8.5.12": "^8.5.12"
   "uuid@<11.1.1": "^11.1.1"
+  "brace-expansion@<=5.0.7": "5.0.8"
+  "tar@<=7.5.20": "7.5.21"
 
 allowBuilds:
   browser-tabs-lock: false
@@ -13,3 +15,6 @@ allowBuilds:
   protobufjs: false
   sharp: true
   utf-8-validate: false
+
+patchedDependencies:
+  minimatch@3.1.5: patches/minimatch@3.1.5.patch

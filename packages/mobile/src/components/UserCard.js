@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Alert, Image, View } from 'react-native';
 import { Surface, Text, TouchableRipple } from 'react-native-paper';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useDispatch, useSelector } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 import { useAuthContext } from '../context/AuthProvider';

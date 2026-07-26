@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 
 const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+const configuredWebUrl = process.env.EXPO_PUBLIC_WEB_URL?.trim();
 const developmentFallback = Platform.OS === 'android'
   ? 'http://10.0.2.2:4000'
   : 'http://localhost:4000';
@@ -40,6 +41,7 @@ const alignWebLoopbackHost = (value) => {
 
 export const API_URL = alignWebLoopbackHost(configuredApiUrl || developmentFallback);
 export const SOCKET_URL = API_URL;
+export const WEB_URL = (configuredWebUrl || 'http://localhost:5173').replace(/\/+$/, '');
 
 if (!configuredApiUrl) {
   const message =
@@ -62,7 +64,7 @@ if (!/^https?:\/\//i.test(API_URL)) {
 
 if (
   (typeof __DEV__ === 'undefined' || !__DEV__) &&
-  !/^https:\/\//i.test(API_URL)
+  (!/^https:\/\//i.test(API_URL) || !/^https:\/\//i.test(WEB_URL))
 ) {
-  throw new Error('[Config] Production mobile builds require an HTTPS API origin.');
+  throw new Error('[Config] Production mobile builds require HTTPS API and web origins.');
 }

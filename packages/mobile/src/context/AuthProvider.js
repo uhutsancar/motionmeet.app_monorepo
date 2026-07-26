@@ -24,29 +24,21 @@ const isCompleteSession = (data) =>
   Boolean(
     data?.success &&
     data?.token &&
-    data?.refreshToken &&
+    (isWeb || data?.refreshToken) &&
     data?.user
   );
 
 const tokenStorage = {
   getItemAsync: async (key) => {
-    if (isWeb) {
-      return typeof localStorage === 'undefined' ? null : localStorage.getItem(key);
-    }
+    if (isWeb) return null;
     return SecureStore.getItemAsync(key);
   },
   setItemAsync: async (key, value) => {
-    if (isWeb) {
-      if (typeof localStorage !== 'undefined') localStorage.setItem(key, value);
-      return;
-    }
+    if (isWeb) return;
     await SecureStore.setItemAsync(key, value);
   },
   deleteItemAsync: async (key) => {
-    if (isWeb) {
-      if (typeof localStorage !== 'undefined') localStorage.removeItem(key);
-      return;
-    }
+    if (isWeb) return;
     await SecureStore.deleteItemAsync(key);
   },
 };
@@ -54,9 +46,10 @@ const tokenStorage = {
 const authApi = axios.create({
   baseURL: API_URL,
   timeout: 30000,
+  withCredentials: isWeb,
   headers: {
     'Content-Type': 'application/json',
-    'X-Client-Platform': 'mobile',
+    'X-Client-Platform': isWeb ? 'web' : 'mobile',
   },
 });
 
@@ -94,14 +87,14 @@ export const AuthProvider = ({ children }) => {
 
     const expiresAt = Number(data.accessTokenExpiresAt) || 0;
     accessTokenRef.current = data.token;
-    refreshTokenRef.current = data.refreshToken;
+    refreshTokenRef.current = isWeb ? null : data.refreshToken;
     accessExpiryRef.current = expiresAt;
     setToken(data.token);
     setUser(data.user);
 
     await Promise.all([
       tokenStorage.setItemAsync(ACCESS_TOKEN_KEY, data.token),
-      tokenStorage.setItemAsync(REFRESH_TOKEN_KEY, data.refreshToken),
+      ...(isWeb ? [] : [tokenStorage.setItemAsync(REFRESH_TOKEN_KEY, data.refreshToken)]),
       tokenStorage.setItemAsync(ACCESS_EXPIRY_KEY, String(expiresAt)),
       tokenStorage.deleteItemAsync(LEGACY_TOKEN_KEY),
     ]);
@@ -110,13 +103,17 @@ export const AuthProvider = ({ children }) => {
   const refreshAccessToken = useCallback(async () => {
     if (refreshInFlightRef.current) return refreshInFlightRef.current;
 
-    const refreshToken =
-      refreshTokenRef.current ||
-      await tokenStorage.getItemAsync(REFRESH_TOKEN_KEY);
-    if (!refreshToken) return null;
+    const refreshToken = isWeb
+      ? null
+      : refreshTokenRef.current ||
+        await tokenStorage.getItemAsync(REFRESH_TOKEN_KEY);
+    if (!isWeb && !refreshToken) return null;
 
     refreshInFlightRef.current = authApi
-      .post(API_ROUTES.auth.refresh, { refreshToken })
+      .post(
+        API_ROUTES.auth.refresh,
+        isWeb ? undefined : { refreshToken }
+      )
       .then(async ({ data }) => {
         await saveSession(data);
         return data.token;
@@ -154,6 +151,10 @@ export const AuthProvider = ({ children }) => {
 
     const restoreSession = async () => {
       try {
+        if (isWeb) {
+          await refreshAccessToken();
+          return;
+        }
         const [storedAccessToken, storedRefreshToken, storedExpiry] =
           await Promise.all([
             tokenStorage.getItemAsync(ACCESS_TOKEN_KEY),
@@ -236,9 +237,10 @@ export const AuthProvider = ({ children }) => {
   const logout = useCallback(async () => {
     const refreshToken = refreshTokenRef.current;
     try {
-      if (refreshToken) {
-        await authApi.post(API_ROUTES.auth.logout, { refreshToken });
-      }
+      await authApi.post(
+        API_ROUTES.auth.logout,
+        isWeb ? undefined : { refreshToken }
+      );
     } catch {
       // Local sign-out must still complete if the server is unavailable.
     } finally {

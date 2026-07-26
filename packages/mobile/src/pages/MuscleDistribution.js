@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, ActivityIndicator, useWindowDimensions } from 'react-native';
-import { Surface, TouchableRipple, Text } from 'react-native-paper';
+import { ScrollView, ActivityIndicator, useWindowDimensions , TouchableOpacity} from 'react-native';
+import { Surface, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
-import Svg, { Polygon, Line, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, Polygon, Line, Text as SvgText } from 'react-native-svg';
 import { getWorkoutStats } from '../api/endpoints';
 import { useAuthContext } from '../context/AuthProvider';
 import { useMuscleGroups } from '../hooks/useMuscleGroups';
@@ -17,7 +17,8 @@ const MuscleDistribution = ({ navigation }) => {
   const RADIUS = SIZE / 2 - 30;
   const { t } = useTranslation();
   const { theme } = useTheme();
-  const styles = getStyles(theme);
+  const chartAccent = theme.dark ? '#60A5FA' : '#2563EB';
+  const styles = getStyles(theme, chartAccent);
   const { data: muscleGroupsList, isLoading: isMusclesLoading } = useMuscleGroups();
   const { getToken } = useAuthContext();
 
@@ -26,7 +27,11 @@ const MuscleDistribution = ({ navigation }) => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const periodLabels = { week: 'Son 7 Gün', month: 'Son 30 Gün', year: 'Son 1 Yıl' };
+  const periodLabels = {
+    week: t('statistics.last_7_days', 'Son 7 gün'),
+    month: t('statistics.last_30_days', 'Son 30 gün'),
+    year: t('statistics.last_year', 'Son 1 yıl'),
+  };
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -58,37 +63,31 @@ const MuscleDistribution = ({ navigation }) => {
 
   const currentPolygon = values.map((v, i) => getPoint(v, i)).join(' ');
   const gridLevels = [0.2, 0.4, 0.6, 0.8, 1.0];
+  const hasDistribution = values.some(value => value > 0);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Header */}
       <Surface elevation={0} style={styles.header}>
-        <TouchableRipple borderless style={styles.iconBtn} onPress={() => navigation.goBack()}>
+        <TouchableOpacity borderless style={styles.iconBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </TouchableRipple>
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('statistics.muscle_dist', 'Kas Dağılımı')}</Text>
-        <Surface elevation={0} style={{ flexDirection: 'row', gap: 10 }}>
-          <TouchableRipple borderless style={styles.iconBtn}>
-            <Ionicons name="help-circle-outline" size={24} color={theme.textMuted} />
-          </TouchableRipple>
-          <TouchableRipple borderless style={styles.iconBtn}>
-            <Ionicons name="share-outline" size={24} color={theme.textMuted} />
-          </TouchableRipple>
-        </Surface>
+        <Surface elevation={0} style={styles.iconBtn} />
       </Surface>
 
       <ScrollView contentContainerStyle={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
 
         {/* Period dropdown */}
         <Surface elevation={0} style={{ alignSelf: 'center', marginTop: 10 }}>
-          <TouchableRipple borderless style={styles.dropdownBtn} onPress={() => setShowDropdown(!showDropdown)}>
+          <TouchableOpacity borderless style={styles.dropdownBtn} onPress={() => setShowDropdown(!showDropdown)}>
             <Text style={styles.dropdownText}>{periodLabels[period]}</Text>
             <Ionicons name="chevron-down" size={18} color={theme.textMuted} />
-          </TouchableRipple>
+          </TouchableOpacity>
           {showDropdown && (
             <Surface elevation={0} style={[styles.dropdownMenu, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               {Object.entries(periodLabels).map(([key, label]) => (
-                <TouchableRipple borderless
+                <TouchableOpacity borderless
                   key={key}
                   style={[styles.dropdownItem, { borderBottomColor: theme.border }]}
                   onPress={() => { setPeriod(key); setShowDropdown(false); }}
@@ -96,7 +95,7 @@ const MuscleDistribution = ({ navigation }) => {
                   <Text style={{ color: period === key ? theme.primary : theme.text, fontWeight: period === key ? 'bold' : 'normal' }}>
                     {label}
                   </Text>
-                </TouchableRipple>
+                </TouchableOpacity>
               ))}
             </Surface>
           )}
@@ -132,12 +131,32 @@ const MuscleDistribution = ({ navigation }) => {
               ))}
 
               {/* Data polygon */}
-              <Polygon
-                points={currentPolygon}
-                stroke={theme.primary}
-                strokeWidth="2"
-                fill={theme.primary + '25'}
-              />
+              {hasDistribution && (
+                <>
+                  <Polygon
+                    points={currentPolygon}
+                    stroke={chartAccent}
+                    strokeWidth="3"
+                    strokeLinejoin="round"
+                    fill={`${chartAccent}28`}
+                  />
+                  {values.map((value, index) => {
+                    const pointRadius = RADIUS * Math.max(value, 0.03);
+                    return (
+                      <Circle
+                        key={`${MUSCLE_KEYS[index]}-point`}
+                        cx={CENTER + pointRadius * Math.cos(angles[index])}
+                        cy={CENTER + pointRadius * Math.sin(angles[index])}
+                        r="3.5"
+                        fill={theme.surface}
+                        stroke={chartAccent}
+                        strokeWidth="2.5"
+                      />
+                    );
+                  })}
+                </>
+              )}
+              <Circle cx={CENTER} cy={CENTER} r="2.5" fill={chartAccent} />
 
               {/* Labels */}
               {MUSCLE_KEYS.map((key, i) => {
@@ -149,7 +168,8 @@ const MuscleDistribution = ({ navigation }) => {
                     key={`label-${i}`}
                     x={x} y={y + 4}
                     fontSize="10"
-                    fill={theme.textMuted}
+                    fontWeight="600"
+                    fill={theme.textSecondary}
                     textAnchor="middle"
                   >
                     {t(`muscle_groups.${key}`, mg?.name || key)}
@@ -161,13 +181,12 @@ const MuscleDistribution = ({ navigation }) => {
 
           <Surface elevation={0} style={styles.legendRow}>
             <Surface elevation={0} style={styles.legendItem}>
-              <Surface elevation={0} style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.primary }} />
+              <Surface elevation={0} style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: chartAccent }} />
               <Text style={styles.legendText}>{t('statistics.current', 'Güncel')}</Text>
             </Surface>
-            <Surface elevation={0} style={styles.legendItem}>
-              <Surface elevation={0} style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.textMuted }} />
-              <Text style={styles.legendText}>{t('statistics.previous', 'Önceki')}</Text>
-            </Surface>
+            {!hasDistribution && (
+              <Text style={styles.legendText}>{t('monthly_report.no_data', 'Bu dönem için veri yok')}</Text>
+            )}
           </Surface>
         </Surface>
 
@@ -176,22 +195,22 @@ const MuscleDistribution = ({ navigation }) => {
           <Surface elevation={0} style={styles.statSquare}>
             <Text style={styles.statLabel}>{t('statistics.workouts', 'Antrenman')}</Text>
             <Text style={styles.statLargeVal}>{stats?.totalWorkouts ?? 0}</Text>
-            <Text style={styles.statDiffPos}>↑ {stats?.totalWorkouts ?? 0}</Text>
+            <Text style={styles.statDiffPos}>● {t('statistics.current_period', 'Güncel dönem')}</Text>
           </Surface>
           <Surface elevation={0} style={styles.statSquare}>
             <Text style={styles.statLabel}>{t('statistics.duration', 'Süre')}</Text>
             <Text style={styles.statLargeVal}>{stats?.totalDuration ?? 0}<Text style={{ fontSize: 14, fontWeight: 'normal' }}>min</Text></Text>
-            <Text style={styles.statDiffPos}>↑ {stats?.totalDuration ?? 0}min</Text>
+            <Text style={styles.statDiffPos}>● {t('statistics.current_period', 'Güncel dönem')}</Text>
           </Surface>
           <Surface elevation={0} style={styles.statSquare}>
             <Text style={styles.statLabel}>{t('statistics.volume', 'Hacim')}</Text>
             <Text style={styles.statLargeVal}>{stats?.totalVolume ?? 0} <Text style={{ fontSize: 14, fontWeight: 'normal' }}>kg</Text></Text>
-            <Text style={styles.statDiffPos}>↑ {stats?.totalVolume ?? 0} kg</Text>
+            <Text style={styles.statDiffPos}>● {t('statistics.current_period', 'Güncel dönem')}</Text>
           </Surface>
           <Surface elevation={0} style={styles.statSquare}>
             <Text style={styles.statLabel}>{t('statistics.sets', 'Set')}</Text>
             <Text style={styles.statLargeVal}>{stats?.totalSets ?? 0}</Text>
-            <Text style={styles.statDiffPos}>↑ {stats?.totalSets ?? 0}</Text>
+            <Text style={styles.statDiffPos}>● {t('statistics.current_period', 'Güncel dönem')}</Text>
           </Surface>
         </Surface>
 
@@ -200,7 +219,7 @@ const MuscleDistribution = ({ navigation }) => {
   );
 };
 
-const getStyles = (theme) => ({
+const getStyles = (theme, chartAccent) => ({
   container: { flex: 1, backgroundColor: theme.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -219,7 +238,15 @@ const getStyles = (theme) => ({
     borderRadius: 12, borderWidth: 1, overflow: 'hidden', zIndex: 100,
   },
   dropdownItem: { padding: 14, borderBottomWidth: 1 },
-  chartContainer: { alignItems: 'center', marginTop: 30 },
+  chartContainer: {
+    alignItems: 'center',
+    marginTop: 24,
+    paddingTop: 18,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.surface,
+  },
   legendRow: { flexDirection: 'row', gap: 16, marginTop: 10, marginBottom: 20 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendText: { fontSize: 12, color: theme.textMuted },
@@ -230,7 +257,7 @@ const getStyles = (theme) => ({
   },
   statLabel: { fontSize: 15, color: theme.textMuted, fontWeight: '500', marginBottom: 12 },
   statLargeVal: { fontSize: 22, fontWeight: 'bold', color: theme.text, marginBottom: 4 },
-  statDiffPos: { fontSize: 12, color: '#34d399', fontWeight: 'bold' }
+  statDiffPos: { fontSize: 12, color: chartAccent, fontWeight: 'bold' }
 });
 
 export default MuscleDistribution;

@@ -1,4 +1,4 @@
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
@@ -20,8 +20,9 @@ const DurationDetail = () => {
     const labels = statsData?.stats?.labels ?? [];
     const durations = statsData?.stats?.durations ?? [];
     const totalDuration = statsData?.totalDuration ?? 0;
-    const avgDuration = labels.length > 0
-        ? Math.round(durations.reduce((a, b) => a + (b || 0), 0) / labels.length)
+    const totalWorkouts = statsData?.totalWorkouts ?? 0;
+    const avgDuration = totalWorkouts > 0
+        ? Math.round(totalDuration / totalWorkouts)
         : 0;
 
     const chartData = labels.map((label, i) => ({

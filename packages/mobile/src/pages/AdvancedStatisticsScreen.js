@@ -1,100 +1,405 @@
-import React, { useCallback, useState, useEffect, useMemo } from 'react';
-import { ScrollView } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ScrollView, View, useWindowDimensions } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { BarChart, LineChart } from 'react-native-chart-kit';
 import { useTranslation } from 'react-i18next';
+import {
+  ActivityIndicator,
+  Appbar,
+  Chip,
+  Surface,
+  Text,
+} from 'react-native-paper';
 import { useTheme } from '../context/ThemeContext';
-import { useAuthContext } from "../context/AuthProvider";
-import endpoints from '../api/endpoints';
-import { Appbar, Surface, Text, ActivityIndicator, useTheme as usePaperTheme } from 'react-native-paper';
+import { useAuthContext } from '../context/AuthProvider';
+import { getWorkoutStats } from '../api/endpoints';
+
+const MetricCard = ({ icon, label, value, unit, color, theme }) => (
+  <Surface
+    elevation={0}
+    style={{
+      width: '48%',
+      minHeight: 94,
+      padding: 14,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.surface,
+    }}
+  >
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <View
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 9,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: `${color}18`,
+        }}
+      >
+        <Ionicons name={icon} size={17} color={color} />
+      </View>
+      <Text style={{ flex: 1, color: theme.textMuted, fontSize: 11, fontWeight: '700' }}>
+        {label}
+      </Text>
+    </View>
+    <Text
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      style={{ color: theme.text, fontSize: 21, fontWeight: '900', marginTop: 9 }}
+    >
+      {Number(value || 0).toLocaleString()}
+      {unit ? <Text style={{ color: theme.textMuted, fontSize: 11, fontWeight: '700' }}> {unit}</Text> : null}
+    </Text>
+  </Surface>
+);
+
+const ChartCard = ({ icon, title, color, theme, children }) => (
+  <Surface
+    elevation={0}
+    style={{
+      paddingVertical: 16,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.surface,
+    }}
+  >
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, marginBottom: 12 }}>
+      <Ionicons name={icon} size={18} color={color} />
+      <Text style={{ color: theme.text, fontSize: 15, fontWeight: '800' }}>{title}</Text>
+    </View>
+    {children}
+  </Surface>
+);
 
 const AdvancedStatisticsScreen = ({ navigation }) => {
+  const { width } = useWindowDimensions();
   const { t } = useTranslation();
   const { theme } = useTheme();
-  const paperTheme = usePaperTheme();
   const { getToken } = useAuthContext();
-  
+  const [period, setPeriod] = useState('month');
+  const [statsData, setStatsData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [muscleData, setMuscleData] = useState([]);
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  const chartWidth = Math.max(260, Math.min(width - 50, 670));
+  const blue = theme.dark ? '#60A5FA' : '#2563EB';
+  const green = '#22A06B';
+  const purple = '#8B5CF6';
 
   const fetchStats = useCallback(async () => {
+    setLoading(true);
+    setLoadFailed(false);
     try {
       const token = await getToken();
-      const data = await endpoints.getWorkoutStats('month', token);
-      if (data.success && data.muscleDistribution) {
-        const formatted = Object.entries(data.muscleDistribution)
-          .map(([name, val]) => ({ name, value: Math.round(val * 100) }))
-          .sort((a, b) => b.value - a.value);
-        setMuscleData(formatted);
+      const data = await getWorkoutStats(period, token);
+      if (data.success) {
+        setStatsData(data);
+      } else {
+        setLoadFailed(true);
       }
-    } catch (error) {
-      console.log('Error fetching advanced stats', error);
+    } catch {
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
-  }, [getToken]);
+  }, [getToken, period]);
 
   useEffect(() => {
-    fetchStats();
+    let active = true;
+    const load = async () => {
+      if (!active) return;
+      await fetchStats();
+    };
+    load();
+    return () => {
+      active = false;
+    };
   }, [fetchStats]);
 
-  const styles = useMemo(() => ({
-    container: { flex: 1, backgroundColor: theme.background },
-    header: {
-      backgroundColor: theme.background,
-      borderBottomWidth: 1, 
-      borderBottomColor: theme.border,
-      elevation: 0,
+  const chartData = useMemo(() => {
+    const stats = statsData?.stats || {};
+    const labels = stats.labels || [];
+    const pointLimit = period === 'year' ? 12 : period === 'week' ? 7 : 10;
+    const start = Math.max(0, labels.length - pointLimit);
+    return {
+      labels: labels.slice(start),
+      volumes: (stats.volumes || []).slice(start),
+      reps: (stats.reps || []).slice(start),
+      durations: (stats.durations || []).slice(start),
+    };
+  }, [period, statsData]);
+
+  const safeSeries = (values) => (
+    values.length ? values.map(value => Number(value) || 0) : [0]
+  );
+  const safeLabels = chartData.labels.length ? chartData.labels : [''];
+  const totalReps = (statsData?.stats?.reps || []).reduce((sum, value) => sum + (Number(value) || 0), 0);
+  const hasData = (statsData?.totalWorkouts || 0) > 0;
+  const muscleData = Object.entries(statsData?.muscleDistribution || {})
+    .map(([name, value]) => ({ name, value: Math.round((Number(value) || 0) * 100) }))
+    .sort((a, b) => b.value - a.value);
+
+  const chartConfig = (color) => ({
+    backgroundGradientFrom: theme.surface,
+    backgroundGradientTo: theme.surface,
+    decimalPlaces: 0,
+    color: () => color,
+    labelColor: () => theme.textMuted,
+    propsForBackgroundLines: {
+      stroke: theme.border,
+      strokeDasharray: '4',
     },
-    headerTitle: { fontSize: 17, fontWeight: '700', color: theme.text },
-    content: { padding: 16 },
-    card: {
-      backgroundColor: theme.surface, borderRadius: 16, padding: 20,
-      borderWidth: 1, borderColor: theme.border,
+    propsForDots: {
+      r: '3',
+      strokeWidth: '2',
+      stroke: color,
     },
-    row: { marginBottom: 20, backgroundColor: 'transparent' },
-    rowInfo: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, backgroundColor: 'transparent' },
-    muscleName: { fontWeight: '700', color: theme.text },
-    muscleValue: { fontWeight: '800', color: theme.primary },
-    barBackground: { height: 10, backgroundColor: theme.surfaceLight, borderRadius: 5, overflow: 'hidden' },
-    barFill: { height: '100%', borderRadius: 5 },
-    emptyState: { alignItems: 'center', marginTop: 60, backgroundColor: 'transparent' },
-    emptyText: { marginTop: 12, color: theme.textMuted }
-  }), [theme]);
+    barPercentage: 0.55,
+  });
+
+  const periods = [
+    { value: 'week', label: t('statistics.week', 'Week') },
+    { value: 'month', label: t('statistics.month', 'Month') },
+    { value: 'year', label: t('statistics.year', 'Year') },
+  ];
 
   return (
-    <Surface style={styles.container}>
-      <Appbar.Header style={styles.header}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
+      <Appbar.Header
+        statusBarHeight={0}
+        style={{
+          backgroundColor: theme.background,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.border,
+          elevation: 0,
+        }}
+      >
         <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
-        <Appbar.Content title={t('statistics.sets_per_muscle', 'Kas grubu başına set')} titleStyle={styles.headerTitle} />
+        <Appbar.Content
+          title={t('statistics.advanced', 'Advanced statistics')}
+          titleStyle={{ color: theme.text, fontSize: 18, fontWeight: '800' }}
+        />
       </Appbar.Header>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          width: '100%',
+          maxWidth: 720,
+          alignSelf: 'center',
+          padding: 16,
+          paddingBottom: 36,
+          gap: 14,
+        }}
+      >
+        <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 19 }}>
+          {t('statistics.advanced_desc', 'Volume, set, repetition and duration details.')}
+        </Text>
+
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {periods.map(item => {
+            const selected = period === item.value;
+            return (
+              <Chip
+                key={item.value}
+                selected={selected}
+                onPress={() => setPeriod(item.value)}
+                mode="outlined"
+                style={{
+                  flex: 1,
+                  borderColor: selected ? blue : theme.border,
+                  backgroundColor: selected ? blue : theme.surface,
+                }}
+                textStyle={{ color: selected ? '#FFFFFF' : theme.textSecondary, fontWeight: '800' }}
+              >
+                {item.label}
+              </Chip>
+            );
+          })}
+        </View>
+
         {loading ? (
-          <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 50 }} />
-        ) : muscleData.length === 0 ? (
-          <Surface style={styles.emptyState} elevation={0}>
-             <Ionicons name="bar-chart-outline" size={48} color={theme.textMuted} />
-             <Text variant="bodyLarge" style={styles.emptyText}>{t('common.no_data', 'Veri bulunamadı')}</Text>
+          <View style={{ minHeight: 320, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator size="large" color={blue} />
+          </View>
+        ) : loadFailed ? (
+          <Surface
+            elevation={0}
+            style={{
+              minHeight: 220,
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 24,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+            }}
+          >
+            <Ionicons name="cloud-offline-outline" size={38} color={theme.textMuted} />
+            <Text style={{ color: theme.text, fontWeight: '800', marginTop: 12 }}>
+              {t('statistics.load_failed', 'Statistics could not be loaded.')}
+            </Text>
+            <Chip mode="outlined" onPress={fetchStats} style={{ marginTop: 14 }}>
+              {t('common.retry', 'Retry')}
+            </Chip>
+          </Surface>
+        ) : !hasData ? (
+          <Surface
+            elevation={0}
+            style={{
+              minHeight: 220,
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 24,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+            }}
+          >
+            <Ionicons name="analytics-outline" size={40} color={theme.textMuted} />
+            <Text style={{ color: theme.text, fontWeight: '800', marginTop: 12 }}>
+              {t('common.no_data', 'No data yet')}
+            </Text>
+            <Text style={{ color: theme.textMuted, fontSize: 12, textAlign: 'center', marginTop: 5 }}>
+              {t('statistics.log_more_workouts', 'Complete workouts to see your statistics here.')}
+            </Text>
           </Surface>
         ) : (
-          <Surface style={styles.card} elevation={2}>
-            {muscleData.map((item, index) => {
-              const translatedName = t(`statistics.muscle_${item.name.toLowerCase()}`, item.name);
-              return (
-              <Surface key={index} style={styles.row} elevation={0}>
-                <Surface style={styles.rowInfo} elevation={0}>
-                  <Text variant="titleMedium" style={styles.muscleName}>{translatedName}</Text>
-                  <Text variant="titleMedium" style={styles.muscleValue}>{item.value}%</Text>
-                </Surface>
-                <Surface style={styles.barBackground} elevation={0}>
-                  <Surface style={[styles.barFill, { width: `${item.value}%`, backgroundColor: theme.primary }]} elevation={0} />
-                </Surface>
-              </Surface>
-            )})}
-          </Surface>
+          <>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between' }}>
+              <MetricCard
+                icon="trending-up-outline"
+                label={t('statistics.volume', 'Volume')}
+                value={statsData?.totalVolume}
+                unit={t('common.kg', 'kg')}
+                color={blue}
+                theme={theme}
+              />
+              <MetricCard
+                icon="repeat-outline"
+                label={t('profile.reps', 'Repetitions')}
+                value={totalReps}
+                unit={t('routines.reps', 'reps').toLowerCase()}
+                color={green}
+                theme={theme}
+              />
+              <MetricCard
+                icon="time-outline"
+                label={t('statistics.duration', 'Duration')}
+                value={statsData?.totalDuration}
+                unit={t('common.min', 'min')}
+                color="#3284FF"
+                theme={theme}
+              />
+              <MetricCard
+                icon="layers-outline"
+                label={t('statistics.sets', 'Sets')}
+                value={statsData?.totalSets}
+                unit=""
+                color={purple}
+                theme={theme}
+              />
+            </View>
+
+            <ChartCard
+              icon="trending-up-outline"
+              title={t('statistics.volume', 'Volume')}
+              color={blue}
+              theme={theme}
+            >
+              <LineChart
+                data={{ labels: safeLabels, datasets: [{ data: safeSeries(chartData.volumes) }] }}
+                width={chartWidth}
+                height={220}
+                fromZero
+                bezier
+                withShadow={false}
+                chartConfig={chartConfig(blue)}
+                style={{ marginLeft: -6, borderRadius: 14 }}
+              />
+            </ChartCard>
+
+            <ChartCard
+              icon="repeat-outline"
+              title={t('profile.reps', 'Repetitions')}
+              color={green}
+              theme={theme}
+            >
+              <BarChart
+                data={{ labels: safeLabels, datasets: [{ data: safeSeries(chartData.reps) }] }}
+                width={chartWidth}
+                height={210}
+                fromZero
+                showValuesOnTopOfBars
+                chartConfig={chartConfig(green)}
+                style={{ marginLeft: -6, borderRadius: 14 }}
+              />
+            </ChartCard>
+
+            <ChartCard
+              icon="time-outline"
+              title={t('statistics.duration', 'Duration')}
+              color="#3284FF"
+              theme={theme}
+            >
+              <LineChart
+                data={{ labels: safeLabels, datasets: [{ data: safeSeries(chartData.durations) }] }}
+                width={chartWidth}
+                height={210}
+                fromZero
+                withShadow={false}
+                chartConfig={chartConfig('#3284FF')}
+                style={{ marginLeft: -6, borderRadius: 14 }}
+              />
+            </ChartCard>
+
+            <Surface
+              elevation={0}
+              style={{
+                padding: 16,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: theme.border,
+                backgroundColor: theme.surface,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                <Ionicons name="body-outline" size={18} color={purple} />
+                <Text style={{ color: theme.text, fontSize: 15, fontWeight: '800' }}>
+                  {t('statistics.muscle_dist', 'Muscle distribution')}
+                </Text>
+              </View>
+              {muscleData.map(item => (
+                <View key={item.name} style={{ marginBottom: 14 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={{ color: theme.textSecondary, fontSize: 12, fontWeight: '700' }}>
+                      {t(`muscle_groups.${item.name}`, item.name)}
+                    </Text>
+                    <Text style={{ color: blue, fontSize: 12, fontWeight: '900' }}>{item.value}%</Text>
+                  </View>
+                  <View style={{ height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: theme.surfaceLight }}>
+                    <View
+                      style={{
+                        width: `${item.value}%`,
+                        height: '100%',
+                        borderRadius: 4,
+                        backgroundColor: blue,
+                      }}
+                    />
+                  </View>
+                </View>
+              ))}
+            </Surface>
+          </>
         )}
       </ScrollView>
-    </Surface>
+    </SafeAreaView>
   );
 };
 

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, ScrollView, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import {
   ActivityIndicator,
   Appbar,
@@ -134,6 +134,7 @@ const Profile = ({ route, navigation }) => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
       <Appbar.Header
+        statusBarHeight={0}
         style={{
           backgroundColor: theme.surface,
           borderBottomWidth: 1,
@@ -165,33 +166,47 @@ const Profile = ({ route, navigation }) => {
         <Surface
           elevation={0}
           style={{
-            padding: 16,
             borderRadius: 12,
             borderWidth: 1,
             borderColor: theme.border,
             backgroundColor: theme.surface,
+            overflow: 'hidden',
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ height: 126, backgroundColor: theme.primarySoft }}>
+            {user?.cover_photo ? (
+              <Image source={{ uri: user.cover_photo }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+            ) : (
+              <View style={{ flex: 1, backgroundColor: theme.primarySoft }} />
+            )}
+            <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(8,10,14,.12)' }} />
+          </View>
+
+          <View style={{ padding: 16, paddingTop: 0 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: -34 }}>
             {user?.profile_picture ? (
-              <Avatar.Image source={{ uri: user.profile_picture }} size={72} />
+              <Avatar.Image
+                source={{ uri: user.profile_picture }}
+                size={76}
+                style={{ borderWidth: 4, borderColor: theme.surface, backgroundColor: theme.surface }}
+              />
             ) : (
               <Avatar.Text
                 label={user?.full_name?.charAt(0).toUpperCase() || 'U'}
-                size={72}
-                style={{ backgroundColor: theme.primary }}
+                size={76}
+                style={{ backgroundColor: theme.primary, borderWidth: 4, borderColor: theme.surface }}
               />
             )}
-            <View style={{ flex: 1, marginLeft: 14 }}>
+            <View style={{ flex: 1, marginLeft: 14, paddingTop: 34 }}>
               <Text style={{ color: theme.text, fontSize: 20, fontWeight: '800' }} numberOfLines={1}>
                 {user?.full_name || user?.username}
               </Text>
               <Text style={{ color: theme.textMuted, fontSize: 13, marginTop: 2 }} numberOfLines={1}>
                 @{user?.username || 'member'}
               </Text>
-              {!!user?.biography && (
+              {!!(user?.bio || user?.biography) && (
                 <Text style={{ color: theme.textSecondary, fontSize: 12, lineHeight: 17, marginTop: 6 }} numberOfLines={2}>
-                  {user.biography}
+                  {user.bio || user.biography}
                 </Text>
               )}
             </View>
@@ -221,7 +236,7 @@ const Profile = ({ route, navigation }) => {
             <Button
               mode="outlined"
               icon="pencil-outline"
-              onPress={() => navigation.navigate('Settings')}
+              onPress={() => navigation.navigate('ProfileEdit')}
               style={{ marginTop: 16, borderRadius: 10, borderColor: theme.border }}
               contentStyle={{ minHeight: 42 }}
               labelStyle={{ color: theme.text, fontWeight: '700' }}
@@ -229,7 +244,110 @@ const Profile = ({ route, navigation }) => {
               {t('profile.edit_profile', 'Edit profile')}
             </Button>
           )}
+          </View>
         </Surface>
+
+        {isOwnProfile && (
+          <Surface
+            elevation={0}
+            style={{
+              marginTop: 16,
+              padding: 16,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+            }}
+          >
+            <TouchableOpacity
+              activeOpacity={0.72}
+              onPress={() => navigation.navigate('Statistics')}
+              style={{ flexDirection: 'row', alignItems: 'center' }}
+            >
+              <View
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: theme.primarySoft,
+                }}
+              >
+                <Ionicons name="stats-chart-outline" size={20} color={theme.primary} />
+              </View>
+              <View style={{ flex: 1, paddingHorizontal: 11 }}>
+                <Text style={{ color: theme.text, fontSize: 16, fontWeight: '900' }}>
+                  {t('statistics.title', 'Statistics')}
+                </Text>
+                <Text style={{ color: theme.textMuted, fontSize: 11, lineHeight: 16, marginTop: 2 }}>
+                  {t('profile.statistics_hint', 'Reports, muscle distribution and personal records')}
+                </Text>
+              </View>
+              <Ionicons name="arrow-forward" size={18} color={theme.primary} />
+            </TouchableOpacity>
+
+            <Divider style={{ marginVertical: 14, backgroundColor: theme.border }} />
+
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {[
+                {
+                  icon: 'calendar-outline',
+                  label: t('statistics.monthly_report', 'Monthly report'),
+                  route: 'MonthlyReportScreen',
+                  color: '#8B5CF6',
+                },
+                {
+                  icon: 'body-outline',
+                  label: t('statistics.muscle_dist', 'Muscle distribution'),
+                  route: 'MuscleDistribution',
+                  color: '#3B82F6',
+                },
+                {
+                  icon: 'analytics-outline',
+                  label: t('statistics.advanced', 'Advanced'),
+                  route: 'AdvancedStatisticsScreen',
+                  color: '#22A06B',
+                },
+              ].map(item => (
+                <TouchableOpacity
+                  key={item.route}
+                  activeOpacity={0.72}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.label}
+                  onPress={() => navigation.navigate(item.route)}
+                  style={{
+                    flex: 1,
+                    minHeight: 78,
+                    paddingHorizontal: 6,
+                    paddingVertical: 10,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    backgroundColor: theme.surfaceLight,
+                  }}
+                >
+                  <Ionicons name={item.icon} size={19} color={item.color} />
+                  <Text
+                    numberOfLines={2}
+                    style={{
+                      color: theme.textSecondary,
+                      fontSize: 9.5,
+                      lineHeight: 13,
+                      textAlign: 'center',
+                      fontWeight: '800',
+                      marginTop: 7,
+                    }}
+                  >
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Surface>
+        )}
 
         {isOwnProfile && (
           <Surface
@@ -443,7 +561,7 @@ const Profile = ({ route, navigation }) => {
         {isOwnProfile && (
           <Button
             mode="text"
-            icon="log-out-outline"
+            icon="logout"
             textColor={theme.danger}
             onPress={handleSignOut}
             style={{ marginTop: 12, borderRadius: 10 }}

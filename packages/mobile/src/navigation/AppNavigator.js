@@ -7,13 +7,14 @@ import {
 } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useSocket } from '../hooks/useSocket';
 import Toast from 'react-native-toast-message';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import Feed from '../pages/Feed';
 import Routines from '../pages/Routines';
@@ -22,6 +23,7 @@ import Profile from '../pages/Profile';
 import Messages from '../pages/Messages';
 
 const loadSettings = () => require('../pages/Settings').default;
+const loadProfileEdit = () => require('../pages/ProfileEditScreen').default;
 const loadChatBox = () => require('../pages/ChatBox').default;
 const loadStatistics = () => require('../pages/Statistics').default;
 const loadConnections = () => require('../pages/Connections').default;
@@ -58,8 +60,19 @@ const MessagesStack = () => (
 const ProfileStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="ProfileMain" component={Profile} />
+    <Stack.Screen name="ProfileEdit" getComponent={loadProfileEdit} />
     <Stack.Screen name="Settings" getComponent={loadSettings} />
     <Stack.Screen name="Statistics" getComponent={loadStatistics} />
+    <Stack.Screen name="AdvancedStatisticsScreen" getComponent={loadAdvancedStatistics} />
+    <Stack.Screen name="MuscleDistribution" getComponent={loadMuscleDistribution} />
+    <Stack.Screen name="MuscleDistributionBodyScreen" getComponent={loadMuscleDistributionBody} />
+    <Stack.Screen name="MainExercisesScreen" getComponent={loadMainExercises} />
+    <Stack.Screen name="LeaderboardScreen" getComponent={loadLeaderboard} />
+    <Stack.Screen name="MonthlyReportScreen" getComponent={loadMonthlyReport} />
+    <Stack.Screen name="WorkoutsDetailScreen" getComponent={loadWorkoutsDetail} />
+    <Stack.Screen name="DurationDetailScreen" getComponent={loadDurationDetail} />
+    <Stack.Screen name="VolumeDetailScreen" getComponent={loadVolumeDetail} />
+    <Stack.Screen name="SetsDetailScreen" getComponent={loadSetsDetail} />
     <Stack.Screen name="Connections" getComponent={loadConnections} />
   </Stack.Navigator>
 );
@@ -69,6 +82,7 @@ const MainStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="Tabs" component={TabNavigator} />
     <Stack.Screen name="Profile" component={Profile} />
+    <Stack.Screen name="ProfileEdit" getComponent={loadProfileEdit} />
     <Stack.Screen name="Settings" getComponent={loadSettings} />
     <Stack.Screen name="Statistics" getComponent={loadStatistics} />
     <Stack.Screen name="ChatBox" getComponent={loadChatBox} />
@@ -105,8 +119,15 @@ const TabNavigator = () => {
   // Listen for new messages globally to show badge
   useEffect(() => {
     if (!socket) return;
-    const onMsg = (msg) => {
+    const onMsg = async (msg) => {
       setUnreadMessages(prev => prev + 1);
+      try {
+        const stored = await AsyncStorage.getItem('@mm_notification_prefs');
+        const preferences = stored ? JSON.parse(stored) : {};
+        if (preferences.newMessage === false) return;
+      } catch {
+        // Invalid preferences fall back to enabled.
+      }
       Toast.show({
         type: 'info',
         text1: msg?.senderName || t('notifications.new_message', 'Yeni Mesaj'),

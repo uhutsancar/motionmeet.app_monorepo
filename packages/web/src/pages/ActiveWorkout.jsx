@@ -1,10 +1,11 @@
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     Box, Stack, Typography, IconButton, Button, Paper, TextField, Divider, CircularProgress
 } from '@mui/material';
 import {
-    Check, CheckCircle2, ChevronRight,
+    Check, CheckCircle2,
     Dumbbell, Flame, Pause, Play, Plus, X
 } from 'lucide-react';
 const formatTime = (seconds) => {
@@ -15,13 +16,11 @@ const formatTime = (seconds) => {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
 import { useActiveWorkout } from '../hooks/useActiveWorkout';
-
-import { BASEURL } from '~/config/env';
+import { resolvePublicMediaUrl } from '@motionmeet/shared';
+import ExercisePickerDialog from '../components/ExercisePickerDialog';
 
 const getMediaUrl = (url) => {
-    if (!url) return null;
-    if (url.startsWith('http')) return url;
-    return `${BASEURL}/dataset/${url.replace('.gif', '.jpg').replace('videos/', 'images/')}`;
+    return resolvePublicMediaUrl(url);
 };
 
 const ActiveWorkout = () => {
@@ -29,10 +28,11 @@ const ActiveWorkout = () => {
     const location = useLocation();
 
     const { routine } = location.state || {};
+    const [pickerOpen, setPickerOpen] = useState(false);
     
     const {
         elapsed, paused, saving, exercises,
-        togglePause, toggleSet, updateSet, addSet, removeSet,
+        togglePause, toggleSet, updateSet, addSet, removeSet, addExercise, removeExercise,
         totalVolume, totalSetsCompleted, finishWorkout
     } = useActiveWorkout(routine);
 
@@ -95,7 +95,7 @@ const ActiveWorkout = () => {
                 <Typography variant="h5" fontWeight="900" sx={{ px: 1 }}>{routine.name}</Typography>
 
                 {exercises.map((ex, exIdx) => {
-                    const mediaUrl = getMediaUrl(ex.exerciseId?.video_url);
+                    const mediaUrl = getMediaUrl(ex.exerciseId?.gifUrl);
 
                     return (
                         <Paper key={exIdx} variant="outlined" sx={{ borderRadius: 4, overflow: 'hidden' }}>
@@ -113,8 +113,12 @@ const ActiveWorkout = () => {
                                         {ex.exerciseId?.name || 'Unknown Exercise'}
                                     </Typography>
                                 </Stack>
-                                <IconButton size="small">
-                                    <ChevronRight size={20} />
+                                <IconButton
+                                    size="small"
+                                    aria-label={t('active_workout.remove_exercise', 'Remove exercise')}
+                                    onClick={() => removeExercise(exIdx)}
+                                >
+                                    <X size={18} />
                                 </IconButton>
                             </Box>
 
@@ -170,7 +174,7 @@ const ActiveWorkout = () => {
                                                 value={set.weight || ''}
                                                 onChange={(e) => updateSet(exIdx, setIdx, 'weight', e.target.value)}
                                                 disabled={set.completed}
-                                                inputProps={{ style: { textAlign: 'center', fontWeight: 'bold' } }}
+                                                slotProps={{ htmlInput: { style: { textAlign: 'center', fontWeight: 'bold' } } }}
                                                 sx={{
                                                     '& .MuiOutlinedInput-root': {
                                                         borderRadius: 2,
@@ -194,7 +198,7 @@ const ActiveWorkout = () => {
                                                 value={set.reps || ''}
                                                 onChange={(e) => updateSet(exIdx, setIdx, 'reps', e.target.value)}
                                                 disabled={set.completed}
-                                                inputProps={{ style: { textAlign: 'center', fontWeight: 'bold' } }}
+                                                slotProps={{ htmlInput: { style: { textAlign: 'center', fontWeight: 'bold' } } }}
                                                 sx={{
                                                     '& .MuiOutlinedInput-root': {
                                                         borderRadius: 2,
@@ -260,6 +264,7 @@ const ActiveWorkout = () => {
                 <Button
                     variant="outlined"
                     startIcon={<Plus size={20} />}
+                    onClick={() => setPickerOpen(true)}
                     sx={{
                         py: 2, borderRadius: 4, borderStyle: 'dashed', borderWidth: 2,
                         fontWeight: 'bold', textTransform: 'none', fontSize: '1rem'
@@ -280,7 +285,7 @@ const ActiveWorkout = () => {
                 <Button
                     variant="contained"
                     color="success"
-                    disabled={saving}
+                    disabled={saving || totalSetsCompleted === 0}
                     onClick={finishWorkout}
                     sx={{
                         width: '100%', maxWidth: 'sm', py: 2, borderRadius: 4,
@@ -301,6 +306,12 @@ const ActiveWorkout = () => {
                     )}
                 </Button>
             </Box>
+            <ExercisePickerDialog
+                open={pickerOpen}
+                onClose={() => setPickerOpen(false)}
+                onSelect={addExercise}
+                excludedIds={exercises.map((exercise) => exercise.exerciseId?._id || exercise.exerciseId)}
+            />
         </Box>
     );
 };

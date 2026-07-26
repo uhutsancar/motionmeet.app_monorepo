@@ -14,8 +14,11 @@ import {
 } from "../utils/authTokens.js";
 import {
   validateLogin,
+  validatePassword,
   validateRegistration,
 } from "../utils/authValidation.js";
+import sendEmail from "../configs/nodeMailer.js";
+import { escapeHtml } from "../utils/html.js";
 
 const publicUser = (user) => ({
   id: user._id,
@@ -154,6 +157,78 @@ export const getMe = async (req, res, next) => {
       return res.status(404).json({ success: false, message: "User not found" });
     }
     return res.json({ success: true, user: publicUser(user) });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const requestPasswordReset = async (req, res, next) => {
+  try {
+    const email =
+      typeof req.body?.email === "string"
+        ? req.body.email.trim().toLowerCase()
+        : "";
+    const genericResponse = {
+      success: true,
+      message: "If the account exists, a reset link has been sent",
+    };
+    if (!email || email.length > 254) return res.status(202).json(genericResponse);
+
+    const user = await authService.getUserByEmailWithPassword(email);
+    if (!user) return res.status(202).json(genericResponse);
+    if (process.env.EMAIL_ENABLED === "false") {
+      return res.status(202).json(genericResponse);
+    }
+
+    try {
+      const token = await authService.createPasswordResetToken(user._id);
+      const resetUrl = new URL("/reset-password", process.env.FRONTEND_URL);
+      resetUrl.searchParams.set("token", token);
+      await sendEmail({
+        to: user.email,
+        subject: "Reset your MotionMeet password",
+        body: `
+          <p>Hello ${escapeHtml(user.full_name || user.username)},</p>
+          <p>Use the link below to set a new MotionMeet password. The link expires in 30 minutes.</p>
+          <p><a href="${escapeHtml(resetUrl.toString())}">Reset password</a></p>
+          <p>If you did not request this, you can ignore this email.</p>
+        `,
+      });
+    } catch (error) {
+      console.error("Password reset delivery failed:", error.message);
+    }
+
+    return res.status(202).json(genericResponse);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const resetPassword = async (req, res, next) => {
+  try {
+    const { password, valid } = validatePassword(req.body?.password);
+    if (!valid) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be between 10 and 72 UTF-8 bytes",
+      });
+    }
+    const hashedPassword = await bcrypt.hash(password, 12);
+    const passwordUpdated = await authService.resetPasswordWithToken(
+      req.body?.token,
+      hashedPassword
+    );
+    if (!passwordUpdated) {
+      return res.status(400).json({
+        success: false,
+        message: "Reset link is invalid or expired",
+      });
+    }
+    clearRefreshCookie(res);
+    return res.json({
+      success: true,
+      message: "Password updated. Sign in again on all devices.",
+    });
   } catch (error) {
     return next(error);
   }

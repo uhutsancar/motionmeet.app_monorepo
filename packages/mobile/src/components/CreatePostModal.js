@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Modal, ScrollView, TextInput, Image, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { useDispatch, useSelector } from 'react-redux';
 import { useAuthContext } from "../context/AuthProvider";
@@ -19,6 +19,10 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
   const dispatch = useDispatch();
   const { getToken } = useAuthContext();
   const user = useSelector((state) => state.user.value);
+  const profilePicture =
+    typeof user?.profile_picture === 'string'
+      ? user.profile_picture.trim()
+      : '';
   const [content, setContent] = useState('');
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -121,10 +125,18 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           <Surface elevation={0} style={styles.userSection}>
-            <Image
-              source={{ uri: user.profile_picture }}
-              style={styles.avatar}
-            />
+            {profilePicture ? (
+              <Image
+                source={{ uri: profilePicture }}
+                style={styles.avatar}
+              />
+            ) : (
+              <Surface elevation={0} style={[styles.avatar, { backgroundColor: theme.primarySoft, alignItems: 'center', justifyContent: 'center' }]}>
+                <Text style={{ color: theme.primary, fontWeight: '800', fontSize: 18 }}>
+                  {user?.full_name?.charAt(0)?.toUpperCase() || 'U'}
+                </Text>
+              </Surface>
+            )}
             <Surface elevation={0}>
               <Text style={styles.userName}>{user.full_name}</Text>
               <Text style={styles.username}>@{user.username}</Text>

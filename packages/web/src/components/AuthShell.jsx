@@ -9,7 +9,7 @@ import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { alpha } from "@mui/material/styles";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import motionmeetLogo from "~/assets/motionmeet_logo.svg";
 
 const AuthShell = ({ eyebrow, title, description, children }) => (

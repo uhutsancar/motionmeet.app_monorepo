@@ -11,7 +11,7 @@ import { getUserConversations } from '../api/endpoints';
 import moment from 'moment';
 import 'moment/locale/tr';
 import { Appbar, Avatar, Text, Searchbar, TouchableRipple, Badge, Surface } from 'react-native-paper';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 const Messages = ({ navigation }) => {
   const dispatch = useDispatch();
@@ -214,7 +214,7 @@ const Messages = ({ navigation }) => {
     <SafeAreaView style={s.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      <Appbar.Header style={s.header}>
+      <Appbar.Header style={s.header} statusBarHeight={0}>
         <Appbar.Content title={t('messages.title', 'Messages')} titleStyle={s.headerTitle} />
         <Appbar.Action icon="square-edit-outline" onPress={handleNewChat} color={theme.primary} />
       </Appbar.Header>

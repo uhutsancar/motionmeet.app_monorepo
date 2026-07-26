@@ -259,6 +259,9 @@ export const getUserProfileAndPosts = async (profileId, requesterId, pagination)
     : canSeeFollowerPosts
       ? ["public", "followers"]
       : ["public"];
+  const connectionRequest = isOwner
+    ? null
+    : await getConnectionBetweenUsers(requesterId, profileId);
 
   const posts = await Post.find({
     user: profileId,
@@ -273,6 +276,9 @@ export const getUserProfileAndPosts = async (profileId, requesterId, pagination)
 
   const profile = withRelationshipCounts(profileDocument);
   delete profile.privacy;
+  profile.isFollowing = requester?.following?.includes(profileId) || false;
+  profile.isConnection = isConnection;
+  profile.connectionPending = connectionRequest?.status === "pending";
   const page = pageFromDocuments(posts, pagination.limit, "createdAt");
   page.items = await hydratePostInteractions(page.items, requester?._id);
   return { profile, posts: page.items, nextCursor: page.nextCursor };

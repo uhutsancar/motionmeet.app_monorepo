@@ -1,40 +1,27 @@
-FROM node:22-alpine AS builder
-# Set working directory
-WORKDIR /app
-# Install globally needed tools
-RUN corepack enable && corepack prepare pnpm@11.10.0 --activate
-RUN npm install -g turbo
-COPY . .
-# Prune the workspace for just the backend dependencies
-RUN turbo prune @motionmeet/backend --docker
+FROM node:24-alpine AS dependencies
 
-FROM node:22-alpine AS installer
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@11.10.0 --activate
 
-# First install dependencies (as they change less often)
-COPY .gitignore .gitignore
-COPY --from=builder /app/out/json/ .
-COPY --from=builder /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
-RUN pnpm install --frozen-lockfile
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY patches ./patches
+COPY packages/backend/package.json ./packages/backend/package.json
+COPY packages/shared/package.json ./packages/shared/package.json
+RUN pnpm install --frozen-lockfile --prod --filter @motionmeet/backend...
 
-# Build the project and its dependencies
-COPY --from=builder /app/out/full/ .
-COPY turbo.json turbo.json
-# Removed shared package build
+FROM node:24-alpine AS runtime
 
-FROM node:22-alpine AS runner
+ENV NODE_ENV=production
 WORKDIR /app
+RUN apk add --no-cache tini
 
-# Add a non-root user
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 backend
-USER backend
+COPY --from=dependencies --chown=node:node /app/node_modules ./node_modules
+COPY --from=dependencies --chown=node:node /app/packages/backend/node_modules ./packages/backend/node_modules
+COPY --chown=node:node packages/backend ./packages/backend
+COPY --chown=node:node packages/shared ./packages/shared
 
-# Copy only the necessary files
-COPY --from=installer /app .
-
+USER node
 WORKDIR /app/packages/backend
-EXPOSE 8080
-
+EXPOSE 4000
+ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["node", "server.js"]

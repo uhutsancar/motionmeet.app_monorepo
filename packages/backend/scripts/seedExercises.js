@@ -34,10 +34,10 @@ try {
 const muscleMap = {
   "chest": "chest",
   "back": "back", "lats": "back", "lower back": "back", "middle back": "back", "traps": "back", "neck": "back",
-  "legs": "legs", "quadriceps": "legs", "hamstrings": "legs", "calves": "legs", "glutes": "legs", "adductors": "legs", "abductors": "legs",
+  "legs": "legs", "upper legs": "legs", "lower legs": "legs", "quadriceps": "legs", "hamstrings": "legs", "calves": "legs", "glutes": "legs", "adductors": "legs", "abductors": "legs",
   "shoulders": "shoulders",
-  "arms": "arms", "biceps": "arms", "triceps": "arms", "forearms": "arms",
-  "abs": "abs", "abdominals": "abs", "core": "abs",
+  "arms": "arms", "upper arms": "arms", "lower arms": "arms", "biceps": "arms", "triceps": "arms", "forearms": "arms",
+  "abs": "abs", "waist": "abs", "abdominals": "abs", "core": "abs",
   "cardio": "cardio",
   "full body": "full_body",
 };

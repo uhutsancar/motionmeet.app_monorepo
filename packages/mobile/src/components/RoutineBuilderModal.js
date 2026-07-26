@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert } from 'react-native';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { useAuthContext } from "../context/AuthProvider";
@@ -172,11 +172,16 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
                 ) : (
                   exercisesData.slice(0, 20).map(ex => (
                     <TouchableRipple borderless key={ex._id} onPress={() => addExercise(ex)} style={styles.resItem}>
-                      <Surface elevation={0} style={{ flex: 1 }}>
-                        <Text style={{ color: theme.text, fontWeight: '500' }}>{ex.name}</Text>
-                        <Text style={{ color: theme.textMuted, fontSize: 12 }}>{ex.muscleGroup} • {ex.equipment}</Text>
+                      <Surface
+                        elevation={0}
+                        style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'transparent' }}
+                      >
+                        <Surface elevation={0} style={{ flex: 1, backgroundColor: 'transparent' }}>
+                          <Text style={{ color: theme.text, fontWeight: '500' }}>{ex.name}</Text>
+                          <Text style={{ color: theme.textMuted, fontSize: 12 }}>{ex.muscleGroup} • {ex.equipment}</Text>
+                        </Surface>
+                        <Ionicons name="add-circle-outline" size={22} color={theme.primary} />
                       </Surface>
-                      <Ionicons name="add-circle-outline" size={22} color={theme.primary} />
                     </TouchableRipple>
                   ))
                 )}

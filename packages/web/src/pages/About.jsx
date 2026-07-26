@@ -1,5 +1,5 @@
 
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { ArrowRight, Zap, Shield, Heart } from 'lucide-react';
 import PublicLayout from './PublicLayout';
@@ -36,36 +36,6 @@ const ValueCard = ({ icon: Icon, title, desc, iconBgColor, iconColor }) => {
   );
 };
 
-const TeamCard = ({ name, role, bio, initials, gradient }) => {
-  const theme = useTheme();
-  return (
-    <Paper 
-      elevation={0}
-      sx={{ 
-        p: 3, 
-        borderRadius: 4, 
-        border: `1px solid ${theme.palette.divider}`,
-        bgcolor: 'background.paper',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 2
-      }}
-    >
-      <Box sx={{ 
-        width: 80, height: 80, borderRadius: 4, 
-        background: gradient, 
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: 'white', fontSize: 24, fontWeight: 800, boxShadow: '0 10px 20px -5px rgba(0,0,0,0.2)'
-      }}>
-        {initials}
-      </Box>
-      <Box>
-        <Typography variant="h6" sx={{ fontWeight: 800 }}>{name}</Typography>
-        <Typography variant="subtitle2" sx={{ color: theme.palette.primary.main, fontWeight: 600, mt: 0.5 }}>{role}</Typography>
-        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1.5, lineHeight: 1.6 }}>{bio}</Typography>
-      </Box>
-    </Paper>
-  );
-};
-
 const About = () => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -91,30 +61,6 @@ const About = () => {
       desc: t('about_page.val3_desc'),
       iconBgColor: 'rgba(236, 72, 153, 0.1)',
       iconColor: '#ec4899',
-    },
-  ];
-
-  const team = [
-    {
-      name: t('about_page.team1_name'),
-      role: t('about_page.team1_role'),
-      bio: t('about_page.team1_bio'),
-      initials: 'AC',
-      gradient: 'linear-gradient(to bottom right, #6558F5, #5145DB)',
-    },
-    {
-      name: t('about_page.team2_name'),
-      role: t('about_page.team2_role'),
-      bio: t('about_page.team2_bio'),
-      initials: 'SJ',
-      gradient: 'linear-gradient(to bottom right, #8b5cf6, #6d28d9)',
-    },
-    {
-      name: t('about_page.team3_name'),
-      role: t('about_page.team3_role'),
-      bio: t('about_page.team3_bio'),
-      initials: 'MJ',
-      gradient: 'linear-gradient(to bottom right, #12A88A, #087A68)',
     },
   ];
 
@@ -161,7 +107,7 @@ const About = () => {
         <Container maxWidth="lg">
           <Grid container spacing={{ xs: 7, lg: 10 }} alignItems="center">
             {/* Visual */}
-            <Grid item xs={12} lg={6}>
+            <Grid size={{ xs: 12, lg: 6 }}>
               <Box sx={{ position: 'relative' }}>
                 <Box sx={{ position: 'absolute', inset: 0, bgcolor: `${theme.palette.primary.main}10`, borderRadius: 6, transform: 'rotate(1deg) scale(1.05)' }} />
                 <Paper elevation={0} sx={{ position: 'relative', bgcolor: 'background.default', borderRadius: 6, p: 4, border: 1, borderColor: 'divider' }}>
@@ -176,13 +122,13 @@ const About = () => {
                   </Box>
                   <Stack spacing={2} pt={1}>
                     {[
-                      { year: '2023', label: 'MotionMeet founded' },
-                      { year: '2024', label: '10k active users' },
-                      { year: '2025', label: '50k+ athletes worldwide' },
-                      { year: '2026', label: '1M+ workouts logged' },
-                    ].map(({ year, label }) => (
-                      <Stack key={year} direction="row" alignItems="center" spacing={2}>
-                        <Typography sx={{ width: 40, fontSize: 12, fontWeight: 800, color: theme.palette.primary.main }}>{year}</Typography>
+                      { marker: '01', label: 'Plan routines around your own training' },
+                      { marker: '02', label: 'Log only the sets you actually complete' },
+                      { marker: '03', label: 'Turn workout history into clear progress' },
+                      { marker: '04', label: 'Share with visibility you control' },
+                    ].map(({ marker, label }) => (
+                      <Stack key={marker} direction="row" alignItems="center" spacing={2}>
+                        <Typography sx={{ width: 40, fontSize: 12, fontWeight: 800, color: theme.palette.primary.main }}>{marker}</Typography>
                         <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: theme.palette.primary.main, flexShrink: 0 }} />
                         <Typography variant="body2" sx={{ color: 'text.secondary' }}>{label}</Typography>
                       </Stack>
@@ -192,7 +138,7 @@ const About = () => {
               </Box>
             </Grid>
             {/* Text */}
-            <Grid item xs={12} lg={6}>
+            <Grid size={{ xs: 12, lg: 6 }}>
               <Stack spacing={3}>
                 <Typography variant="h3" sx={{ fontWeight: 800, color: 'text.primary' }}>
                   {t('about_page.story_title')}
@@ -206,22 +152,6 @@ const About = () => {
         </Container>
       </Box>
 
-      {/* ── Team ── */}
-      <Box sx={{ py: { xs: 8, sm: 10 }, px: { xs: 2, sm: 3 } }}>
-        <Container maxWidth="md">
-          <Typography variant="h3" align="center" sx={{ fontWeight: 800, mb: 6 }}>
-            {t('about_page.team_title')}
-          </Typography>
-          <Grid container spacing={3}>
-            {team.map((m, i) => (
-              <Grid item xs={12} sm={4} key={i}>
-                <TeamCard {...m} />
-              </Grid>
-            ))}
-          </Grid>
-        </Container>
-      </Box>
-
       {/* ── Values ── */}
       <Box sx={{ py: { xs: 8, sm: 10 }, px: { xs: 2, sm: 3 }, bgcolor: 'background.paper' }}>
         <Container maxWidth="md">
@@ -230,7 +160,7 @@ const About = () => {
           </Typography>
           <Grid container spacing={3}>
             {values.map((v, i) => (
-              <Grid item xs={12} sm={4} key={i}>
+              <Grid size={{ xs: 12, sm: 4 }} key={i}>
                 <ValueCard {...v} />
               </Grid>
             ))}

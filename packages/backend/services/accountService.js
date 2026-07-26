@@ -12,6 +12,7 @@ import User from "../models/User.js";
 import Usage from "../models/Usage.js";
 import UploadReservation from "../models/UploadReservation.js";
 import Workout from "../models/Workout.js";
+import PasswordResetToken from "../models/PasswordResetToken.js";
 import { extractS3Key } from "../utils/s3Utils.js";
 import {
   deleteMediaOrQueue,
@@ -102,6 +103,7 @@ export const streamAccountData = async (userId, response) => {
   const privateSections = [
     ["customExercises", Exercise.find({ createdBy: userId })],
     ["sessions", Session.find({ userId })],
+    ["passwordResetTokens", PasswordResetToken.find({ userId })],
     ["usage", Usage.find({ userId })],
     ["uploadReservations", UploadReservation.find({ userId })],
   ];
@@ -149,6 +151,7 @@ export const deleteAccountData = async (userId) => {
     await session.withTransaction(async () => {
       await queueMediaDeletions(mediaKeys, { session });
       await Session.deleteMany({ userId }, { session });
+      await PasswordResetToken.deleteMany({ userId }, { session });
       await Usage.deleteMany({ userId }, { session });
       await UploadReservation.deleteMany({ userId }, { session });
       await Connection.deleteMany(

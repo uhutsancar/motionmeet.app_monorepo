@@ -1,4 +1,4 @@
-import { isNonEmptyString, isObjectId, isOptionalString } from "../utils/validation.js";
+import { isNonEmptyString, isObjectId, isOptionalHttpUrl, isOptionalString } from "../utils/validation.js";
 import * as exerciseService from "../services/exerciseService.js";
 
 // Get all exercises with optional filtering
@@ -59,7 +59,7 @@ export const createExercise = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Invalid exercise details" });
     }
 
-    if (!isOptionalString(gifUrl, 2048)) {
+    if (!isOptionalHttpUrl(gifUrl)) {
       return res.status(400).json({ success: false, message: "Invalid exercise media URL" });
     }
 
@@ -70,7 +70,7 @@ export const createExercise = async (req, res, next) => {
       gifUrl,
       userId: req.userId,
     });
-    res.json({ success: true, exercise: newExercise, message: "Exercise created successfully" });
+    res.status(201).json({ success: true, exercise: newExercise, message: "Exercise created successfully" });
   } catch (error) {
     next(error);
   }
@@ -93,5 +93,17 @@ export const getExerciseStats = async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+};
+
+export const getPersonalRecords = async (req, res, next) => {
+  try {
+    const records = await exerciseService.getPersonalRecords(
+      req.userId,
+      req.query?.limit
+    );
+    return res.json({ success: true, records });
+  } catch (error) {
+    return next(error);
   }
 };

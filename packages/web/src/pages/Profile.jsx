@@ -21,22 +21,24 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router";
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis } from "recharts";
+import { API_ROUTES } from "@motionmeet/shared";
 import api from "~/api/axios";
 import Loading from "~/components/Loading";
 import ProfileModal from "~/components/ProfileModal";
 import { EmptyState, PageShell, SectionHeader } from "~/components/AppPage";
 
-const EMPTY_WORKOUTS = [];
-
 const Profile = () => {
   const theme = useTheme();
   const currentUser = useSelector((state) => state.user.value);
   const { profileId } = useParams();
+  const navigate = useNavigate();
   const { getToken } = useAuthContext();
   const { t, i18n } = useTranslation();
   const [publicProfile, setPublicProfile] = useState(null);
+  const [publicPosts, setPublicPosts] = useState([]);
+  const [relationshipLoading, setRelationshipLoading] = useState(false);
   const [profileLoading, setProfileLoading] = useState(Boolean(profileId));
   const [profileError, setProfileError] = useState("");
   const [activeStatTab, setActiveStatTab] = useState("duration");
@@ -48,7 +50,9 @@ const Profile = () => {
 
   const isOwnProfile = !profileId || profileId === currentUser?._id;
   const user = isOwnProfile ? currentUser : publicProfile;
-  const visibleWorkouts = isOwnProfile ? workouts : EMPTY_WORKOUTS;
+  const visibleWorkouts = isOwnProfile
+    ? workouts
+    : publicPosts.map((post) => post.workout).filter(Boolean);
   const followersCount = user?.followers_count ?? user?.followers?.length ?? 0;
   const followingCount = user?.following_count ?? user?.following?.length ?? 0;
 
@@ -71,11 +75,14 @@ const Profile = () => {
       try {
         const token = await getToken();
         const { data } = await api.post(
-          "/api/user/profiles",
+          API_ROUTES.user_extras.profiles,
           { profileId },
           { headers: { Authorization: `Bearer ${token}` } },
         );
-        if (active && data.success) setPublicProfile(data.profile);
+        if (active && data.success) {
+          setPublicProfile(data.profile);
+          setPublicPosts(data.posts || []);
+        }
         if (active && !data.success) {
           setProfileError(data.message || "Profile could not be loaded");
           toast.error(data.message);
@@ -104,7 +111,7 @@ const Profile = () => {
       try {
         const token = await getToken();
         if (!token) return;
-        const { data } = await api.get("/api/workout", {
+        const { data } = await api.get(API_ROUTES.workout.base, {
           headers: { Authorization: `Bearer ${token}` },
           params: { limit: 100 },
         });
@@ -125,7 +132,7 @@ const Profile = () => {
     setLoadingMoreWorkouts(true);
     try {
       const token = await getToken();
-      const { data } = await api.get("/api/workout", {
+      const { data } = await api.get(API_ROUTES.workout.base, {
         headers: { Authorization: `Bearer ${token}` },
         params: { cursor: workoutCursor, limit: 100 },
       });
@@ -181,7 +188,7 @@ const Profile = () => {
     try {
       const token = await getToken();
       const { data } = await api.post(
-        "/api/post/add",
+        API_ROUTES.post.add,
         {
           post_type: "workout",
           workout: workout._id,
@@ -221,29 +228,88 @@ const Profile = () => {
     { label: t("profile.following"), value: followingCount },
   ];
   const insights = [
-    { label: t("profile.stats"), icon: LineChart },
-    { label: t("menu.exercises"), icon: Dumbbell },
-    { label: t("profile.awards"), icon: Trophy },
-    { label: t("profile.events"), icon: CalendarIcon },
+    { label: t("profile.stats"), icon: LineChart, route: "/statistics" },
+    { label: t("menu.exercises"), icon: Dumbbell, route: "/exercises" },
+    { label: t("profile.awards"), icon: Trophy, route: "/statistics/records" },
+    { label: t("profile.events"), icon: CalendarIcon, route: "/statistics/history" },
   ];
   const currentAmount = chartData.at(-1)?.amt || 0;
   const currentUnit = activeStatTab === "duration" ? t("common.minutes_short") : activeStatTab === "volume" ? t("common.kg") : t("profile.reps");
 
+  const updateRelationship = async (route) => {
+    if (!profileId || relationshipLoading) return;
+    setRelationshipLoading(true);
+    try {
+      const token = await getToken();
+      const { data } = await api.post(
+        route,
+        { id: profileId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!data.success) throw new Error(data.message);
+      setPublicProfile((profile) => ({
+        ...profile,
+        isFollowing:
+          route === API_ROUTES.user_extras.follow
+            ? true
+            : route === API_ROUTES.user_extras.unfollow
+              ? false
+              : profile.isFollowing,
+        followers_count:
+          route === API_ROUTES.user_extras.follow
+            ? (profile.followers_count || 0) + 1
+            : route === API_ROUTES.user_extras.unfollow
+              ? Math.max(0, (profile.followers_count || 0) - 1)
+              : profile.followers_count,
+        connectionPending:
+          route === API_ROUTES.user_extras.connect
+            ? true
+            : profile.connectionPending,
+      }));
+      toast.success(data.message);
+    } catch (error) {
+      toast.error(error.response?.data?.message || error.message);
+    } finally {
+      setRelationshipLoading(false);
+    }
+  };
+
   return (
     <PageShell maxWidth={1120}>
+      <Paper variant="outlined" sx={{ overflow: "hidden" }}>
+        <Box
+          sx={{
+            position: "relative",
+            height: { xs: 112, sm: 156 },
+            background: "linear-gradient(115deg, rgba(101,88,245,.28), rgba(59,130,246,.18), rgba(0,169,143,.18))",
+          }}
+        >
+          {user.cover_photo && (
+            <Box
+              component="img"
+              src={user.cover_photo}
+              alt=""
+              sx={{ width: "100%", height: "100%", display: "block", objectFit: "cover" }}
+            />
+          )}
+          <Box sx={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, transparent 45%, rgba(9,10,13,.34))" }} />
+        </Box>
         <Stack
-          component={Paper}
-          variant="outlined"
           direction={{ xs: "column", sm: "row" }}
           spacing={2}
-          sx={{ p: { xs: 2, sm: 3 }, alignItems: { xs: "center", sm: "center" }, justifyContent: "space-between", textAlign: { xs: "center", sm: "left" } }}
+          sx={{
+            p: { xs: 2, sm: 3 },
+            pt: { xs: 0, sm: 0 },
+            alignItems: "center",
+            justifyContent: "space-between",
+            textAlign: { xs: "center", sm: "left" },
+          }}
         >
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={2.5} sx={{ alignItems: "center" }}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2.5} sx={{ alignItems: "center", mt: { xs: -5, sm: -4 } }}>
             <Box sx={{ position: "relative" }}>
-              <Avatar src={user.profile_picture || undefined} alt={user.full_name} variant="rounded" sx={{ width: 80, height: 80, borderRadius: 3, fontSize: 30, fontWeight: 800, border: 1, borderColor: "divider", boxShadow: 2 }}>
+              <Avatar src={user.profile_picture || undefined} alt={user.full_name} variant="rounded" sx={{ width: 88, height: 88, borderRadius: 3, fontSize: 30, fontWeight: 800, border: 4, borderColor: "background.paper", bgcolor: "background.paper", boxShadow: 3 }}>
                 {user.full_name?.charAt(0).toUpperCase() || "U"}
               </Avatar>
-              <Box sx={{ position: "absolute", right: -3, bottom: -3, width: 22, height: 22, bgcolor: "success.main", borderRadius: "50%", border: 4, borderColor: "background.default" }} />
             </Box>
             <Stack spacing={1}>
               <Typography variant="h5" sx={{ fontWeight: 900 }}>
@@ -263,12 +329,38 @@ const Profile = () => {
               </Stack>
             </Stack>
           </Stack>
-          {isOwnProfile && (
+          {isOwnProfile ? (
             <Button variant="outlined" onClick={() => setShowEdit(true)} sx={{ width: { xs: "100%", sm: "auto" } }}>
               {t("profile.edit_profile")}
             </Button>
+          ) : (
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ width: { xs: "100%", sm: "auto" } }}>
+              <Button
+                variant={user.isFollowing ? "outlined" : "contained"}
+                disabled={relationshipLoading}
+                onClick={() => updateRelationship(
+                  user.isFollowing
+                    ? API_ROUTES.user_extras.unfollow
+                    : API_ROUTES.user_extras.follow
+                )}
+              >
+                {user.isFollowing ? t("profile.unfollow", "Unfollow") : t("profile.follow", "Follow")}
+              </Button>
+              {!user.isConnection && (
+                <Button
+                  variant="outlined"
+                  disabled={relationshipLoading || user.connectionPending}
+                  onClick={() => updateRelationship(API_ROUTES.user_extras.connect)}
+                >
+                  {user.connectionPending
+                    ? t("profile.connection_pending", "Pending")
+                    : t("profile.connect", "Connect")}
+                </Button>
+              )}
+            </Stack>
           )}
         </Stack>
+      </Paper>
 
         <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
           <Stack direction="row" spacing={1.5} sx={{ mb: 3, alignItems: "flex-start" }}>
@@ -323,7 +415,7 @@ const Profile = () => {
           </ToggleButtonGroup>
         </Paper>
 
-        <Stack spacing={1.5}>
+        {isOwnProfile && <Stack spacing={1.5}>
           <Stack direction="row" spacing={1} sx={{ px: 1, alignItems: "center" }}>
             <Target size={16} />
             <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>
@@ -331,9 +423,9 @@ const Profile = () => {
             </Typography>
           </Stack>
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, 1fr)", sm: "repeat(4, 1fr)" }, gap: 2 }}>
-            {insights.map(({ label, icon: Icon }) => (
+            {insights.map(({ label, icon: Icon, route }) => (
               <Card key={label} variant="outlined">
-                <CardActionArea sx={{ p: 2, height: "100%" }}>
+                <CardActionArea onClick={() => navigate(route)} sx={{ p: 2, height: "100%" }}>
                   <Stack spacing={1.5} sx={{ alignItems: "center" }}>
                     <Avatar variant="rounded" sx={{ bgcolor: "action.hover", color: "text.secondary" }}>
                       <Icon size={20} />
@@ -346,7 +438,7 @@ const Profile = () => {
               </Card>
             ))}
           </Box>
-        </Stack>
+        </Stack>}
 
         <Stack spacing={2}>
           <SectionHeader

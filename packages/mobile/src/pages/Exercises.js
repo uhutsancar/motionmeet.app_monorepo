@@ -16,18 +16,17 @@ import {
   Surface,
   Text,
 } from 'react-native-paper';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
-import Constants from 'expo-constants';
 import { useTranslation } from 'react-i18next';
+import { resolvePublicMediaUrl } from '@motionmeet/shared';
 import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from '../context/AuthProvider';
 import { getExercises } from '../api/endpoints';
 import CustomExerciseModal from '../components/CustomExerciseModal';
 import { useMuscleGroups } from '../hooks/useMuscleGroups';
 import { useEquipment } from '../hooks/useEquipment';
-
-const API_BASE = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:4000';
+import { API_URL } from '../config/environment';
 
 const Exercises = ({ navigation }) => {
   const { theme } = useTheme();
@@ -120,9 +119,7 @@ const Exercises = ({ navigation }) => {
   };
 
   const renderExercise = ({ item }) => {
-    const imageUrl = item.gifUrl
-      ? `${API_BASE}/dataset/${item.gifUrl.replace('.gif', '.jpg').replace('videos/', 'images/')}`
-      : null;
+    const imageUrl = resolvePublicMediaUrl(item.gifUrl, API_URL);
 
     return (
       <TouchableOpacity
@@ -173,6 +170,7 @@ const Exercises = ({ navigation }) => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
       <Appbar.Header
+        statusBarHeight={0}
         style={{
           backgroundColor: theme.surface,
           borderBottomWidth: 1,

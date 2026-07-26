@@ -45,7 +45,7 @@ export const hydratePostInteractions = async (
         {
           $setWindowFields: {
             partitionBy: "$postId",
-            sortBy: { createdAt: -1, _id: -1 },
+            sortBy: { createdAt: -1 },
             output: {
               postRank: { $documentNumber: {} },
             },

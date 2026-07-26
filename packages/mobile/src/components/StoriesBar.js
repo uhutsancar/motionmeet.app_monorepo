@@ -1,7 +1,7 @@
 import React, { useState, memo, useMemo } from 'react';
 import { Image, ScrollView } from 'react-native';
 import { useSelector } from 'react-redux';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import StoryViewer from './StoryViewer';
@@ -16,43 +16,44 @@ const StoriesBar = ({ onAddStory }) => {
   const styles = useMemo(() => ({
     container: {
       backgroundColor: theme.background,
-      paddingVertical: 8,
+      paddingVertical: 10,
     },
     scrollContent: {
-      paddingHorizontal: 12,
-      gap: 12,
+      paddingHorizontal: 16,
+      gap: 10,
       alignItems: 'center',
     },
     storyContainer: {
       alignItems: 'center',
-      width: 72,
+      width: 66,
+      borderRadius: 12,
     },
     createStoryRing: {
-      width: 68,
-      height: 68,
-      borderRadius: 34,
+      width: 62,
+      height: 62,
+      borderRadius: 31,
       justifyContent: 'center',
       alignItems: 'center',
       position: 'relative',
-      marginBottom: 6,
+      marginBottom: 5,
       backgroundColor: 'transparent'
     },
     storyRing: {
-      width: 68,
-      height: 68,
-      borderRadius: 34,
-      borderWidth: 2.5,
+      width: 62,
+      height: 62,
+      borderRadius: 31,
+      borderWidth: 2,
       justifyContent: 'center',
       alignItems: 'center',
-      marginBottom: 6,
+      marginBottom: 5,
       padding: 2,
       position: 'relative',
       backgroundColor: 'transparent'
     },
     avatar: {
-      width: 60,
-      height: 60,
-      borderRadius: 30,
+      width: 54,
+      height: 54,
+      borderRadius: 27,
       borderWidth: 2,
       borderColor: theme.background,
     },
@@ -70,9 +71,9 @@ const StoriesBar = ({ onAddStory }) => {
       position: 'absolute',
       bottom: 0,
       right: 0,
-      width: 24,
-      height: 24,
-      borderRadius: 12,
+      width: 22,
+      height: 22,
+      borderRadius: 11,
       backgroundColor: theme.primary,
       alignItems: 'center',
       justifyContent: 'center',
@@ -83,9 +84,10 @@ const StoriesBar = ({ onAddStory }) => {
       position: 'absolute',
       top: -4,
       right: -4,
-      width: 20,
-      height: 20,
-      borderRadius: 10,
+      minWidth: 18,
+      height: 18,
+      borderRadius: 9,
+      paddingHorizontal: 4,
       backgroundColor: theme.secondary,
       alignItems: 'center',
       justifyContent: 'center',
@@ -98,15 +100,20 @@ const StoriesBar = ({ onAddStory }) => {
       fontWeight: 'bold',
     },
     usernameText: {
-      fontSize: 11,
+      fontSize: 10.5,
       color: theme.textMuted,
       textAlign: 'center',
+      maxWidth: 64,
     },
   }), [theme]);
 
   // viewerStories: all stories of selected user, in chronological order
   const [viewerStories, setViewerStories] = useState([]);
   const [viewerVisible, setViewerVisible] = useState(false);
+  const userProfilePicture =
+    typeof user?.profile_picture === 'string'
+      ? user.profile_picture.trim()
+      : '';
 
   // Group stories by user — keep all stories per user, show 1 bubble per user
   const groupedByUser = useMemo(() => {
@@ -159,9 +166,9 @@ const StoriesBar = ({ onAddStory }) => {
           >
             <Surface elevation={0} style={{ backgroundColor: 'transparent', alignItems: 'center' }}>
               <Surface elevation={0} style={styles.createStoryRing}>
-                {user?.profile_picture ? (
+                {userProfilePicture ? (
                   <Image
-                    source={{ uri: user.profile_picture }}
+                    source={{ uri: userProfilePicture }}
                     style={styles.avatar}
                   />
                 ) : (
@@ -182,32 +189,46 @@ const StoriesBar = ({ onAddStory }) => {
           </TouchableRipple>
 
           {/* One bubble per user, contains all their stories */}
-          {groupedByUser.map(({ user: storyUser, stories: userStories }) => (
-            <TouchableRipple
-              key={storyUser._id}
-              style={styles.storyContainer}
-              onPress={() => handleStoryPress(userStories)}
-              borderless
-            >
-              <Surface elevation={0} style={{ backgroundColor: 'transparent', alignItems: 'center' }}>
-                <Surface elevation={0} style={[styles.storyRing, { borderColor: theme.primary }]}>
-                  <Image
-                    source={{ uri: storyUser.profile_picture }}
-                    style={styles.avatar}
-                  />
-                  {/* Story count badge if > 1 */}
-                  {userStories.length > 1 && (
-                    <Surface elevation={0} style={styles.countBadge}>
-                      <Text style={styles.countText}>{userStories.length}</Text>
-                    </Surface>
-                  )}
+          {groupedByUser.map(({ user: storyUser, stories: userStories }) => {
+            const storyProfilePicture =
+              typeof storyUser.profile_picture === 'string'
+                ? storyUser.profile_picture.trim()
+                : '';
+            return (
+              <TouchableRipple
+                key={storyUser._id}
+                style={styles.storyContainer}
+                onPress={() => handleStoryPress(userStories)}
+                borderless
+              >
+                <Surface elevation={0} style={{ backgroundColor: 'transparent', alignItems: 'center' }}>
+                  <Surface elevation={0} style={[styles.storyRing, { borderColor: theme.primary }]}>
+                    {storyProfilePicture ? (
+                      <Image
+                        source={{ uri: storyProfilePicture }}
+                        style={styles.avatar}
+                      />
+                    ) : (
+                      <Surface elevation={0} style={[styles.avatar, styles.placeholderAvatar]}>
+                        <Text style={styles.placeholderText}>
+                          {storyUser?.full_name?.charAt(0)?.toUpperCase() || 'U'}
+                        </Text>
+                      </Surface>
+                    )}
+                    {/* Story count badge if > 1 */}
+                    {userStories.length > 1 && (
+                      <Surface elevation={0} style={styles.countBadge}>
+                        <Text style={styles.countText}>{userStories.length}</Text>
+                      </Surface>
+                    )}
+                  </Surface>
+                  <Text style={styles.usernameText} numberOfLines={1}>
+                    {storyUser.full_name?.split(' ')[0] || storyUser.username}
+                  </Text>
                 </Surface>
-                <Text style={styles.usernameText} numberOfLines={1}>
-                  {storyUser.full_name?.split(' ')[0] || storyUser.username}
-                </Text>
-              </Surface>
-            </TouchableRipple>
-          ))}
+              </TouchableRipple>
+            );
+          })}
         </ScrollView>
       </Surface>
 

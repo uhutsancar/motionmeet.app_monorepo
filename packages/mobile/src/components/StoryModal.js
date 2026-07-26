@@ -6,10 +6,12 @@ import {
   Alert,
   ScrollView,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  View,
+  useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthContext } from "../context/AuthProvider";
 import { createStory } from '../api/endpoints';
@@ -20,6 +22,8 @@ import { useTranslation } from 'react-i18next';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
 
 const StoryModal = ({ visible, onClose, onSuccess }) => {
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { t } = useTranslation();
   const { getToken } = useAuthContext();
@@ -28,6 +32,10 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
   const [media, setMedia] = useState(null);
   const [background, setBackground] = useState('#000000');
   const [loading, setLoading] = useState(false);
+  const previewHeight = Math.max(260, Math.min(width * 1.12, height * 0.46, 420));
+  const canPublish = !loading && (
+    mode === 'text' ? text.trim().length > 0 : Boolean(media)
+  );
 
   const bgColors = [
     '#000000',
@@ -47,40 +55,54 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
     header: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
+      height: insets.top + 58,
+      paddingTop: insets.top,
       paddingHorizontal: 16,
-      paddingVertical: 16,
-      minHeight: 64,
       borderBottomWidth: 1,
       borderBottomColor: theme.border,
-      backgroundColor: 'transparent'
+      backgroundColor: theme.background,
+    },
+    headerSide: {
+      width: 82,
+      height: 58,
+      justifyContent: 'center',
     },
     backButton: {
-      padding: 8,
-      marginLeft: -8,
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     postButtonWrapper: {
-      padding: 8,
-      marginRight: -8,
+      minHeight: 42,
+      alignItems: 'flex-end',
+      justifyContent: 'center',
     },
     headerTitle: {
-      fontSize: 18,
-      fontWeight: 'bold',
+      flex: 1,
+      textAlign: 'center',
+      fontSize: 17,
+      fontWeight: '800',
       color: theme.text,
     },
     postButton: {
-      fontSize: 16,
+      fontSize: 13,
       fontWeight: '900',
       textTransform: 'uppercase',
+      letterSpacing: 0.5,
     },
     content: {
       flex: 1,
+    },
+    contentContainer: {
       padding: 16,
+      paddingBottom: 36,
     },
     modeSelector: {
       flexDirection: 'row',
-      gap: 12,
-      marginBottom: 20,
+      gap: 10,
+      marginBottom: 16,
       backgroundColor: 'transparent'
     },
     modeButton: {
@@ -89,8 +111,8 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
       alignItems: 'center',
       justifyContent: 'center',
       gap: 8,
-      paddingVertical: 12,
-      borderRadius: 16,
+      minHeight: 48,
+      borderRadius: 12,
       borderWidth: 1,
       borderColor: theme.border,
     },
@@ -99,11 +121,11 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
       fontWeight: 'bold',
     },
     preview: {
-      height: 400,
-      borderRadius: 24,
+      height: previewHeight,
+      borderRadius: 20,
       justifyContent: 'center',
       alignItems: 'center',
-      marginBottom: 20,
+      marginBottom: 16,
       overflow: 'hidden',
       borderWidth: 1,
       borderColor: theme.border,
@@ -114,11 +136,24 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
       resizeMode: 'cover',
     },
     previewText: {
-      fontSize: 24,
-      fontWeight: 'bold',
+      fontSize: 22,
+      lineHeight: 29,
+      fontWeight: '800',
       color: '#fff',
       textAlign: 'center',
       paddingHorizontal: 20,
+    },
+    emptyMedia: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
+      paddingHorizontal: 24,
+    },
+    emptyMediaText: {
+      color: theme.textMuted,
+      textAlign: 'center',
+      fontSize: 14,
+      fontWeight: '700',
     },
     textInput: {
       borderWidth: 1,
@@ -127,24 +162,23 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
       padding: 16,
       fontSize: 16,
       color: theme.text,
-      minHeight: 100,
+      minHeight: 96,
       textAlignVertical: 'top',
-      marginBottom: 20,
+      marginBottom: 18,
       backgroundColor: theme.surface,
     },
     sectionTitle: {
       fontSize: 14,
       fontWeight: 'bold',
       color: theme.text,
-      marginBottom: 12,
+      marginBottom: 10,
       textTransform: 'uppercase',
       letterSpacing: 1,
     },
     colorPicker: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 12,
-      paddingBottom: 40,
+      gap: 11,
       backgroundColor: 'transparent'
     },
     colorButton: {
@@ -157,9 +191,22 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
     selectedColor: {
       borderColor: theme.text,
     },
-  }), [theme]);
+  }), [insets.top, previewHeight, theme]);
 
-  const pickMedia = async (type) => {
+  const resetDraft = () => {
+    setMode('text');
+    setText('');
+    setMedia(null);
+    setBackground('#000000');
+  };
+
+  const handleClose = () => {
+    if (loading) return;
+    resetDraft();
+    onClose?.();
+  };
+
+  const pickMedia = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (status !== 'granted') {
@@ -168,12 +215,11 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: type === 'video' 
-        ? ['videos']
-        : ['images'],
+      mediaTypes: ['images', 'videos'],
       allowsEditing: true,
       aspect: [9, 16],
       quality: 0.8,
+      videoMaxDuration: 60,
     });
 
     if (!result.canceled) {
@@ -195,7 +241,7 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
 
     try {
       setLoading(true);
-      let token = await getToken();
+      const token = await getToken();
       const uploadedKey =
         media && mode === 'media'
           ? await uploadMedia(media, 'stories', token)
@@ -209,8 +255,9 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
 
       if (data.success) {
         Alert.alert(t('common.success'), t('feed.story_created'));
+        resetDraft();
         onSuccess?.();
-        onClose();
+        onClose?.();
       } else {
         Alert.alert(t('common.error'), data.message);
       }
@@ -226,23 +273,44 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
       visible={visible}
       animationType="slide"
       transparent={false}
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <SafeAreaView style={styles.container}>
-        <Surface elevation={0} style={styles.header}>
-          <TouchableRipple onPress={onClose} style={styles.backButton} borderless>
-            <Ionicons name="arrow-back" size={24} color={theme.text} />
-          </TouchableRipple>
+      <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+        <View style={styles.header}>
+          <View style={[styles.headerSide, { alignItems: 'flex-start' }]}>
+            <TouchableRipple
+              onPress={handleClose}
+              style={styles.backButton}
+              borderless
+              disabled={loading}
+              accessibilityLabel={t('common.back', 'Back')}
+            >
+              <Ionicons name="arrow-back" size={23} color={theme.text} />
+            </TouchableRipple>
+          </View>
           <Text style={styles.headerTitle}>{t('feed.create_story')}</Text>
-          <TouchableRipple onPress={handleCreateStory} disabled={loading} style={styles.postButtonWrapper} borderless>
-            <Text style={[styles.postButton, { color: loading ? theme.primary + '80' : theme.primary }]}>
-              {loading ? t('common.saving') : t('feed.post_action')}
-            </Text>
-          </TouchableRipple>
-        </Surface>
+          <View style={[styles.headerSide, { alignItems: 'flex-end' }]}>
+            <TouchableRipple
+              onPress={handleCreateStory}
+              disabled={!canPublish}
+              style={styles.postButtonWrapper}
+              borderless
+              accessibilityLabel={t('feed.post_action')}
+            >
+              <Text style={[styles.postButton, { color: canPublish ? theme.primary : theme.textMuted }]}>
+                {loading ? t('common.saving') : t('feed.post_action')}
+              </Text>
+            </TouchableRipple>
+          </View>
+        </View>
 
-        <ScrollView style={styles.content}>
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentContainer}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <Surface elevation={0} style={styles.modeSelector}>
             <TouchableRipple
               style={[styles.modeButton, { backgroundColor: mode === 'text' ? theme.surface + '80' : theme.surface }]}
@@ -259,7 +327,7 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
             </TouchableRipple>
             <TouchableRipple
               style={[styles.modeButton, { backgroundColor: mode === 'media' ? theme.surface + '80' : theme.surface }]}
-              onPress={() => pickMedia('image')}
+              onPress={pickMedia}
               borderless
             >
               <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'transparent' }}>
@@ -270,8 +338,17 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
           </Surface>
 
           <Surface elevation={0} style={[styles.preview, { backgroundColor: mode === 'text' ? background : '#000' }]}>
-            {mode === 'media' && media ? (
-              <Image source={{ uri: media.uri }} style={styles.mediaPreview} />
+            {mode === 'media' ? (
+              media ? (
+                <Image source={{ uri: media.uri }} style={styles.mediaPreview} />
+              ) : (
+                <View style={styles.emptyMedia}>
+                  <Ionicons name="images-outline" size={38} color={theme.textMuted} />
+                  <Text style={styles.emptyMediaText}>
+                    {t('workout_summary.add_media', 'Add photo or video')}
+                  </Text>
+                </View>
+              )
             ) : (
               <Text style={styles.previewText}>{text || t('feed.story_text_placeholder')}</Text>
             )}
@@ -301,6 +378,8 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
                     ]}
                     onPress={() => setBackground(color)}
                     borderless
+                    accessibilityRole="button"
+                    accessibilityLabel={color}
                   >
                     <Surface elevation={0} style={{ width: '100%', height: '100%', backgroundColor: 'transparent' }} />
                   </TouchableRipple>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, StatusBar } from 'react-native';
+import { ScrollView, StatusBar, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,13 +10,7 @@ import { Appbar, Surface, Switch, Text, useTheme as usePaperTheme, TouchableRipp
 const STORAGE_KEY = '@mm_notification_prefs';
 
 const DEFAULT_PREFS = {
-  pushEnabled: true,
-  newFollower: true,
-  postLike: true,
-  postComment: true,
   newMessage: true,
-  workoutReminder: false,
-  weeklyReport: true,
 };
 
 const NotificationsScreen = ({ navigation }) => {
@@ -54,25 +48,13 @@ const NotificationsScreen = ({ navigation }) => {
 
   const sections = [
     {
-      title: t('notifications.general', 'Genel'),
-      items: [
-        { key: 'pushEnabled', label: t('notifications.push', 'Anlık Bildirimler'), subtitle: t('notifications.push_sub', 'Tüm bildirimleri aç veya kapat') },
-      ]
-    },
-    {
       title: t('notifications.social', 'Sosyal'),
       items: [
-        { key: 'newFollower', label: t('notifications.new_follower', 'Yeni Takipçi') },
-        { key: 'postLike', label: t('notifications.post_like', 'Gönderi Beğenisi') },
-        { key: 'postComment', label: t('notifications.post_comment', 'Gönderi Yorumu') },
-        { key: 'newMessage', label: t('notifications.new_message', 'Yeni Mesaj') },
-      ]
-    },
-    {
-      title: t('notifications.workout', 'Antrenman'),
-      items: [
-        { key: 'workoutReminder', label: t('notifications.workout_reminder', 'Antrenman Hatırlatıcısı'), subtitle: t('notifications.reminder_sub', 'Günlük antrenman hatırlatması') },
-        { key: 'weeklyReport', label: t('notifications.weekly_report', 'Haftalık Rapor'), subtitle: t('notifications.weekly_sub', 'Her Pazartesi gönderilir') },
+        {
+          key: 'newMessage',
+          label: t('notifications.new_message', 'Yeni Mesaj'),
+          subtitle: t('notifications.in_app_message_sub', 'Yeni mesajlar için uygulama içi bildirim göster'),
+        },
       ]
     }
   ];
@@ -90,7 +72,7 @@ const NotificationsScreen = ({ navigation }) => {
         {sections.map((section) => (
           <Surface elevation={0} key={section.title} style={styles.section}>
             <Text variant="labelMedium" style={styles.sectionLabel}>{section.title.toUpperCase()}</Text>
-            <Surface style={styles.card} elevation={1}>
+            <Surface style={styles.card} elevation={0}>
               {section.items.map((item, i) => (
                 <SwitchRow
                   key={item.key}

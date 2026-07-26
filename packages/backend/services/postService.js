@@ -28,24 +28,34 @@ export const createPost = async (postData) => {
   return await Post.create(postData);
 };
 
-export const getFeedPostsForUser = async (userId, pagination) => {
+export const getFeedPostsForUser = async (userId, pagination, mode = "discover") => {
   const user = await User.findById(userId).select("connections following");
   if (!user) return null;
 
   const socialIds = [...new Set([...user.connections, ...user.following].map(String))];
-  const hiddenWorkoutOwners = await User.find({
-    _id: { $in: socialIds },
-    "privacy.showWorkoutsOnFeed": false,
-  }).distinct("_id");
-  const posts = await Post.find({
-    $and: [
-      {
+  const hiddenWorkoutOwners = mode === "following"
+    ? await User.find({
+        _id: { $in: socialIds },
+        "privacy.showWorkoutsOnFeed": false,
+      }).distinct("_id")
+    : [];
+  const accessFilter = mode === "following"
+    ? {
         $or: [
           { user: userId },
           { user: { $in: socialIds }, visibility: "public" },
           { user: { $in: socialIds }, visibility: "followers" },
         ],
-      },
+      }
+    : {
+        $or: [
+          { user: userId },
+          { visibility: "public", post_type: { $ne: "workout" } },
+        ],
+      };
+  const posts = await Post.find({
+    $and: [
+      accessFilter,
       cursorFilter(pagination.cursor, "createdAt"),
     ],
     $nor: [

@@ -14,7 +14,7 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { useState } from "react";
-import { Link as RouterLink, useNavigate } from "react-router-dom";
+import { Link as RouterLink, useNavigate } from "react-router";
 import AuthShell from "~/components/AuthShell";
 import { useAuthContext } from "../context/AuthProvider.jsx";
 
@@ -105,7 +105,7 @@ const Signup = () => {
             autoComplete="new-password"
             value={formData.password}
             onChange={updateField("password")}
-            helperText="Use at least 8 characters."
+            helperText="Use at least 10 characters."
             slotProps={{
               htmlInput: { minLength: 8 },
               input: {

@@ -130,7 +130,7 @@ const Settings = ({ navigation }) => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <Appbar.Header style={{
+      <Appbar.Header statusBarHeight={0} style={{
         backgroundColor: theme.surface,
         elevation: 0,
         borderBottomWidth: 1,
@@ -168,7 +168,7 @@ const Settings = ({ navigation }) => {
             iconColor={theme.primary}
             title={t('settings.account', 'Account')}
             description={t('settings.account_sub', 'Profile and security')}
-            onPress={() => navigation.navigate('ProfileMain')}
+            onPress={() => navigation.navigate('ProfileEdit')}
             theme={theme}
           />
           <Divider />

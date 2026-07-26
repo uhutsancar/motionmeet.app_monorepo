@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Paper from "@mui/material/Paper";
@@ -10,8 +10,11 @@ import EmojiEventsRounded from "@mui/icons-material/EmojiEventsRounded";
 import LocalFireDepartmentRounded from "@mui/icons-material/LocalFireDepartmentRounded";
 import StarRounded from "@mui/icons-material/StarRounded";
 import WorkspacePremiumRounded from "@mui/icons-material/WorkspacePremiumRounded";
+import CircularProgress from "@mui/material/CircularProgress";
 import { Award } from "lucide-react";
 import { EmptyState, PageHeader, PageShell } from "~/components/AppPage";
+import { getPersonalRecords } from "../services/exerciseService";
+import { useAuthContext } from "../context/AuthProvider";
 
 const iconMap = {
   Trophy: EmojiEventsRounded,
@@ -30,12 +33,26 @@ const colorMap = {
 const PersonalRecords = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [records] = useState([
-    { id: 1, name: "Bench Press", value: "100", unit: "kg", date: "Oct 24, 2025", icon: "Trophy", color: "blue" },
-    { id: 2, name: "Squat", value: "140", unit: "kg", date: "Sep 12, 2025", icon: "Flame", color: "orange" },
-    { id: 3, name: "Deadlift", value: "160", unit: "kg", date: "Nov 02, 2025", icon: "Award", color: "amber" },
-    { id: 4, name: "Overhead Press", value: "65", unit: "kg", date: "Aug 15, 2025", icon: "Star", color: "green" },
-  ]);
+  const { getToken } = useAuthContext();
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const loadRecords = async () => {
+      try {
+        const token = await getToken();
+        const data = await getPersonalRecords(token);
+        if (active && data.success) setRecords(data.records || []);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    loadRecords();
+    return () => {
+      active = false;
+    };
+  }, [getToken]);
 
   return (
     <PageShell maxWidth={1000}>
@@ -47,13 +64,19 @@ const PersonalRecords = () => {
         action={<Chip label="PRO" size="small" color="warning" sx={{ fontWeight: 900 }} />}
       />
 
-      {records.length > 0 ? (
+      {loading ? (
+        <Stack alignItems="center" py={8}>
+          <CircularProgress size={32} />
+        </Stack>
+      ) : records.length > 0 ? (
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
-          {records.map((record) => {
-            const Icon = iconMap[record.icon] || EmojiEventsRounded;
-            const gradient = colorMap[record.color] || colorMap.blue;
+          {records.map((record, index) => {
+            const icons = Object.values(iconMap);
+            const gradients = Object.values(colorMap);
+            const Icon = icons[index % icons.length];
+            const gradient = gradients[index % gradients.length];
             return (
-              <Paper key={record.id} variant="outlined" sx={{ p: 2.5, position: "relative", overflow: "hidden", "&:hover": { borderColor: "primary.main" } }}>
+              <Paper key={record.exerciseId} variant="outlined" sx={{ p: 2.5, position: "relative", overflow: "hidden", "&:hover": { borderColor: "primary.main" } }}>
                 <Box sx={{ position: "absolute", top: -28, right: -28, width: 100, height: 100, borderRadius: "50%", background: gradient, opacity: 0.1, filter: "blur(22px)" }} />
                 <Stack direction="row" spacing={2} sx={{ position: "relative", zIndex: 1, alignItems: "center", justifyContent: "space-between" }}>
                   <Stack direction="row" spacing={1.5} sx={{ minWidth: 0, alignItems: "center" }}>
@@ -63,13 +86,14 @@ const PersonalRecords = () => {
                     <Box sx={{ minWidth: 0 }}>
                       <Typography variant="subtitle1" noWrap sx={{ fontWeight: 800 }}>{record.name}</Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {t("statistics.archived_on", "Recorded")} {record.date}
+                        {t("statistics.archived_on", "Recorded")}{" "}
+                        {new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(record.recordedAt))}
                       </Typography>
                     </Box>
                   </Stack>
                   <Box sx={{ flexShrink: 0, textAlign: "right" }}>
                     <Typography variant="h5" sx={{ fontWeight: 800 }}>
-                      {record.value} <Typography component="span" variant="body2" color="text.secondary">{record.unit}</Typography>
+                      {record.value} <Typography component="span" variant="body2" color="text.secondary">kg</Typography>
                     </Typography>
                     <Chip label="1RM" size="small" variant="outlined" sx={{ mt: 0.5 }} />
                   </Box>

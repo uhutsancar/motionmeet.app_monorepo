@@ -5,6 +5,8 @@ import {
   loginUser,
   getMe,
   logoutUser,
+  requestPasswordReset,
+  resetPassword,
   refreshSession,
 } from "../controllers/authController.js";
 import { protect } from "../middlewares/auth.js";
@@ -45,10 +47,21 @@ const refreshLimiter = rateLimit({
   message: authLimiterResponse,
 });
 
+const passwordResetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: createRateLimitStore("password-reset"),
+  message: authLimiterResponse,
+});
+
 router.post("/register", registerLimiter, registerUser);
 router.post("/login", loginLimiter, loginUser);
 router.post("/refresh", refreshLimiter, refreshSession);
 router.post("/logout", logoutUser);
+router.post("/forgot-password", passwordResetLimiter, requestPasswordReset);
+router.post("/reset-password", passwordResetLimiter, resetPassword);
 router.get("/me", protect, getMe);
 
 export default router;

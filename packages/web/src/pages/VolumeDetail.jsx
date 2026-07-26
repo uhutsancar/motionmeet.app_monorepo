@@ -1,4 +1,4 @@
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
@@ -20,8 +20,9 @@ const VolumeDetail = () => {
     const labels = statsData?.stats?.labels ?? [];
     const volumes = statsData?.stats?.volumes ?? [];
     const totalVolume = statsData?.totalVolume ?? 0;
-    const avgVolume = labels.length > 0
-        ? Math.round(volumes.reduce((a, b) => a + (b || 0), 0) / labels.length)
+    const totalWorkouts = statsData?.totalWorkouts ?? 0;
+    const avgVolume = totalWorkouts > 0
+        ? Math.round(totalVolume / totalWorkouts)
         : 0;
 
     const chartData = labels.map((label, i) => ({

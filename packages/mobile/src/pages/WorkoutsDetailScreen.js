@@ -1,7 +1,7 @@
 import React from 'react';
 import { ScrollView, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { BarChart } from 'react-native-chart-kit';
@@ -18,9 +18,7 @@ const WorkoutsDetailScreen = ({ navigation, route }) => {
   const statsData = route?.params?.statsData ?? null;
   const totalWorkouts = statsData?.totalWorkouts ?? 0;
   const labels = statsData?.stats?.labels ?? [];
-  // workouts per label: approximate by counting non-zero volume days
-  const volumes = statsData?.stats?.volumes ?? [];
-  const workoutsPerLabel = volumes.map(v => (v > 0 ? 1 : 0));
+  const workoutsPerLabel = statsData?.stats?.workouts ?? [];
   const avgPerSession = labels.length > 0 ? (totalWorkouts / labels.length).toFixed(1) : 0;
 
   const hasData = labels.length > 0;
@@ -48,7 +46,7 @@ const WorkoutsDetailScreen = ({ navigation, route }) => {
             <Text variant="labelMedium" style={styles.summaryUnit}>{t('monthly_report.chart_unit_workouts', 'seans')}</Text>
           </Surface>
           <Surface style={styles.summaryCard} elevation={1}>
-            <Text variant="labelMedium" style={styles.summaryLabel}>{t('monthly_report.avg_per_session', 'Seans Başına Ort.')}</Text>
+            <Text variant="labelMedium" style={styles.summaryLabel}>{t('monthly_report.avg_per_active_day', 'Aktif Gün Başına Ort.')}</Text>
             <Text variant="displaySmall" style={styles.summaryValue}>{avgPerSession}</Text>
             <Text variant="labelMedium" style={styles.summaryUnit}>{t('monthly_report.chart_unit_workouts', 'seans')}</Text>
           </Surface>

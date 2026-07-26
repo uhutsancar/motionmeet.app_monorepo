@@ -6,7 +6,7 @@ import {
   ScrollView,
   Alert
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { useAuthContext } from "../context/AuthProvider";
@@ -158,7 +158,7 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
   return (
     <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={handleClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-        <Surface style={[styles.modalContent, { paddingBottom: insets.bottom }]} elevation={4}>
+        <Surface style={[styles.modalContent, { paddingBottom: insets.bottom }]} elevation={0}>
           
           <Appbar.Header style={styles.header}>
             <Appbar.Action icon="close" onPress={handleClose} color={theme.text} />
@@ -208,7 +208,7 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
                 </Surface>
               </TouchableRipple>
               {showMuscles && (
-                <Surface style={styles.optionsList} elevation={2}>
+                <Surface style={styles.optionsList} elevation={0}>
                   <ScrollView nestedScrollEnabled style={{ maxHeight: 180 }}>
                     {muscleGroups.map(m => (
                       <TouchableRipple 
@@ -243,7 +243,7 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
                 </Surface>
               </TouchableRipple>
               {showEquipment && (
-                <Surface style={styles.optionsList} elevation={2}>
+                <Surface style={styles.optionsList} elevation={0}>
                   {equipmentList.map(e => (
                     <TouchableRipple 
                       key={e} 

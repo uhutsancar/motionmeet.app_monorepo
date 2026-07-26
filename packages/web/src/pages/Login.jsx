@@ -5,8 +5,6 @@ import VisibilityOutlined from "@mui/icons-material/VisibilityOutlined";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Checkbox from "@mui/material/Checkbox";
-import FormControlLabel from "@mui/material/FormControlLabel";
 import IconButton from "@mui/material/IconButton";
 import InputAdornment from "@mui/material/InputAdornment";
 import Link from "@mui/material/Link";
@@ -14,7 +12,7 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { useState } from "react";
-import { Link as RouterLink, useNavigate } from "react-router-dom";
+import { Link as RouterLink, useNavigate } from "react-router";
 import AuthShell from "~/components/AuthShell";
 import { useAuthContext } from "../context/AuthProvider.jsx";
 
@@ -105,12 +103,8 @@ const Login = () => {
               },
             }}
           />
-          <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mt: -0.5 }}>
-            <FormControlLabel
-              control={<Checkbox size="small" defaultChecked />}
-              label={<Typography variant="body2" color="text.secondary">Keep me signed in</Typography>}
-            />
-            <Link href="mailto:support@motionmeet.app" underline="hover" variant="body2" sx={{ fontWeight: 800 }}>
+          <Stack direction="row" sx={{ alignItems: "center", justifyContent: "flex-end", mt: -0.5 }}>
+            <Link component={RouterLink} to="/forgot-password" underline="hover" variant="body2" sx={{ fontWeight: 800 }}>
               Forgot password?
             </Link>
           </Stack>

@@ -14,6 +14,18 @@ export const isNonEmptyString = (value, maxLength = 255) =>
 export const isOptionalString = (value, maxLength = 255) =>
   value === undefined || value === null || (typeof value === "string" && value.trim().length <= maxLength);
 
+export const isOptionalHttpUrl = (value, maxLength = 2048) => {
+  if (value === undefined || value === null || value === "") return true;
+  if (typeof value !== "string" || value.trim().length > maxLength) return false;
+  try {
+    const parsed = new URL(value.trim());
+    return parsed.protocol === "https:" ||
+      (process.env.NODE_ENV !== "production" && parsed.protocol === "http:");
+  } catch {
+    return false;
+  }
+};
+
 export const isFiniteNumber = (value, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) => {
   if (
     (typeof value !== "number" && typeof value !== "string") ||
@@ -46,7 +58,9 @@ export const isExerciseList = (value, { allowEmpty = false } = {}) => {
       }
 
       return (
-        (set.reps === undefined || isFiniteNumber(set.reps, { min: 0, max: 10000 })) &&
+        (set.reps === undefined ||
+          (isFiniteNumber(set.reps, { min: 0, max: 10000 }) &&
+            Number.isInteger(Number(set.reps)))) &&
         (set.weight === undefined || isFiniteNumber(set.weight, { min: 0, max: 100000 })) &&
         (set.completed === undefined || typeof set.completed === "boolean")
       );

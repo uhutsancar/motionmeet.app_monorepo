@@ -3,21 +3,42 @@ info:
   title: MotionMeet API
   version: 1.0.0
   description: Contract shared by the web, Expo mobile, and Express API packages.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
 servers:
   - url: /
 security:
   - bearerAuth: []
 tags:
   - name: Auth
+    description: Account authentication and session lifecycle.
   - name: User
+    description: Account profiles, privacy, discovery and relationships.
   - name: Media
+    description: Direct object-storage upload authorization.
   - name: Social
+    description: Feed posts, comments and stories.
   - name: Workouts
+    description: Workout logging and server-derived performance metrics.
   - name: Messages
+    description: Private conversations and message state.
+  - name: Exercises
+    description: Exercise catalog, details and personal records.
+  - name: Routines
+    description: Reusable workout routines.
+  - name: Reference
+    description: Public and authenticated reference catalogs.
+  - name: Admin
+    description: Superadmin-only account management.
+  - name: Health
+    description: Container and dependency health probes.
 paths:
   /api/auth/register:
     post:
       tags: [Auth]
+      summary: Register an account
+      operationId: postAuthRegister
       security: []
       requestBody:
         required: true
@@ -41,6 +62,8 @@ paths:
   /api/auth/login:
     post:
       tags: [Auth]
+      summary: Authenticate an account
+      operationId: postAuthLogin
       security: []
       requestBody:
         required: true
@@ -66,6 +89,8 @@ paths:
   /api/auth/refresh:
     post:
       tags: [Auth]
+      summary: Rotate an authentication session
+      operationId: postAuthRefresh
       security: []
       description: "Web uses the HttpOnly refresh cookie. Mobile sends refreshToken and X-Client-Platform: mobile."
       requestBody:
@@ -87,13 +112,61 @@ paths:
   /api/auth/logout:
     post:
       tags: [Auth]
+      summary: End an authentication session
+      operationId: postAuthLogout
       security: []
       responses:
         "200":
           $ref: "#/components/responses/Success"
+  /api/auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request a password reset
+      operationId: postAuthForgotPassword
+      security: []
+      description: Always returns an accepted response so account existence is not disclosed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+      responses:
+        "202":
+          $ref: "#/components/responses/Success"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset an account password
+      operationId: postAuthResetPassword
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token: { type: string, minLength: 32, maxLength: 256 }
+                password: { type: string, minLength: 10, maxLength: 72 }
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
   /api/auth/me:
     get:
       tags: [Auth]
+      summary: Get the authenticated account
+      operationId: getAuthMe
       responses:
         "200":
           description: Current user
@@ -110,6 +183,8 @@ paths:
   /api/user/privacy:
     get:
       tags: [User]
+      summary: Get privacy preferences
+      operationId: getUserPrivacy
       responses:
         "200":
           description: Privacy preferences
@@ -122,6 +197,8 @@ paths:
                   privacy: { $ref: "#/components/schemas/Privacy" }
     patch:
       tags: [User]
+      summary: Update privacy preferences
+      operationId: patchUserPrivacy
       requestBody:
         required: true
         content:
@@ -134,6 +211,8 @@ paths:
   /api/user/export:
     get:
       tags: [User]
+      summary: Export account data
+      operationId: getUserExport
       responses:
         "200":
           description: Complete account export
@@ -146,6 +225,8 @@ paths:
   /api/user/account:
     delete:
       tags: [User]
+      summary: Delete an account
+      operationId: deleteUserAccount
       requestBody:
         required: true
         content:
@@ -160,9 +241,136 @@ paths:
           $ref: "#/components/responses/Success"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /api/user/data:
+    get:
+      tags: [User]
+      summary: Get account data
+      operationId: getUserData
+      responses:
+        "200":
+          description: Current account profile, plan, following and connection data
+  /api/user/update:
+    post:
+      tags: [User]
+      summary: Update the account profile
+      operationId: postUserUpdate
+      description: Update profile fields. Legacy multipart profile/cover uploads remain supported; direct media uploads are preferred.
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                full_name: { type: string, maxLength: 100 }
+                username: { type: string, minLength: 3, maxLength: 30 }
+                bio: { type: string, maxLength: 500 }
+                location: { type: string, maxLength: 120 }
+                profile: { type: string, format: binary }
+                cover: { type: string, format: binary }
+      responses:
+        "200":
+          description: Updated user
+  /api/user/discover:
+    post:
+      tags: [User]
+      summary: Discover user profiles
+      operationId: postUserDiscover
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                input: { type: string, maxLength: 100 }
+      responses:
+        "200":
+          description: Privacy-filtered user discovery page
+  /api/user/follow:
+    post:
+      tags: [User]
+      summary: Follow a user
+      operationId: postUserFollow
+      requestBody:
+        $ref: "#/components/requestBodies/UserTarget"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/user/unfollow:
+    post:
+      tags: [User]
+      summary: Unfollow a user
+      operationId: postUserUnfollow
+      requestBody:
+        $ref: "#/components/requestBodies/UserTarget"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/user/connect:
+    post:
+      tags: [User]
+      summary: Request a connection
+      operationId: postUserConnect
+      requestBody:
+        $ref: "#/components/requestBodies/UserTarget"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/user/accept:
+    post:
+      tags: [User]
+      summary: Accept a connection
+      operationId: postUserAccept
+      requestBody:
+        $ref: "#/components/requestBodies/UserTarget"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/user/connections:
+    get:
+      tags: [User]
+      summary: List connections
+      operationId: getUserConnections
+      responses:
+        "200":
+          description: Connections and pending requests
+  /api/user/profiles:
+    post:
+      tags: [User]
+      summary: Get a user profile
+      operationId: postUserProfiles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [profileId]
+              properties:
+                profileId: { type: string }
+      responses:
+        "200":
+          description: Privacy-filtered profile and visible posts
+  /api/user/suggested:
+    get:
+      tags: [User]
+      summary: List suggested profiles
+      operationId: getUserSuggested
+      responses:
+        "200":
+          description: Suggested public profiles
+  /api/user/recent-messages:
+    get:
+      tags: [Messages]
+      summary: List recent conversations
+      operationId: getUserRecentMessages
+      responses:
+        "200":
+          description: Bounded recent conversations
   /api/media/presign:
     post:
       tags: [Media]
+      summary: Authorize a direct media upload
+      operationId: postMediaPresign
       requestBody:
         required: true
         content:
@@ -195,9 +403,14 @@ paths:
   /api/post/feed:
     get:
       tags: [Social]
+      summary: Get the social feed
+      operationId: getPostFeed
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
+        - in: query
+          name: mode
+          schema: { enum: [discover, following], default: discover }
       responses:
         "200":
           description: Cursor-paginated feed
@@ -214,6 +427,8 @@ paths:
   /api/post/add:
     post:
       tags: [Social]
+      summary: Create a post
+      operationId: postPostAdd
       description: Direct-upload clients pass uploadedKeys obtained from /api/media/presign.
       requestBody:
         required: true
@@ -237,6 +452,8 @@ paths:
   /api/post/like:
     post:
       tags: [Social]
+      summary: Toggle a post like
+      operationId: postPostLike
       requestBody:
         required: true
         content:
@@ -261,6 +478,8 @@ paths:
   /api/post/comment/add:
     post:
       tags: [Social]
+      summary: Add a post comment
+      operationId: postPostCommentAdd
       requestBody:
         required: true
         content:
@@ -277,6 +496,8 @@ paths:
   /api/post/{postId}/comments:
     get:
       tags: [Social]
+      summary: List post comments
+      operationId: getPostByPostIdComments
       parameters:
         - in: path
           name: postId
@@ -287,9 +508,79 @@ paths:
       responses:
         "200":
           description: Cursor-paginated comments, newest first
+  /api/post/delete:
+    post:
+      tags: [Social]
+      summary: Delete a post using the legacy endpoint
+      operationId: postPostDelete
+      deprecated: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [postId]
+              properties:
+                postId: { type: string }
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/post/{postId}:
+    delete:
+      tags: [Social]
+      summary: Delete a post
+      operationId: deletePostByPostId
+      parameters:
+        - $ref: "#/components/parameters/PostId"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/story/create:
+    post:
+      tags: [Social]
+      summary: Create a story
+      operationId: postStoryCreate
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                content: { type: string, maxLength: 2000 }
+                media_type: { enum: [text, image, video] }
+                visibility: { enum: [public, followers, private] }
+                media: { type: string, format: binary }
+                uploadedKey: { type: string }
+      responses:
+        "201":
+          description: Story created
+  /api/story/get:
+    get:
+      tags: [Social]
+      summary: List visible stories
+      operationId: getStoryGet
+      responses:
+        "200":
+          description: Unexpired stories visible to the current user
+  /api/story/delete/{storyId}:
+    delete:
+      tags: [Social]
+      summary: Delete a story
+      operationId: deleteStoryDeleteByStoryId
+      parameters:
+        - in: path
+          name: storyId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
   /api/workout:
     get:
       tags: [Workouts]
+      summary: List workouts
+      operationId: getWorkout
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
@@ -298,24 +589,36 @@ paths:
           description: Cursor-paginated workouts
     post:
       tags: [Workouts]
+      summary: Log a workout
+      operationId: postWorkout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkoutInput"
       responses:
-        "200":
+        "201":
           description: Logged workout
         "403":
           description: Plan quota reached
   /api/workout/stats:
     get:
       tags: [Workouts]
+      summary: Get workout statistics
+      operationId: getWorkoutStats
       parameters:
         - in: query
           name: period
-          schema: { enum: [week, month, year], default: month }
+          schema: { enum: [week, month, calendar_month, year], default: month }
       responses:
         "200":
           description: Statistics filtered to the requested 7, 30, or 365-day window
   /api/message/get:
     post:
       tags: [Messages]
+      summary: Get a conversation
+      operationId: postMessageGet
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
@@ -331,6 +634,271 @@ paths:
       responses:
         "200":
           description: Cursor-paginated conversation
+  /api/message/send:
+    post:
+      tags: [Messages]
+      summary: Send a message
+      operationId: postMessageSend
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [to_user_id]
+              properties:
+                to_user_id: { type: string }
+                text: { type: string, maxLength: 5000 }
+                image: { type: string, format: binary }
+                uploadedKey: { type: string }
+      responses:
+        "201":
+          description: Message created
+  /api/message/conversations:
+    get:
+      tags: [Messages]
+      summary: List conversations
+      operationId: getMessageConversations
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Cursor-paginated conversations
+  /api/message/recent:
+    get:
+      tags: [Messages]
+      summary: List recent messages
+      operationId: getMessageRecent
+      responses:
+        "200":
+          description: Bounded recent conversations
+  /api/message/seen:
+    post:
+      tags: [Messages]
+      summary: Mark messages as seen
+      operationId: postMessageSeen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from_user_id]
+              properties:
+                from_user_id: { type: string }
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/message/delete/{messageId}:
+    delete:
+      tags: [Messages]
+      summary: Delete a message
+      operationId: deleteMessageDeleteByMessageId
+      parameters:
+        - in: path
+          name: messageId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/exercise:
+    get:
+      tags: [Exercises]
+      summary: Search exercises
+      operationId: getExercise
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string, maxLength: 100 }
+        - in: query
+          name: muscle
+          schema: { type: string }
+        - in: query
+          name: equipment
+          schema: { type: string }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Searchable exercise page
+    post:
+      tags: [Exercises]
+      summary: Create a custom exercise
+      operationId: postExercise
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, muscleGroup, equipment]
+              properties:
+                name: { type: string, minLength: 2, maxLength: 120 }
+                muscleGroup: { type: string }
+                equipment: { type: string }
+                gifUrl: { type: string, format: uri }
+      responses:
+        "201":
+          description: Custom exercise created
+  /api/exercise/records:
+    get:
+      tags: [Exercises]
+      summary: List personal records
+      operationId: getExerciseRecords
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Personal records derived from completed workout sets
+  /api/exercise/{exerciseId}:
+    get:
+      tags: [Exercises]
+      summary: Get exercise details
+      operationId: getExerciseByExerciseId
+      parameters:
+        - $ref: "#/components/parameters/ExerciseId"
+      responses:
+        "200":
+          description: Exercise details
+  /api/exercise/{exerciseId}/stats:
+    get:
+      tags: [Exercises]
+      summary: Get exercise statistics
+      operationId: getExerciseByExerciseIdStats
+      parameters:
+        - $ref: "#/components/parameters/ExerciseId"
+      responses:
+        "200":
+          description: Current user's exercise history aggregates
+  /api/routine:
+    get:
+      tags: [Routines]
+      summary: List routines
+      operationId: getRoutine
+      responses:
+        "200":
+          description: Current user's routines
+    post:
+      tags: [Routines]
+      summary: Create a routine
+      operationId: postRoutine
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoutineInput"
+      responses:
+        "201":
+          description: Routine created
+  /api/routine/{routineId}:
+    put:
+      tags: [Routines]
+      summary: Update a routine
+      operationId: putRoutineByRoutineId
+      parameters:
+        - $ref: "#/components/parameters/RoutineId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoutineInput"
+      responses:
+        "200":
+          description: Routine updated
+    delete:
+      tags: [Routines]
+      summary: Delete a routine
+      operationId: deleteRoutineByRoutineId
+      parameters:
+        - $ref: "#/components/parameters/RoutineId"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/plans:
+    get:
+      tags: [Reference]
+      summary: List available plans
+      operationId: getPlans
+      security: []
+      responses:
+        "200":
+          description: Available plans
+  /api/plans/update:
+    post:
+      tags: [User]
+      summary: Update the current plan
+      operationId: postPlansUpdate
+      description: Update the current user's plan only when server policy permits.
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/muscle-groups:
+    get:
+      tags: [Reference]
+      summary: List muscle groups
+      operationId: getMuscleGroups
+      responses:
+        "200":
+          description: Canonical muscle-group reference data
+  /api/equipment:
+    get:
+      tags: [Reference]
+      summary: List equipment
+      operationId: getEquipment
+      responses:
+        "200":
+          description: Canonical equipment reference data
+  /api/admin/users:
+    get:
+      tags: [Admin]
+      summary: List users for administration
+      operationId: getAdminUsers
+      responses:
+        "200":
+          description: Superadmin-only user administration page
+  /api/admin/users/{userId}/role:
+    put:
+      tags: [Admin]
+      summary: Update a user role
+      operationId: putAdminUsersByUserIdRole
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /api/admin/users/{userId}/plan:
+    put:
+      tags: [Admin]
+      summary: Update a user plan
+      operationId: putAdminUsersByUserIdPlan
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+  /health/live:
+    get:
+      tags: [Health]
+      summary: Check API liveness
+      operationId: getHealthLive
+      security: []
+      responses:
+        "200":
+          description: Process liveness
+  /health/ready:
+    get:
+      tags: [Health]
+      summary: Check API readiness
+      operationId: getHealthReady
+      security: []
+      responses:
+        "200":
+          description: Database, Redis and capability readiness
+        "503":
+          description: A required dependency is unavailable
 components:
   securitySchemes:
     bearerAuth:
@@ -346,6 +914,36 @@ components:
       in: query
       name: limit
       schema: { type: integer, minimum: 1, maximum: 100 }
+    UserId:
+      in: path
+      name: userId
+      required: true
+      schema: { type: string }
+    PostId:
+      in: path
+      name: postId
+      required: true
+      schema: { type: string }
+    ExerciseId:
+      in: path
+      name: exerciseId
+      required: true
+      schema: { type: string }
+    RoutineId:
+      in: path
+      name: routineId
+      required: true
+      schema: { type: string }
+  requestBodies:
+    UserTarget:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [id]
+            properties:
+              id: { type: string }
   schemas:
     RegisterRequest:
       type: object
@@ -390,6 +988,54 @@ components:
         refreshToken:
           type: string
           description: "Returned only to clients declaring X-Client-Platform: mobile."
+    WorkoutSetInput:
+      type: object
+      required: [reps, weight]
+      properties:
+        reps: { type: integer, minimum: 0, maximum: 10000 }
+        weight: { type: number, minimum: 0, maximum: 100000 }
+        completed: { type: boolean, default: true }
+        setType: { enum: [normal, warmup, drop, failure] }
+    WorkoutInput:
+      type: object
+      required: [name, startTime, endTime, exercises]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        notes: { type: string, maxLength: 2000 }
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        visibility: { enum: [public, followers, private] }
+        exercises:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [exerciseId, sets]
+            properties:
+              exerciseId: { type: string }
+              sets:
+                type: array
+                minItems: 1
+                items: { $ref: "#/components/schemas/WorkoutSetInput" }
+      description: Aggregate duration, volume, set and rep totals are server-derived and ignored when supplied by clients.
+    RoutineInput:
+      type: object
+      required: [name, exercises]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 1000 }
+        exercises:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [exerciseId, sets]
+            properties:
+              exerciseId: { type: string }
+              sets:
+                type: array
+                minItems: 1
+                items: { $ref: "#/components/schemas/WorkoutSetInput" }
     Post:
       type: object
       required: [_id, user, like_count, liked_by_me, comment_count, comments]

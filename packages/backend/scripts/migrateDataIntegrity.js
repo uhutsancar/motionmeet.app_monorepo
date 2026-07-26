@@ -7,6 +7,7 @@ import MediaDeletionJob from "../models/MediaDeletionJob.js";
 import Message from "../models/Message.js";
 import MuscleGroup from "../models/MuscleGroup.js";
 import Plan from "../models/Plan.js";
+import PasswordResetToken from "../models/PasswordResetToken.js";
 import Post from "../models/Post.js";
 import PostComment from "../models/PostComment.js";
 import PostLike from "../models/PostLike.js";
@@ -392,6 +393,7 @@ const main = async () => {
     Message.createIndexes(),
     MuscleGroup.createIndexes(),
     Plan.createIndexes(),
+    PasswordResetToken.createIndexes(),
     Post.createIndexes(),
     PostComment.createIndexes(),
     PostLike.createIndexes(),

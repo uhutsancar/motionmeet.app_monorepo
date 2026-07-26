@@ -75,7 +75,12 @@ export const runWithRedisLock = async (name, ttlSeconds, task) => {
   }
 };
 
-export const isRedisReady = () => !redisClient || redisClient.isReady;
+export const isRedisReady = () => Boolean(redisClient?.isReady);
+
+export const getRedisStatus = () => {
+  if (!redisClient) return "disabled";
+  return redisClient.isReady ? "ready" : "not-ready";
+};
 
 export const consumeDistributedLimit = async (
   key,

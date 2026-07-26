@@ -6,7 +6,7 @@ import { Send, Search, MessageSquare, ArrowLeft, Check, CheckCheck, X, Trash2 } 
 import moment from 'moment';
 import 'moment/locale/tr';
 import toast from 'react-hot-toast';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router';
 
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
@@ -359,14 +359,16 @@ const WebMessages = () => {
             placeholder={t('messages.search', 'Search...')}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            InputProps={{
-              startAdornment: <InputAdornment position="start"><Search size={16} /></InputAdornment>,
-              endAdornment: searchQuery ? (
-                <InputAdornment position="end">
-                  <IconButton size="small" onClick={() => setSearchQuery('')}><X size={14} /></IconButton>
-                </InputAdornment>
-              ) : null,
-              sx: { borderRadius: 2.5, bgcolor: 'background.default' }
+            slotProps={{
+              input: {
+                startAdornment: <InputAdornment position="start"><Search size={16} /></InputAdornment>,
+                endAdornment: searchQuery ? (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => setSearchQuery('')}><X size={14} /></IconButton>
+                  </InputAdornment>
+                ) : null,
+                sx: { borderRadius: 2.5, bgcolor: 'background.default' }
+              }
             }}
           />
         </Box>
@@ -501,7 +503,7 @@ const WebMessages = () => {
                 onKeyDown={handleKeyDown}
                 variant="standard"
                 fullWidth
-                InputProps={{ disableUnderline: true, sx: { fontSize: 14, py: 0.5 } }}
+                slotProps={{ input: { disableUnderline: true, sx: { fontSize: 14, py: 0.5 } } }}
                 sx={{ flex: 1 }}
               />
               <IconButton

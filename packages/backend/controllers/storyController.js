@@ -53,8 +53,9 @@ export const addUserStory = async (req, res, next) => {
     if (media) {
       const { key } = await uploadToS3(media.buffer, media.originalname, "stories", media.mimetype);
       mediaKey = key;
+      const cleanKey = key.startsWith('/') ? key.slice(1) : key;
       mediaUrl = imagekit.url({
-        path: key,
+        path: cleanKey,
         ...(resolvedMediaType === "image"
           ? { transformation: [{ quality: "auto" }, { format: "webp" }] }
           : {}),

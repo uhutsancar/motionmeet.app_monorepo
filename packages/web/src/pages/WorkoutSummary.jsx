@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 import {
     Activity, ArrowLeft, Camera, Dumbbell, PlayCircle,
-    TrendingUp, Zap, Eye, Lock, X, Users
+    Zap, Eye, Lock, X, Users
 } from 'lucide-react';
 
 import { createWorkout, createPost } from '~/api/endpoints';
@@ -46,12 +45,20 @@ const WorkoutSummary = () => {
     const fileInputRef = useRef(null);
     const savedWorkoutIdRef = useRef(workoutId);
 
-    const chartData = useMemo(() => Array.from({ length: 10 }, (_, i) => ({
-        time: i,
-        hr: 100 + Math.random() * 50
-    })), []);
-
     const totalSets = workout?.exercises?.reduce((acc, ex) => acc + ex.sets.length, 0) || 0;
+    const exerciseSummary = useMemo(
+        () => (workout?.exercises || []).map((exercise) => ({
+            name: exercise.exerciseId?.name || exercise.name || t('workout.exercise', 'Exercise'),
+            sets: exercise.sets?.length || 0,
+            volume: Math.round(
+                (exercise.sets || []).reduce(
+                    (sum, set) => sum + (Number(set.weight) || 0) * (Number(set.reps) || 0),
+                    0
+                )
+            ),
+        })),
+        [t, workout?.exercises]
+    );
 
     useEffect(() => {
         return () => {
@@ -292,25 +299,21 @@ const WorkoutSummary = () => {
 
                 <Divider sx={{ my: 1 }} />
 
-                {/* Summary Chart Area */}
+                {/* Exercise summary */}
                 <Paper variant="outlined" sx={{ borderRadius: 4, p: 3, bgcolor: 'background.paper' }}>
-                    <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
-                        <Typography variant="subtitle1" fontWeight="bold">{t('workout_summary.intensity', 'Yoğunluk')}</Typography>
-                        <TrendingUp size={20} style={{ color: '#60A5FA' }} />
+                    <Typography variant="subtitle1" fontWeight="bold" mb={2}>
+                        {t('workout_summary.exercise_summary', 'Exercise summary')}
+                    </Typography>
+                    <Stack spacing={1.25}>
+                        {exerciseSummary.map((exercise, index) => (
+                            <Stack key={`${exercise.name}-${index}`} direction="row" justifyContent="space-between" spacing={2}>
+                                <Typography variant="body2" fontWeight={700}>{exercise.name}</Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    {exercise.sets} {t('statistics.sets', 'sets')} · {exercise.volume.toLocaleString()} kg
+                                </Typography>
+                            </Stack>
+                        ))}
                     </Stack>
-                    <Box sx={{ height: 120, width: '100%', mt: 2 }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={chartData}>
-                                <defs>
-                                    <linearGradient id="colorHr" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="var(--accent-primary)" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="var(--accent-primary)" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <Area type="monotone" dataKey="hr" stroke="var(--accent-primary)" strokeWidth={3} fillOpacity={1} fill="url(#colorHr)" />
-                            </AreaChart>
-                        </ResponsiveContainer>
-                    </Box>
                 </Paper>
             </Box>
         </Box>

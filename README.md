@@ -1,70 +1,125 @@
 # MotionMeet
 
-MotionMeet is a social fitness platform with an Express/MongoDB backend, a React/Vite web client, and a React Native/Expo mobile client.
+MotionMeet is a social fitness monorepo:
 
-## Requirements
+- `packages/backend`: Express 5, MongoDB/Mongoose, Redis, Socket.IO
+- `packages/web`: React, Vite, MUI
+- `packages/mobile`: React Native and Expo
+- `packages/shared`: shared API routes and media URL helpers
 
-- Node.js 20+ and pnpm
-- MongoDB credentials for authenticated backend flows
-- A modern browser or Expo Go for development testing
+## Local prerequisites
 
-## Install
+- Node.js 22.22 or newer
+- Corepack/pnpm 11.10
+- Docker Desktop for the container workflow
+
+## Install and validate
 
 ```bash
 corepack enable
 corepack pnpm install --frozen-lockfile
+corepack pnpm lint
+corepack pnpm typecheck
+corepack pnpm test
+corepack pnpm build
 ```
 
-Keep credentials in local `.env` files. Do not commit them. The backend example is `packages/backend/.env.example`; web variables use the `VITE_` prefix and mobile variables use `EXPO_PUBLIC_`.
+The test task currently runs the backend's validation, token, pagination,
+media-signature and workout-metric suites. Web and mobile are additionally
+checked by ESLint, TypeScript, and production export/build. Run the visual
+browser smoke matrix in CI or from a session with an attached browser.
 
-### Backend Environment (`packages/backend/.env`)
+## Development without Docker
 
-- `PORT`, `MONGODB_URL`, `FRONTEND_URL`, `JWT_SECRET`
+Copy the package examples to untracked local environment files:
 
-### Frontend Environment
+```text
+packages/backend/.env.example -> packages/backend/.env
+packages/web/.env.example     -> packages/web/.env
+packages/mobile/.env.example  -> packages/mobile/.env
+```
 
-- Web: `VITE_BASEURL`, `VITE_SOCKET_URL`
-- Mobile: `EXPO_PUBLIC_API_URL`
-
-## Development
-
-Run every application through Turborepo:
+Then run all packages or one package:
 
 ```bash
 corepack pnpm dev
-```
-
-Or run one application:
-
-```bash
 corepack pnpm dev:backend
 corepack pnpm dev:web
 corepack pnpm dev:mobile
 ```
 
-The default ports are backend `4000`, web `5173`, and Expo/Metro `8081`.
-
-## Validation
-
-```bash
-corepack pnpm lint
-corepack pnpm typecheck
-corepack pnpm build
-```
-
-There is no automated test suite in the repository yet, so no placeholder `test` task is defined.
+Defaults are API `4000`, web `5173`, and Expo/Metro `8081`.
 
 ## Docker development
+
+The development Compose stack contains a MongoDB single-node replica set
+(required by workout transactions), Redis, the API, and Vite with bind-mounted
+source and hot reload:
 
 ```bash
 docker compose up --build
 ```
 
-For a physical mobile device, set `EXPO_PUBLIC_API_URL` to an address the device can reach and, when Expo cannot infer the host, set `REACT_NATIVE_PACKAGER_HOSTNAME` in your shell or a local Compose override. Never commit a machine-specific LAN IP.
+Optional Expo/Metro container:
 
-The backend requires a long-running Node host because it serves Socket.IO connections. The web SPA can be deployed separately using `packages/web/vercel.json` when Vercel's project root is `packages/web`.
+```bash
+docker compose --profile mobile up --build
+```
 
-## Exercise dataset
+Copy `.env.development.example` to `.env` only when host-port or Expo origin
+overrides are needed. A physical device must use LAN-accessible
+`EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_WEB_URL` values.
 
-The local `exercises-dataset-main` snapshot is intentionally excluded from Git and Docker builds. Its media license is not transferable to this project, so it must not be shipped until MotionMeet has a suitable license. See [docs/exercises-dataset.md](docs/exercises-dataset.md).
+## Docker production
 
+1. Copy `.env.production.example` to `.env.production`.
+2. Replace `JWT_SECRET`, `FRONTEND_URL`, and `CORS_ORIGINS`.
+3. Enable media/email only after their credentials are supplied.
+4. Validate and start:
+
+```bash
+docker compose -f docker-compose.prod.yml config
+docker compose -f docker-compose.prod.yml build
+docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml ps
+```
+
+The production stack serves the SPA and reverse-proxies `/api`, `/health`, and
+Socket.IO from one origin. The API and web containers are read-only and
+drop Linux capabilities. MongoDB and Redis are on an internal network and are
+not published on the host.
+
+The included MongoDB service is suitable for a single-host deployment. For
+serious production workloads, supply `MONGODB_URL` for an authenticated managed
+replica set with backups and multi-zone failover. Put the web container behind
+an HTTPS reverse proxy or load balancer; `FRONTEND_URL` and `CORS_ORIGINS` must
+use that exact HTTPS origin.
+
+Native iOS/Android binaries are not server containers. Build them with the Expo
+native/EAS workflow using production HTTPS values.
+
+See [docs/production.md](docs/production.md) for the deployment checklist and
+[docs/openapi.yaml](docs/openapi.yaml) for the API contract.
+
+## Data migrations
+
+Both commands are dry-run by default:
+
+```bash
+corepack pnpm --filter @motionmeet/backend migrate:integrity
+corepack pnpm --filter @motionmeet/backend migrate:workout-metrics
+```
+
+After reviewing the output and taking a database backup:
+
+```bash
+corepack pnpm --filter @motionmeet/backend migrate:integrity:apply
+corepack pnpm --filter @motionmeet/backend migrate:workout-metrics:apply
+```
+
+## Exercise media
+
+The local `exercises-dataset-main` snapshot is excluded from Git and Docker.
+It must never be exposed through a filesystem route. Production clients accept
+only public HTTP(S) media URLs; licensed media must be migrated to object storage
+or a CDN. See [docs/exercises-dataset.md](docs/exercises-dataset.md).

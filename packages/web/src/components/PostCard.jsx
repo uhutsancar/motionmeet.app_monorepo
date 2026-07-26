@@ -20,7 +20,7 @@ import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import api from "~/api/axios";
 import { API_ROUTES } from "@motionmeet/shared";
 
@@ -129,6 +129,16 @@ const PostCard = ({ post }) => {
       toast.error(error.message);
     } finally {
       setOlderCommentsLoading(false);
+    }
+  };
+
+  const handleShare = async () => {
+    const text = [post.content, post.workout?.name].filter(Boolean).join("\n") || "MotionMeet";
+    if (navigator.share) {
+      await navigator.share({ title: "MotionMeet", text });
+    } else {
+      await navigator.clipboard.writeText(text);
+      toast.success(t("feed.copied", "Copied to clipboard"));
     }
   };
 
@@ -282,7 +292,7 @@ const PostCard = ({ post }) => {
         <Button color={showComments ? "primary" : "inherit"} startIcon={<MessageCircle size={22} />} onClick={() => setShowComments((visible) => !visible)}>
           {commentCount}
         </Button>
-        <IconButton aria-label={t("feed.share", "Share")} sx={{ ml: "auto" }}>
+        <IconButton aria-label={t("feed.share", "Share")} onClick={handleShare} sx={{ ml: "auto" }}>
           <Share2 size={21} />
         </IconButton>
       </Stack>

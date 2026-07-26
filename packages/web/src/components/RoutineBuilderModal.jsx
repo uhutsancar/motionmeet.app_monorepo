@@ -124,7 +124,7 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
                 toast.error(data.message || "Failed to create routine.");
             }
         } catch (error) {
-            toast.error(error.message || "An error occurred.");
+            toast.error(error.response?.data?.message || error.message || "An error occurred.");
         }
     };
 
@@ -149,7 +149,7 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
                             placeholder="e.g. Leg Day Destroyer"
                             value={form.name}
                             onChange={(e) => setForm({ ...form, name: e.target.value })}
-                            InputProps={{ sx: { borderRadius: 3 } }}
+                            slotProps={{ input: { sx: { borderRadius: 3 } } }}
                         />
 
                         <Paper variant="outlined" sx={{ p: 2, borderRadius: 3, bgcolor: 'background.default' }}>
@@ -162,13 +162,15 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
                                 size="small"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                InputProps={{
-                                    startAdornment: (
-                                        <InputAdornment position="start">
-                                            <SearchRounded fontSize="small" />
-                                        </InputAdornment>
-                                    ),
-                                    sx: { borderRadius: 2, bgcolor: 'background.paper' }
+                                slotProps={{
+                                    input: {
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <SearchRounded fontSize="small" />
+                                            </InputAdornment>
+                                        ),
+                                        sx: { borderRadius: 2, bgcolor: 'background.paper' }
+                                    }
                                 }}
                                 sx={{ mb: 2 }}
                             />
@@ -225,7 +227,7 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
                                                             size="small"
                                                             value={set.weight}
                                                             onChange={(e) => updateSet(exIndex, setIndex, "weight", Number(e.target.value))}
-                                                            inputProps={{ style: { textAlign: 'center' } }}
+                                                            slotProps={{ htmlInput: { style: { textAlign: 'center' } } }}
                                                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, bgcolor: 'background.default' } }}
                                                         />
                                                         <TextField
@@ -233,7 +235,7 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
                                                             size="small"
                                                             value={set.reps}
                                                             onChange={(e) => updateSet(exIndex, setIndex, "reps", Number(e.target.value))}
-                                                            inputProps={{ style: { textAlign: 'center' } }}
+                                                            slotProps={{ htmlInput: { style: { textAlign: 'center' } } }}
                                                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, bgcolor: 'background.default' } }}
                                                         />
                                                         <Box display="flex" justifyContent="center">

@@ -26,15 +26,8 @@ import {
   Zap,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import PublicLayout from "./PublicLayout";
-
-const people = [
-  { name: "Maya", color: "#F7695E" },
-  { name: "Alex", color: "#00A98F" },
-  { name: "Jin", color: "#6457F5" },
-  { name: "Noa", color: "#E89614" },
-];
 
 const Metric = ({ icon: Icon, label, value, accent }) => (
   <Box
@@ -321,19 +314,12 @@ const Landing = () => {
                 </Button>
               </Stack>
               <Stack direction="row" spacing={1.75} sx={{ mt: 4, alignItems: "center" }}>
-                <Stack direction="row">
-                  {people.map((person, index) => (
-                    <Avatar
-                      key={person.name}
-                      sx={{ width: 34, height: 34, ml: index ? -0.9 : 0, border: 2, borderColor: "background.default", bgcolor: person.color, fontSize: 11, fontWeight: 900 }}
-                    >
-                      {person.name[0]}
-                    </Avatar>
-                  ))}
-                </Stack>
+                <Box sx={{ display: "grid", placeItems: "center", width: 38, height: 38, borderRadius: 3, bgcolor: alpha(theme.palette.secondary.main, 0.12), color: "secondary.main" }}>
+                  <CheckRounded fontSize="small" />
+                </Box>
                 <Box>
-                  <Typography sx={{ fontSize: 12.5, fontWeight: 800 }}>Built for real consistency</Typography>
-                  <Typography sx={{ color: "text.disabled", fontSize: 11.5 }}>Training · progress · people</Typography>
+                  <Typography sx={{ fontSize: 12.5, fontWeight: 800 }}>A complete, connected training flow</Typography>
+                  <Typography sx={{ color: "text.disabled", fontSize: 11.5 }}>Workout logging · progress · community</Typography>
                 </Box>
               </Stack>
             </Box>
@@ -354,10 +340,10 @@ const Landing = () => {
             bgcolor: alpha(theme.palette.background.paper, 0.68),
           }}
         >
-          <Metric icon={Activity} label="ACTIVE ATHLETES" value="50K+" accent={theme.palette.primary.main} />
-          <Metric icon={Dumbbell} label="SESSIONS LOGGED" value="1M+" accent={theme.palette.secondary.main} />
-          <Metric icon={Flame} label="WEEKLY MOMENTUM" value="87%" accent="#F7695E" />
-          <Metric icon={Heart} label="COMMUNITY RATING" value="4.9 / 5" accent="#E89614" />
+          <Metric icon={Activity} label="WORKOUT LOGGING" value="Sets & volume" accent={theme.palette.primary.main} />
+          <Metric icon={Dumbbell} label="EXERCISE LIBRARY" value="Search & filter" accent={theme.palette.secondary.main} />
+          <Metric icon={Flame} label="PROGRESS" value="Stats & records" accent="#F7695E" />
+          <Metric icon={Heart} label="COMMUNITY" value="Feed & messages" accent="#E89614" />
         </Paper>
       </Container>
 
@@ -497,31 +483,23 @@ const Landing = () => {
       <Box component="section" sx={{ py: { xs: 10, md: 14 }, bgcolor: "background.paper", borderBlock: 1, borderColor: "divider" }}>
         <Container maxWidth="lg">
           <SectionIntro
-            eyebrow="REAL PEOPLE. REAL MOMENTUM."
-            title="A stronger habit feels better together."
-            description="MotionMeet is made for people who care more about showing up than showing off."
+            eyebrow="BUILT FOR HONEST PROGRESS"
+            title="Useful training tools, without invented promises."
+            description="Every visible metric comes from completed workout data, while social visibility stays under your control."
             align="center"
           />
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" }, gap: 2 }}>
             {[
-              ["“My training finally feels organized without feeling rigid.”", "Maya R.", "Hybrid athlete", "#F7695E"],
-              ["“The progress view gives me exactly the push I need for the next session.”", "Jon B.", "Strength athlete", "#6457F5"],
-              ["“It feels social, but every interaction still comes back to the work.”", "Ece A.", "Runner & lifter", "#00A98F"],
-            ].map(([quote, name, role, color], index) => (
-              <Paper key={name} variant="outlined" sx={{ p: 3.25, borderRadius: 5, minHeight: 240, display: "flex", flexDirection: "column", justifyContent: "space-between", transform: { md: index === 1 ? "translateY(-12px)" : "none" } }}>
-                <Box>
-                  <Stack direction="row" spacing={0.3} sx={{ mb: 2.5 }}>
-                    {[0, 1, 2, 3, 4].map((star) => <Box key={star} sx={{ color: "#E89614", fontSize: 15 }}>★</Box>)}
-                  </Stack>
-                  <Typography sx={{ fontFamily: '"Manrope", sans-serif', fontWeight: 700, fontSize: 18, lineHeight: 1.6 }}>{quote}</Typography>
+              [Target, "Canonical workout data", "Duration, sets, reps and volume are calculated from completed sets on the server.", "#F7695E"],
+              [BarChart3, "Explainable statistics", "Reports, streaks and personal records are derived from stored workout history.", "#6457F5"],
+              [Users2, "Controlled sharing", "Public, followers-only and private visibility rules are enforced by the API.", "#00A98F"],
+            ].map(([Icon, title, text, color], index) => (
+              <Paper key={title} variant="outlined" sx={{ p: 3.25, borderRadius: 5, minHeight: 220, display: "flex", flexDirection: "column", transform: { md: index === 1 ? "translateY(-12px)" : "none" } }}>
+                <Box sx={{ display: "grid", placeItems: "center", width: 46, height: 46, mb: 2.5, borderRadius: 3, bgcolor: alpha(color, 0.12), color }}>
+                  <Icon size={22} />
                 </Box>
-                <Stack direction="row" spacing={1.2} sx={{ alignItems: "center", mt: 3 }}>
-                  <Avatar sx={{ bgcolor: color, width: 40, height: 40, fontSize: 12, fontWeight: 900 }}>{name.split(" ").map((part) => part[0]).join("")}</Avatar>
-                  <Box>
-                    <Typography sx={{ fontSize: 13, fontWeight: 900 }}>{name}</Typography>
-                    <Typography sx={{ color: "text.disabled", fontSize: 11.5 }}>{role}</Typography>
-                  </Box>
-                </Stack>
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>{title}</Typography>
+                <Typography color="text.secondary" sx={{ mt: 1.2, lineHeight: 1.7 }}>{text}</Typography>
               </Paper>
             ))}
           </Box>

@@ -3,7 +3,8 @@ import { ArrowRight, Dumbbell, FileText, MoreHorizontal, PlayCircle, Plus, Searc
 import { useTranslation } from "react-i18next";
 import { useAuthContext } from "../context/AuthProvider";
 import api from "~/api/axios";
-import { useNavigate } from "react-router-dom";
+import { API_ROUTES } from "@motionmeet/shared";
+import { useNavigate } from "react-router";
 import RoutineBuilderModal from "../components/RoutineBuilderModal";
 import { Box, Button, Chip, IconButton, Paper, Stack, Typography } from "@mui/material";
 import { EmptyState, PageHeader, PageShell, SectionHeader } from "~/components/AppPage";
@@ -22,7 +23,7 @@ const Routines = () => {
       if (cursor) setLoadingMore(true);
       const token = await getToken();
       if (!token) return;
-      const { data } = await api.get("/api/routine", {
+      const { data } = await api.get(API_ROUTES.routine.base, {
         headers: { Authorization: `Bearer ${token}` },
         params: cursor ? { cursor } : undefined,
       });
@@ -66,7 +67,14 @@ const Routines = () => {
         <Paper
           component="button"
           variant="outlined"
-          onClick={() => setShowBuilder(true)}
+          onClick={() => navigate("/active-workout", {
+            state: {
+              routine: {
+                name: t("routines.quick_workout", "Quick workout"),
+                exercises: [],
+              },
+            },
+          })}
           sx={{
             p: 2.5,
             display: "flex",

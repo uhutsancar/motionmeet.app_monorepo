@@ -1,67 +1,131 @@
 name: motionmeet_prod
 
 services:
-  backend:
-    build:
-      context: .
-      dockerfile: packages/backend/Dockerfile.prod
+  mongo:
+    image: mongo:8.0
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
     expose:
-      - "4000"
-    env_file:
-      - path: ./.env.production
-        required: false
-    environment:
-      NODE_ENV: production
-      PORT: 4000
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-    depends_on:
-      redis:
-        condition: service_healthy
+      - "27017"
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
-      interval: 30s
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 20s
+      retries: 20
     restart: unless-stopped
+    volumes:
+      - mongo_prod_data:/data/db
     networks:
-      - motionmeet_prod_net
+      - data
 
-  web:
-    build:
-      context: .
-      dockerfile: packages/web/Dockerfile.prod
-      args:
-        VITE_BASEURL: ${VITE_BASEURL:-}
-        VITE_SOCKET_URL: ${VITE_SOCKET_URL:-}
-    ports:
-      - "80:80"
+  mongo-init:
+    image: mongo:8.0
     depends_on:
-      backend:
+      mongo:
         condition: service_healthy
-    restart: unless-stopped
+    restart: "no"
+    command:
+      - mongosh
+      - mongodb://mongo:27017/admin
+      - --quiet
+      - --eval
+      - >-
+        try { rs.status() } catch (error) {
+          rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]})
+        }
     networks:
-      - motionmeet_prod_net
+      - data
 
   redis:
     image: redis:7.4-alpine
     command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
-    restart: unless-stopped
     expose:
       - "6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
-      retries: 5
+      retries: 10
+    restart: unless-stopped
     volumes:
-      - redis_data:/data
+      - redis_prod_data:/data
     networks:
-      - motionmeet_prod_net
+      - data
+
+  backend:
+    build:
+      context: .
+      dockerfile: packages/backend/Dockerfile.prod
+    env_file:
+      - path: ${MOTIONMEET_ENV_FILE:-.env.production}
+        required: true
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      MONGODB_URL: ${MONGODB_URL:-mongodb://mongo:27017/motionmeet?replicaSet=rs0}
+      MONGODB_DB_NAME: ${MONGODB_DB_NAME:-motionmeet}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    expose:
+      - "4000"
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - edge
+      - data
+
+  web:
+    build:
+      context: .
+      dockerfile: packages/web/Dockerfile.prod
+      args:
+        VITE_BASEURL: ""
+        VITE_SOCKET_URL: ""
+        VITE_BUILD_SOURCEMAP: "false"
+    ports:
+      - "${HTTP_PORT:-80}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health/live"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - edge
 
 networks:
-  motionmeet_prod_net:
-    driver: bridge
+  edge:
+  data:
+    internal: true
 
 volumes:
-  redis_data:
+  mongo_prod_data:
+  redis_prod_data:

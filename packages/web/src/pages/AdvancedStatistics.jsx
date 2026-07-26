@@ -12,9 +12,10 @@ import {
 } from "recharts";
 import { Activity, BarChart3, Clock, TrendingUp } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { useAuthContext } from "../context/AuthProvider";
 import api from "~/api/axios";
+import { API_ROUTES } from "@motionmeet/shared";
 import { Box, Paper, Skeleton, Stack, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import { PageHeader, PageShell } from "~/components/AppPage";
 
@@ -72,8 +73,9 @@ const AdvancedStatistics = () => {
       setLoading(true);
       try {
         const token = await getToken();
-        const { data } = await api.get(`/api/workout/stats?period=${period}`, {
+        const { data } = await api.get(API_ROUTES.workout.stats, {
           headers: { Authorization: `Bearer ${token}` },
+          params: { period }
         });
         if (active && data.success) setStatsData(data.stats);
       } catch (error) {

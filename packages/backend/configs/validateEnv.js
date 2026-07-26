@@ -1,5 +1,14 @@
 const MIN_PRODUCTION_SECRET_LENGTH = 32;
 
+const requireValues = (names, context) => {
+  const missing = names.filter((name) => !process.env[name]?.trim());
+  if (missing.length) {
+    throw new Error(
+      `Missing ${context} environment variables: ${missing.join(", ")}`
+    );
+  }
+};
+
 const requireUrl = (name, protocols) => {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`${name} is required in production`);
@@ -46,6 +55,31 @@ export const validateEnvironment = () => {
       if (parsed.origin !== origin.replace(/\/$/, "")) {
         throw new Error("CORS_ORIGINS entries must contain only an HTTPS origin");
       }
+    }
+
+    const mediaUploadsEnabled =
+      process.env.MEDIA_UPLOADS_ENABLED?.trim().toLowerCase() !== "false";
+    if (mediaUploadsEnabled) {
+      requireValues(
+        [
+          "AWS_ACCESS_KEY_ID",
+          "AWS_SECRET_ACCESS_KEY",
+          "AWS_BUCKET_NAME",
+          "IMAGEKIT_PUBLIC_KEY",
+          "IMAGEKIT_PRIVATE_KEY",
+        ],
+        "media"
+      );
+      requireUrl("IMAGEKIT_URL_ENDPOINT", ["https:"]);
+    }
+
+    const emailEnabled =
+      process.env.EMAIL_ENABLED?.trim().toLowerCase() !== "false";
+    if (emailEnabled) {
+      requireValues(
+        ["SMTP_USER", "SMTP_PASS", "SENDER_EMAIL"],
+        "email"
+      );
     }
   }
 };

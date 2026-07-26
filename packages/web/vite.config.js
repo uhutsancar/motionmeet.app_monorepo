@@ -30,9 +30,26 @@ export default defineConfig(({ mode }) => {
 
   build: {
     target: 'esnext',
-    chunkSizeWarningLimit: 2000,
+    chunkSizeWarningLimit: 600,
     minify: 'terser',
     sourcemap: env.VITE_BUILD_SOURCEMAP === 'true',
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (
+            /[\\/]react(?:-dom|-router)?[\\/]/.test(id)
+            || id.includes('scheduler')
+            || id.includes('@mui')
+            || id.includes('@emotion')
+          ) return 'vendor-core'
+          if (id.includes('recharts') || id.includes('d3-')) return 'vendor-charts'
+          if (id.includes('@reduxjs') || id.includes('react-redux') || id.includes('redux')) return 'vendor-state'
+          if (id.includes('axios') || id.includes('socket.io') || id.includes('engine.io')) return 'vendor-network'
+          return undefined
+        },
+      },
+    },
   }
   }
 })

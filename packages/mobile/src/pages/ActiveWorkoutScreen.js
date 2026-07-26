@@ -9,9 +9,10 @@ const formatTime = (seconds) => {
     if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
+import ExercisePickerModal from '../components/ExercisePickerModal';
 
 const ActiveWorkoutScreen = ({ navigation, route }) => {
   const { t } = useTranslation();
@@ -41,6 +42,7 @@ const ActiveWorkoutScreen = ({ navigation, route }) => {
 
   const [workoutName, setWorkoutName] = useState(routine?.name || t('workout.my_workout', 'Antrenmanım'));
   const [workoutNote, setWorkoutNote] = useState('');
+  const [pickerVisible, setPickerVisible] = useState(false);
   
   // ── Real Timer ───────────────────────────────────────────────────
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -89,8 +91,31 @@ const ActiveWorkoutScreen = ({ navigation, route }) => {
     setExercises(newEx);
   };
 
+  const addExercise = (exercise) => {
+    setExercises((current) => {
+      if (current.some((item) => item.id === exercise._id)) return current;
+      return [
+        ...current,
+        {
+          id: exercise._id,
+          name: exercise.name,
+          muscleGroup: exercise.muscleGroup,
+          equipment: exercise.equipment,
+          sets: [{ reps: '', weight: '', done: false, setType: 'normal' }],
+        },
+      ];
+    });
+  };
+
   // ── Finish ────────────────────────────────────────────────────────
   const handleFinish = () => {
+    if (totalSets === 0) {
+      Alert.alert(
+        t('common.error', 'Error'),
+        t('active_workout.complete_one_set', 'Complete at least one set before finishing.')
+      );
+      return;
+    }
     clearInterval(timerRef.current);
     const workoutData = {
       name: workoutName,
@@ -102,7 +127,7 @@ const ActiveWorkoutScreen = ({ navigation, route }) => {
         exerciseId: ex.id,
         name: ex.name,
         muscleGroup: ex.muscleGroup,
-        sets: ex.sets.filter(s => s.done || (s.weight && s.reps)).map(s => ({
+        sets: ex.sets.filter(s => s.done).map(s => ({
           setType: s.setType || 'normal',
           weight: parseFloat(s.weight) || 0,
           reps: parseInt(s.reps) || 0,
@@ -132,7 +157,7 @@ const ActiveWorkoutScreen = ({ navigation, route }) => {
       {/* Header */}
       <Surface elevation={2} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, paddingVertical: 8, backgroundColor: theme.surface }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-          <IconButton icon="chevron-down" size={28} iconColor={theme.text} onPress={() => navigation.goBack()} />
+          <IconButton icon="chevron-down" size={28} iconColor={theme.text} onPress={() => navigation.goBack()} accessibilityLabel={t('common.close', 'Close workout')} />
           <View style={{ marginLeft: 4 }}>
             <Text variant="titleLarge" style={{ fontWeight: '900', color: theme.text, fontVariant: ['tabular-nums'] }}>{formatTime(elapsedSeconds)}</Text>
             <View style={{ flexDirection: 'row', gap: 12, marginTop: 2 }}>
@@ -141,7 +166,7 @@ const ActiveWorkoutScreen = ({ navigation, route }) => {
             </View>
           </View>
         </View>
-        <Button mode="contained" onPress={handleFinish} style={{ borderRadius: 12, marginRight: 8 }} labelStyle={{ fontWeight: 'bold' }}>
+        <Button mode="contained" onPress={handleFinish} disabled={totalSets === 0} style={{ borderRadius: 12, marginRight: 8 }} labelStyle={{ fontWeight: 'bold' }}>
           {t('workout.finish', 'Bitir')}
         </Button>
       </Surface>
@@ -160,6 +185,7 @@ const ActiveWorkoutScreen = ({ navigation, route }) => {
           placeholderTextColor={theme.textMuted}
           underlineColor="transparent"
           activeUnderlineColor="transparent"
+          accessibilityLabel={t('workout.name_placeholder', 'Workout name')}
         />
 
         <TextInput
@@ -172,6 +198,7 @@ const ActiveWorkoutScreen = ({ navigation, route }) => {
           placeholderTextColor={theme.textMuted}
           underlineColor="transparent"
           activeUnderlineColor="transparent"
+          accessibilityLabel={t('workout.add_workout_note', 'Workout note')}
         />
 
         {exercises.length === 0 && (
@@ -198,6 +225,7 @@ const ActiveWorkoutScreen = ({ navigation, route }) => {
                     { text: t('workout.remove_exercise', 'Kaldır'), style: 'destructive', onPress: () => removeExercise(exIndex) }
                   ]);
                 }}
+                accessibilityLabel={t('workout.exercise_actions', { name: ex.name }, `${ex.name} actions`)}
               />
             </View>
 
@@ -230,6 +258,7 @@ const ActiveWorkoutScreen = ({ navigation, route }) => {
                   textColor={s.done ? '#10b981' : theme.text}
                   placeholderTextColor={theme.textMuted}
                   outlineStyle={{ borderColor: 'transparent', borderRadius: 8 }}
+                  accessibilityLabel={t('workout.set_weight', { set: setIndex + 1 }, `Set ${setIndex + 1} weight`)}
                 />
                 <TextInput 
                   mode="outlined"
@@ -243,13 +272,19 @@ const ActiveWorkoutScreen = ({ navigation, route }) => {
                   textColor={s.done ? '#10b981' : theme.text}
                   placeholderTextColor={theme.textMuted}
                   outlineStyle={{ borderColor: 'transparent', borderRadius: 8 }}
+                  accessibilityLabel={t('workout.set_reps', { set: setIndex + 1 }, `Set ${setIndex + 1} reps`)}
                 />
                 <TouchableRipple 
                   style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: s.done ? '#10b981' : theme.background, justifyContent: 'center', alignItems: 'center' }}
                   onPress={() => toggleSet(exIndex, setIndex)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: s.done }}
+                  accessibilityLabel={t('workout.complete_set', { set: setIndex + 1 }, `Complete set ${setIndex + 1}`)}
                   borderless
                 >
-                  {s.done && <Ionicons name="checkmark" size={18} color="#fff" />}
+                  <View style={{ width: 18, height: 18, alignItems: 'center', justifyContent: 'center' }}>
+                    {s.done ? <Ionicons name="checkmark" size={18} color="#fff" /> : null}
+                  </View>
                 </TouchableRipple>
               </View>
             ))}
@@ -267,6 +302,16 @@ const ActiveWorkoutScreen = ({ navigation, route }) => {
         ))}
 
         <Button
+            mode="outlined"
+            icon="plus"
+            onPress={() => setPickerVisible(true)}
+            style={{ borderRadius: 14, marginBottom: 12, borderStyle: 'dashed' }}
+            contentStyle={{ minHeight: 50 }}
+        >
+            {t('active_workout.add_exercise', 'Egzersiz Ekle')}
+        </Button>
+
+        <Button
             mode="text"
             textColor="#ef4444"
             onPress={handleCancel}
@@ -277,6 +322,12 @@ const ActiveWorkoutScreen = ({ navigation, route }) => {
         </Button>
         </ScrollView>
       </KeyboardAvoidingView>
+      <ExercisePickerModal
+        visible={pickerVisible}
+        onDismiss={() => setPickerVisible(false)}
+        onSelect={addExercise}
+        excludedIds={exercises.map((exercise) => exercise.id)}
+      />
     </SafeAreaView>
   );
 };

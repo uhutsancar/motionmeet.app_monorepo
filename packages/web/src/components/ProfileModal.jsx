@@ -1,5 +1,5 @@
 import { useAuthContext } from "../context/AuthProvider";
-import { uploadMedia } from "../api/mediaUpload";
+import { uploadMedia, validateProfileImage } from "../api/mediaUpload";
 import {
   Avatar,
   Box,
@@ -61,6 +61,18 @@ const ProfileModal = ({ setShowEdit }) => {
     setEditForm((current) => ({ ...current, [field]: event.target.value }));
   };
 
+  const selectImage = (field) => (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      validateProfileImage(file);
+      setEditForm((current) => ({ ...current, [field]: file }));
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
+
   const handleSaveProfile = async (event) => {
     event.preventDefault();
     setSaving(true);
@@ -74,6 +86,8 @@ const ProfileModal = ({ setShowEdit }) => {
       userData.append("weight", weight);
       userData.append("height", height);
       const token = await getToken();
+      if (profile_picture) validateProfileImage(profile_picture);
+      if (cover_photo) validateProfileImage(cover_photo);
       if (profile_picture) {
         userData.append(
           "uploadedProfileKey",
@@ -89,7 +103,7 @@ const ProfileModal = ({ setShowEdit }) => {
       await dispatch(updateUser({ userData, token })).unwrap();
       setShowEdit(false);
     } catch (error) {
-      toast.error(error.message);
+      toast.error(error.response?.data?.message || error.message || t("common.error", "Something went wrong"));
     } finally {
       setSaving(false);
     }
@@ -115,8 +129,8 @@ const ProfileModal = ({ setShowEdit }) => {
                 <Box
                   component="input"
                   type="file"
-                  accept="image/*"
-                  onChange={(event) => setEditForm((current) => ({ ...current, profile_picture: event.target.files?.[0] || null }))}
+                  accept=".jpg,.jpeg,.png,.webp,.gif,.heic,.heif,image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif"
+                  onChange={selectImage("profile_picture")}
                   sx={{ display: "none" }}
                 />
               </ButtonBase>
@@ -134,8 +148,8 @@ const ProfileModal = ({ setShowEdit }) => {
                 <Box
                   component="input"
                   type="file"
-                  accept="image/*"
-                  onChange={(event) => setEditForm((current) => ({ ...current, cover_photo: event.target.files?.[0] || null }))}
+                  accept=".jpg,.jpeg,.png,.webp,.gif,.heic,.heif,image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif"
+                  onChange={selectImage("cover_photo")}
                   sx={{ display: "none" }}
                 />
               </ButtonBase>

@@ -8,6 +8,9 @@ const workoutSchema = new mongoose.Schema(
     endTime: { type: Date },
     durationMinutes: { type: Number, default: 0 },
     volumeKg: { type: Number, default: 0 },
+    totalSets: { type: Number, default: 0 },
+    totalReps: { type: Number, default: 0 },
+    metricsVersion: { type: Number, default: 2 },
     exercises: [
       {
         exerciseId: { type: mongoose.Schema.Types.ObjectId, ref: "Exercise", required: true },

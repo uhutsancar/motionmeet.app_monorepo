@@ -1,44 +1,141 @@
 name: motionmeet_dev
 
 services:
+  mongo:
+    image: mongo:8.0
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - mongo_dev_data:/data/db
+    networks:
+      - data
+
+  mongo-init:
+    image: mongo:8.0
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: "no"
+    command:
+      - mongosh
+      - mongodb://mongo:27017/admin
+      - --quiet
+      - --eval
+      - >-
+        try { rs.status() } catch (error) {
+          rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]})
+        }
+    networks:
+      - data
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - redis_dev_data:/data
+    networks:
+      - data
+
   backend:
     build:
       context: .
-      dockerfile: packages/backend/Dockerfile
-    container_name: motionmeet_dev_backend
-    restart: unless-stopped
-    ports:
-      - "8081:8080"
-    env_file:
-      - .env
+      dockerfile: packages/backend/Dockerfile.dev
     environment:
-      - NODE_ENV=development
-      - PORT=8080
+      NODE_ENV: development
+      PORT: 4000
+      MONGODB_URL: mongodb://mongo:27017/motionmeet?replicaSet=rs0
+      MONGODB_DB_NAME: motionmeet
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: development-only-change-before-deployment
+      FRONTEND_URL: http://localhost:${WEB_PORT:-5173}
+      CORS_ORIGINS: http://localhost:${WEB_PORT:-5173}
+      MEDIA_UPLOADS_ENABLED: "false"
+      EMAIL_ENABLED: "false"
+      RUN_SCHEDULED_JOBS: "false"
+    ports:
+      - "${BACKEND_PORT:-4000}:4000"
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
     volumes:
       - ./packages/backend:/app/packages/backend
-      - /app/packages/backend/node_modules
+      - ./packages/shared:/app/packages/shared
+      - backend_dev_node_modules:/app/packages/backend/node_modules
     networks:
-      - motionmeet_dev_net
+      - edge
+      - data
 
   web:
     build:
       context: .
-      dockerfile: packages/web/Dockerfile
-      args:
-        - VITE_BASEURL=http://localhost:8081
-        - VITE_SOCKET_URL=ws://localhost:8081
-    container_name: motionmeet_dev_web
-    restart: unless-stopped
+      dockerfile: packages/web/Dockerfile.dev
+    environment:
+      VITE_BASEURL: http://localhost:${BACKEND_PORT:-4000}
+      VITE_SOCKET_URL: http://localhost:${BACKEND_PORT:-4000}
     ports:
-      - "3000:80"
+      - "${WEB_PORT:-5173}:5173"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     volumes:
       - ./packages/web:/app/packages/web
-      - /app/packages/web/node_modules
+      - ./packages/shared:/app/packages/shared
+      - web_dev_node_modules:/app/packages/web/node_modules
     networks:
-      - motionmeet_dev_net
+      - edge
+
+  mobile:
+    profiles: ["mobile"]
+    build:
+      context: .
+      dockerfile: packages/mobile/Dockerfile.dev
+    environment:
+      EXPO_PUBLIC_API_URL: ${EXPO_PUBLIC_API_URL:-http://localhost:4000}
+      EXPO_PUBLIC_WEB_URL: ${EXPO_PUBLIC_WEB_URL:-http://localhost:5173}
+      EXPO_NO_TELEMETRY: "1"
+    ports:
+      - "${EXPO_PORT:-8081}:8081"
+      - "19000:19000"
+      - "19001:19001"
+      - "19002:19002"
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./packages/mobile:/app/packages/mobile
+      - ./packages/shared:/app/packages/shared
+      - mobile_dev_node_modules:/app/packages/mobile/node_modules
+    networks:
+      - edge
 
 networks:
-  motionmeet_dev_net:
-    driver: bridge
+  edge:
+  data:
+
+volumes:
+  mongo_dev_data:
+  redis_dev_data:
+  backend_dev_node_modules:
+  web_dev_node_modules:
+  mobile_dev_node_modules:

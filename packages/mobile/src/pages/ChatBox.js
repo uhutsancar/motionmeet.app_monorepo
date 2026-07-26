@@ -297,7 +297,7 @@ const ChatBox = ({ route, navigation }) => {
     <Surface elevation={0} style={s.container}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      <Appbar.Header style={s.header} statusBarHeight={insets.top}>
+      <Appbar.Header style={s.header} statusBarHeight={0}>
         <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
         <Surface elevation={0} style={s.headerAvContainer}>
           {user.profile_picture

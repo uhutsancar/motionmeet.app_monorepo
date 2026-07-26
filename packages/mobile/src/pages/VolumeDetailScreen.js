@@ -2,7 +2,7 @@ import React from 'react';
 import { ScrollView, useWindowDimensions } from 'react-native';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { BarChart } from 'react-native-chart-kit';
@@ -18,8 +18,9 @@ const VolumeDetailScreen = ({ navigation, route }) => {
   const totalVolume = statsData?.totalVolume ?? 0;
   const labels = statsData?.stats?.labels ?? [];
   const volumes = statsData?.stats?.volumes ?? [];
-  const avgVolume = labels.length > 0
-    ? Math.round(volumes.reduce((a, b) => a + (b || 0), 0) / labels.length)
+  const totalWorkouts = statsData?.totalWorkouts ?? 0;
+  const avgVolume = totalWorkouts > 0
+    ? Math.round(totalVolume / totalWorkouts)
     : 0;
   const hasData = labels.length > 0;
 

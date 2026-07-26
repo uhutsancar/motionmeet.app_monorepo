@@ -45,7 +45,7 @@ export const createRoutine = async (req, res, next) => {
             getCurrentCount: () => routineService.countUserRoutines(userId),
           });
           if (!quotaReserved) {
-            return res.status(403).json({ success: false, message: `Routine limit reached (${limit}). Please upgrade your plan to Elite.` });
+            return res.status(403).json({ success: false, message: `Routine limit reached for the current plan (${limit}).` });
           }
         }
       }

@@ -1,6 +1,15 @@
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const USERNAME_PATTERN = /^[a-z0-9._-]{3,30}$/;
 
+export const validatePassword = (value) => {
+  const password = typeof value === "string" ? value : "";
+  const passwordBytes = Buffer.byteLength(password, "utf8");
+  return {
+    password,
+    valid: passwordBytes >= 10 && passwordBytes <= 72,
+  };
+};
+
 /**
  * @param {{email?: unknown, password?: unknown, full_name?: unknown, username?: unknown}} [payload]
  */
@@ -11,8 +20,8 @@ export const validateRegistration = (payload = {}) => {
   const normalizedUsername =
     typeof username === "string" ? username.trim().toLowerCase() : "";
   const normalizedName = typeof full_name === "string" ? full_name.trim() : "";
-  const normalizedPassword = typeof password === "string" ? password : "";
-  const passwordBytes = Buffer.byteLength(normalizedPassword, "utf8");
+  const { password: normalizedPassword, valid: passwordValid } =
+    validatePassword(password);
 
   const fieldErrors = {};
   if (normalizedEmail.length > 254 || !EMAIL_PATTERN.test(normalizedEmail)) {
@@ -26,7 +35,7 @@ export const validateRegistration = (payload = {}) => {
     fieldErrors.full_name =
       "Full name must be between 2 and 100 characters";
   }
-  if (passwordBytes < 10 || passwordBytes > 72) {
+  if (!passwordValid) {
     fieldErrors.password = "Password must be between 10 and 72 UTF-8 bytes";
   }
 

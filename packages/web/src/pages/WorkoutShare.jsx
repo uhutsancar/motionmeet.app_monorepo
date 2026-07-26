@@ -1,8 +1,9 @@
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { Share, Instagram, Twitter, CheckCircle2, Download, X } from 'lucide-react';
+import { Share, CheckCircle2, X } from 'lucide-react';
 import moment from 'moment';
 import { Box, Typography, IconButton, Button, Stack, Paper, Chip } from '@mui/material';
+import toast from 'react-hot-toast';
 
 const WorkoutCompleteShare = () => {
     const { t } = useTranslation();
@@ -10,6 +11,26 @@ const WorkoutCompleteShare = () => {
     const navigate = useNavigate();
 
     const workout = location.state?.workout;
+    const totalSets = workout?.exercises?.reduce(
+        (sum, exercise) => sum + (exercise.sets?.length || 0),
+        0
+    ) || 0;
+
+    const handleShare = async () => {
+        const text = `${workout.name}: ${workout.durationMinutes || 0} min · ${(workout.volumeKg || 0).toLocaleString()} kg`;
+        try {
+            if (navigator.share) {
+                await navigator.share({ title: 'MotionMeet workout', text });
+            } else {
+                await navigator.clipboard.writeText(text);
+                toast.success(t('common.copied', 'Copied to clipboard'));
+            }
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                toast.error(t('common.share_failed', 'Could not share this workout.'));
+            }
+        }
+    };
 
     if (!workout) {
         return (
@@ -35,8 +56,8 @@ const WorkoutCompleteShare = () => {
                 {/* Title Section */}
                 <Box sx={{ textAlign: 'center', mb: 6 }}>
                     <CheckCircle2 size={64} color="#10b981" style={{ margin: '0 auto', marginBottom: 16 }} />
-                    <Typography variant="h3" fontWeight="900" gutterBottom>Güzeldi!</Typography>
-                    <Typography variant="subtitle1" color="text.secondary" fontWeight="bold">Bu senin 34. antrenmanın oldu.</Typography>
+                    <Typography variant="h3" fontWeight="900" gutterBottom>{t('workout_share.completed', 'Workout complete')}</Typography>
+                    <Typography variant="subtitle1" color="text.secondary" fontWeight="bold">{t('workout_share.saved', 'Your workout and post were saved.')}</Typography>
                 </Box>
 
                 {/* Share Card to overlay onto Instagram */}
@@ -73,43 +94,22 @@ const WorkoutCompleteShare = () => {
                             </Paper>
                         </Stack>
 
-                        <Stack direction="row" spacing={1} justifyContent="center" flexWrap="wrap">
-                            <Chip label="2 Yeni Kupa 🏆" size="small" sx={{ bgcolor: 'success.light', color: 'success.dark', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.65rem' }} />
-                            <Chip label="Bacak Günü" size="small" sx={{ bgcolor: 'info.light', color: 'info.dark', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1, fontSize: '0.65rem' }} />
-                        </Stack>
+                        <Chip label={`${totalSets} ${t('statistics.sets', 'sets')}`} size="small" sx={{ bgcolor: 'success.light', color: 'success.dark', fontWeight: 'bold' }} />
                     </Box>
                 </Box>
 
                 {/* Sharing Options */}
                 <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <Typography variant="caption" fontWeight="bold" color="text.secondary" align="center" sx={{ textTransform: 'uppercase', letterSpacing: 2 }}>Spacelara Paylaş</Typography>
-
-                    <Stack direction="row" spacing={3} justifyContent="center" mb={4}>
-                        <Stack alignItems="center" spacing={1}>
-                            <IconButton sx={{ width: 56, height: 56, background: 'linear-gradient(to top right, #facc15, #ef4444, #a855f7)', color: 'white', boxShadow: 3, transition: 'transform 0.2s', '&:hover': { transform: 'scale(1.1)' } }}>
-                                <Instagram size={24} />
-                            </IconButton>
-                            <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ textTransform: 'uppercase' }}>Hikaye</Typography>
-                        </Stack>
-                        <Stack alignItems="center" spacing={1}>
-                            <IconButton sx={{ width: 56, height: 56, bgcolor: 'common.black', color: 'white', boxShadow: 3, transition: 'transform 0.2s', '&:hover': { bgcolor: 'grey.900', transform: 'scale(1.1)' } }}>
-                                <Twitter size={24} />
-                            </IconButton>
-                            <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ textTransform: 'uppercase' }}>Gönderi</Typography>
-                        </Stack>
-                        <Stack alignItems="center" spacing={1}>
-                            <IconButton sx={{ width: 56, height: 56, bgcolor: 'info.main', color: 'white', boxShadow: 3, transition: 'transform 0.2s', '&:hover': { bgcolor: 'info.dark', transform: 'scale(1.1)' } }}>
-                                <Share size={24} />
-                            </IconButton>
-                            <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ textTransform: 'uppercase' }}>Diğer</Typography>
-                        </Stack>
-                        <Stack alignItems="center" spacing={1}>
-                            <IconButton sx={{ width: 56, height: 56, bgcolor: 'background.paper', border: 1, borderColor: 'divider', color: 'text.primary', boxShadow: 3, transition: 'transform 0.2s', '&:hover': { transform: 'scale(1.1)' } }}>
-                                <Download size={24} />
-                            </IconButton>
-                            <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ textTransform: 'uppercase' }}>İndir</Typography>
-                        </Stack>
-                    </Stack>
+                    <Button
+                        variant="contained"
+                        fullWidth
+                        size="large"
+                        startIcon={<Share size={20} />}
+                        onClick={handleShare}
+                        sx={{ py: 1.5, borderRadius: 4, fontWeight: 'bold' }}
+                    >
+                        {t('monthly_report.share', 'Share')}
+                    </Button>
 
                     <Button
                         variant="outlined"

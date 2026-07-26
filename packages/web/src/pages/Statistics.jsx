@@ -1,7 +1,7 @@
-import { Box, Card, CardActionArea, Chip, Stack, Typography } from "@mui/material";
+import { Box, Card, CardActionArea, Stack, Typography } from "@mui/material";
 import { ActivitySquare, ArrowUpRight, Award, BarChart3, Calendar, Dumbbell } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { PageHeader, PageShell } from "~/components/AppPage";
 
 const Statistics = () => {
@@ -14,7 +14,6 @@ const Statistics = () => {
       icon: ActivitySquare,
       color: "primary.main",
       route: "/statistics/history",
-      isPro: false,
     },
     {
       title: t("statistics.muscle_dist", "Muscle Distribution"),
@@ -22,7 +21,6 @@ const Statistics = () => {
       icon: Dumbbell,
       color: "secondary.main",
       route: "/statistics/muscle-distribution",
-      isPro: false,
     },
     {
       title: t("statistics.records", "Personal Records"),
@@ -30,7 +28,6 @@ const Statistics = () => {
       icon: Award,
       color: "warning.main",
       route: "/statistics/records",
-      isPro: true,
     },
     {
       title: t("statistics.monthly_report", "Monthly Report"),
@@ -38,7 +35,6 @@ const Statistics = () => {
       icon: Calendar,
       color: "info.main",
       route: "/statistics/monthly-report",
-      isPro: false,
     },
   ];
 
@@ -52,16 +48,8 @@ const Statistics = () => {
       />
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" }, gap: 2 }}>
-        {menuItems.map(({ title, subtitle, icon: Icon, color, route, isPro }) => (
+        {menuItems.map(({ title, subtitle, icon: Icon, color, route }) => (
           <Card key={route} variant="outlined" sx={{ position: "relative", minHeight: 156 }}>
-            {isPro && (
-              <Chip
-                label="PRO"
-                size="small"
-                color="warning"
-                sx={{ position: "absolute", zIndex: 1, top: 16, right: 16, height: 22, fontWeight: 900 }}
-              />
-            )}
             <CardActionArea onClick={() => navigate(route)} sx={{ p: 2.5, height: "100%" }}>
               <Stack direction="row" spacing={2} sx={{ height: "100%", alignItems: "flex-start" }}>
                 <Box
@@ -78,7 +66,7 @@ const Statistics = () => {
                 >
                   <Icon size={21} />
                 </Box>
-                <Stack spacing={0.6} sx={{ minWidth: 0, flex: 1, pr: isPro ? 5 : 0 }}>
+                <Stack spacing={0.6} sx={{ minWidth: 0, flex: 1 }}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{title}</Typography>
                   <Typography variant="body2" color="text.secondary">{subtitle}</Typography>
                   <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", mt: "auto", pt: 1.5, color: "primary.main" }}>

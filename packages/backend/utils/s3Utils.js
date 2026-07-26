@@ -12,8 +12,15 @@ import s3Client from "../configs/aws.js";
  * @returns {Promise<Object>} - S3 upload response containing the Key.
  */
 export const uploadToS3 = async (file, fileName, folder = "", contentType) => {
+    if (process.env.MEDIA_UPLOADS_ENABLED === "false") {
+        throw Object.assign(new Error("Media uploads are disabled"), {
+            status: 503,
+        });
+    }
     if (!process.env.AWS_BUCKET_NAME) {
-        throw new Error("AWS_BUCKET_NAME is not configured");
+        throw Object.assign(new Error("AWS_BUCKET_NAME is not configured"), {
+            status: 503,
+        });
     }
 
     const safeName = path.basename(fileName || "upload").replace(/[^A-Za-z0-9._-]/g, "-");

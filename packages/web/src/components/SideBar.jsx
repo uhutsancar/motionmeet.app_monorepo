@@ -15,7 +15,7 @@ import Typography from "@mui/material/Typography";
 import { alpha } from "@mui/material/styles";
 import { useMediaQuery, useTheme } from "@mui/material";
 import { useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import motionmeetLogo from "~/assets/motionmeet_logo.svg";
 import { useAuthContext } from "../context/AuthProvider";
 import { useAppTheme } from "../context/appThemeContext";

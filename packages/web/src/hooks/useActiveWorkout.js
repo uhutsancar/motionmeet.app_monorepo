@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import api from '~/api/axios';
 import { useAuthContext } from "../context/AuthProvider";
+import toast from 'react-hot-toast';
 
 export const useActiveWorkout = (routine) => {
     const { getToken } = useAuthContext();
@@ -61,6 +62,25 @@ export const useActiveWorkout = (routine) => {
         setExercises(newEx);
     };
 
+    const addExercise = (exercise) => {
+        setExercises((current) => {
+            if (current.some((item) => (item.exerciseId?._id || item.exerciseId) === exercise._id)) {
+                return current;
+            }
+            return [
+                ...current,
+                {
+                    exerciseId: exercise,
+                    sets: [{ weight: '', reps: '', setType: 'normal', completed: false }],
+                },
+            ];
+        });
+    };
+
+    const removeExercise = (exIdx) => {
+        setExercises((current) => current.filter((_, index) => index !== exIdx));
+    };
+
     const totalVolume = exercises.reduce((sum, ex) => {
         return sum + ex.sets.reduce((setSum, set) => {
             if (set.completed) {
@@ -78,6 +98,10 @@ export const useActiveWorkout = (routine) => {
 
     const finishWorkout = async () => {
         if (saving) return;
+        if (totalSetsCompleted === 0) {
+            toast.error("Complete at least one set before finishing.");
+            return;
+        }
         setSaving(true);
         try {
             const token = await getToken();
@@ -91,7 +115,12 @@ export const useActiveWorkout = (routine) => {
                 volumeKg: totalVolume,
                 exercises: exercises.map(ex => ({
                     exerciseId: ex.exerciseId._id || ex.exerciseId,
-                    sets: ex.sets.filter(set => set.completed).map(({ weight, reps }) => ({ weight, reps })),
+                    sets: ex.sets.filter(set => set.completed).map(({ weight, reps, setType }) => ({
+                        setType: setType || 'normal',
+                        weight: Number(weight) || 0,
+                        reps: Number(reps) || 0,
+                        completed: true,
+                    })),
                 })).filter(ex => ex.sets.length > 0)
             };
 
@@ -105,7 +134,12 @@ export const useActiveWorkout = (routine) => {
                     ...(data.workout || {}),
                     exercises: exercises.map(ex => ({
                         exerciseId: ex.exerciseId,
-                        sets: ex.sets.filter(set => set.completed).map(({ weight, reps }) => ({ weight, reps })),
+                        sets: ex.sets.filter(set => set.completed).map(({ weight, reps, setType }) => ({
+                            setType: setType || 'normal',
+                            weight: Number(weight) || 0,
+                            reps: Number(reps) || 0,
+                            completed: true,
+                        })),
                     })).filter(ex => ex.sets.length > 0),
                 };
                 navigate('/workout-summary', {
@@ -113,11 +147,11 @@ export const useActiveWorkout = (routine) => {
                     state: { workout: completedWorkout, workoutId: data.workout?._id },
                 });
             } else {
-                alert(data.message || "Workout could not be saved.");
+                toast.error(data.message || "Workout could not be saved.");
             }
         } catch (error) {
             console.error("Failed to save workout:", error);
-            alert("Workouts could not be saved.");
+            toast.error(error.response?.data?.message || "Workout could not be saved.");
         } finally {
             setSaving(false);
         }
@@ -125,7 +159,7 @@ export const useActiveWorkout = (routine) => {
 
     return {
         elapsed, paused, saving, exercises,
-        togglePause, toggleSet, updateSet, addSet, removeSet,
+        togglePause, toggleSet, updateSet, addSet, removeSet, addExercise, removeExercise,
         totalVolume, totalSetsCompleted, finishWorkout
     };
 };
