@@ -12,6 +12,8 @@
 - Enable `MEDIA_UPLOADS_ENABLED` only after S3 and ImageKit credentials work.
 - Enable `EMAIL_ENABLED` only after SMTP delivery and password-reset links work.
 - Upload licensed exercise media to HTTPS object storage/CDN.
+- Set `MONGODB_DB_NAME` explicitly; the API refuses MongoDB's implicit `test`
+  database.
 - Run the integrity and workout-metric migrations after a backup.
 
 Canonical muscle groups, equipment, and the free plan are bootstrapped

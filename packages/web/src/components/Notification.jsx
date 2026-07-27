@@ -25,7 +25,7 @@ const Notification = ({ toastInstance, message }) => {
       }}
     >
       <Box sx={{ flex: 1, p: 2 }}>
-        <Stack direction="row" alignItems="center" spacing={2}>
+        <Stack direction="row" sx={{ alignItems: "center" }} spacing={2}>
           <Box sx={{ position: "relative" }}>
             <Avatar
               src={message.from_user_id.profile_picture}

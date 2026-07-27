@@ -48,6 +48,7 @@ const PostCard = ({ post }) => {
     post?.comment_next_cursor || null,
   );
   const [olderCommentsLoading, setOlderCommentsLoading] = useState(false);
+  const [isLiking, setIsLiking] = useState(false);
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -56,7 +57,8 @@ const PostCard = ({ post }) => {
 
   if (!post?.user) return null;
 
-  const hasWorkout = post.post_type === "workout" && post.workout;
+  const isOwner = currentUser?._id === post?.user?._id;
+  const hasWorkout = post?.post_type === "workout" && post?.workout;
   const isVideo = post.post_type === "video";
   const imageUrls = post.image_urls || [];
   const carouselData = [];
@@ -66,19 +68,36 @@ const PostCard = ({ post }) => {
   if (hasWorkout) carouselData.push({ type: "workout", data: post.workout });
 
   const handleLike = async () => {
+    if (isLiking) return;
+    setIsLiking(true);
+
+    const willLike = !isLiked;
+    // Optimistic update
+    setIsLiked(willLike);
+    setLikeCount((prev) => prev + (willLike ? 1 : -1));
+
     try {
-      const { data } = await api.post(
-        API_ROUTES.post.like,
-        { postId: post._id },
-        { headers: { Authorization: `Bearer ${await getToken()}` } },
-      );
+      const token = await getToken();
+      const url = API_ROUTES.post.likeIdempotent(post._id);
+      const { data } = willLike
+        ? await api.put(url, null, { headers: { Authorization: `Bearer ${token}` } })
+        : await api.delete(url, { headers: { Authorization: `Bearer ${token}` } });
 
       if (data.success) {
         setIsLiked(data.liked);
         setLikeCount(data.like_count);
+      } else {
+        // Revert optimistic update
+        setIsLiked(!willLike);
+        setLikeCount((prev) => prev + (willLike ? -1 : 1));
       }
     } catch (error) {
+      // Revert optimistic update
+      setIsLiked(!willLike);
+      setLikeCount((prev) => prev + (willLike ? -1 : 1));
       toast.error(error.message);
+    } finally {
+      setIsLiking(false);
     }
   };
 

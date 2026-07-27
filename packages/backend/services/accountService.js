@@ -9,6 +9,8 @@ import Routine from "../models/Routine.js";
 import Session from "../models/Session.js";
 import Story from "../models/Story.js";
 import User from "../models/User.js";
+import UserFollow from "../models/UserFollow.js";
+import StoryView from "../models/StoryView.js";
 import Usage from "../models/Usage.js";
 import UploadReservation from "../models/UploadReservation.js";
 import Workout from "../models/Workout.js";
@@ -130,10 +132,18 @@ export const deleteAccountData = async (userId) => {
       .select("media_url +media_key")
       .lean(),
     UploadReservation.find({ userId }).select("key").lean(),
+    UserFollow.find({ followerId: userId }).select("followeeId").lean(),
+    UserFollow.find({ followeeId: userId }).select("followerId").lean(),
+    Connection.find({ $or: [{ from_user_id: userId }, { to_user_id: userId }], status: "accepted" }).lean(),
+    PostLike.find({ userId }).select("postId").lean(),
   ]);
 
   if (!user) return false;
   const ownedPostIds = posts.map((post) => post._id);
+  const followeeIds = reservations[1]?.map(f => f.followeeId) || [];
+  const followerIds = reservations[2]?.map(f => f.followerId) || [];
+  const connectionUserIds = (reservations[3] || []).map(c => c.from_user_id === userId ? c.to_user_id : c.from_user_id);
+  const likedPostIds = (reservations[4] || []).map(l => l.postId);
 
   const mediaKeys = uniqueMediaKeys([
     user.profile_picture_key || user.profile_picture,
@@ -172,37 +182,23 @@ export const deleteAccountData = async (userId) => {
       );
       await Exercise.deleteMany({ createdBy: userId }, { session });
       await Post.deleteMany({ user: userId }, { session });
-      await Post.updateMany(
-        {
-          user: { $ne: userId },
-          $or: [{ likes_count: userId }, { "comments.user": userId }],
-        },
-        {
-          $pull: {
-            likes_count: userId,
-            comments: { user: userId },
-          },
-        },
-        { session }
-      );
+      await Post.updateMany({ _id: { $in: likedPostIds } }, { $inc: { like_count: -1 } }, { session });
       await Story.deleteMany({ user: userId }, { session });
+      await StoryView.deleteMany({ userId }, { session });
       await Routine.deleteMany({ userId }, { session });
       await Workout.deleteMany({ userId }, { session });
-      await User.updateMany(
-        { followers: userId },
-        { $pull: { followers: userId } },
-        { session }
-      );
-      await User.updateMany(
-        { following: userId },
-        { $pull: { following: userId } },
-        { session }
-      );
-      await User.updateMany(
-        { connections: userId },
-        { $pull: { connections: userId } },
-        { session }
-      );
+      
+      await UserFollow.deleteMany({ $or: [{ followerId: userId }, { followeeId: userId }] }, { session });
+      
+      if (followeeIds.length > 0) {
+        await User.updateMany({ _id: { $in: followeeIds } }, { $inc: { followers_count: -1 } }, { session });
+      }
+      if (followerIds.length > 0) {
+        await User.updateMany({ _id: { $in: followerIds } }, { $inc: { following_count: -1 } }, { session });
+      }
+      if (connectionUserIds.length > 0) {
+        await User.updateMany({ _id: { $in: connectionUserIds } }, { $inc: { connections_count: -1 } }, { session });
+      }
       await User.deleteOne({ _id: userId }, { session });
     });
   } finally {

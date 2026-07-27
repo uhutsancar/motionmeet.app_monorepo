@@ -95,8 +95,23 @@ export const createPost = async (postData, token) => {
   return data;
 };
 
+/** @deprecated Use likePostIdempotent / unlikePostIdempotent instead */
 export const likePost = async (postId, token) => {
   const { data } = await api.post(API_ROUTES.post.like, { postId }, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const likePostIdempotent = async (postId, token) => {
+  const { data } = await api.put(API_ROUTES.post.likeIdempotent(postId), null, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const unlikePostIdempotent = async (postId, token) => {
+  const { data } = await api.delete(API_ROUTES.post.unlike(postId), {
     headers: { Authorization: `Bearer ${token}` },
   });
   return data;
@@ -280,6 +295,8 @@ export default {
   getPosts,
   createPost,
   likePost,
+  likePostIdempotent,
+  unlikePostIdempotent,
   deletePost,
   
   // Message

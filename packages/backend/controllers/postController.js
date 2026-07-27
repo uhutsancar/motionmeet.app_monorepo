@@ -133,6 +133,7 @@ export const getFeedPost = async (req, res, next) => {
   }
 };
 
+/** @deprecated Kept for backward compatibility with older mobile clients. */
 export const likePost = async (req, res, next) => {
   try {
     const postId = req.body?.postId;
@@ -142,7 +143,7 @@ export const likePost = async (req, res, next) => {
 
     const post = await postService.getPostForLike(postId);
     if (!post) return res.json({ success: false, message: "Post not found" });
-    if (!postService.canAccessPost(post, req.dbUser)) {
+    if (!(await postService.canAccessPost(post, req.dbUser))) {
       return res.status(403).json({ success: false, message: "Post is not accessible" });
     }
 
@@ -151,6 +152,58 @@ export const likePost = async (req, res, next) => {
     return res.json({
       success: true,
       message: result.liked ? "Post liked" : "Post unliked",
+      liked: result.liked,
+      like_count: result.likeCount,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const likePostIdempotent = async (req, res, next) => {
+  try {
+    const { postId } = req.params;
+    if (!isObjectId(postId)) {
+      return res.status(400).json({ success: false, message: "Invalid post id" });
+    }
+
+    const post = await postService.getPostForLike(postId);
+    if (!post) return res.status(404).json({ success: false, message: "Post not found" });
+    if (!(await postService.canAccessPost(post, req.dbUser))) {
+      return res.status(403).json({ success: false, message: "Post is not accessible" });
+    }
+
+    const result = await postService.idempotentLikePost(postId, req.userId);
+
+    return res.json({
+      success: true,
+      message: "Post liked",
+      liked: result.liked,
+      like_count: result.likeCount,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const unlikePost = async (req, res, next) => {
+  try {
+    const { postId } = req.params;
+    if (!isObjectId(postId)) {
+      return res.status(400).json({ success: false, message: "Invalid post id" });
+    }
+
+    const post = await postService.getPostForLike(postId);
+    if (!post) return res.status(404).json({ success: false, message: "Post not found" });
+    if (!(await postService.canAccessPost(post, req.dbUser))) {
+      return res.status(403).json({ success: false, message: "Post is not accessible" });
+    }
+
+    const result = await postService.idempotentUnlikePost(postId, req.userId);
+
+    return res.json({
+      success: true,
+      message: "Post unliked",
       liked: result.liked,
       like_count: result.likeCount,
     });
@@ -168,7 +221,7 @@ export const addComment = async (req, res, next) => {
 
     const existingPost = await postService.getPostForComment(postId);
     if (!existingPost) return res.json({ success: false, message: "Post not found" });
-    if (!postService.canAccessPost(existingPost, req.dbUser)) {
+    if (!(await postService.canAccessPost(existingPost, req.dbUser))) {
       return res.status(403).json({ success: false, message: "Post is not accessible" });
     }
 
@@ -192,7 +245,7 @@ export const getComments = async (req, res, next) => {
 
     const post = await postService.getPostForComment(postId);
     if (!post) return res.status(404).json({ success: false, message: "Post not found" });
-    if (!postService.canAccessPost(post, req.dbUser)) {
+    if (!(await postService.canAccessPost(post, req.dbUser))) {
       return res.status(403).json({ success: false, message: "Post is not accessible" });
     }
 

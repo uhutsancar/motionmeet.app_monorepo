@@ -24,6 +24,8 @@ export const API_ROUTES = Object.freeze({
     delete: (postId) => `/api/post/${postId}`,
     feed: "/api/post/feed",
     like: "/api/post/like",
+    likeIdempotent: (postId) => `/api/post/${postId}/like`,
+    unlike: (postId) => `/api/post/${postId}/like`,
   }),
   message: Object.freeze({
     get: "/api/message/get",

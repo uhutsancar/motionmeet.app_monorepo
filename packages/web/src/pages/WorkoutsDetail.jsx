@@ -47,7 +47,7 @@ const WorkoutsDetail = () => {
         <Box sx={{ width: '100%', minHeight: '100vh', bgcolor: 'background.default', p: { xs: 2, sm: 4 } }}>
             <Box sx={{ maxWidth: 768, mx: 'auto', pb: 10 }}>
                 {/* Header */}
-                <Stack direction="row" alignItems="center" spacing={2} mb={4}>
+                <Stack direction="row" sx={{ alignItems: "center" }} spacing={2} mb={4}>
                     <IconButton onClick={() => navigate(-1)} sx={{ bgcolor: 'action.hover' }}>
                         <ArrowBackRounded />
                     </IconButton>
@@ -72,7 +72,7 @@ const WorkoutsDetail = () => {
                 <Paper variant="outlined" sx={{ p: 3, borderRadius: 4 }}>
                     <Typography variant="body2" fontWeight={700} color="text.secondary" mb={3}>{t('monthly_report.trend_title', 'Trend')}</Typography>
                     {!hasData ? (
-                        <Stack alignItems="center" justifyContent="center" py={8} spacing={1.5}>
+                        <Stack sx={{ justifyContent: "center",  alignItems: "center" }} py={8} spacing={1.5}>
                             <FitnessCenterRounded sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.5 }} />
                             <Typography variant="body2" color="text.secondary">{t('monthly_report.no_data', 'Bu dönem için veri yok')}</Typography>
                         </Stack>

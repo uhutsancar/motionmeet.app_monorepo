@@ -1,37 +1,25 @@
 import mongoose from "mongoose";
 import User from "../models/User.js";
 import Connection from "../models/Connection.js";
+import UserFollow from "../models/UserFollow.js";
 import Post from "../models/Post.js";
 import escapeStringRegexp from "escape-string-regexp";
 import { isUserId } from "../utils/validation.js";
 import { cursorFilter, pageFromDocuments } from "../utils/pagination.js";
 import { hydratePostInteractions } from "./postInteractionService.js";
+import { bufferCountIncrement } from "../configs/redis.js";
 
 const USER_BRIEF_FIELDS = "_id full_name username profile_picture";
-const USER_SUMMARY_FIELDS = `${USER_BRIEF_FIELDS} bio location followers following connections`;
+const USER_SUMMARY_FIELDS = `${USER_BRIEF_FIELDS} bio location followers_count following_count connections_count`;
 const USER_PROFILE_FIELDS = `${USER_SUMMARY_FIELDS} cover_photo statistics privacy createdAt`;
 const MAX_RELATIONSHIPS = 10_000;
 
-const relationshipCapacityFilter = (field, relatedUserId) => ({
-  $or: [
-    { [field]: relatedUserId },
-    {
-      $expr: {
-        $lt: [{ $size: { $ifNull: [`$${field}`, []] } }, MAX_RELATIONSHIPS],
-      },
-    },
-  ],
+const relationshipCapacityFilter = (countField) => ({
+  [countField]: { $lt: MAX_RELATIONSHIPS },
 });
 
 export const withRelationshipCounts = (user) => {
-  const value = user.toObject ? user.toObject() : user;
-  value.followers_count = value.followers?.length || 0;
-  value.following_count = value.following?.length || 0;
-  value.connections_count = value.connections?.length || 0;
-  delete value.followers;
-  delete value.following;
-  delete value.connections;
-  return value;
+  return user.toObject ? user.toObject() : user;
 };
 
 export const getUserById = async (userId) => {
@@ -57,22 +45,44 @@ export const checkUsernameTaken = async (username, excludeUserId) => {
 };
 
 export const updateUser = async (userId, updatedData) => {
-  return await User.findByIdAndUpdate(userId, updatedData, { new: true }).populate("plan");
+  const user = await User.findByIdAndUpdate(userId, updatedData, { new: true }).populate("plan");
+
+  if (
+    updatedData.full_name !== undefined ||
+    updatedData.username !== undefined ||
+    updatedData.profile_picture !== undefined
+  ) {
+    const profileUpdates = {};
+    if (updatedData.full_name !== undefined) profileUpdates["author_profile.full_name"] = updatedData.full_name;
+    if (updatedData.username !== undefined) profileUpdates["author_profile.username"] = updatedData.username;
+    if (updatedData.profile_picture !== undefined) profileUpdates["author_profile.profile_picture"] = updatedData.profile_picture;
+
+    // Asynchronously update all posts by this user
+    Post.updateMany({ user: userId }, { $set: profileUpdates }).catch((err) => {
+      console.error("Failed to sync author_profile to posts:", err.message);
+    });
+  }
+
+  return user;
 };
 
 export const searchUsers = async (input, excludeUserId) => {
-  const escapedInput = escapeStringRegexp(input);
-  const userDocuments = await User.find({
-    _id: { $ne: excludeUserId },
-    "privacy.showInSearch": { $ne: false },
-    $or: [
-      { username: new RegExp(`^${escapedInput}`, "i") },
-      { full_name: new RegExp(`^${escapedInput}`, "i") },
-    ],
-  })
+  // If search input is empty, return empty array immediately.
+  if (!input || !input.trim()) return [];
+
+  const userDocuments = await User.find(
+    {
+      _id: { $ne: excludeUserId },
+      "privacy.showInSearch": { $ne: false },
+      $text: { $search: input },
+    },
+    { score: { $meta: "textScore" } }
+  )
+    .sort({ score: { $meta: "textScore" } })
     .select(USER_SUMMARY_FIELDS)
-    .limit(20);
-    
+    .limit(20)
+    .lean();
+
   return userDocuments;
 };
 
@@ -87,26 +97,36 @@ export const followUser = async (userId, targetId) => {
   const session = await mongoose.startSession();
   try {
     return await session.withTransaction(async () => {
-      const requester = await User.updateOne(
-        {
-          _id: userId,
-          ...relationshipCapacityFilter("following", targetId),
-        },
-        { $addToSet: { following: targetId } },
-        { session }
+      const edge = await UserFollow.updateOne(
+        { followerId: userId, followeeId: targetId },
+        { $setOnInsert: { followerId: userId, followeeId: targetId } },
+        { upsert: true, session }
       );
-      const target = await User.updateOne(
-        {
-          _id: targetId,
-          ...relationshipCapacityFilter("followers", userId),
-        },
-        { $addToSet: { followers: userId } },
-        { session }
-      );
-      if (requester.matchedCount !== 1 || target.matchedCount !== 1) {
-        throw Object.assign(new Error("Relationship limit reached"), {
-          status: 409,
-        });
+      
+      if (edge.upsertedCount === 0) return true;
+
+      const bufferedFollowing = await bufferCountIncrement("following_count", userId.toString(), 1);
+      if (!bufferedFollowing) {
+        const requester = await User.updateOne(
+          { _id: userId, ...relationshipCapacityFilter("following_count") },
+          { $inc: { following_count: 1 } },
+          { session }
+        );
+        if (requester.matchedCount !== 1) {
+          throw Object.assign(new Error("Relationship limit reached"), { status: 409 });
+        }
+      }
+
+      const bufferedFollowers = await bufferCountIncrement("followers_count", targetId.toString(), 1);
+      if (!bufferedFollowers) {
+        const target = await User.updateOne(
+          { _id: targetId, ...relationshipCapacityFilter("followers_count") },
+          { $inc: { followers_count: 1 } },
+          { session }
+        );
+        if (target.matchedCount !== 1) {
+          throw Object.assign(new Error("Relationship limit reached"), { status: 409 });
+        }
       }
       return true;
     });
@@ -119,16 +139,30 @@ export const unfollowUser = async (userId, targetId) => {
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
-      await User.updateOne(
-        { _id: userId },
-        { $pull: { following: targetId } },
+      const deleted = await UserFollow.deleteOne(
+        { followerId: userId, followeeId: targetId },
         { session }
       );
-      await User.updateOne(
-        { _id: targetId },
-        { $pull: { followers: userId } },
-        { session }
-      );
+      
+      if (deleted.deletedCount > 0) {
+        const bufferedFollowing = await bufferCountIncrement("following_count", userId.toString(), -1);
+        if (!bufferedFollowing) {
+          await User.updateOne(
+            { _id: userId },
+            { $inc: { following_count: -1 } },
+            { session }
+          );
+        }
+
+        const bufferedFollowers = await bufferCountIncrement("followers_count", targetId.toString(), -1);
+        if (!bufferedFollowers) {
+          await User.updateOne(
+            { _id: targetId },
+            { $inc: { followers_count: -1 } },
+            { session }
+          );
+        }
+      }
     });
   } finally {
     await session.endSession();
@@ -164,30 +198,44 @@ export const createConnection = async (userId, targetId) => {
 };
 
 export const getUserConnectionsData = async (userId) => {
-  const user = await User.findById(userId).populate([
-    { path: "connections", select: USER_BRIEF_FIELDS, options: { limit: 200 } },
-    { path: "followers", select: USER_BRIEF_FIELDS, options: { limit: 200 } },
-    { path: "following", select: USER_BRIEF_FIELDS, options: { limit: 200 } },
-  ]);
-
-  if (!user) return null;
-
-  const pendingConnections = (
-    await Connection.find({ to_user_id: userId, status: "pending" })
+  const [connectionsDocs, followersDocs, followingDocs, pendingConnectionsDocs] = await Promise.all([
+    Connection.find({
+      $or: [{ from_user_id: userId }, { to_user_id: userId }],
+      status: "accepted"
+    })
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .populate("from_user_id", USER_BRIEF_FIELDS)
+      .populate("to_user_id", USER_BRIEF_FIELDS),
+    
+    UserFollow.find({ followeeId: userId })
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .populate("followerId", USER_BRIEF_FIELDS),
+      
+    UserFollow.find({ followerId: userId })
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .populate("followeeId", USER_BRIEF_FIELDS),
+      
+    Connection.find({ to_user_id: userId, status: "pending" })
       .sort({ createdAt: -1 })
       .limit(100)
-      .populate({
-        path: "from_user_id",
-        select: USER_BRIEF_FIELDS,
-      })
-  )
-    .map((connection) => connection.from_user_id)
-    .filter(Boolean);
+      .populate("from_user_id", USER_BRIEF_FIELDS)
+  ]);
+
+  const connections = connectionsDocs.map(c => 
+    c.from_user_id?._id?.toString() === userId ? c.to_user_id : c.from_user_id
+  ).filter(Boolean);
+  
+  const followers = followersDocs.map(f => f.followerId).filter(Boolean);
+  const following = followingDocs.map(f => f.followeeId).filter(Boolean);
+  const pendingConnections = pendingConnectionsDocs.map(c => c.from_user_id).filter(Boolean);
 
   return {
-    connections: user.connections,
-    followers: user.followers,
-    following: user.following,
+    connections,
+    followers,
+    following,
     pendingConnections,
   };
 };
@@ -203,32 +251,39 @@ export const acceptConnection = async (userId, senderId) => {
           status: { $in: ["pending", "accepted"] },
         },
         { status: "accepted" },
-        { new: true, session }
+        { new: false, session }
       );
       if (!connection) return null;
 
-      const recipient = await User.updateOne(
-        {
-          _id: userId,
-          ...relationshipCapacityFilter("connections", senderId),
-        },
-        { $addToSet: { connections: senderId } },
-        { session }
-      );
-      const sender = await User.updateOne(
-        {
-          _id: senderId,
-          ...relationshipCapacityFilter("connections", userId),
-        },
-        { $addToSet: { connections: userId } },
-        { session }
-      );
-      if (recipient.matchedCount !== 1 || sender.matchedCount !== 1) {
-        throw Object.assign(new Error("Connection limit reached"), {
-          status: 409,
-        });
+      if (connection.status === "accepted") {
+          return connection;
       }
-      return connection;
+
+      const bufferedRecipient = await bufferCountIncrement("connections_count", userId.toString(), 1);
+      if (!bufferedRecipient) {
+        const recipient = await User.updateOne(
+          { _id: userId, ...relationshipCapacityFilter("connections_count") },
+          { $inc: { connections_count: 1 } },
+          { session }
+        );
+        if (recipient.matchedCount !== 1) {
+          throw Object.assign(new Error("Connection limit reached"), { status: 409 });
+        }
+      }
+
+      const bufferedSender = await bufferCountIncrement("connections_count", senderId.toString(), 1);
+      if (!bufferedSender) {
+        const sender = await User.updateOne(
+          { _id: senderId, ...relationshipCapacityFilter("connections_count") },
+          { $inc: { connections_count: 1 } },
+          { session }
+        );
+        if (sender.matchedCount !== 1) {
+          throw Object.assign(new Error("Connection limit reached"), { status: 409 });
+        }
+      }
+
+      return await Connection.findById(connection._id).session(session);
     });
   } finally {
     await session.endSession();
@@ -236,32 +291,36 @@ export const acceptConnection = async (userId, senderId) => {
 };
 
 export const getUserProfileAndPosts = async (profileId, requesterId, pagination) => {
-  const [profileDocument, requester] = await Promise.all([
-    User.findById(profileId).select(USER_PROFILE_FIELDS),
-    User.findById(requesterId).select("following connections"),
-  ]);
-
+  const profileDocument = await User.findById(profileId).select(USER_PROFILE_FIELDS);
   if (!profileDocument) return null;
 
+  let isFollowing = false;
+  let isConnection = false;
+  let connectionPending = false;
+  
   const isOwner = profileId === requesterId;
-  const isConnection = requester?.connections?.includes(profileId) || false;
+
+  if (!isOwner && requesterId) {
+    const [followDoc, connDoc] = await Promise.all([
+      UserFollow.exists({ followerId: requesterId, followeeId: profileId }),
+      getConnectionBetweenUsers(requesterId, profileId)
+    ]);
+    isFollowing = !!followDoc;
+    isConnection = connDoc?.status === "accepted";
+    connectionPending = connDoc?.status === "pending";
+  }
+
   if (!isOwner && profileDocument.privacy?.publicProfile === false && !isConnection) {
     return { restricted: true };
   }
 
-  const canSeeFollowerPosts =
-    isOwner ||
-    requester?.following?.includes(profileId) ||
-    requester?.connections?.includes(profileId);
+  const canSeeFollowerPosts = isOwner || isFollowing || isConnection;
 
   const visibility = isOwner
     ? ["public", "followers", "private"]
     : canSeeFollowerPosts
       ? ["public", "followers"]
       : ["public"];
-  const connectionRequest = isOwner
-    ? null
-    : await getConnectionBetweenUsers(requesterId, profileId);
 
   const posts = await Post.find({
     user: profileId,
@@ -276,19 +335,18 @@ export const getUserProfileAndPosts = async (profileId, requesterId, pagination)
 
   const profile = withRelationshipCounts(profileDocument);
   delete profile.privacy;
-  profile.isFollowing = requester?.following?.includes(profileId) || false;
+  profile.isFollowing = isFollowing;
   profile.isConnection = isConnection;
-  profile.connectionPending = connectionRequest?.status === "pending";
+  profile.connectionPending = connectionPending;
   const page = pageFromDocuments(posts, pagination.limit, "createdAt");
-  page.items = await hydratePostInteractions(page.items, requester?._id);
+  page.items = await hydratePostInteractions(page.items, requesterId);
   return { profile, posts: page.items, nextCursor: page.nextCursor };
 };
 
 export const getSuggestedUsersList = async (userId) => {
-  const currentUser = await User.findById(userId).select("following");
-  if (!currentUser) return null;
-
-  const excludedIds = [...currentUser.following, userId];
+  const followingDocs = await UserFollow.find({ followerId: userId }).select("followeeId");
+  const excludedIds = [...followingDocs.map(doc => doc.followeeId), userId];
+  
   const userDocuments = await User.find({
     _id: { $nin: excludedIds },
     "privacy.showInSearch": { $ne: false },

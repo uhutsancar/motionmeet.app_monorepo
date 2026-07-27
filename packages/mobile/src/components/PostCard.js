@@ -4,7 +4,7 @@ import { VideoView, useVideoPlayer } from 'expo-video';
 import { useSelector, useDispatch } from 'react-redux';
 import { useAuthContext } from "../context/AuthProvider";
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { likePost, followUser, unfollowUser, addComment, getPostComments } from '../api/endpoints';
+import { likePostIdempotent, unlikePostIdempotent, followUser, unfollowUser, addComment, getPostComments } from '../api/endpoints';
 import { fetchUser } from '../features/user/userSlice';
 import api from '../api/client';
 import moment from 'moment';
@@ -419,15 +419,28 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
 
   const handleLike = async () => {
     if (isProcessing) return;
+    const willLike = !isLiked;
+    // Optimistic update
+    setIsLiked(willLike);
+    setLikeCount((prev) => prev + (willLike ? 1 : -1));
     try {
       setIsProcessing(true);
       const token = await getToken();
-      const data = await likePost(post._id, token);
+      const data = willLike
+        ? await likePostIdempotent(post._id, token)
+        : await unlikePostIdempotent(post._id, token);
       if (data.success) {
         setIsLiked(data.liked);
         setLikeCount(data.like_count);
+      } else {
+        // Revert optimistic update
+        setIsLiked(!willLike);
+        setLikeCount((prev) => prev + (willLike ? -1 : 1));
       }
     } catch (error) {
+      // Revert optimistic update
+      setIsLiked(!willLike);
+      setLikeCount((prev) => prev + (willLike ? -1 : 1));
       logHandledError('like-post', error);
       Alert.alert(t('common.error', 'Error'), t('feed.failed_like', 'Failed to like post'));
     } finally {

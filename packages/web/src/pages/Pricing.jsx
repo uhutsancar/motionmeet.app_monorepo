@@ -134,7 +134,7 @@ const Pricing = () => {
         }}
       >
         <Container maxWidth="lg">
-          <Stack spacing={2} alignItems="center" textAlign="center" mb={7}>
+          <Stack spacing={2} sx={{ alignItems: "center" }} sx={{ textAlign: "center" }} mb={7}>
             <Typography variant="overline" color="primary" fontWeight={800}>
               {t("pricing_page.hero_badge", "Simple, transparent pricing")}
             </Typography>
@@ -159,7 +159,7 @@ const Pricing = () => {
           )}
 
           {loading ? (
-            <Stack alignItems="center" py={8}>
+            <Stack sx={{ alignItems: "center" }} py={8}>
               <Loader2 size={32} className="spin" />
             </Stack>
           ) : (
@@ -190,7 +190,7 @@ const Pricing = () => {
                       </Typography>
                       <Stack spacing={1.5} mb={4} flex={1}>
                         {planFeatureRows(plan, t).map((feature) => (
-                          <Stack key={feature} direction="row" spacing={1.25} alignItems="center">
+                          <Stack key={feature} direction="row" spacing={1.25} sx={{ alignItems: "center" }}>
                             <Check size={18} color="#22c55e" aria-hidden="true" />
                             <Typography variant="body2" color="text.secondary">
                               {feature}

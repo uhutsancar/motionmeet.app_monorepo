@@ -18,6 +18,11 @@ if (redisClient) {
   redisClient.on("error", (error) => {
     console.error("Redis client error:", error.message);
   });
+  try {
+    await redisClient.connect();
+  } catch (error) {
+    console.error("Initial Redis connection failed:", error.message);
+  }
 }
 
 export const initializeRedis = async () => {
@@ -42,7 +47,7 @@ export const initializeRedis = async () => {
 };
 
 export const createRateLimitStore = (prefix) => {
-  if (!redisClient) return undefined;
+  if (!redisClient || !redisClient.isOpen) return undefined; // Falls back to MemoryStore
   return new RedisStore({
     prefix: `motionmeet:rate-limit:${prefix}:`,
     sendCommand: (...args) => redisClient.sendCommand(args),
@@ -113,4 +118,39 @@ export const disconnectRedis = async () => {
     (client) => client?.isOpen
   );
   await Promise.allSettled(clients.map((client) => client.quit()));
+};
+
+/**
+ * DBA Optimization: Buffer count increments in Redis to avoid MongoDB hot document lock contention.
+ * Example key: motionmeet:buffer:like:post123
+ */
+export const bufferCountIncrement = async (type, id, value = 1) => {
+  if (!redisClient?.isReady) return false;
+  try {
+    await redisClient.hIncrBy(`motionmeet:buffer:${type}`, id, value);
+    return true;
+  } catch (error) {
+    console.error(`Redis buffer increment error (${type}:${id}):`, error.message);
+    return false;
+  }
+};
+
+/**
+ * Returns buffered increments for a given type and resets the buffer.
+ */
+export const getAndClearBufferedIncrements = async (type) => {
+  if (!redisClient?.isReady) return {};
+  const key = `motionmeet:buffer:${type}`;
+  try {
+    // Pipeline: Get all fields and values, then delete the hash
+    const [data] = await redisClient
+      .multi()
+      .hGetAll(key)
+      .del(key)
+      .exec();
+    return data || {};
+  } catch (error) {
+    console.error(`Redis buffer clear error (${type}):`, error.message);
+    return {};
+  }
 };

@@ -3,6 +3,12 @@ import mongoose from "mongoose";
 const DEFAULT_LIMIT = 30;
 const MAX_LIMIT = 100;
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const isValidCursorId = (id) =>
+  typeof id === "string" &&
+  (mongoose.isObjectIdOrHexString(id) || UUID_RE.test(id));
+
 export const parsePagination = (
   query = {},
   { defaultLimit = DEFAULT_LIMIT, maxLimit = MAX_LIMIT } = {}
@@ -19,10 +25,7 @@ export const parsePagination = (
         Buffer.from(query.cursor, "base64url").toString("utf8")
       );
       const date = new Date(parsed.date);
-      if (
-        !Number.isNaN(date.getTime()) &&
-        mongoose.isObjectIdOrHexString(parsed.id)
-      ) {
+      if (!Number.isNaN(date.getTime()) && isValidCursorId(parsed.id)) {
         cursor = { date, id: parsed.id };
       }
     } catch {

@@ -65,7 +65,7 @@ const PersonalRecords = () => {
       />
 
       {loading ? (
-        <Stack alignItems="center" py={8}>
+        <Stack sx={{ alignItems: "center" }} py={8}>
           <CircularProgress size={32} />
         </Stack>
       ) : records.length > 0 ? (

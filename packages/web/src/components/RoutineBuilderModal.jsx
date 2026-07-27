@@ -132,7 +132,7 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
         <Dialog open={true} onClose={() => setShowModal(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 4, bgcolor: 'background.paper', backgroundImage: 'none' } }}>
             <Box component="form" onSubmit={handleSubmit}>
                 <DialogTitle sx={{ pb: 1, pt: 3, px: 3 }}>
-                    <Stack direction="row" alignItems="center" spacing={2}>
+                    <Stack direction="row" sx={{ alignItems: "center" }} spacing={2}>
                         <Box sx={{ width: 40, height: 40, borderRadius: '50%', bgcolor: 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.1, position: 'absolute' }} />
                         <FileTextRounded color="primary" />
                         <Typography variant="h6" fontWeight={800}>Build Routine</Typography>
@@ -181,8 +181,8 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
                                         <Stack
                                             key={ex._id}
                                             direction="row"
-                                            alignItems="center"
-                                            justifyContent="space-between"
+                                            sx={{ justifyContent: "space-between",  alignItems: "center" }}
+                                           
                                             sx={{ p: 1.5, cursor: 'pointer', borderRadius: 1.5, '&:hover': { bgcolor: 'action.hover' } }}
                                             onClick={() => addExercise(ex)}
                                         >
@@ -199,8 +199,8 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
                                 <Stack spacing={2}>
                                     {selectedExercises.map((se, exIndex) => (
                                         <Paper key={exIndex} variant="outlined" sx={{ p: 2, borderRadius: 3, bgcolor: 'background.paper' }}>
-                                            <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
-                                                <Stack direction="row" alignItems="center" spacing={1}>
+                                            <Stack direction="row" sx={{ justifyContent: "space-between",  alignItems: "center" }} mb={2}>
+                                                <Stack direction="row" sx={{ alignItems: "center" }} spacing={1}>
                                                     <DumbbellRounded color="primary" fontSize="small" />
                                                     <Typography variant="subtitle2" fontWeight={700}>{se.exerciseId.name}</Typography>
                                                 </Stack>

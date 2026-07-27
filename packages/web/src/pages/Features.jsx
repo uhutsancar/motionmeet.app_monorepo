@@ -33,7 +33,7 @@ const FeatureRow = ({ index }) => {
     /* 1 – Workout Logging */
     <Stack spacing={1.5} key="1">
       {[{ ex: 'Bench Press', done: true, val: '80 kg × 8' }, { ex: 'Squat', done: true, val: '100 kg × 5' }, { ex: 'Deadlift', done: false, val: '120 kg × 3' }].map((r, i) => (
-        <Stack key={i} direction="row" alignItems="center" justifyContent="space-between" sx={{ 
+        <Stack key={i} direction="row" sx={{ justifyContent: "space-between",  alignItems: "center" }} sx={{ 
           p: 1.5, borderRadius: 3, border: '1px solid',
           bgcolor: r.done ? 'rgba(34, 197, 94, 0.1)' : 'background.default',
           borderColor: r.done ? 'rgba(34, 197, 94, 0.2)' : 'divider'
@@ -42,7 +42,7 @@ const FeatureRow = ({ index }) => {
             <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: r.done ? '#4ade80' : 'text.primary' }}>{r.ex}</Typography>
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>Set {i + 1}</Typography>
           </Box>
-          <Stack direction="row" alignItems="center" spacing={1}>
+          <Stack direction="row" sx={{ alignItems: "center" }} spacing={1}>
             <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: r.done ? '#4ade80' : 'text.secondary' }}>{r.val}</Typography>
             <Box sx={{ 
               width: 20, height: 20, borderRadius: '50%', border: '2px solid',
@@ -54,13 +54,13 @@ const FeatureRow = ({ index }) => {
           </Stack>
         </Stack>
       ))}
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ p: 1.5, borderRadius: 3, bgcolor: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+      <Stack direction="row" sx={{ alignItems: "center" }} spacing={1} sx={{ p: 1.5, borderRadius: 3, bgcolor: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
         <Typography variant="caption" sx={{ color: '#fbbf24', fontWeight: 'bold' }}>🏆 New PR — Bench Press 80 kg!</Typography>
       </Stack>
     </Stack>,
     /* 2 – Progress Tracking */
     <Stack spacing={1.5} key="2">
-      <Stack direction="row" alignItems="flex-end" spacing={0.5} sx={{ height: 96 }}>
+      <Stack direction="row" sx={{ alignItems: "flex-end" }} spacing={0.5} sx={{ height: 96 }}>
         {[40, 55, 50, 72, 65, 90, 85].map((h, i) => (
           <Box key={i} sx={{ flex: 1, position: 'relative', height: `${h}%` }}>
             <Box sx={{ width: '100%', height: '100%', borderRadius: 1, bgcolor: '#6558F5', opacity: 0.8 }} />
@@ -68,7 +68,7 @@ const FeatureRow = ({ index }) => {
           </Box>
         ))}
       </Stack>
-      <Stack direction="row" justifyContent="space-between" sx={{ typography: 'caption', color: 'text.secondary', fontSize: 9 }}>
+      <Stack direction="row" sx={{ justifyContent: "space-between" }} sx={{ typography: 'caption', color: 'text.secondary', fontSize: 9 }}>
         {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'].map(m => <Typography key={m} component="span" variant="inherit">{m}</Typography>)}
       </Stack>
       <Grid container spacing={1}>
@@ -85,7 +85,7 @@ const FeatureRow = ({ index }) => {
     /* 3 – Routine Builder */
     <Stack spacing={1} key="3">
       {['Push Day A', 'Pull Day B', 'Leg Day C'].map((r, i) => (
-        <Stack key={i} direction="row" alignItems="center" spacing={1.5} sx={{ p: 1.5, borderRadius: 3, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
+        <Stack key={i} direction="row" sx={{ alignItems: "center" }} spacing={1.5} sx={{ p: 1.5, borderRadius: 3, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
           <Box sx={{ width: 32, height: 32, borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: ['#6558F5', '#8A80FF', '#12A88A'][i], color: 'white', fontWeight: 'bold', fontSize: 14 }}>
             {['P', 'P', 'L'][i]}
           </Box>
@@ -104,7 +104,7 @@ const FeatureRow = ({ index }) => {
     <Stack spacing={1.5} key="4">
       {[{ name: 'Alex M.', workout: 'Push Day A', time: '1h 20m', vol: '12,400 kg', pr: true }, { name: 'Sara K.', workout: 'Leg Day', time: '55m', vol: '8,200 kg', pr: false }].map((p, i) => (
         <Box key={i} sx={{ p: 1.5, borderRadius: 3, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
-          <Stack direction="row" alignItems="center" spacing={1} mb={1}>
+          <Stack direction="row" sx={{ alignItems: "center" }} spacing={1} mb={1}>
             <Box sx={{ width: 32, height: 32, borderRadius: '50%', bgcolor: ['#3b82f6', '#ec4899'][i], display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold', fontSize: 12 }}>
               {p.name[0]}
             </Box>
@@ -133,7 +133,7 @@ const FeatureRow = ({ index }) => {
         ))}
       </Stack>
       {[{ name: 'Bench Press', muscle: 'Chest', eq: 'Barbell' }, { name: 'Incline DB Press', muscle: 'Chest', eq: 'Dumbbell' }, { name: 'Cable Fly', muscle: 'Chest', eq: 'Cable' }].map((e, i) => (
-        <Stack key={i} direction="row" alignItems="center" spacing={1.5} sx={{ p: 1.5, borderRadius: 3, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
+        <Stack key={i} direction="row" sx={{ alignItems: "center" }} spacing={1.5} sx={{ p: 1.5, borderRadius: 3, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
           <Box sx={{ width: 36, height: 36, borderRadius: 2, bgcolor: 'rgba(101, 88, 245, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6558F5' }}>
             <Dumbbell size={16} />
           </Box>
@@ -186,7 +186,7 @@ const FeatureRow = ({ index }) => {
           </Typography>
           <Stack spacing={1.5}>
             {bullets.map((b, i) => (
-              <Stack key={i} direction="row" alignItems="center" spacing={1.5}>
+              <Stack key={i} direction="row" sx={{ alignItems: "center" }} spacing={1.5}>
                 <CheckCircle2 size={20} color={theme.palette.primary.main} style={{ flexShrink: 0 }} />
                 <Typography variant="body1" sx={{ color: 'text.secondary', fontWeight: 500 }}>{b}</Typography>
               </Stack>
@@ -215,7 +215,7 @@ const Features = () => {
         <Box sx={{ position: 'absolute', top: -128, left: '50%', transform: 'translateX(-50%)', width: 700, height: 400, borderRadius: '50%', bgcolor: 'rgba(101, 88, 245, 0.1)', filter: 'blur(80px)', pointerEvents: 'none' }} />
         
         <Container maxWidth="md" sx={{ position: 'relative', zIndex: 1 }}>
-          <Stack spacing={3} alignItems="center">
+          <Stack spacing={3} sx={{ alignItems: "center" }}>
             <Box sx={{ display: 'inline-flex', alignItems: 'center', px: 2, py: 1, borderRadius: 10, bgcolor: `${theme.palette.primary.main}1A`, border: `1px solid ${theme.palette.primary.main}33` }}>
               <Typography variant="body2" sx={{ color: theme.palette.primary.main, fontWeight: 'bold' }}>{t('features_page.hero_badge')}</Typography>
             </Box>

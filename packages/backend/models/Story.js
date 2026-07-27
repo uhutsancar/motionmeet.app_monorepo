@@ -10,11 +10,7 @@ const storySchema = new mongoose.Schema(
       type: String,
       enum: ["text", "image", "video"],
     },
-    views_count: {
-      type: [{ type: String, ref: "User" }],
-      default: undefined,
-      select: false,
-    },
+
     background_color: {type: String},
   },
   { timestamps: true, minimize: false }

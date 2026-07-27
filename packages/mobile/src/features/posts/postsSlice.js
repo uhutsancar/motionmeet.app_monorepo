@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { getPosts, createPost, likePost, deletePost } from '../../api/endpoints';
+import { getPosts, createPost, likePostIdempotent, unlikePostIdempotent, deletePost } from '../../api/endpoints';
 
 const initialState = {
   posts: [],
@@ -35,8 +35,10 @@ export const createNewPost = createAsyncThunk(
 
 export const toggleLikePost = createAsyncThunk(
   'posts/likePost',
-  async ({ postId, token }) => {
-    const data = await likePost(postId, token);
+  async ({ postId, token, liked }) => {
+    const data = liked
+      ? await likePostIdempotent(postId, token)
+      : await unlikePostIdempotent(postId, token);
     if (data.success) {
       return {
         postId,

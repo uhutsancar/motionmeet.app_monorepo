@@ -74,7 +74,7 @@ const CustomExerciseModal = ({ setShowModal, onExerciseCreated }) => {
         <Dialog open={true} onClose={() => setShowModal(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 4, bgcolor: 'background.paper', backgroundImage: 'none' } }}>
             <Box component="form" onSubmit={handleSubmit}>
                 <DialogTitle sx={{ pb: 1, pt: 3, px: 3 }}>
-                    <Stack direction="row" alignItems="center" spacing={2}>
+                    <Stack direction="row" sx={{ alignItems: "center" }} spacing={2}>
                         <Box sx={{ width: 40, height: 40, borderRadius: '50%', bgcolor: 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.1, position: 'absolute' }} />
                         <DumbbellRounded color="primary" />
                         <Typography variant="h6" fontWeight={800}>Custom Exercise</Typography>

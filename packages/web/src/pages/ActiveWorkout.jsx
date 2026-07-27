@@ -48,7 +48,7 @@ const ActiveWorkout = () => {
                 borderBottom: 1, borderColor: 'divider', p: 2, px: { lg: 4 }, boxShadow: 1
             }}>
                 <Box sx={{ maxWidth: 'md', mx: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Stack direction="row" alignItems="center" spacing={2}>
+                    <Stack direction="row" sx={{ alignItems: "center" }} spacing={2}>
                         <IconButton
                             onClick={togglePause}
                             color="primary"
@@ -66,8 +66,8 @@ const ActiveWorkout = () => {
                         </Stack>
                     </Stack>
 
-                    <Stack direction="row" spacing={{ xs: 2, sm: 4 }} alignItems="center" sx={{ overflowX: 'auto', px: 1 }}>
-                        <Stack alignItems="center">
+                    <Stack direction="row" spacing={{ xs: 2, sm: 4 }} sx={{ alignItems: "center" }} sx={{ overflowX: 'auto', px: 1 }}>
+                        <Stack sx={{ alignItems: "center" }}>
                             <Typography variant="overline" sx={{ fontSize: '0.65rem', fontWeight: 900, color: 'text.secondary', lineHeight: 1 }}>
                                 {t('statistics.volume', 'Hacim')}
                             </Typography>
@@ -76,7 +76,7 @@ const ActiveWorkout = () => {
                             </Typography>
                         </Stack>
                         <Divider orientation="vertical" flexItem sx={{ height: 32, alignSelf: 'center' }} />
-                        <Stack alignItems="center">
+                        <Stack sx={{ alignItems: "center" }}>
                             <Typography variant="overline" sx={{ fontSize: '0.65rem', fontWeight: 900, color: 'text.secondary', lineHeight: 1 }}>
                                 {t('statistics.sets', 'Set')}
                             </Typography>
@@ -101,7 +101,7 @@ const ActiveWorkout = () => {
                         <Paper key={exIdx} variant="outlined" sx={{ borderRadius: 4, overflow: 'hidden' }}>
                             {/* Exercise Header */}
                             <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'space-between', bgcolor: 'action.hover' }}>
-                                <Stack direction="row" alignItems="center" spacing={2}>
+                                <Stack direction="row" sx={{ alignItems: "center" }} spacing={2}>
                                     {mediaUrl ? (
                                         <Box component="img" src={mediaUrl} sx={{ width: 48, height: 48, borderRadius: 2, objectFit: 'cover' }} />
                                     ) : (
@@ -125,7 +125,7 @@ const ActiveWorkout = () => {
                             {/* Sets List */}
                             <Box sx={{ p: { xs: 1, sm: 2 } }}>
                                 {/* Columns Header */}
-                                <Stack direction="row" alignItems="center" sx={{ px: 1, py: 1, mb: 1 }}>
+                                <Stack direction="row" sx={{ alignItems: "center" }} sx={{ px: 1, py: 1, mb: 1 }}>
                                     <Typography variant="overline" sx={{ width: 40, textAlign: 'center', fontSize: '0.65rem', fontWeight: 900 }}>Set</Typography>
                                     <Typography variant="overline" sx={{ flex: 1, minWidth: 60, textAlign: 'center', fontSize: '0.65rem', fontWeight: 900, display: { xs: 'none', sm: 'block' } }}>Önceki</Typography>
                                     <Typography variant="overline" sx={{ flex: 1, textAlign: 'center', fontSize: '0.65rem', fontWeight: 900 }}>kg</Typography>
@@ -138,7 +138,7 @@ const ActiveWorkout = () => {
                                     <Stack
                                         key={setIdx}
                                         direction="row"
-                                        alignItems="center"
+                                        sx={{ alignItems: "center" }}
                                         spacing={{ xs: 1, sm: 2 }}
                                         sx={{
                                             px: { xs: 0.5, sm: 1 }, py: 1, mb: 1, borderRadius: 2,
@@ -294,12 +294,12 @@ const ActiveWorkout = () => {
                     }}
                 >
                     {saving ? (
-                        <Stack direction="row" alignItems="center" spacing={1}>
+                        <Stack direction="row" sx={{ alignItems: "center" }} spacing={1}>
                             <CircularProgress size={20} color="inherit" />
                             <Typography fontWeight="bold">{t('common.saving', 'Kaydediliyor...')}</Typography>
                         </Stack>
                     ) : (
-                        <Stack direction="row" alignItems="center" spacing={1}>
+                        <Stack direction="row" sx={{ alignItems: "center" }} spacing={1}>
                             <Typography fontWeight="bold">{t('active_workout.finish_workout', 'Antrenmanı Bitir')}</Typography>
                             <CheckCircle2 size={20} />
                         </Stack>

@@ -5,6 +5,7 @@ import { validateEnvironment } from "../configs/validateEnv.js";
 const managedKeys = [
   "NODE_ENV",
   "MONGODB_URL",
+  "MONGODB_DB_NAME",
   "REDIS_URL",
   "FRONTEND_URL",
   "CORS_ORIGINS",
@@ -36,6 +37,7 @@ const restoreEnvironment = () => {
 const configureProductionBase = () => {
   process.env.NODE_ENV = "production";
   process.env.MONGODB_URL = "mongodb://mongo:27017/motionmeet";
+  process.env.MONGODB_DB_NAME = "motionmeet";
   process.env.REDIS_URL = "redis://redis:6379";
   process.env.FRONTEND_URL = "https://app.example.com";
   process.env.CORS_ORIGINS = "https://app.example.com";
@@ -47,6 +49,22 @@ const configureProductionBase = () => {
 test("production accepts explicitly disabled optional capabilities", () => {
   try {
     configureProductionBase();
+    assert.doesNotThrow(() => validateEnvironment());
+  } finally {
+    restoreEnvironment();
+  }
+});
+
+test("database name is explicit and cannot use MongoDB's implicit test database", () => {
+  try {
+    configureProductionBase();
+    delete process.env.MONGODB_DB_NAME;
+    assert.throws(() => validateEnvironment(), /MONGODB_DB_NAME/);
+
+    process.env.MONGODB_DB_NAME = "test";
+    assert.throws(() => validateEnvironment(), /explicit application database/);
+
+    process.env.MONGODB_DB_NAME = "motionmeet";
     assert.doesNotThrow(() => validateEnvironment());
   } finally {
     restoreEnvironment();

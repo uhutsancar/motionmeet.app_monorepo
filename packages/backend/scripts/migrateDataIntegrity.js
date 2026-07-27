@@ -12,123 +12,41 @@ import Post from "../models/Post.js";
 import PostComment from "../models/PostComment.js";
 import PostLike from "../models/PostLike.js";
 import Story from "../models/Story.js";
+import StoryView from "../models/StoryView.js";
 import Session from "../models/Session.js";
 import UploadReservation from "../models/UploadReservation.js";
 import Routine from "../models/Routine.js";
 import Usage from "../models/Usage.js";
 import User from "../models/User.js";
+import UserFollow from "../models/UserFollow.js";
 import Workout from "../models/Workout.js";
 
 const applyChanges = process.argv.includes("--apply");
 const MAX_RELATIONSHIPS = 10_000;
 
-const duplicatesBy = (items, getKey) => {
-  const groups = new Map();
-  for (const item of items) {
-    const key = getKey(item);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(item);
-  }
-  return [...groups.entries()].filter(([, values]) => values.length > 1);
-};
-
 const main = async () => {
   await connectDB();
 
-  const users = await User.find({})
-    .select("_id email username followers following connections")
-    .lean();
-  const normalizedUsers = users.map((user) => ({
-    ...user,
-    email: user.email.trim().toLowerCase(),
-    username: user.username.trim().toLowerCase(),
-  }));
-  const emailConflicts = duplicatesBy(normalizedUsers, (user) => user.email);
-  const usernameConflicts = duplicatesBy(normalizedUsers, (user) => user.username);
+  console.log("Analyzing database for conflicts...");
 
-  const connections = await Connection.find({})
-    .select("_id from_user_id to_user_id status")
-    .lean();
-  const connectionPairs = connections.map((connection) => ({
-    ...connection,
-    pairKey: [connection.from_user_id, connection.to_user_id].sort().join(":"),
-  }));
-  const connectionConflicts = duplicatesBy(
-    connectionPairs,
-    (connection) => connection.pairKey
-  );
-  const validUserIds = new Set(normalizedUsers.map((user) => user._id));
-  const relationships = new Map(
-    normalizedUsers.map((user) => [
-      user._id,
-      {
-        followers: new Set(
-          (user.followers || []).filter(
-            (id) => id !== user._id && validUserIds.has(id)
-          )
-        ),
-        following: new Set(
-          (user.following || []).filter(
-            (id) => id !== user._id && validUserIds.has(id)
-          )
-        ),
-        connections: new Set(
-          (user.connections || []).filter(
-            (id) => id !== user._id && validUserIds.has(id)
-          )
-        ),
-      },
-    ])
-  );
+  const emailConflictsRaw = await User.aggregate([
+    { $group: { _id: { $toLower: { $trim: { input: "$email" } } }, count: { $sum: 1 }, ids: { $push: "$_id" } } },
+    { $match: { count: { $gt: 1 } } }
+  ]);
+  const emailConflicts = emailConflictsRaw.map(c => ({ value: c._id, ids: c.ids }));
 
-  for (const [userId, relation] of relationships) {
-    for (const targetId of relation.following) {
-      relationships.get(targetId).followers.add(userId);
-    }
-    for (const sourceId of relation.followers) {
-      relationships.get(sourceId).following.add(userId);
-    }
-    for (const connectionId of relation.connections) {
-      relationships.get(connectionId).connections.add(userId);
-    }
-  }
+  const usernameConflictsRaw = await User.aggregate([
+    { $group: { _id: { $toLower: { $trim: { input: "$username" } } }, count: { $sum: 1 }, ids: { $push: "$_id" } } },
+    { $match: { count: { $gt: 1 } } }
+  ]);
+  const usernameConflicts = usernameConflictsRaw.map(c => ({ value: c._id, ids: c.ids }));
 
-  const orphanConnectionIds = [];
-  for (const connection of connectionPairs) {
-    const fromId = connection.from_user_id;
-    const toId = connection.to_user_id;
-    if (
-      fromId === toId ||
-      !validUserIds.has(fromId) ||
-      !validUserIds.has(toId)
-    ) {
-      orphanConnectionIds.push(connection._id);
-    } else if (connection.status === "accepted") {
-      relationships.get(fromId).connections.add(toId);
-      relationships.get(toId).connections.add(fromId);
-    }
-  }
+  const connectionConflictsRaw = await Connection.aggregate([
+    { $group: { _id: "$pairKey", count: { $sum: 1 }, ids: { $push: "$_id" } } },
+    { $match: { count: { $gt: 1 } } }
+  ]);
+  const connectionConflicts = connectionConflictsRaw.map(c => ({ value: c._id, ids: c.ids }));
 
-  const relationshipLimitConflicts = [];
-  for (const [userId, relation] of relationships) {
-    for (const field of ["followers", "following", "connections"]) {
-      if (relation[field].size > MAX_RELATIONSHIPS) {
-        relationshipLimitConflicts.push({
-          userId,
-          field,
-          count: relation[field].size,
-          limit: MAX_RELATIONSHIPS,
-        });
-      }
-    }
-  }
-
-  const acceptedConnectionPairs = new Set();
-  for (const [userId, relation] of relationships) {
-    for (const connectionId of relation.connections) {
-      acceptedConnectionPairs.add([userId, connectionId].sort().join(":"));
-    }
-  }
   const [legacyInteractionStats = { likes: 0, comments: 0, posts: 0 }] =
     await Post.aggregate([
       {
@@ -155,25 +73,12 @@ const main = async () => {
 
   console.log(JSON.stringify({
     mode: applyChanges ? "apply" : "dry-run",
-    users: users.length,
-    connections: connections.length,
     legacyInteractions: legacyInteractionStats,
     unownedCustomExercises,
-    orphanConnections: orphanConnectionIds,
     conflicts: {
-      emails: emailConflicts.map(([value, matches]) => ({
-        value,
-        ids: matches.map((match) => match._id),
-      })),
-      usernames: usernameConflicts.map(([value, matches]) => ({
-        value,
-        ids: matches.map((match) => match._id),
-      })),
-      connectionPairs: connectionConflicts.map(([value, matches]) => ({
-        value,
-        ids: matches.map((match) => match._id),
-      })),
-      relationshipLimits: relationshipLimitConflicts,
+      emails: emailConflicts,
+      usernames: usernameConflicts,
+      connectionPairs: connectionConflicts,
     },
   }, null, 2));
 
@@ -184,67 +89,87 @@ const main = async () => {
   if (
     emailConflicts.length ||
     usernameConflicts.length ||
-    connectionConflicts.length ||
-    relationshipLimitConflicts.length
+    connectionConflicts.length
   ) {
     throw new Error(
-      "Migration aborted because reported identity, relationship, or connection conflicts must be resolved manually"
+      "Migration aborted because reported identity or connection conflicts must be resolved manually"
     );
   }
 
-  if (normalizedUsers.length) {
-    await User.bulkWrite(
-      normalizedUsers.map((user) => ({
+  console.log("Migrating Users...");
+  const userCursor = User.find({}).select("_id email username followers following connections").lean().cursor();
+  let userUpdates = [];
+  let userFollowOps = [];
+  
+  for await (const user of userCursor) {
+    const email = user.email.trim().toLowerCase();
+    const username = user.username.trim().toLowerCase();
+    const followerIds = Array.isArray(user.followers) ? user.followers.filter(id => id !== user._id.toString()) : [];
+    const followingIds = Array.isArray(user.following) ? user.following.filter(id => id !== user._id.toString()) : [];
+    const connectionIds = Array.isArray(user.connections) ? user.connections.filter(id => id !== user._id.toString()) : [];
+
+    for (const targetId of followingIds) {
+      userFollowOps.push({
         updateOne: {
-          filter: { _id: user._id },
-          update: {
-            $set: {
-              email: user.email,
-              username: user.username,
-              followers: [...relationships.get(user._id).followers],
-              following: [...relationships.get(user._id).following],
-              connections: [...relationships.get(user._id).connections],
-            },
+          filter: { followerId: user._id, followeeId: targetId },
+          update: { $setOnInsert: { followerId: user._id, followeeId: targetId } },
+          upsert: true
+        }
+      });
+    }
+
+    userUpdates.push({
+      updateOne: {
+        filter: { _id: user._id },
+        update: {
+          $set: {
+            email,
+            username,
+            followers_count: followerIds.length,
+            following_count: followingIds.length,
+            connections_count: connectionIds.length,
           },
-        },
-      }))
-    );
-  }
-  if (connectionPairs.length) {
-    await Connection.bulkWrite(
-      connectionPairs.map((connection) => ({
-        updateOne: {
-          filter: { _id: connection._id },
-          update: { $set: { pairKey: connection.pairKey } },
-        },
-      }))
-    );
-  }
-  if (orphanConnectionIds.length) {
-    await Connection.deleteMany({ _id: { $in: orphanConnectionIds } });
-  }
-  if (acceptedConnectionPairs.size) {
-    await Connection.bulkWrite(
-      [...acceptedConnectionPairs].map((pairKey) => {
-        const [fromUserId, toUserId] = pairKey.split(":");
-        return {
-          updateOne: {
-            filter: { pairKey },
-            update: {
-              $set: {
-                pairKey,
-                from_user_id: fromUserId,
-                to_user_id: toUserId,
-                status: "accepted",
-              },
-            },
-            upsert: true,
-          },
-        };
-      })
-    );
+          $unset: { followers: "", following: "", connections: "" }
+        }
+      }
+    });
+
+    if (userUpdates.length >= 1000) {
+      if (userFollowOps.length) await UserFollow.bulkWrite(userFollowOps);
+      await User.bulkWrite(userUpdates);
+      userUpdates = [];
+      userFollowOps = [];
+    }
   }
 
+  if (userUpdates.length > 0) {
+    if (userFollowOps.length) await UserFollow.bulkWrite(userFollowOps);
+    await User.bulkWrite(userUpdates);
+  }
+
+  console.log("Migrating Connections...");
+  const connCursor = Connection.find({}).lean().cursor();
+  let connUpdates = [];
+  for await (const conn of connCursor) {
+    const pairKey = [conn.from_user_id, conn.to_user_id].sort().join(":");
+    if (pairKey !== conn.pairKey) {
+      connUpdates.push({
+        updateOne: {
+          filter: { _id: conn._id },
+          update: { $set: { pairKey } }
+        }
+      });
+    }
+    if (connUpdates.length >= 1000) {
+      await Connection.bulkWrite(connUpdates);
+      connUpdates = [];
+    }
+  }
+  if (connUpdates.length > 0) {
+    await Connection.bulkWrite(connUpdates);
+  }
+
+  console.log("Migrating Posts...");
   for await (const post of Post.find({
     $or: [
       { "likes_count.0": { $exists: true } },
@@ -293,10 +218,17 @@ const main = async () => {
     }
     await Post.updateOne(
       { _id: post._id },
-      { $unset: { likes_count: "", comments: "" } }
+      { 
+        $unset: { likes_count: "", comments: "" },
+        $set: { 
+          like_count: post.likes_count?.length || 0, 
+          comment_count: post.comments?.length || 0 
+        } 
+      }
     );
   }
 
+  console.log("Aggregating Usage Statistics...");
   const [workoutCounts, routineCounts, statistics] = await Promise.all([
     Workout.aggregate([
       {
@@ -361,9 +293,11 @@ const main = async () => {
       },
     },
   });
+  
   if (statistics.length) {
-    await User.bulkWrite(
-      statistics.map((entry) => ({
+    let statUpdates = [];
+    for (const entry of statistics) {
+      statUpdates.push({
         updateOne: {
           filter: { _id: entry._id },
           update: {
@@ -376,15 +310,32 @@ const main = async () => {
             },
           },
         },
-      }))
-    );
+      });
+      if (statUpdates.length >= 1000) {
+        await User.bulkWrite(statUpdates);
+        statUpdates = [];
+      }
+    }
+    if (statUpdates.length > 0) {
+      await User.bulkWrite(statUpdates);
+    }
   }
 
-  await Story.updateMany(
-    { views_count: { $exists: true } },
-    { $unset: { views_count: "" } }
-  );
+  console.log("Migrating Stories...");
+  for await (const story of Story.find({ views_count: { $exists: true } }).cursor()) {
+    if (story.views_count?.length) {
+      await StoryView.bulkWrite(story.views_count.map(userId => ({
+        updateOne: {
+          filter: { storyId: story._id, userId },
+          update: { $setOnInsert: { storyId: story._id, userId } },
+          upsert: true
+        }
+      })));
+    }
+    await Story.updateOne({ _id: story._id }, { $unset: { views_count: "" } });
+  }
 
+  console.log("Creating Indexes...");
   await Promise.all([
     Connection.createIndexes(),
     Exercise.createIndexes(),

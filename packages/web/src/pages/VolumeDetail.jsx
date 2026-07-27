@@ -50,7 +50,7 @@ const VolumeDetail = () => {
     return (
         <Box sx={{ width: '100%', minHeight: '100vh', bgcolor: 'background.default', p: { xs: 2, sm: 4 } }}>
             <Box sx={{ maxWidth: 768, mx: 'auto', pb: 10 }}>
-                <Stack direction="row" alignItems="center" spacing={2} mb={4}>
+                <Stack direction="row" sx={{ alignItems: "center" }} spacing={2} mb={4}>
                     <IconButton onClick={() => navigate(-1)} sx={{ bgcolor: 'action.hover' }}>
                         <ArrowBackRounded />
                     </IconButton>
@@ -73,7 +73,7 @@ const VolumeDetail = () => {
                 <Paper variant="outlined" sx={{ p: 3, borderRadius: 4, mb: 3 }}>
                     <Typography variant="body2" fontWeight={700} color="text.secondary" mb={3}>{t('monthly_report.trend_title', 'Trend')}</Typography>
                     {!hasData ? (
-                        <Stack alignItems="center" justifyContent="center" py={8} spacing={1.5}>
+                        <Stack sx={{ justifyContent: "center",  alignItems: "center" }} py={8} spacing={1.5}>
                             <TrendingUpRounded sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.5 }} />
                             <Typography variant="body2" color="text.secondary">{t('monthly_report.no_data', 'Bu dönem için veri yok')}</Typography>
                         </Stack>
@@ -102,7 +102,7 @@ const VolumeDetail = () => {
                         <Typography variant="body2" fontWeight={700} color="text.secondary" mb={2}>{t('statistics.top_exercises', 'En İyi Egzersizler')}</Typography>
                         <Stack spacing={1}>
                             {exerciseBreakdown.slice(0, 5).map((ex, i) => (
-                                <Stack key={i} direction="row" alignItems="center" sx={{ py: 1.5, borderBottom: i === Math.min(exerciseBreakdown.length, 5) - 1 ? 0 : 1, borderColor: 'divider' }}>
+                                <Stack key={i} direction="row" sx={{ alignItems: "center" }} sx={{ py: 1.5, borderBottom: i === Math.min(exerciseBreakdown.length, 5) - 1 ? 0 : 1, borderColor: 'divider' }}>
                                     <Typography variant="body2" fontWeight={900} color="primary.main" sx={{ width: 28 }}>#{i + 1}</Typography>
                                     <Typography variant="body2" fontWeight={600} flex={1}>{ex.name}</Typography>
                                     <Typography variant="body2" fontWeight={700} color="text.secondary">{ex.total?.toLocaleString()} kg</Typography>

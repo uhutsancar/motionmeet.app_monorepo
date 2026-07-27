@@ -1,7 +1,9 @@
 import cron from "node-cron";
 import Story from "../models/Story.js";
+import Post from "../models/Post.js";
+import User from "../models/User.js";
 import { extractS3Key } from "../utils/s3Utils.js";
-import { runWithRedisLock } from "../configs/redis.js";
+import { runWithRedisLock, getAndClearBufferedIncrements } from "../configs/redis.js";
 import UploadReservation from "../models/UploadReservation.js";
 import {
   deleteMediaOrQueue,
@@ -53,6 +55,31 @@ const deleteQueuedMedia = async () => {
   }
 };
 
+const flushRedisBuffers = async () => {
+  const buffers = [
+    { type: "post_likes", model: Post, field: "like_count" },
+    { type: "post_comments", model: Post, field: "comment_count" },
+    { type: "post_shares", model: Post, field: "share_count" },
+    { type: "post_downloads", model: Post, field: "download_count" },
+    { type: "followers_count", model: User, field: "followers_count" },
+    { type: "following_count", model: User, field: "following_count" },
+    { type: "connections_count", model: User, field: "connections_count" },
+  ];
+
+  for (const { type, model, field } of buffers) {
+    const data = await getAndClearBufferedIncrements(type);
+    const operations = Object.entries(data).map(([id, value]) => ({
+      updateOne: {
+        filter: { _id: id },
+        update: { $inc: { [field]: parseInt(value, 10) } },
+      }
+    }));
+    if (operations.length) {
+      await model.bulkWrite(operations);
+    }
+  }
+};
+
 export const initCronJobs = () => {
   if (process.env.RUN_SCHEDULED_JOBS === "false") {
     console.log("Background cron jobs disabled for this process.");
@@ -86,10 +113,21 @@ export const initCronJobs = () => {
     );
   });
 
+  const flushBufferTask = cron.schedule("* * * * *", () => {
+    void runWithRedisLock(
+      "flush-redis-buffers",
+      50,
+      flushRedisBuffers
+    ).catch((error) =>
+      console.error("Error in flush buffer cron:", error.message)
+    );
+  });
+
   console.log("Background cron jobs initialized successfully.");
   return [
     storyTask,
     abandonedUploadTask,
     mediaDeletionTask,
+    flushBufferTask,
   ];
 };

@@ -1,5 +1,6 @@
 import Story from "../models/Story.js";
-import User from "../models/User.js";
+import UserFollow from "../models/UserFollow.js";
+import Connection from "../models/Connection.js";
 
 const PUBLIC_USER_FIELDS = "_id full_name username profile_picture";
 
@@ -8,17 +9,26 @@ export const createStory = async (storyData) => {
 };
 
 export const getStoriesForUser = async (userId) => {
-  const user = await User.findById(userId).select("connections following");
-  if (!user) return null;
+  const [followingDocs, connectionsDocs] = await Promise.all([
+    UserFollow.find({ followerId: userId }).select("followeeId").lean(),
+    Connection.find({
+      $or: [{ from_user_id: userId }, { to_user_id: userId }],
+      status: "accepted"
+    }).lean()
+  ]);
+
+  const followeeIds = followingDocs.map(doc => doc.followeeId);
+  const connectionUserIds = connectionsDocs.map(c => 
+    c.from_user_id === userId ? c.to_user_id : c.from_user_id
+  );
 
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const userIds = [userId, ...user.connections, ...user.following];
+  const userIds = [userId, ...followeeIds, ...connectionUserIds];
   
   return await Story.find({
     user: { $in: userIds },
     createdAt: { $gte: cutoff },
   })
-    .select("-views_count")
     .populate("user", PUBLIC_USER_FIELDS)
     .sort({ createdAt: -1 });
 };

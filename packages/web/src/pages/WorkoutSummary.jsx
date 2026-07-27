@@ -173,7 +173,7 @@ const WorkoutSummary = () => {
             {/* Header */}
             <Box sx={{ position: 'sticky', top: 0, zIndex: 50, bgcolor: 'background.paper', backdropFilter: 'blur(10px)', borderBottom: 1, borderColor: 'divider', p: 2 }}>
                 <Box sx={{ maxWidth: 'md', mx: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Stack direction="row" alignItems="center" spacing={2}>
+                    <Stack direction="row" sx={{ alignItems: "center" }} spacing={2}>
                         <IconButton onClick={handleDiscard}>
                             <ArrowLeft size={24} />
                         </IconButton>
@@ -288,7 +288,7 @@ const WorkoutSummary = () => {
                     >
                         {VISIBILITY_OPTIONS.map(opt => (
                             <MenuItem key={opt.value} value={opt.value}>
-                                <Stack direction="row" alignItems="center" spacing={1}>
+                                <Stack direction="row" sx={{ alignItems: "center" }} spacing={1}>
                                     {opt.icon}
                                     <Typography>{opt.label}</Typography>
                                 </Stack>
@@ -306,7 +306,7 @@ const WorkoutSummary = () => {
                     </Typography>
                     <Stack spacing={1.25}>
                         {exerciseSummary.map((exercise, index) => (
-                            <Stack key={`${exercise.name}-${index}`} direction="row" justifyContent="space-between" spacing={2}>
+                            <Stack key={`${exercise.name}-${index}`} direction="row" sx={{ justifyContent: "space-between" }} spacing={2}>
                                 <Typography variant="body2" fontWeight={700}>{exercise.name}</Typography>
                                 <Typography variant="body2" color="text.secondary">
                                     {exercise.sets} {t('statistics.sets', 'sets')} · {exercise.volume.toLocaleString()} kg

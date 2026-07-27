@@ -38,3 +38,15 @@ test("pagination cursor round-trips the final document", () => {
   });
   assert.equal(createCursor(documents[1]), page.nextCursor);
 });
+
+test("pagination cursor accepts UUID string identifiers", () => {
+  const uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+  const date = new Date("2026-07-24T10:00:00.000Z");
+  const cursor = createCursor({ _id: uuid, createdAt: date });
+  assert.ok(cursor, "cursor should be created for UUID _id");
+
+  const parsed = parsePagination({ cursor });
+  assert.ok(parsed.cursor, "UUID cursor should be accepted");
+  assert.equal(parsed.cursor.id, uuid);
+  assert.equal(parsed.cursor.date.toISOString(), date.toISOString());
+});

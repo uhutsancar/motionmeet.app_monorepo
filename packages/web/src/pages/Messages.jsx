@@ -45,7 +45,7 @@ const Avatar = ({ user, size = 40, online = false }) => {
 };
 
 const TypingDots = () => (
-  <Stack direction="row" alignItems="center" spacing={0.5} sx={{ px: 1.5, py: 1, borderRadius: 3, bgcolor: 'action.hover', width: 'fit-content' }}>
+  <Stack direction="row" sx={{ alignItems: "center" }} spacing={0.5} sx={{ px: 1.5, py: 1, borderRadius: 3, bgcolor: 'action.hover', width: 'fit-content' }}>
     {[0, 1, 2].map(i => (
       <Box key={i} sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'text.secondary', animation: 'bounce 1.4s infinite ease-in-out both', animationDelay: `${i * 0.15}s`, '@keyframes bounce': { '0%, 80%, 100%': { transform: 'scale(0)' }, '40%': { transform: 'scale(1)' } } }} />
     ))}
@@ -345,7 +345,7 @@ const WebMessages = () => {
       >
       <Box sx={{ display: { xs: activeConv ? 'none' : 'flex', md: 'flex' }, flexDirection: 'column', width: { xs: '100%', md: 336, lg: 360 }, borderRight: 1, borderColor: 'divider', flexShrink: 0, bgcolor: 'background.paper' }}>
         <Box sx={{ px: 2.5, py: 2.25, borderBottom: 1, borderColor: 'divider' }}>
-          <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
+          <Stack direction="row" sx={{ justifyContent: "space-between",  alignItems: "center" }} mb={2}>
             <Typography variant="h6" fontWeight={800}>{t('messages.title', 'Messages')}</Typography>
             <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
               <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: connected ? 'success.main' : 'error.main' }} />
@@ -378,7 +378,7 @@ const WebMessages = () => {
               {Array(5).fill(0).map((_, i) => (
                 <Stack key={i} direction="row" spacing={2} p={1}>
                   <Box sx={{ borderRadius: '50%', bgcolor: 'action.hover', width: 48, height: 48 }} />
-                  <Stack flex={1} spacing={1} justifyContent="center">
+                  <Stack flex={1} spacing={1} sx={{ justifyContent: "center" }}>
                     <Box sx={{ h: 12, w: 96, bgcolor: 'action.hover', borderRadius: 1 }} />
                     <Box sx={{ h: 10, w: 144, bgcolor: 'action.hover', borderRadius: 1 }} />
                   </Stack>
@@ -386,7 +386,7 @@ const WebMessages = () => {
               ))}
             </Stack>
           ) : displayedConvs.length === 0 ? (
-            <Stack alignItems="center" justifyContent="center" height={220} spacing={1.25} px={4} textAlign="center">
+            <Stack sx={{ justifyContent: "center",  alignItems: "center" }} height={220} spacing={1.25} px={4} sx={{ textAlign: "center" }}>
               <Box sx={{ width: 42, height: 42, borderRadius: 2.5, bgcolor: 'action.hover', display: 'grid', placeItems: 'center', color: 'text.secondary' }}>
                 <MessageSquare size={20} />
               </Box>
@@ -406,13 +406,13 @@ const WebMessages = () => {
                     </ListItemAvatar>
                     <ListItemText
                       primary={
-                        <Stack direction="row" alignItems="center" justifyContent="space-between" mb={0.5}>
+                        <Stack direction="row" sx={{ justifyContent: "space-between",  alignItems: "center" }} mb={0.5}>
                           <Typography variant="body2" fontWeight={hasUnread ? 700 : 500} noWrap>{conv.partner?.full_name || conv.partner?.username}</Typography>
                           <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11, ml: 1, flexShrink: 0 }}>{conv.lastMessage?.createdAt ? moment(conv.lastMessage.createdAt).fromNow() : ''}</Typography>
                         </Stack>
                       }
                       secondary={
-                        <Stack direction="row" alignItems="center" justifyContent="space-between">
+                        <Stack direction="row" sx={{ justifyContent: "space-between",  alignItems: "center" }}>
                           <Typography variant="caption" noWrap sx={{ maxWidth: 180, color: hasUnread ? 'text.primary' : 'text.secondary', fontWeight: hasUnread ? 500 : 400 }}>
                             {conv.isNew ? t('messages.start_new_chat', 'Start a new chat') : (conv.lastMessage?.text || (conv.lastMessage?.message_type === 'image' ? '📷 Fotoğraf' : '...'))}
                           </Typography>
@@ -431,7 +431,7 @@ const WebMessages = () => {
 
       {activeConv ? (
         <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, bgcolor: 'background.default' }}>
-          <Stack direction="row" alignItems="center" spacing={2} sx={{ px: 2.5, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
+          <Stack direction="row" sx={{ alignItems: "center" }} spacing={2} sx={{ px: 2.5, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
             <IconButton sx={{ display: { xs: 'flex', md: 'none' } }} onClick={() => navigate('/messages')} size="small">
               <ArrowLeft size={20} />
             </IconButton>
@@ -455,18 +455,18 @@ const WebMessages = () => {
               </Button>
             )}
             {loadingMsgs ? (
-              <Stack alignItems="center" justifyContent="center" height="100%">
+              <Stack sx={{ justifyContent: "center",  alignItems: "center" }} height="100%">
                 <CircularProgress size={28} />
               </Stack>
             ) : messages.length === 0 ? (
-              <Stack alignItems="center" justifyContent="center" height="100%" spacing={1} textAlign="center">
+              <Stack sx={{ justifyContent: "center",  alignItems: "center" }} height="100%" spacing={1} sx={{ textAlign: "center" }}>
                 <MessageSquare size={40} color="var(--mui-palette-text-disabled)" />
                 <Typography variant="body2" color="text.secondary">{t('messages.start_conversation', 'Start the conversation!')}</Typography>
               </Stack>
             ) : messages.map((msg, idx) => {
               const mine = isMe(msg);
               return (
-                <Stack key={msg._id || idx} direction="row" alignItems="flex-end" justifyContent={mine ? 'flex-end' : 'flex-start'} spacing={1}>
+                <Stack key={msg._id || idx} direction="row" sx={{ justifyContent: mine ? 'flex-end' : 'flex-start',  alignItems: "flex-end" }} spacing={1}>
                   {!mine && <Avatar user={activeConv.partner} size={26} />}
                   <Box sx={{ maxWidth: '70%' }}>
                     {msg.message_type === 'image' && msg.media_url && <Box component="img" src={msg.media_url} alt="media" sx={{ borderRadius: 3, mb: 0.5, maxHeight: 240, objectFit: 'cover' }} />}
@@ -475,7 +475,7 @@ const WebMessages = () => {
                         <Typography variant="body2" sx={{ lineHeight: 1.5, wordBreak: 'break-word' }}>{msg.text}</Typography>
                       </Paper>
                     )}
-                    <Stack direction="row" alignItems="center" justifyContent={mine ? 'flex-end' : 'flex-start'} spacing={0.5} mt={0.5}>
+                    <Stack direction="row" sx={{ justifyContent: mine ? 'flex-end' : 'flex-start',  alignItems: "center" }} spacing={0.5} mt={0.5}>
                       {mine && (
                         <IconButton size="small" onClick={() => handleDeleteMessage(msg._id)} sx={{ p: 0.25, mr: 0.5, color: 'text.secondary', '&:hover': { color: 'error.main' } }}>
                           <Trash2 size={14} />
@@ -488,12 +488,12 @@ const WebMessages = () => {
                 </Stack>
               );
             })}
-            {partnerTyping && <Stack direction="row" alignItems="flex-end" spacing={1}><Avatar user={activeConv.partner} size={26} /><TypingDots /></Stack>}
+            {partnerTyping && <Stack direction="row" sx={{ alignItems: "flex-end" }} spacing={1}><Avatar user={activeConv.partner} size={26} /><TypingDots /></Stack>}
             <Box ref={messagesEndRef} />
           </Box>
 
           <Box sx={{ px: 2, py: 1.5, borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
-            <Stack direction="row" alignItems="flex-end" spacing={1} sx={{ px: 1.5, py: 0.75, borderRadius: 2.5, bgcolor: 'background.default', border: 1, borderColor: 'divider' }}>
+            <Stack direction="row" sx={{ alignItems: "flex-end" }} spacing={1} sx={{ px: 1.5, py: 0.75, borderRadius: 2.5, bgcolor: 'background.default', border: 1, borderColor: 'divider' }}>
               <TextField
                 multiline
                 maxRows={4}
@@ -518,7 +518,7 @@ const WebMessages = () => {
         </Box>
       ) : (
         <Box sx={{ display: { xs: 'none', md: 'flex' }, flex: 1, alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default', p: 4 }}>
-          <Stack alignItems="center" spacing={1.5} textAlign="center">
+          <Stack sx={{ alignItems: "center" }} spacing={1.5} sx={{ textAlign: "center" }}>
             <Box sx={{ borderRadius: 3, bgcolor: 'action.hover', color: 'primary.main', display: 'grid', placeItems: 'center', width: 52, height: 52, border: 1, borderColor: 'divider' }}>
               <MessageSquare size={24} />
             </Box>

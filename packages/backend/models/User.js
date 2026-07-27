@@ -26,9 +26,9 @@ const userSchema = new mongoose.Schema(
     plan: { type: mongoose.Schema.Types.ObjectId, ref: "Plan" },
     weight: { type: Number, default: 0 }, // Added for user measurements
     height: { type: Number, default: 0 }, // Added for user measurements
-    followers: [{ type: String, ref: "User" }],
-    following: [{ type: String, ref: "User" }],
-    connections: [{ type: String, ref: "User" }],
+    followers_count: { type: Number, default: 0 },
+    following_count: { type: Number, default: 0 },
+    connections_count: { type: Number, default: 0 },
     privacy: {
       publicProfile: { type: Boolean, default: true },
       showWorkoutsOnFeed: { type: Boolean, default: true },
@@ -45,11 +45,11 @@ const userSchema = new mongoose.Schema(
   { timestamps: true, minimize: false }
 );
 
-userSchema.index({ "privacy.showInSearch": 1, username: 1 });
-userSchema.index({ "privacy.showInSearch": 1, full_name: 1 });
-userSchema.index({ followers: 1 });
-userSchema.index({ following: 1 });
-userSchema.index({ connections: 1 });
+userSchema.index(
+  { username: "text", full_name: "text" },
+  { weights: { username: 3, full_name: 1 }, name: "UserSearchTextIndex" }
+);
+
 
 const User = mongoose.model("User", userSchema);
 

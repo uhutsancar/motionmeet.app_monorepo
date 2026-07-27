@@ -106,6 +106,7 @@ See [docs/production.md](docs/production.md) for the deployment checklist and
 Both commands are dry-run by default:
 
 ```bash
+corepack pnpm --filter @motionmeet/backend migrate:database-namespace
 corepack pnpm --filter @motionmeet/backend migrate:integrity
 corepack pnpm --filter @motionmeet/backend migrate:workout-metrics
 ```
@@ -113,9 +114,14 @@ corepack pnpm --filter @motionmeet/backend migrate:workout-metrics
 After reviewing the output and taking a database backup:
 
 ```bash
+corepack pnpm --filter @motionmeet/backend migrate:database-namespace:apply
 corepack pnpm --filter @motionmeet/backend migrate:integrity:apply
 corepack pnpm --filter @motionmeet/backend migrate:workout-metrics:apply
 ```
+
+The namespace migration safely merges legacy data from the implicit `test`
+database into `MONGODB_DB_NAME` and leaves the source database intact. Run it
+before changing an existing deployment from an unnamed MongoDB database.
 
 ## Exercise media
 

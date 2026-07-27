@@ -12,6 +12,8 @@
     "seed:master-data": "node scripts/seedMasterData.js",
     "migrate:integrity": "node scripts/migrateDataIntegrity.js",
     "migrate:integrity:apply": "node scripts/migrateDataIntegrity.js --apply",
+    "migrate:database-namespace": "node scripts/migrateDatabaseNamespace.js",
+    "migrate:database-namespace:apply": "node scripts/migrateDatabaseNamespace.js --apply",
     "migrate:workout-metrics": "node scripts/migrateWorkoutMetrics.js",
     "migrate:workout-metrics:apply": "node scripts/migrateWorkoutMetrics.js --apply",
     "lint": "eslint .",

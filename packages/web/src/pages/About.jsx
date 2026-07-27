@@ -77,7 +77,7 @@ const About = () => {
         <Box sx={{ position: 'absolute', top: -128, left: '50%', transform: 'translateX(-50%)', width: 700, height: 400, borderRadius: '50%', bgcolor: 'rgba(18, 168, 138, 0.1)', filter: 'blur(80px)', pointerEvents: 'none' }} />
         
         <Container maxWidth="md" sx={{ position: 'relative', zIndex: 1 }}>
-          <Stack spacing={3} alignItems="center">
+          <Stack spacing={3} sx={{ alignItems: "center" }}>
             <Box sx={{ display: 'inline-flex', alignItems: 'center', px: 2, py: 1, borderRadius: 10, bgcolor: `${theme.palette.primary.main}1A`, border: `1px solid ${theme.palette.primary.main}33` }}>
               <Typography variant="body2" sx={{ color: theme.palette.primary.main, fontWeight: 'bold' }}>{t('about_page.hero_badge')}</Typography>
             </Box>
@@ -91,7 +91,7 @@ const About = () => {
             </Typography>
 
             {/* Stats */}
-            <Stack direction="row" flexWrap="wrap" justifyContent="center" gap={3} pt={2}>
+            <Stack direction="row" flexWrap="wrap" sx={{ justifyContent: "center" }} gap={3} pt={2}>
               {stats.map(({ val }, i) => (
                 <Box key={i} sx={{ px: 3, py: 1.5, borderRadius: 4, bgcolor: 'background.paper', border: `1px solid ${theme.palette.divider}` }}>
                   <Typography variant="h6" sx={{ fontWeight: 800, color: theme.palette.primary.main }}>{val}</Typography>
@@ -111,7 +111,7 @@ const About = () => {
               <Box sx={{ position: 'relative' }}>
                 <Box sx={{ position: 'absolute', inset: 0, bgcolor: `${theme.palette.primary.main}10`, borderRadius: 6, transform: 'rotate(1deg) scale(1.05)' }} />
                 <Paper elevation={0} sx={{ position: 'relative', bgcolor: 'background.default', borderRadius: 6, p: 4, border: 1, borderColor: 'divider' }}>
-                  <Stack direction="row" alignItems="center" spacing={1.5} mb={2.5}>
+                  <Stack direction="row" sx={{ alignItems: "center" }} spacing={1.5} mb={2.5}>
                     <Box component="img" src={motionmeetLogo} alt="MotionMeet" sx={{ height: 40, width: 'auto' }} />
                     <Typography variant="h5" sx={{ fontWeight: 800 }}>MotionMeet</Typography>
                   </Stack>
@@ -127,7 +127,7 @@ const About = () => {
                       { marker: '03', label: 'Turn workout history into clear progress' },
                       { marker: '04', label: 'Share with visibility you control' },
                     ].map(({ marker, label }) => (
-                      <Stack key={marker} direction="row" alignItems="center" spacing={2}>
+                      <Stack key={marker} direction="row" sx={{ alignItems: "center" }} spacing={2}>
                         <Typography sx={{ width: 40, fontSize: 12, fontWeight: 800, color: theme.palette.primary.main }}>{marker}</Typography>
                         <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: theme.palette.primary.main, flexShrink: 0 }} />
                         <Typography variant="body2" sx={{ color: 'text.secondary' }}>{label}</Typography>
@@ -191,7 +191,7 @@ const About = () => {
               <Typography variant="h6" sx={{ color: 'rgba(255, 255, 255, 0.8)', maxWidth: 448, mx: 'auto', fontWeight: 400 }}>
                 {t('about_page.cta_sub')}
               </Typography>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center" pt={1}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: "center" }} pt={1}>
                 <Button 
                   component={Link} to="/login"
                   variant="contained"
