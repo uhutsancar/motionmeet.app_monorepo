@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Alert, Linking, ScrollView, Share, StatusBar, StyleSheet, Switch , TouchableOpacity} from 'react-native';
+import { Linking, ScrollView, Share, StatusBar, StyleSheet, Switch , TouchableOpacity} from 'react-native';
 import { Button, Dialog, Portal, Surface, Text, TextInput } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -8,6 +8,8 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from '../context/AuthProvider';
 import { API_ROUTES } from '@motionmeet/shared';
 import api from '../api/client';
+import { KeyboardResponsiveView } from '../components/KeyboardAwareScrollView';
+import { getUserFacingError, logHandledError, showError } from '../utils/feedback';
 
 const DEFAULT_PREFS = {
   publicProfile: true,
@@ -34,9 +36,10 @@ const PrivacyScreen = ({ navigation }) => {
         if (active && data?.privacy) setPrefs(data.privacy);
       })
       .catch((error) => {
-        Alert.alert(
+        logHandledError('load-privacy', error);
+        showError(
           t('common.error', 'Hata'),
-          error.response?.data?.message || t('privacy.load_failed', 'Gizlilik ayarları yüklenemedi.')
+          getUserFacingError(error, t('privacy.load_failed', 'Gizlilik ayarları yüklenemedi.')),
         );
       });
     return () => {
@@ -55,9 +58,10 @@ const PrivacyScreen = ({ navigation }) => {
       if (data?.privacy) setPrefs(data.privacy);
     } catch (error) {
       setPrefs(previous);
-      Alert.alert(
+      logHandledError('save-privacy', error);
+      showError(
         t('common.error', 'Hata'),
-        error.response?.data?.message || t('privacy.save_failed', 'Gizlilik ayarı kaydedilemedi.')
+        getUserFacingError(error, t('privacy.save_failed', 'Gizlilik ayarı kaydedilemedi.')),
       );
     }
   };
@@ -76,9 +80,10 @@ const PrivacyScreen = ({ navigation }) => {
       setDeletePassword('');
       await signOut();
     } catch (error) {
-      Alert.alert(
+      logHandledError('delete-account', error);
+      showError(
         t('common.error', 'Hata'),
-        error.response?.data?.message || t('privacy.delete_failed', 'Hesap silinemedi.')
+        getUserFacingError(error, t('privacy.delete_failed', 'Hesap silinemedi.')),
       );
     } finally {
       setRequestPending(false);
@@ -94,9 +99,10 @@ const PrivacyScreen = ({ navigation }) => {
         message: typeof data === 'string' ? data : JSON.stringify(data, null, 2),
       });
     } catch (error) {
-      Alert.alert(
+      logHandledError('export-account', error);
+      showError(
         t('common.error', 'Hata'),
-        error.response?.data?.message || t('privacy.export_failed', 'Veriler dışa aktarılamadı.')
+        getUserFacingError(error, t('privacy.export_failed', 'Veriler dışa aktarılamadı.')),
       );
     } finally {
       setRequestPending(false);
@@ -211,36 +217,38 @@ const PrivacyScreen = ({ navigation }) => {
         </Surface>
       </ScrollView>
 
-      <Portal>
-        <Dialog visible={deleteDialogOpen} onDismiss={() => setDeleteDialogOpen(false)}>
-          <Dialog.Title>{t('privacy.delete_account', 'Hesabı Sil')}</Dialog.Title>
-          <Dialog.Content>
-            <Text>{t('privacy.delete_confirm', 'Bu işlem geri alınamaz. Tüm verileriniz silinecek.')}</Text>
-            <TextInput
-              mode="outlined"
-              secureTextEntry
-              autoComplete="current-password"
-              label={t('auth.password', 'Şifre')}
-              value={deletePassword}
-              onChangeText={setDeletePassword}
-              style={styles.passwordInput}
-            />
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setDeleteDialogOpen(false)}>
-              {t('common.cancel', 'İptal')}
-            </Button>
-            <Button
-              textColor="#ef4444"
-              loading={requestPending}
-              disabled={!deletePassword || requestPending}
-              onPress={confirmDeleteAccount}
-            >
-              {t('privacy.delete_btn', 'Sil')}
-            </Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
+      {deleteDialogOpen && <Portal>
+        <KeyboardResponsiveView style={styles.dialogKeyboardView}>
+          <Dialog visible={deleteDialogOpen} onDismiss={() => setDeleteDialogOpen(false)}>
+            <Dialog.Title>{t('privacy.delete_account', 'Hesabı Sil')}</Dialog.Title>
+            <Dialog.Content>
+              <Text>{t('privacy.delete_confirm', 'Bu işlem geri alınamaz. Tüm verileriniz silinecek.')}</Text>
+              <TextInput
+                mode="outlined"
+                secureTextEntry
+                autoComplete="current-password"
+                label={t('auth.password', 'Şifre')}
+                value={deletePassword}
+                onChangeText={setDeletePassword}
+                style={styles.passwordInput}
+              />
+            </Dialog.Content>
+            <Dialog.Actions>
+              <Button onPress={() => setDeleteDialogOpen(false)}>
+                {t('common.cancel', 'İptal')}
+              </Button>
+              <Button
+                textColor="#ef4444"
+                loading={requestPending}
+                disabled={!deletePassword || requestPending}
+                onPress={confirmDeleteAccount}
+              >
+                {t('privacy.delete_btn', 'Sil')}
+              </Button>
+            </Dialog.Actions>
+          </Dialog>
+        </KeyboardResponsiveView>
+      </Portal>}
     </SafeAreaView>
   );
 };
@@ -271,6 +279,7 @@ const getStyles = (theme) => ({
   rowLabel: { fontSize: 15, fontWeight: '600', color: theme.text },
   rowSub: { fontSize: 12, color: theme.textMuted, marginTop: 2 },
   passwordInput: { marginTop: 16 },
+  dialogKeyboardView: { flex: 1, justifyContent: 'center' },
   headerRight: { width: 40 },
   scrollContent: { paddingBottom: 40 },
   dangerText: { color: '#ef4444' },

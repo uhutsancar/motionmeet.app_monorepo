@@ -49,7 +49,7 @@ if (!configuredApiUrl) {
     'Set it to a LAN-accessible backend URL when running on a physical device.';
 
   if (typeof __DEV__ !== 'undefined' && __DEV__) {
-    console.warn(message);
+    console.log(message);
   } else {
     throw new Error(
       '[Config] EXPO_PUBLIC_API_URL is required for production builds. ' +

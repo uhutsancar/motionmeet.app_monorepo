@@ -9,6 +9,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { fetchUser } from '../features/user/userSlice';
 import { getPlans, updatePlan } from '../api/endpoints';
 import { useTranslation } from 'react-i18next';
+import { logHandledError } from '../utils/feedback';
 
 const PricingScreen = ({ navigation }) => {
   const { theme } = useTheme();
@@ -27,7 +28,7 @@ const PricingScreen = ({ navigation }) => {
       const data = await getPlans(token);
       if (data.success) setPlans(data.plans);
     } catch (err) {
-      console.error(err);
+      logHandledError('load-pricing', err);
       Alert.alert(t('common.error', 'Error'), t('pricing_page.load_error', 'Could not fetch plans.'));
     } finally {
       setLoading(false);
@@ -52,7 +53,7 @@ const PricingScreen = ({ navigation }) => {
         Alert.alert(t('common.error', 'Error'), data.message || t('pricing_page.upgrade_err', 'Failed to update plan.'));
       }
     } catch (err) {
-      console.error(err);
+      logHandledError('update-plan', err);
       Alert.alert(t('common.error', 'Error'), t('pricing_page.upgrade_err', 'Failed to update plan.'));
     } finally {
       setUpgrading(null);

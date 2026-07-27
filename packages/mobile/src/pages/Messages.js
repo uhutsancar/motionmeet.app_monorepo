@@ -12,6 +12,7 @@ import moment from 'moment';
 import 'moment/locale/tr';
 import { Appbar, Avatar, Text, Searchbar, TouchableRipple, Badge, Surface } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { logHandledError } from '../utils/feedback';
 
 const Messages = ({ navigation }) => {
   const dispatch = useDispatch();
@@ -107,7 +108,7 @@ const Messages = ({ navigation }) => {
         setConversations(convs);
       }
     } catch (error) {
-      console.warn('Conversation request failed:', error.message);
+      logHandledError('load-conversation-request', error);
     }
   }, []);
 
@@ -118,7 +119,7 @@ const Messages = ({ navigation }) => {
       await dispatch(fetchConnections(token));
       await loadConversations(token);
     } catch (error) {
-      console.warn('Conversation list could not be loaded:', error.message);
+      logHandledError('load-conversations', error);
     } finally {
       setLoading(false);
     }

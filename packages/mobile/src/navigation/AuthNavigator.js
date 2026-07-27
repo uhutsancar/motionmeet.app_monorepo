@@ -9,6 +9,7 @@ import AppNavigator from './AppNavigator';
 import LoginScreen from '../pages/Login';
 import { SocketProvider } from '../context/SocketProvider';
 import { useTheme } from '../context/ThemeContext';
+import { logHandledError } from '../utils/feedback';
 
 const AuthNavigator = () => {
   const { isLoaded, isSignedIn, getToken } = useAuthContext();
@@ -28,7 +29,7 @@ const AuthNavigator = () => {
             dispatch(fetchUser(token));
           }
         } catch (error) {
-          console.error('Error loading user data:', error);
+          logHandledError('load-current-user', error);
         }
       } else {
         // Clear token when signed out

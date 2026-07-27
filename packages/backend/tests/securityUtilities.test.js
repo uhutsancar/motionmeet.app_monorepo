@@ -28,6 +28,23 @@ test("media signature validation does not trust MIME labels", () => {
     }),
     false
   );
+  assert.equal(
+    hasValidMediaSignature({
+      buffer: Buffer.from([0xff, 0xd8, 0xff, ...new Array(9).fill(0)]),
+      mimetype: "image/jpg",
+    }),
+    true
+  );
+  assert.equal(
+    hasValidMediaSignature({
+      buffer: Buffer.concat([
+        Buffer.from([0, 0, 0, 24]),
+        Buffer.from("ftypheif"),
+      ]),
+      mimetype: "image/heif",
+    }),
+    true
+  );
 });
 
 test("legacy ImageKit URLs resolve to safe object keys", () => {

@@ -10,6 +10,7 @@ import { AppState } from 'react-native';
 import { useAuthContext } from "../context/AuthProvider";
 import { io } from 'socket.io-client';
 import { SOCKET_URL } from '../config/environment';
+import { logHandledError } from '../utils/feedback';
 
 export const SocketContext = createContext(null);
 
@@ -35,7 +36,7 @@ export const SocketProvider = ({ children }) => {
           const token = await getTokenRef.current({ skipCache: true });
           callback({ token: token || '' });
         } catch (error) {
-          console.warn('[Socket] Token could not be refreshed:', error.message);
+          logHandledError('refresh-socket-token', error);
           callback({ token: '' });
         }
       },
@@ -53,7 +54,7 @@ export const SocketProvider = ({ children }) => {
     const onDisconnect = () => setConnected(false);
     const onConnectError = (error) => {
       setConnected(false);
-      console.warn('[Socket] Connection failed:', error.message);
+      logHandledError('connect-socket', error);
     };
     const onOnlineUsers = (userIds) => {
       setOnlineUsers(new Set(Array.isArray(userIds) ? userIds : []));

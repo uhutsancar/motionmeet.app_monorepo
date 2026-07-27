@@ -50,8 +50,8 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Handle errors globally
-    console.error('API Error:', error.response?.data || error.message);
+    // Expected request failures are handled by the calling screen. Logging
+    // them with console.error opens React Native's LogBox over the user UI.
     return Promise.reject(error);
   }
 );

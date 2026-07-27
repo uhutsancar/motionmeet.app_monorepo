@@ -1,16 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import {
-  Modal,
   TextInput,
   Image,
-  Alert,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
   View,
   useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthContext } from "../context/AuthProvider";
@@ -20,10 +14,17 @@ import { uploadMedia } from '../api/mediaUpload';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
+import { FullScreenModal } from './ResponsiveModal';
+import KeyboardAwareScrollView from './KeyboardAwareScrollView';
+import {
+  getUserFacingError,
+  logHandledError,
+  showError,
+  showSuccess,
+} from '../utils/feedback';
 
 const StoryModal = ({ visible, onClose, onSuccess }) => {
   const { width, height } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { t } = useTranslation();
   const { getToken } = useAuthContext();
@@ -55,8 +56,7 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
     header: {
       flexDirection: 'row',
       alignItems: 'center',
-      height: insets.top + 58,
-      paddingTop: insets.top,
+      height: 58,
       paddingHorizontal: 16,
       borderBottomWidth: 1,
       borderBottomColor: theme.border,
@@ -191,7 +191,7 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
     selectedColor: {
       borderColor: theme.text,
     },
-  }), [insets.top, previewHeight, theme]);
+  }), [previewHeight, theme]);
 
   const resetDraft = () => {
     setMode('text');
@@ -210,7 +210,7 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (status !== 'granted') {
-      Alert.alert(t('common.error'), t('feed.permission_required_media'));
+      showError(t('common.error'), t('feed.permission_required_media'));
       return;
     }
 
@@ -235,7 +235,7 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
       : 'text';
 
     if (mediaType === 'text' && !text) {
-      Alert.alert(t('common.error'), t('feed.add_text_error'));
+      showError(t('common.error'), t('feed.add_text_error'));
       return;
     }
 
@@ -254,29 +254,31 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
       }, token);
 
       if (data.success) {
-        Alert.alert(t('common.success'), t('feed.story_created'));
+        showSuccess(t('common.success'), t('feed.story_created'));
         resetDraft();
         onSuccess?.();
         onClose?.();
       } else {
-        Alert.alert(t('common.error'), data.message);
+        showError(t('common.error'), data.message);
       }
     } catch (error) {
-      Alert.alert(t('common.error'), error.message);
+      logHandledError('create-story', error);
+      showError(
+        t('common.error'),
+        getUserFacingError(error, t('feed.story_create_failed', 'Hikaye oluşturulamadı.')),
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Modal
+    <FullScreenModal
       visible={visible}
-      animationType="slide"
-      transparent={false}
       onRequestClose={handleClose}
+      backgroundColor={theme.background}
     >
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+      <View style={styles.container}>
         <View style={styles.header}>
           <View style={[styles.headerSide, { alignItems: 'flex-start' }]}>
             <TouchableRipple
@@ -305,7 +307,8 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
           </View>
         </View>
 
-        <ScrollView
+        <KeyboardAwareScrollView
+          avoidKeyboard={false}
           style={styles.content}
           contentContainerStyle={styles.contentContainer}
           keyboardShouldPersistTaps="handled"
@@ -387,10 +390,9 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
               </Surface>
             </>
           )}
-        </ScrollView>
-      </SafeAreaView>
-      </KeyboardAvoidingView>
-    </Modal>
+        </KeyboardAwareScrollView>
+      </View>
+    </FullScreenModal>
   );
 };
 

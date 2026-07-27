@@ -155,6 +155,10 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }) => {
       visible={visible}
       animationType="fade"
       transparent={false}
+      presentationStyle="fullScreen"
+      hardwareAccelerated
+      statusBarTranslucent
+      navigationBarTranslucent
       onRequestClose={closeViewer}
     >
       <Surface elevation={0} style={styles.container}>

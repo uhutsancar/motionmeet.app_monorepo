@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Share, View, ScrollView, useWindowDimensions } from 'react-native';
+import { Share, View, ScrollView } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
@@ -10,12 +10,21 @@ import { getWorkoutStats } from '../api/endpoints';
 import { useAuthContext } from '../context/AuthProvider';
 import { Appbar, Text, Surface, TouchableRipple, ActivityIndicator, Divider, Chip, Button } from 'react-native-paper';
 import { useMuscleGroups } from '../hooks/useMuscleGroups';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { logHandledError } from '../utils/feedback';
 
 const MonthlyReportScreen = ({ navigation }) => {
-  const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const chartWidth = Math.min(width - 32, 688);
-  const RADAR_SIZE = Math.min(width - 80, 420);
+  const {
+    columns,
+    columnGap,
+    contentWidth,
+    horizontalPadding,
+  } = useResponsiveLayout();
+  const statCardWidth =
+    columns === 2 ? (contentWidth - columnGap) / 2 : contentWidth;
+  const chartWidth = Math.max(220, Math.min(contentWidth, 688));
+  const RADAR_SIZE = Math.max(200, Math.min(contentWidth - 40, 420));
   const CENTER = RADAR_SIZE / 2;
   const RADIUS = RADAR_SIZE / 2 - 30;
   const { t, i18n } = useTranslation();
@@ -41,7 +50,7 @@ const MonthlyReportScreen = ({ navigation }) => {
         const data = await getWorkoutStats('calendar_month', token);
         if (data.success) setStatsData(data);
       } catch (err) {
-        console.error('Monthly report fetch error:', err);
+        logHandledError('load-monthly-report', err);
       } finally {
         setLoading(false);
       }
@@ -191,7 +200,7 @@ const MonthlyReportScreen = ({ navigation }) => {
         {loading ? (
           <ActivityIndicator animating={true} color={theme.primary} size="large" style={{ marginVertical: 40 }} />
         ) : (
-          <View style={{ paddingHorizontal: 16, marginTop: 8, position: 'relative' }}>
+          <View style={{ paddingHorizontal: horizontalPadding, marginTop: 8, position: 'relative' }}>
             <BarChart
               data={{
                 labels: safeLabels,
@@ -231,12 +240,12 @@ const MonthlyReportScreen = ({ navigation }) => {
           <Text variant="titleMedium" style={{ color: theme.textMuted, fontWeight: '600' }}>{t('monthly_report.summary', 'Özet')}</Text>
         </View>
 
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between', paddingHorizontal: 20 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: columnGap, paddingHorizontal: horizontalPadding }}>
           {statCards.map(card => (
             <Surface
               key={card.key}
               elevation={0}
-              style={{ width: '48%', backgroundColor: theme.surface, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 18, borderWidth: 1, borderColor: theme.border, overflow: 'hidden', position: 'relative' }}
+              style={{ width: statCardWidth, backgroundColor: theme.surface, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 18, borderWidth: 1, borderColor: theme.border, overflow: 'hidden', position: 'relative' }}
             >
                 <TouchableRipple onPress={() => navigation.navigate(card.screen, { statsData })} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1 }} borderless><View /></TouchableRipple>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>

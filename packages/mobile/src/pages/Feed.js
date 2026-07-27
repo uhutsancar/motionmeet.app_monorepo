@@ -29,6 +29,7 @@ import CreatePostModal from '../components/CreatePostModal';
 import StoryModal from '../components/StoryModal';
 import SuggestedAthletes from '../components/SuggestedAthletes';
 import MotionMark from '../components/MotionMark';
+import { logHandledError } from '../utils/feedback';
 
 const Feed = ({ navigation }) => {
   const { theme } = useTheme();
@@ -58,7 +59,7 @@ const Feed = ({ navigation }) => {
         dispatch(fetchConnections(token)),
       ]);
     } catch (error) {
-      console.error('Error loading data:', error);
+      logHandledError('load-feed', error);
     }
   }, [activeTab, dispatch, getToken]);
 
@@ -156,6 +157,9 @@ const Feed = ({ navigation }) => {
         renderItem={renderItem}
         keyExtractor={(row, index) => row.id || row.item?._id || String(index)}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets
         removeClippedSubviews
         windowSize={5}
         maxToRenderPerBatch={4}

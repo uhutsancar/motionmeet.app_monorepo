@@ -7,12 +7,22 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from "../context/AuthProvider";
 import { getWorkoutStats } from '../api/endpoints';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { logHandledError } from '../utils/feedback';
 
 const MuscleDistributionBodyScreen = ({ navigation }) => {
   const { t } = useTranslation();
   const { theme } = useTheme();
   const styles = getStyles(theme);
   const { getToken } = useAuthContext();
+  const {
+    columns,
+    columnGap,
+    contentWidth,
+    horizontalPadding,
+  } = useResponsiveLayout();
+  const gridItemWidth =
+    columns === 2 ? (contentWidth - columnGap) / 2 : contentWidth;
   
   const [loading, setLoading] = useState(true);
   const [muscleData, setMuscleData] = useState([]);
@@ -28,7 +38,7 @@ const MuscleDistributionBodyScreen = ({ navigation }) => {
         setMuscleData(formatted);
       }
     } catch (error) {
-      console.error('Error fetching muscle body stats', error);
+      logHandledError('load-muscle-grid', error);
     } finally {
       setLoading(false);
     }
@@ -55,7 +65,12 @@ const MuscleDistributionBodyScreen = ({ navigation }) => {
         <Surface elevation={0} style={{ width: 40 }} />
       </Surface>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingHorizontal: horizontalPadding },
+        ]}
+      >
         {loading ? (
           <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 50 }} />
         ) : muscleData.length === 0 ? (
@@ -64,11 +79,11 @@ const MuscleDistributionBodyScreen = ({ navigation }) => {
              <Text style={styles.emptyText}>{t('common.no_data', 'Veri bulunamadı')}</Text>
           </Surface>
         ) : (
-          <Surface elevation={0} style={styles.grid}>
+          <Surface elevation={0} style={[styles.grid, { gap: columnGap }]}>
              {muscleData.map((item, index) => {
                 const translatedName = t(`statistics.muscle_${item.name.toLowerCase()}`, item.name);
                 return (
-                <Surface elevation={0} key={index} style={styles.gridItem}>
+                <Surface elevation={0} key={index} style={[styles.gridItem, { width: gridItemWidth }]}>
                    <Surface elevation={0} style={[styles.iconBox, { backgroundColor: getIntensityColor(item.value) + '20' }]}>
                       <Ionicons name="fitness-outline" size={28} color={getIntensityColor(item.value)} />
                    </Surface>
@@ -91,11 +106,11 @@ const getStyles = (theme) => ({
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '700', color: theme.text },
-  content: { padding: 16 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  content: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingTop: 16, paddingBottom: 40 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap' },
   gridItem: {
-    width: '48%', backgroundColor: theme.surface, padding: 16, borderRadius: 20,
-    marginBottom: 16, alignItems: 'center', borderWidth: 1, borderColor: theme.border,
+    backgroundColor: theme.surface, padding: 16, borderRadius: 20,
+    alignItems: 'center', borderWidth: 1, borderColor: theme.border,
     shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 3
   },
   iconBox: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },

@@ -15,6 +15,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from '../context/AuthProvider';
 import { getRoutines } from '../api/endpoints';
 import RoutineBuilderModal from '../components/RoutineBuilderModal';
+import { logHandledError } from '../utils/feedback';
 
 const RoutineCard = ({ routine, theme, navigation }) => {
   const { t } = useTranslation();
@@ -115,7 +116,7 @@ const Routines = ({ navigation }) => {
         setNextCursor(data.nextCursor);
       }
     } catch (error) {
-      console.error('Error fetching routines:', error);
+      logHandledError('load-routines', error);
     } finally {
       setLoading(false);
       setLoadingMore(false);

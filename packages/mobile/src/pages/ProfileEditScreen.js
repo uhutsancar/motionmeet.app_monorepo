@@ -1,10 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
-  Alert,
   Image,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,6 +20,14 @@ import { useAuthContext } from '../context/AuthProvider';
 import { useTheme } from '../context/ThemeContext';
 import { uploadMedia } from '../api/mediaUpload';
 import { updateUser } from '../features/user/userSlice';
+import KeyboardAwareScrollView from '../components/KeyboardAwareScrollView';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import {
+  getUserFacingError,
+  logHandledError,
+  showError,
+  showSuccess,
+} from '../utils/feedback';
 
 const ALLOWED_IMAGE_TYPES = new Set([
   'image/jpeg',
@@ -52,6 +56,7 @@ const ProfileEditScreen = ({ navigation }) => {
   const { getToken } = useAuthContext();
   const { theme } = useTheme();
   const { t } = useTranslation();
+  const { horizontalPadding, isNarrow } = useResponsiveLayout();
   const [profileAsset, setProfileAsset] = useState(null);
   const [coverAsset, setCoverAsset] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -85,7 +90,7 @@ const ProfileEditScreen = ({ navigation }) => {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert(
+        showError(
           t('profile.photo_permission_title', 'Photo permission required'),
           t('profile.photo_permission_body', 'Allow photo access to update your profile images.'),
         );
@@ -104,13 +109,13 @@ const ProfileEditScreen = ({ navigation }) => {
       if (kind === 'profile') setProfileAsset(asset);
       else setCoverAsset(asset);
     } catch (error) {
-      Alert.alert(t('common.error', 'Error'), error.message);
+      showError(t('common.error', 'Error'), getUserFacingError(error));
     }
   };
 
   const saveProfile = async () => {
     if (!form.full_name.trim() || !form.username.trim()) {
-      Alert.alert(
+      showError(
         t('common.error', 'Error'),
         t('profile.required_fields', 'Full name and username are required.'),
       );
@@ -140,15 +145,18 @@ const ProfileEditScreen = ({ navigation }) => {
       };
 
       await dispatch(updateUser({ userData: payload, token })).unwrap();
-      Alert.alert(
+      showSuccess(
         t('profile.updated_title', 'Profile updated'),
         t('profile.updated_body', 'Your changes are now visible.'),
-        [{ text: t('common.ok', 'OK'), onPress: () => navigation.goBack() }],
       );
+      navigation.goBack();
     } catch (error) {
-      Alert.alert(
+      logHandledError('update-profile', error);
+      showError(
         t('common.error', 'Error'),
-        typeof error === 'string' ? error : error.message || t('profile.update_failed', 'Profile update failed.'),
+        typeof error === 'string'
+          ? error
+          : getUserFacingError(error, t('profile.update_failed', 'Profile update failed.')),
       );
     } finally {
       setSaving(false);
@@ -156,7 +164,7 @@ const ProfileEditScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right', 'bottom']}>
       <Appbar.Header statusBarHeight={0} style={{ backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border }}>
         <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} disabled={saving} />
         <Appbar.Content
@@ -165,21 +173,18 @@ const ProfileEditScreen = ({ navigation }) => {
         />
       </Appbar.Header>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
+        <KeyboardAwareScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             width: '100%',
             maxWidth: 720,
             alignSelf: 'center',
-            padding: 16,
+            paddingHorizontal: horizontalPadding,
+            paddingTop: 16,
             paddingBottom: 40,
             gap: 16,
           }}
+          extraScrollHeight={28}
         >
           <Surface
             elevation={0}
@@ -299,7 +304,7 @@ const ProfileEditScreen = ({ navigation }) => {
               theme={inputTheme}
               textColor={theme.text}
             />
-            <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flexDirection: isNarrow ? 'column' : 'row', gap: 12 }}>
               <TextInput
                 mode="outlined"
                 label={t('profile.weight', 'Weight (kg)')}
@@ -336,8 +341,7 @@ const ProfileEditScreen = ({ navigation }) => {
           >
             {saving ? t('common.saving', 'Saving...') : t('profile.save_changes', 'Save changes')}
           </Button>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 };

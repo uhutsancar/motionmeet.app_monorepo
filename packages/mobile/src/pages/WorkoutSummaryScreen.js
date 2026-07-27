@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, ScrollView, Image, Alert, KeyboardAvoidingView, Platform, StyleSheet
+  View, Image, Alert, StyleSheet
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -13,6 +13,15 @@ import { createWorkout, createPost } from '../api/endpoints';
 import { uploadMedia } from '../api/mediaUpload';
 import moment from 'moment';
 import { Appbar, Button, Surface, Text, TextInput, Divider, List, IconButton, ActivityIndicator } from 'react-native-paper';
+import KeyboardAwareScrollView from '../components/KeyboardAwareScrollView';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import {
+  getUserFacingError,
+  logHandledError,
+  showError,
+  showInfo,
+  showSuccess,
+} from '../utils/feedback';
 
 const VISIBILITY_OPTIONS = ['public', 'followers', 'private'];
 
@@ -27,11 +36,12 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
   const { theme } = useTheme();
   const styles = getStyles(theme);
   const { getToken } = useAuthContext();
+  const { horizontalPadding, isNarrow } = useResponsiveLayout();
 
   const workoutData = route?.params?.workoutData || {};
 
   const [note, setNote] = useState(workoutData.note || '');
-  const [mediaUri, setMediaUri] = useState(null);
+  const [mediaAsset, setMediaAsset] = useState(null);
   const [visibility, setVisibility] = useState('public');
   const [saving, setSaving] = useState(false);
 
@@ -60,11 +70,15 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
         onPress: async () => {
           const camPerm = await ImagePicker.requestCameraPermissionsAsync();
           if (camPerm.status !== 'granted') {
-            Alert.alert(t('common.error', 'Hata'), t('workout.camera_permission', 'Kamera izni gerekiyor'));
+            showError(t('common.error', 'Hata'), t('workout.camera_permission', 'Kamera izni gerekiyor'));
             return;
           }
-          const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.8 });
-          if (!result.canceled && result.assets?.length > 0) setMediaUri(result.assets[0].uri);
+          const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ['images'],
+            allowsEditing: true,
+            quality: 0.8,
+          });
+          if (!result.canceled && result.assets?.length > 0) setMediaAsset(result.assets[0]);
         }
       },
       {
@@ -72,11 +86,11 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
         onPress: async () => {
           const libPerm = await ImagePicker.requestMediaLibraryPermissionsAsync();
           if (libPerm.status !== 'granted') {
-            Alert.alert(t('common.error', 'Hata'), t('workout.gallery_permission', 'Galeri izni gerekiyor'));
+            showError(t('common.error', 'Hata'), t('workout.gallery_permission', 'Galeri izni gerekiyor'));
             return;
           }
           const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.8 });
-          if (!result.canceled && result.assets?.length > 0) setMediaUri(result.assets[0].uri);
+          if (!result.canceled && result.assets?.length > 0) setMediaAsset(result.assets[0]);
         }
       },
       { text: t('common.cancel', 'İptal'), style: 'cancel' }
@@ -107,19 +121,19 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
       };
       const workoutRes = await createWorkout(workoutPayload, freshToken);
       if (!workoutRes.success) {
-        Alert.alert(t('common.error'), workoutRes.message || t('common.error', 'Kaydedilemedi'));
+        showError(
+          t('common.error'),
+          workoutRes.message || t('workout.save_failed', 'Antrenman kaydedilemedi.'),
+        );
         return;
       }
 
       const savedWorkoutId = workoutRes.workout?._id;
+      let postError = null;
 
       try {
-        if (mediaUri) {
-          const uploadedKey = await uploadMedia({
-            uri: mediaUri,
-            name: `workout_${Date.now()}.jpg`,
-            type: 'image/jpeg',
-          }, 'posts', freshToken);
+        if (mediaAsset) {
+          const uploadedKey = await uploadMedia(mediaAsset, 'posts', freshToken);
           await createPost({
             content: note.trim() || '',
             post_type: 'workout',
@@ -136,13 +150,35 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
           }, freshToken);
         }
       } catch (postErr) {
-        console.warn('Workout post oluşturulamadı:', postErr.response?.data || postErr.message);
+        postError = postErr;
+        logHandledError('share-workout-post', postErr);
       }
 
-      Alert.alert(t('common.success', 'Başarılı'), t('workout.saved', 'Antrenman kaydedildi!'), [{ text: 'Tamam', onPress: () => navigation.navigate('Tabs') }]);
+      if (postError) {
+        showInfo(
+          t('workout.saved_title', 'Antrenman kaydedildi'),
+          getUserFacingError(
+            postError,
+            t(
+              'workout.post_share_failed',
+              'Antrenman kaydedildi ancak gönderi paylaşılamadı. Daha sonra tekrar deneyebilirsiniz.',
+            ),
+          ),
+          { visibilityTime: 5200 },
+        );
+      } else {
+        showSuccess(
+          t('common.success', 'Başarılı'),
+          t('workout.saved', 'Antrenman kaydedildi!'),
+        );
+      }
+      navigation.navigate('Tabs');
     } catch (error) {
-      console.error('Workout save error:', error.response?.data || error.message);
-      Alert.alert(t('common.error'), error.response?.data?.message || error.message || t('common.error', 'Bir hata oluştu'));
+      logHandledError('save-workout', error);
+      showError(
+        t('common.error'),
+        getUserFacingError(error, t('workout.save_failed', 'Antrenman kaydedilemedi.')),
+      );
     } finally {
       setSaving(false);
     }
@@ -160,7 +196,7 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
       <Appbar.Header style={styles.header} statusBarHeight={0}>
         <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
         <Appbar.Content title={t('workout.save_workout', 'Antrenmanı Kaydet')} titleStyle={styles.headerTitle} />
@@ -173,24 +209,30 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
         )}
       </Appbar.Header>
 
-      <KeyboardAvoidingView style={styles.flex1} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <KeyboardAwareScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingHorizontal: horizontalPadding },
+          ]}
+          extraScrollHeight={28}
+          showsVerticalScrollIndicator={false}
+        >
           
           <Text variant="headlineSmall" style={styles.workoutName}>
             {workoutData.name || t('workout.my_workout', 'Antrenmanım')}
           </Text>
 
           {/* Stats */}
-          <View style={styles.statsContainer}>
-            <Surface style={styles.statCard} elevation={1}>
+          <View style={[styles.statsContainer, isNarrow && styles.statsContainerNarrow]}>
+            <Surface style={[styles.statCard, isNarrow && styles.statCardNarrow]} elevation={1}>
               <Text variant="labelMedium" style={styles.statLabel}>{t('statistics.duration', 'Süre')}</Text>
               <Text variant="titleMedium" style={styles.statValuePrimary}>{stats.duration}</Text>
             </Surface>
-            <Surface style={styles.statCard} elevation={1}>
+            <Surface style={[styles.statCard, isNarrow && styles.statCardNarrow]} elevation={1}>
               <Text variant="labelMedium" style={styles.statLabel}>{t('statistics.volume', 'Hacim')}</Text>
               <Text variant="titleMedium" style={styles.statValue}>{stats.volume}</Text>
             </Surface>
-            <Surface style={styles.statCard} elevation={1}>
+            <Surface style={[styles.statCard, isNarrow && styles.statCardNarrow]} elevation={1}>
               <Text variant="labelMedium" style={styles.statLabel}>{t('statistics.sets', 'Set')}</Text>
               <Text variant="titleMedium" style={styles.statValue}>{stats.sets}</Text>
             </Surface>
@@ -211,15 +253,15 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
           <Divider style={styles.divider} />
 
           {/* Media upload */}
-          {mediaUri ? (
+          {mediaAsset?.uri ? (
             <View style={styles.mediaContainer}>
-              <Image source={{ uri: mediaUri }} style={styles.mediaImage} resizeMode="cover" />
+              <Image source={{ uri: mediaAsset.uri }} style={styles.mediaImage} resizeMode="cover" />
               <IconButton
                 icon="close-circle"
                 iconColor="#ef4444"
                 size={28}
                 style={styles.mediaCloseButton}
-                onPress={() => setMediaUri(null)}
+                onPress={() => setMediaAsset(null)}
               />
             </View>
           ) : (
@@ -302,8 +344,7 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
             {t('workout.delete', 'Antrenmanı Sil')}
           </Button>
 
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 };
@@ -315,10 +356,12 @@ const getStyles = (theme) => StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: theme.text },
   activityIndicator: { marginRight: 16 },
   saveButton: { marginRight: 8, borderRadius: 8 },
-  scrollContent: { paddingHorizontal: 16, paddingBottom: 60 },
+  scrollContent: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingBottom: 60 },
   workoutName: { color: theme.text, fontWeight: 'bold', marginTop: 16 },
-  statsContainer: { flexDirection: 'row', marginTop: 16, gap: 12 },
+  statsContainer: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 16, gap: 12 },
+  statsContainerNarrow: { gap: 8 },
   statCard: { flex: 1, padding: 12, borderRadius: 12, backgroundColor: theme.surfaceLight },
+  statCardNarrow: { minWidth: 88, paddingHorizontal: 8 },
   statLabel: { color: theme.textMuted },
   statValuePrimary: { color: theme.primary, fontWeight: 'bold', marginTop: 4 },
   statValue: { color: theme.text, fontWeight: 'bold', marginTop: 4 },

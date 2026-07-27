@@ -3,8 +3,6 @@ import { FlatList, View } from 'react-native';
 import {
   ActivityIndicator,
   Button,
-  Modal,
-  Portal,
   Searchbar,
   Surface,
   Text,
@@ -14,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from '../context/AuthProvider';
 import { getExercises } from '../api/endpoints';
+import { BottomSheetModal } from './ResponsiveModal';
 
 const ExercisePickerModal = ({ visible, onDismiss, onSelect, excludedIds = [] }) => {
   const { t } = useTranslation();
@@ -44,18 +43,20 @@ const ExercisePickerModal = ({ visible, onDismiss, onSelect, excludedIds = [] })
   }, [getToken, search, visible]);
 
   return (
-    <Portal>
-      <Modal
-        visible={visible}
-        onDismiss={onDismiss}
-        contentContainerStyle={{
-          margin: 18,
-          padding: 18,
-          maxHeight: '82%',
+    <BottomSheetModal
+      visible={visible}
+      onRequestClose={onDismiss}
+      backgroundColor={theme.surface}
+      heightRatio={0.82}
+    >
+      <Surface
+        elevation={0}
+        style={{
+          flex: 1,
+          width: '100%',
           maxWidth: 620,
-          width: '92%',
           alignSelf: 'center',
-          borderRadius: 20,
+          padding: 18,
           backgroundColor: theme.surface,
         }}
       >
@@ -100,8 +101,8 @@ const ExercisePickerModal = ({ visible, onDismiss, onSelect, excludedIds = [] })
         <Button onPress={onDismiss} style={{ marginTop: 10 }}>
           {t('common.cancel', 'Cancel')}
         </Button>
-      </Modal>
-    </Portal>
+      </Surface>
+    </BottomSheetModal>
   );
 };
 

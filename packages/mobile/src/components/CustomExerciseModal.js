@@ -1,10 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { 
-  Modal, 
-  KeyboardAvoidingView, 
-  Platform,
   ScrollView,
-  Alert
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '../context/ThemeContext';
@@ -13,13 +9,18 @@ import { useAuthContext } from "../context/AuthProvider";
 import { setAuthToken } from '../api/client';
 import { createExercise } from '../api/endpoints';
 import { Appbar, Text, TextInput, Button, TouchableRipple, Surface } from 'react-native-paper';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMuscleGroups } from '../hooks/useMuscleGroups';
 import { useEquipment } from '../hooks/useEquipment';
+import { BottomSheetModal } from './ResponsiveModal';
+import KeyboardAwareScrollView from './KeyboardAwareScrollView';
+import {
+  getUserFacingError,
+  logHandledError,
+  showError,
+} from '../utils/feedback';
 
 const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
   const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { getToken } = useAuthContext();
   
@@ -39,12 +40,12 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
 
   const handleSubmit = async () => {
     if (!name.trim()) {
-      Alert.alert(t('common.error'), t('exercises.missing_name', 'Exercise name is required'));
+      showError(t('common.error'), t('exercises.missing_name', 'Exercise name is required'));
       return;
     }
     
     if (!muscleGroup || !equipment) {
-      Alert.alert(t('common.error'), t('exercises.missing_fields', 'Please select muscle group and equipment'));
+      showError(t('common.error'), t('exercises.missing_fields', 'Please select muscle group and equipment'));
       return;
     }
 
@@ -66,13 +67,13 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
         if (onExerciseCreated) onExerciseCreated(data.exercise);
         handleClose();
       } else {
-        Alert.alert(t('common.error'), data.message || t('exercises.create_failed', 'Failed to create exercise'));
+        showError(t('common.error'), data.message || t('exercises.create_failed', 'Failed to create exercise'));
       }
     } catch (error) {
-      console.error('Exercise creation error:', error.response?.data || error.message);
-      Alert.alert(
-        t('common.error'), 
-        error.response?.data?.message || error.message || t('common.error', 'An error occurred')
+      logHandledError('create-exercise', error);
+      showError(
+        t('common.error'),
+        getUserFacingError(error, t('exercises.create_failed', 'Failed to create exercise')),
       );
     } finally {
       setSaving(false);
@@ -89,16 +90,9 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
   };
 
   const styles = useMemo(() => ({
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.5)',
-      justifyContent: 'flex-end',
-    },
     modalContent: {
+      flex: 1,
       backgroundColor: theme.background,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      height: '75%',
       overflow: 'hidden',
     },
     header: {
@@ -112,8 +106,9 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
       fontSize: 18,
       fontWeight: 'bold',
     },
-    formContainer: {
+    formContent: {
       padding: 20,
+      paddingBottom: 40,
     },
     inputGroup: {
       marginBottom: 20,
@@ -156,9 +151,14 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
   }), [theme]);
 
   return (
-    <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={handleClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-        <Surface style={[styles.modalContent, { paddingBottom: insets.bottom }]} elevation={0}>
+    <BottomSheetModal
+      visible={visible}
+      onRequestClose={handleClose}
+      backgroundColor={theme.background}
+      heightRatio={0.82}
+      dismissOnBackdrop={!saving}
+    >
+        <Surface style={styles.modalContent} elevation={0}>
           
           <Appbar.Header style={styles.header}>
             <Appbar.Action icon="close" onPress={handleClose} color={theme.text} />
@@ -176,7 +176,14 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
             </Button>
           </Appbar.Header>
 
-          <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
+          <KeyboardAwareScrollView
+            avoidKeyboard={false}
+            style={{ flex: 1 }}
+            contentContainerStyle={styles.formContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            showsVerticalScrollIndicator={false}
+          >
             
             <Surface elevation={0} style={styles.inputGroup}>
               <Text variant="titleMedium" style={styles.label}>{t('exercises.exercise_name', 'Egzersiz Adı')} *</Text>
@@ -263,10 +270,9 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
             </Surface>
             
             <Surface elevation={0} style={{ height: 100, backgroundColor: 'transparent' }} />
-          </ScrollView>
+          </KeyboardAwareScrollView>
         </Surface>
-      </KeyboardAvoidingView>
-    </Modal>
+    </BottomSheetModal>
   );
 };
 

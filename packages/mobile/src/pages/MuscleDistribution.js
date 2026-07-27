@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, ActivityIndicator, useWindowDimensions , TouchableOpacity} from 'react-native';
+import { ScrollView, ActivityIndicator, TouchableOpacity} from 'react-native';
 import { Surface, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -9,10 +9,19 @@ import Svg, { Circle, Polygon, Line, Text as SvgText } from 'react-native-svg';
 import { getWorkoutStats } from '../api/endpoints';
 import { useAuthContext } from '../context/AuthProvider';
 import { useMuscleGroups } from '../hooks/useMuscleGroups';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { logHandledError } from '../utils/feedback';
 
 const MuscleDistribution = ({ navigation }) => {
-  const { width } = useWindowDimensions();
-  const SIZE = Math.min(width - 80, 420);
+  const {
+    columns,
+    columnGap,
+    contentWidth,
+    horizontalPadding,
+  } = useResponsiveLayout();
+  const statCardWidth =
+    columns === 2 ? (contentWidth - columnGap) / 2 : contentWidth;
+  const SIZE = Math.max(200, Math.min(contentWidth - 40, 420));
   const CENTER = SIZE / 2;
   const RADIUS = SIZE / 2 - 30;
   const { t } = useTranslation();
@@ -43,7 +52,7 @@ const MuscleDistribution = ({ navigation }) => {
           setStats(data);
         }
       } catch (error) {
-        console.error('Error fetching muscle stats:', error);
+        logHandledError('load-muscle-stats', error);
       } finally {
         setLoading(false);
       }
@@ -76,7 +85,7 @@ const MuscleDistribution = ({ navigation }) => {
         <Surface elevation={0} style={styles.iconBtn} />
       </Surface>
 
-      <ScrollView contentContainerStyle={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: horizontalPadding, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
 
         {/* Period dropdown */}
         <Surface elevation={0} style={{ alignSelf: 'center', marginTop: 10 }}>
@@ -191,23 +200,23 @@ const MuscleDistribution = ({ navigation }) => {
         </Surface>
 
         {/* Stats Grid — dynamic */}
-        <Surface elevation={0} style={styles.statsGrid}>
-          <Surface elevation={0} style={styles.statSquare}>
+        <Surface elevation={0} style={[styles.statsGrid, { gap: columnGap }]}>
+          <Surface elevation={0} style={[styles.statSquare, { width: statCardWidth }]}>
             <Text style={styles.statLabel}>{t('statistics.workouts', 'Antrenman')}</Text>
             <Text style={styles.statLargeVal}>{stats?.totalWorkouts ?? 0}</Text>
             <Text style={styles.statDiffPos}>● {t('statistics.current_period', 'Güncel dönem')}</Text>
           </Surface>
-          <Surface elevation={0} style={styles.statSquare}>
+          <Surface elevation={0} style={[styles.statSquare, { width: statCardWidth }]}>
             <Text style={styles.statLabel}>{t('statistics.duration', 'Süre')}</Text>
             <Text style={styles.statLargeVal}>{stats?.totalDuration ?? 0}<Text style={{ fontSize: 14, fontWeight: 'normal' }}>min</Text></Text>
             <Text style={styles.statDiffPos}>● {t('statistics.current_period', 'Güncel dönem')}</Text>
           </Surface>
-          <Surface elevation={0} style={styles.statSquare}>
+          <Surface elevation={0} style={[styles.statSquare, { width: statCardWidth }]}>
             <Text style={styles.statLabel}>{t('statistics.volume', 'Hacim')}</Text>
             <Text style={styles.statLargeVal}>{stats?.totalVolume ?? 0} <Text style={{ fontSize: 14, fontWeight: 'normal' }}>kg</Text></Text>
             <Text style={styles.statDiffPos}>● {t('statistics.current_period', 'Güncel dönem')}</Text>
           </Surface>
-          <Surface elevation={0} style={styles.statSquare}>
+          <Surface elevation={0} style={[styles.statSquare, { width: statCardWidth }]}>
             <Text style={styles.statLabel}>{t('statistics.sets', 'Set')}</Text>
             <Text style={styles.statLargeVal}>{stats?.totalSets ?? 0}</Text>
             <Text style={styles.statDiffPos}>● {t('statistics.current_period', 'Güncel dönem')}</Text>
@@ -250,9 +259,9 @@ const getStyles = (theme, chartAccent) => ({
   legendRow: { flexDirection: 'row', gap: 16, marginTop: 10, marginBottom: 20 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendText: { fontSize: 12, color: theme.textMuted },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   statSquare: {
-    width: '48%', backgroundColor: theme.surface, borderRadius: 16,
+    backgroundColor: theme.surface, borderRadius: 16,
     paddingHorizontal: 16, paddingVertical: 20, borderWidth: 1, borderColor: theme.border
   },
   statLabel: { fontSize: 15, color: theme.textMuted, fontWeight: '500', marginBottom: 12 },

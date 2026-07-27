@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { getExerciseStats } from '../api/endpoints';
 import { useAuthContext } from '../context/AuthProvider';
 import { Appbar, Text, Surface, Button, useTheme as usePaperTheme, TouchableRipple } from 'react-native-paper';
+import { logHandledError } from '../utils/feedback';
 
 const ExerciseDetail = ({ route, navigation }) => {
   const { exercise } = route.params;
@@ -30,7 +31,7 @@ const ExerciseDetail = ({ route, navigation }) => {
           setStats(data.stats);
         }
       } catch (error) {
-        console.error("Error fetching exercise stats:", error);
+        logHandledError('load-exercise-stats', error);
       } finally {
         setLoading(false);
       }

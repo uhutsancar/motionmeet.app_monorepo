@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   FlatList,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,8 +9,6 @@ import {
   ActivityIndicator,
   Appbar,
   List,
-  Modal,
-  Portal,
   Searchbar,
   Surface,
   Text,
@@ -27,10 +24,11 @@ import CustomExerciseModal from '../components/CustomExerciseModal';
 import { useMuscleGroups } from '../hooks/useMuscleGroups';
 import { useEquipment } from '../hooks/useEquipment';
 import { API_URL } from '../config/environment';
+import { BottomSheetModal } from '../components/ResponsiveModal';
+import { logHandledError } from '../utils/feedback';
 
 const Exercises = ({ navigation }) => {
   const { theme } = useTheme();
-  const { height } = useWindowDimensions();
   const { t } = useTranslation();
   const { getToken } = useAuthContext();
   const { data: muscleGroupsList } = useMuscleGroups();
@@ -58,7 +56,7 @@ const Exercises = ({ navigation }) => {
       const data = await getExercises(params, token);
       if (data.success) setExercises(data.exercises || []);
     } catch (error) {
-      console.error('Error fetching exercises:', error);
+      logHandledError('load-exercises', error);
     } finally {
       setLoading(false);
     }
@@ -304,17 +302,20 @@ const Exercises = ({ navigation }) => {
         />
       )}
 
-      <Portal>
-        <Modal
-          visible={showFilterModal}
-          onDismiss={() => setShowFilterModal(false)}
-          contentContainerStyle={{
-            maxHeight: height * 0.72,
-            margin: 20,
+      <BottomSheetModal
+        visible={showFilterModal}
+        onRequestClose={() => setShowFilterModal(false)}
+        backgroundColor={theme.surface}
+        heightRatio={0.72}
+      >
+        <Surface
+          elevation={0}
+          style={{
+            flex: 1,
+            width: '100%',
+            maxWidth: 620,
+            alignSelf: 'center',
             overflow: 'hidden',
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: theme.border,
             backgroundColor: theme.surface,
           }}
         >
@@ -330,8 +331,8 @@ const Exercises = ({ navigation }) => {
             renderItem={renderFilterItem}
             keyExtractor={(item) => item}
           />
-        </Modal>
-      </Portal>
+        </Surface>
+      </BottomSheetModal>
 
       <CustomExerciseModal
         visible={showCreateModal}

@@ -4,19 +4,25 @@ import {
   StatusBar,
   TouchableOpacity,
   View,
-  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Appbar, Surface, Text } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 const StatisticsMenu = ({ navigation }) => {
-  const { width } = useWindowDimensions();
   const { t } = useTranslation();
   const { theme, isDark } = useTheme();
-  const twoColumns = width >= 350;
+  const {
+    columns,
+    columnGap,
+    contentWidth,
+    horizontalPadding,
+  } = useResponsiveLayout();
+  const cardWidth =
+    columns === 2 ? (contentWidth - columnGap) / 2 : contentWidth;
 
   const primaryItems = [
     {
@@ -89,7 +95,8 @@ const StatisticsMenu = ({ navigation }) => {
           width: '100%',
           maxWidth: 720,
           alignSelf: 'center',
-          padding: 16,
+          paddingHorizontal: horizontalPadding,
+          paddingTop: 16,
           paddingBottom: 36,
         }}
       >
@@ -136,7 +143,7 @@ const StatisticsMenu = ({ navigation }) => {
           </Text>
         </View>
 
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between' }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: columnGap }}>
           {primaryItems.map(item => (
             <TouchableOpacity
               key={item.route}
@@ -145,7 +152,7 @@ const StatisticsMenu = ({ navigation }) => {
               accessibilityLabel={item.title}
               onPress={() => navigation.navigate(item.route)}
               style={{
-                width: twoColumns ? '48.5%' : '100%',
+                width: cardWidth,
                 minHeight: 166,
                 padding: 15,
                 borderRadius: 16,

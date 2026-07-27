@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert } from 'react-native';
+import { TextInput, ActivityIndicator } from 'react-native';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '../context/ThemeContext';
@@ -7,14 +7,20 @@ import { useTranslation } from 'react-i18next';
 import { useAuthContext } from "../context/AuthProvider";
 import { setAuthToken } from '../api/client';
 import { getExercises, createRoutine } from '../api/endpoints';
-import Toast from 'react-native-toast-message';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BottomSheetModal } from './ResponsiveModal';
+import KeyboardAwareScrollView from './KeyboardAwareScrollView';
+import {
+  getUserFacingError,
+  logHandledError,
+  showError,
+  showInfo,
+  showSuccess,
+} from '../utils/feedback';
 
 const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
   const { getToken } = useAuthContext();
-  const insets = useSafeAreaInsets();
   const styles = getStyles(theme);
 
   const [name, setName] = useState("");
@@ -35,7 +41,7 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
         const data = await getExercises({ search: searchQuery.trim() }, token);
         if (data.success) setExercisesData(data.exercises);
       } catch (error) {
-        console.error('Exercise search error:', error);
+        logHandledError('routine-exercise-search', error);
       } finally {
         setLoadingEx(false);
       }
@@ -46,7 +52,7 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
 
   const addExercise = (ex) => {
     if (selectedExercises.find(e => e.exerciseId._id === ex._id)) {
-      Toast.show({ type: 'info', text1: t('common.error'), text2: t('routines.already_added', 'Zaten eklendi') });
+      showInfo(t('common.info', 'Bilgi'), t('routines.already_added', 'Zaten eklendi'));
       return;
     }
     const newEx = {
@@ -75,11 +81,11 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
 
   const handleSubmit = async () => {
     if (!name.trim()) {
-      Alert.alert(t('common.error'), t('routines.name_required', 'Rutin adı gerekli'));
+      showError(t('common.error'), t('routines.name_required', 'Rutin adı gerekli'));
       return;
     }
     if (selectedExercises.length === 0) {
-      Alert.alert(t('common.error'), t('routines.add_exercises_first', 'Önce egzersiz ekle'));
+      showError(t('common.error'), t('routines.add_exercises_first', 'Önce egzersiz ekle'));
       return;
     }
 
@@ -101,15 +107,18 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
 
       const data = await createRoutine(payload, freshToken);
       if (data.success) {
-        Alert.alert(t('common.success', 'Başarılı'), t('routines.routine_created', 'Rutin oluşturuldu!'));
+        showSuccess(t('common.success', 'Başarılı'), t('routines.routine_created', 'Rutin oluşturuldu!'));
         onRoutineCreated(data.routine);
         handleClose();
       } else {
-        Alert.alert(t('common.error'), data.message || t('common.error', 'Bir hata oluştu'));
+        showError(t('common.error'), data.message || t('common.error', 'Bir hata oluştu'));
       }
     } catch (error) {
-      console.error('Routine save error:', error.response?.data || error.message);
-      Alert.alert(t('common.error'), error.response?.data?.message || error.message || t('common.error', 'Bir hata oluştu'));
+      logHandledError('create-routine', error);
+      showError(
+        t('common.error'),
+        getUserFacingError(error, t('routines.create_failed', 'Rutin oluşturulamadı.')),
+      );
     } finally {
       setSaving(false);
     }
@@ -123,9 +132,14 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={handleClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-        <Surface elevation={0} style={[styles.modalContent, { paddingBottom: insets.bottom }]}>
+    <BottomSheetModal
+      visible={visible}
+      onRequestClose={handleClose}
+      backgroundColor={theme.background}
+      heightRatio={0.94}
+      dismissOnBackdrop={!saving}
+    >
+        <Surface elevation={0} style={styles.modalContent}>
           <Surface elevation={0} style={styles.header}>
             <TouchableRipple borderless onPress={handleClose} style={styles.iconBtn}>
               <Ionicons name="close" size={24} color={theme.text} />
@@ -136,7 +150,14 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
             </TouchableRipple>
           </Surface>
 
-          <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+          <KeyboardAwareScrollView
+            avoidKeyboard={false}
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            showsVerticalScrollIndicator={false}
+          >
             <Surface elevation={0} style={styles.inputGroup}>
               <Text style={styles.label}>{t('routines.routine_name', 'Rutin Adı')}</Text>
               <TextInput 
@@ -224,22 +245,21 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
             ))}
 
             <Surface elevation={0} style={{ height: 100 }} />
-          </ScrollView>
+          </KeyboardAwareScrollView>
         </Surface>
-      </KeyboardAvoidingView>
-    </Modal>
+    </BottomSheetModal>
   );
 };
 
 const getStyles = (theme) => ({
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: theme.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '90%' },
+  modalContent: { flex: 1, backgroundColor: theme.background },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: theme.border },
   headerTitle: { color: theme.text, fontSize: 18, fontWeight: 'bold' },
   iconBtn: { padding: 4 },
   saveBtn: { backgroundColor: theme.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
   saveBtnText: { color: '#fff', fontWeight: 'bold' },
-  scroll: { padding: 20 },
+  scroll: { flex: 1, padding: 20 },
+  scrollContent: { paddingBottom: 40 },
   inputGroup: { marginBottom: 4 },
   searchSection: { marginBottom: 4 },
   label: { color: theme.text, fontWeight: 'bold', marginBottom: 8 },

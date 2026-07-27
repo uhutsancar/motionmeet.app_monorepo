@@ -12,6 +12,8 @@ import { uploadMedia } from '../api/mediaUpload';
 import { setMessages, addMessage, prependMessages, removeMessage } from '../features/messages/messagesSlice';
 import moment from 'moment';
 import { Appbar, Avatar, Text, TextInput, IconButton, Surface, ActivityIndicator, Badge, useTheme as usePaperTheme, TouchableRipple } from 'react-native-paper';
+import { showError } from '../utils/feedback';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 const ChatBox = ({ route, navigation }) => {
   const { userId, user: routeUser } = route?.params || {};
@@ -22,6 +24,8 @@ const ChatBox = ({ route, navigation }) => {
   const paperTheme = usePaperTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { contentWidth } = useResponsiveLayout();
+  const messageMediaWidth = Math.max(140, Math.min(220, contentWidth * 0.72));
   const s = getStyles(theme, paperTheme, insets);
 
   const currentUser = useSelector((state) => state.user.value);
@@ -67,7 +71,7 @@ const ChatBox = ({ route, navigation }) => {
         }
       } catch (error) {
         if (!cancelled) {
-          Alert.alert(t('common.error', 'Error'), t('messages.load_failed', 'Messages could not be loaded'));
+          showError(t('common.error', 'Error'), t('messages.load_failed', 'Messages could not be loaded'));
         }
       } finally {
         if (!cancelled) setInitialLoading(false);
@@ -94,7 +98,7 @@ const ChatBox = ({ route, navigation }) => {
     const onTypStop = ({ from_user_id }) => { if (from_user_id === userId) setPartnerTyping(false); };
     const onDeleted = ({ messageId }) => dispatch(removeMessage(messageId));
     const onMessageError = ({ message } = {}) => {
-      Alert.alert(t('common.error', 'Error'), message || t('messages.send_failed', 'Failed to send message'));
+      showError(t('common.error', 'Error'), message || t('messages.send_failed', 'Failed to send message'));
     };
 
     socket.on('message_received', onMsg);
@@ -141,7 +145,7 @@ const ChatBox = ({ route, navigation }) => {
         setNextCursor(data.nextCursor);
       }
     } catch {
-      Alert.alert(t('common.error', 'Error'), t('messages.load_failed', 'Messages could not be loaded'));
+      showError(t('common.error', 'Error'), t('messages.load_failed', 'Messages could not be loaded'));
     } finally {
       setLoadingOlder(false);
     }
@@ -156,7 +160,10 @@ const ChatBox = ({ route, navigation }) => {
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') { Alert.alert(t('common.error', 'Error'), t('feed.permission_required_media', 'We need permission to access your media')); return; }
+    if (status !== 'granted') {
+      showError(t('common.error', 'Error'), t('feed.permission_required_media', 'We need permission to access your media'));
+      return;
+    }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'], allowsEditing: true, aspect: [4, 3], quality: 0.8,
     });
@@ -188,7 +195,7 @@ const ChatBox = ({ route, navigation }) => {
         setImage(null);
       }
     } catch {
-      Alert.alert(t('common.error', 'Error'), t('messages.send_failed', 'Failed to send message'));
+      showError(t('common.error', 'Error'), t('messages.send_failed', 'Failed to send message'));
     }
   }, [connected, dispatch, emitTypingStop, getToken, image, socketSend, text, t, userId]);
 
@@ -213,10 +220,10 @@ const ChatBox = ({ route, navigation }) => {
               if (data.success) {
                 dispatch(removeMessage(msgId));
               } else {
-                Alert.alert(t('common.error', 'Error'), data.message);
+                showError(t('common.error', 'Error'), data.message);
               }
             } catch (err) {
-              Alert.alert(t('common.error', 'Error'), t('messages.delete_failed', 'Failed to delete message'));
+              showError(t('common.error', 'Error'), t('messages.delete_failed', 'Failed to delete message'));
             }
           } 
         }
@@ -241,7 +248,14 @@ const ChatBox = ({ route, navigation }) => {
         )}
         <Surface elevation={0} style={{ maxWidth: '75%' }}>
           {msg.message_type === 'image' && msg.media_url && (
-            <Image source={{ uri: msg.media_url }} style={s.msgImage} resizeMode="cover" />
+            <Image
+              source={{ uri: msg.media_url }}
+              style={[
+                s.msgImage,
+                { width: messageMediaWidth, height: messageMediaWidth * 0.9 },
+              ]}
+              resizeMode="cover"
+            />
           )}
           {msg.text ? (
             <TouchableRipple 
@@ -294,7 +308,7 @@ const ChatBox = ({ route, navigation }) => {
   const isOnline = onlineUsers.has(userId);
 
   return (
-    <Surface elevation={0} style={s.container}>
+    <SafeAreaView style={s.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       <Appbar.Header style={s.header} statusBarHeight={0}>
@@ -328,7 +342,7 @@ const ChatBox = ({ route, navigation }) => {
 
       <KeyboardAvoidingView 
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         {initialLoading ? (
           <Surface elevation={0} style={s.loader}><ActivityIndicator color={theme.primary} /></Surface>
@@ -405,7 +419,7 @@ const ChatBox = ({ route, navigation }) => {
           </Surface>
         </Surface>
       </KeyboardAvoidingView>
-    </Surface>
+    </SafeAreaView>
   );
 };
 
@@ -452,7 +466,7 @@ const getStyles = (theme, paperTheme, insets) => ({
   },
   bubbleText: { fontSize: 16, lineHeight: 22, fontWeight: '500' },
   msgTime: { color: theme.textMuted, marginTop: 4, fontWeight: '600', paddingHorizontal: 8 },
-  msgImage: { width: 220, height: 200, borderRadius: 18, marginBottom: 6 },
+  msgImage: { borderRadius: 18, marginBottom: 6 },
   typingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.textMuted, marginHorizontal: 2 },
   imagePreview: {
     flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12,

@@ -1,10 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
-  Alert,
-  KeyboardAvoidingView,
   Linking,
-  Platform,
-  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
@@ -14,6 +10,8 @@ import { useAuthContext } from '../context/AuthProvider';
 import { useTheme } from '../context/ThemeContext';
 import MotionMark from '../components/MotionMark';
 import { WEB_URL } from '../config/environment';
+import KeyboardAwareScrollView from '../components/KeyboardAwareScrollView';
+import { showError } from '../utils/feedback';
 
 const Login = () => {
   const { theme } = useTheme();
@@ -40,7 +38,7 @@ const Login = () => {
       : [formData.email, formData.password, formData.username, formData.full_name];
 
     if (required.some((value) => !value.trim())) {
-      Alert.alert('Missing details', isLogin
+      showError('Missing details', isLogin
         ? 'Please enter your email and password.'
         : 'Please complete every field.');
       return;
@@ -58,7 +56,7 @@ const Login = () => {
         });
 
       if (!result.success) {
-        Alert.alert('Authentication failed', result.message || 'Please try again.');
+        showError('Authentication failed', result.message || 'Please try again.');
       }
     } finally {
       setLoading(false);
@@ -72,14 +70,10 @@ const Login = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
+        <KeyboardAwareScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
+          extraScrollHeight={24}
         >
           <View style={styles.brandRow}>
             <MotionMark size={46} />
@@ -210,8 +204,7 @@ const Login = () => {
               By continuing, you agree to the MotionMeet Terms and Privacy Policy.
             </Text>
           </Surface>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 };

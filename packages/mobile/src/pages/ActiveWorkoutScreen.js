@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Appbar, Text, Surface, TextInput, Button, IconButton, Divider, TouchableRipple } from 'react-native-paper';
 const formatTime = (seconds) => {
@@ -13,11 +13,16 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import ExercisePickerModal from '../components/ExercisePickerModal';
+import KeyboardAwareScrollView from '../components/KeyboardAwareScrollView';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 const ActiveWorkoutScreen = ({ navigation, route }) => {
   const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const kbAppearance = isDark ? 'dark' : 'light';
+  const { horizontalPadding, isNarrow } = useResponsiveLayout();
+  const setFieldWidth = isNarrow ? 50 : 60;
+  const setRowGap = isNarrow ? 6 : 12;
 
   const routine = route?.params?.routine;
 
@@ -153,7 +158,7 @@ const ActiveWorkoutScreen = ({ navigation, route }) => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right', 'bottom']}>
       {/* Header */}
       <Surface elevation={2} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, paddingVertical: 8, backgroundColor: theme.surface }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
@@ -171,8 +176,18 @@ const ActiveWorkoutScreen = ({ navigation, route }) => {
         </Button>
       </Surface>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: 16, paddingBottom: 32, paddingTop: 16 }} showsVerticalScrollIndicator={false}>
+        <KeyboardAwareScrollView
+          contentContainerStyle={{
+            width: '100%',
+            maxWidth: 720,
+            alignSelf: 'center',
+            paddingHorizontal: horizontalPadding,
+            paddingBottom: 40,
+            paddingTop: 16,
+          }}
+          extraScrollHeight={28}
+          showsVerticalScrollIndicator={false}
+        >
         
         {/* Title */}
         <TextInput
@@ -212,7 +227,7 @@ const ActiveWorkoutScreen = ({ navigation, route }) => {
 
         {/* Exercises */}
         {exercises.map((ex, exIndex) => (
-          <Surface key={exIndex} elevation={1} style={{ marginBottom: 24, borderRadius: 16, padding: 16, backgroundColor: theme.surface }}>
+          <Surface key={exIndex} elevation={1} style={{ marginBottom: 24, borderRadius: 16, padding: isNarrow ? 12 : 16, backgroundColor: theme.surface }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <Text variant="titleMedium" style={{ color: theme.primary, fontWeight: 'bold' }}>{ex.name}</Text>
               <IconButton
@@ -234,15 +249,15 @@ const ActiveWorkoutScreen = ({ navigation, route }) => {
             ) : null}
 
             {/* Sets header */}
-            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16, marginBottom: 8, paddingHorizontal: 10 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: setRowGap, marginBottom: 8 }}>
               <Text variant="labelMedium" style={{ color: theme.textMuted, fontWeight: 'bold', width: 30, textAlign: 'center' }}>Set</Text>
-              <Text variant="labelMedium" style={{ color: theme.textMuted, fontWeight: 'bold', width: 60, textAlign: 'center' }}>kg</Text>
-              <Text variant="labelMedium" style={{ color: theme.textMuted, fontWeight: 'bold', width: 60, textAlign: 'center' }}>Tkr</Text>
+              <Text variant="labelMedium" style={{ color: theme.textMuted, fontWeight: 'bold', width: setFieldWidth, textAlign: 'center' }}>kg</Text>
+              <Text variant="labelMedium" style={{ color: theme.textMuted, fontWeight: 'bold', width: setFieldWidth, textAlign: 'center' }}>Tkr</Text>
               <Ionicons name="checkmark" size={18} color={theme.textMuted} style={{ width: 30, textAlign: 'center' }} />
             </View>
 
             {ex.sets.map((s, setIndex) => (
-              <View key={setIndex} style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 12, backgroundColor: s.done ? '#10b98120' : 'transparent', marginBottom: 4 }}>
+              <View key={setIndex} style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: setRowGap, paddingVertical: 6, borderRadius: 12, backgroundColor: s.done ? '#10b98120' : 'transparent', marginBottom: 4 }}>
                 <View style={{ width: 30, alignItems: 'center', justifyContent: 'center', backgroundColor: s.done ? 'transparent' : theme.background, paddingVertical: 8, borderRadius: 8 }}>
                     <Text style={{ color: s.done ? '#10b981' : theme.textMuted, fontWeight: 'bold' }}>{setIndex + 1}</Text>
                 </View>
@@ -254,7 +269,7 @@ const ActiveWorkoutScreen = ({ navigation, route }) => {
                   value={s.weight}
                   onChangeText={(val) => updateSetField(exIndex, setIndex, 'weight', val)}
                   keyboardAppearance={kbAppearance}
-                  style={{ width: 60, textAlign: 'center', backgroundColor: s.done ? 'transparent' : theme.background, height: 40 }}
+                  style={{ width: setFieldWidth, textAlign: 'center', backgroundColor: s.done ? 'transparent' : theme.background, height: 40 }}
                   textColor={s.done ? '#10b981' : theme.text}
                   placeholderTextColor={theme.textMuted}
                   outlineStyle={{ borderColor: 'transparent', borderRadius: 8 }}
@@ -268,7 +283,7 @@ const ActiveWorkoutScreen = ({ navigation, route }) => {
                   value={s.reps}
                   onChangeText={(val) => updateSetField(exIndex, setIndex, 'reps', val)}
                   keyboardAppearance={kbAppearance}
-                  style={{ width: 60, textAlign: 'center', backgroundColor: s.done ? 'transparent' : theme.background, height: 40 }}
+                  style={{ width: setFieldWidth, textAlign: 'center', backgroundColor: s.done ? 'transparent' : theme.background, height: 40 }}
                   textColor={s.done ? '#10b981' : theme.text}
                   placeholderTextColor={theme.textMuted}
                   outlineStyle={{ borderColor: 'transparent', borderRadius: 8 }}
@@ -320,8 +335,7 @@ const ActiveWorkoutScreen = ({ navigation, route }) => {
         >
             {t('workout.cancel_workout', 'Antrenmanı İptal Et')}
         </Button>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
       <ExercisePickerModal
         visible={pickerVisible}
         onDismiss={() => setPickerVisible(false)}

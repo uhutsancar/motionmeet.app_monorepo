@@ -18,6 +18,7 @@ import 'moment/locale/tr';
 import { useAuthContext } from '../context/AuthProvider';
 import { useTheme } from '../context/ThemeContext';
 import { setAuthToken } from '../api/client';
+import { logHandledError } from '../utils/feedback';
 import { getUserProfile, getWorkouts } from '../api/endpoints';
 
 const Profile = ({ route, navigation }) => {
@@ -56,7 +57,7 @@ const Profile = ({ route, navigation }) => {
           );
         }
       } catch (error) {
-        console.error('Failed to fetch public profile', error);
+        logHandledError('load-public-profile', error);
       } finally {
         setProfileLoading(false);
       }
@@ -73,7 +74,7 @@ const Profile = ({ route, navigation }) => {
         const data = await getWorkouts(token);
         if (data.success) setWorkouts(data.workouts || []);
       } catch (error) {
-        console.error('Failed to fetch workouts on mobile', error);
+        logHandledError('load-profile-workouts', error);
       }
     };
     if (currentUser) fetchUserWorkouts();

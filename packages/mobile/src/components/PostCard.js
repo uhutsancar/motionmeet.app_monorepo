@@ -12,6 +12,7 @@ import 'moment/locale/tr';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
+import { logHandledError } from '../utils/feedback';
 
 const POST_PADDING = 16;
 const normalizeUri = (value) => (
@@ -427,7 +428,7 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
         setLikeCount(data.like_count);
       }
     } catch (error) {
-      console.error('Like error:', error);
+      logHandledError('like-post', error);
       Alert.alert(t('common.error', 'Error'), t('feed.failed_like', 'Failed to like post'));
     } finally {
       setIsProcessing(false);
@@ -448,7 +449,7 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
       }
       dispatch(fetchUser(token));
     } catch (error) {
-      console.error('Follow error:', error);
+      logHandledError('follow-user', error);
       Alert.alert(t('common.error'), t('feed.follow_failed'));
     } finally {
       setFollowProcessing(false);
@@ -469,7 +470,7 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
         Alert.alert(t('common.error'), data.message);
       }
     } catch (error) {
-      console.error('Comment error:', error);
+      logHandledError('add-comment', error);
     } finally {
       setIsProcessing(false);
     }
@@ -494,7 +495,7 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
         setCommentCursor(data.nextCursor);
       }
     } catch (error) {
-      console.error('Comment history error:', error);
+      logHandledError('load-comments', error);
     } finally {
       setOlderCommentsLoading(false);
     }

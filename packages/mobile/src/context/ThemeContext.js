@@ -67,7 +67,7 @@ export const ThemeProvider = ({ children }) => {
           setSavedMode(storedTheme);
         }
       } catch (error) {
-        console.error('Error loading theme:', error);
+        if (__DEV__) console.log('[Theme] Could not load saved preference', error?.message);
       }
     };
 
@@ -86,7 +86,7 @@ export const ThemeProvider = ({ children }) => {
     try {
       await AsyncStorage.setItem('appTheme', nextMode);
     } catch (error) {
-      console.error('Error saving theme:', error);
+      if (__DEV__) console.log('[Theme] Could not save preference', error?.message);
     }
   }, [isDark]);
 

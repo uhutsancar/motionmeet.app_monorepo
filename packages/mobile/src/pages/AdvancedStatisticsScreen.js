@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, View, useWindowDimensions } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { BarChart, LineChart } from 'react-native-chart-kit';
@@ -14,12 +14,13 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from '../context/AuthProvider';
 import { getWorkoutStats } from '../api/endpoints';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
-const MetricCard = ({ icon, label, value, unit, color, theme }) => (
+const MetricCard = ({ icon, label, value, unit, color, theme, width }) => (
   <Surface
     elevation={0}
     style={{
-      width: '48%',
+      width,
       minHeight: 94,
       padding: 14,
       borderRadius: 14,
@@ -76,7 +77,6 @@ const ChartCard = ({ icon, title, color, theme, children }) => (
 );
 
 const AdvancedStatisticsScreen = ({ navigation }) => {
-  const { width } = useWindowDimensions();
   const { t } = useTranslation();
   const { theme } = useTheme();
   const { getToken } = useAuthContext();
@@ -84,8 +84,16 @@ const AdvancedStatisticsScreen = ({ navigation }) => {
   const [statsData, setStatsData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
+  const {
+    columns,
+    columnGap,
+    contentWidth,
+    horizontalPadding,
+  } = useResponsiveLayout({ minTwoColumnWidth: 460 });
+  const metricWidth =
+    columns === 2 ? (contentWidth - columnGap) / 2 : contentWidth;
 
-  const chartWidth = Math.max(260, Math.min(width - 50, 670));
+  const chartWidth = Math.max(220, Math.min(contentWidth - 2, 670));
   const blue = theme.dark ? '#60A5FA' : '#2563EB';
   const green = '#22A06B';
   const purple = '#8B5CF6';
@@ -191,7 +199,8 @@ const AdvancedStatisticsScreen = ({ navigation }) => {
           width: '100%',
           maxWidth: 720,
           alignSelf: 'center',
-          padding: 16,
+          paddingHorizontal: horizontalPadding,
+          paddingTop: 16,
           paddingBottom: 36,
           gap: 14,
         }}
@@ -272,7 +281,7 @@ const AdvancedStatisticsScreen = ({ navigation }) => {
           </Surface>
         ) : (
           <>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between' }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: columnGap }}>
               <MetricCard
                 icon="trending-up-outline"
                 label={t('statistics.volume', 'Volume')}
@@ -280,6 +289,7 @@ const AdvancedStatisticsScreen = ({ navigation }) => {
                 unit={t('common.kg', 'kg')}
                 color={blue}
                 theme={theme}
+                width={metricWidth}
               />
               <MetricCard
                 icon="repeat-outline"
@@ -288,6 +298,7 @@ const AdvancedStatisticsScreen = ({ navigation }) => {
                 unit={t('routines.reps', 'reps').toLowerCase()}
                 color={green}
                 theme={theme}
+                width={metricWidth}
               />
               <MetricCard
                 icon="time-outline"
@@ -296,6 +307,7 @@ const AdvancedStatisticsScreen = ({ navigation }) => {
                 unit={t('common.min', 'min')}
                 color="#3284FF"
                 theme={theme}
+                width={metricWidth}
               />
               <MetricCard
                 icon="layers-outline"
@@ -304,6 +316,7 @@ const AdvancedStatisticsScreen = ({ navigation }) => {
                 unit=""
                 color={purple}
                 theme={theme}
+                width={metricWidth}
               />
             </View>
 

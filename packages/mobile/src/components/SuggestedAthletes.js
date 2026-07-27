@@ -6,6 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import UserCard from './UserCard';
 import { useAuthContext } from '../context/AuthProvider';
 import { getSuggestedUsers } from '../api/endpoints';
+import { logHandledError } from '../utils/feedback';
 
 const SuggestedAthletes = ({ navigation }) => {
   const { theme } = useTheme();
@@ -22,7 +23,7 @@ const SuggestedAthletes = ({ navigation }) => {
         setUsers(data.users);
       }
     } catch (error) {
-      console.error('Suggested fetch error:', error.message);
+      logHandledError('load-suggested-athletes', error);
     } finally {
       setLoading(false);
     }

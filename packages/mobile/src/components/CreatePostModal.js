@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Modal, ScrollView, TextInput, Image, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { TextInput, Image, ActivityIndicator } from 'react-native';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { useDispatch, useSelector } from 'react-redux';
@@ -11,6 +10,14 @@ import { uploadMedia } from '../api/mediaUpload';
 
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
+import { FullScreenModal } from './ResponsiveModal';
+import KeyboardAwareScrollView from './KeyboardAwareScrollView';
+import {
+  getUserFacingError,
+  logHandledError,
+  showError,
+  showSuccess,
+} from '../utils/feedback';
 
 const CreatePostModal = ({ visible, onClose, onSuccess }) => {
   const { theme, isDark } = useTheme();
@@ -31,7 +38,7 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (status !== 'granted') {
-      Alert.alert(t('common.error'), t('feed.permission_required'));
+      showError(t('common.error'), t('feed.permission_required'));
       return;
     }
 
@@ -53,12 +60,12 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
 
   const handlePublish = async () => {
     if (!user) {
-      Alert.alert(t('common.error'), t('common.user_not_found'));
+      showError(t('common.error'), t('common.user_not_found'));
       return;
     }
 
     if (!content.trim() && images.length === 0) {
-      Alert.alert(t('common.error'), t('feed.add_content_error'));
+      showError(t('common.error'), t('feed.add_content_error'));
       return;
     }
 
@@ -86,7 +93,7 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
         token,
       })).unwrap();
       
-      Alert.alert(t('common.success'), t('feed.post_published'));
+      showSuccess(t('common.success'), t('feed.post_published'));
       setContent('');
       setImages([]);
       
@@ -96,7 +103,11 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
         onClose();
       }
     } catch (error) {
-      Alert.alert(t('common.error'), error.message || t('feed.publish_failed'));
+      logHandledError('create-post', error);
+      showError(
+        t('common.error'),
+        getUserFacingError(error, t('feed.publish_failed')),
+      );
     } finally {
       setLoading(false);
     }
@@ -107,14 +118,12 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
   }
 
   return (
-    <Modal
+    <FullScreenModal
       visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
       onRequestClose={onClose}
+      backgroundColor={theme.background}
     >
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <SafeAreaView style={styles.container}>
+      <Surface elevation={0} style={styles.container}>
         <Surface elevation={0} style={styles.header}>
           <TouchableRipple borderless onPress={onClose} style={styles.closeButton}>
             <Ionicons name="close" size={28} color={theme.text} />
@@ -123,7 +132,14 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
           <Surface elevation={0} style={{ width: 28 }} />
         </Surface>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <KeyboardAwareScrollView
+          avoidKeyboard={false}
+          style={styles.content}
+          contentContainerStyle={styles.contentContainer}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}
+        >
           <Surface elevation={0} style={styles.userSection}>
             {profilePicture ? (
               <Image
@@ -169,7 +185,7 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
               ))}
             </Surface>
           )}
-        </ScrollView>
+        </KeyboardAwareScrollView>
 
         <Surface elevation={0} style={styles.bottomBar}>
           <TouchableRipple borderless
@@ -191,9 +207,8 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
             )}
           </TouchableRipple>
         </Surface>
-      </SafeAreaView>
-      </KeyboardAvoidingView>
-    </Modal>
+      </Surface>
+    </FullScreenModal>
   );
 };
 
@@ -221,7 +236,11 @@ const getStyles = (theme) => ({
   },
   content: {
     flex: 1,
+  },
+  contentContainer: {
+    flexGrow: 1,
     padding: 20,
+    paddingBottom: 28,
   },
   userSection: {
     flexDirection: 'row',
