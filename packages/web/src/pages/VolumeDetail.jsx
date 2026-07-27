@@ -102,7 +102,7 @@ const VolumeDetail = () => {
                         <Typography variant="body2" fontWeight={700} color="text.secondary" mb={2}>{t('statistics.top_exercises', 'En İyi Egzersizler')}</Typography>
                         <Stack spacing={1}>
                             {exerciseBreakdown.slice(0, 5).map((ex, i) => (
-                                <Stack key={i} direction="row" sx={{ alignItems: "center" }} sx={{ py: 1.5, borderBottom: i === Math.min(exerciseBreakdown.length, 5) - 1 ? 0 : 1, borderColor: 'divider' }}>
+                                <Stack key={i} direction="row" sx={{ alignItems: "center", py: 1.5, borderBottom: i === Math.min(exerciseBreakdown.length, 5) - 1 ? 0 : 1, borderColor: 'divider' }}>
                                     <Typography variant="body2" fontWeight={900} color="primary.main" sx={{ width: 28 }}>#{i + 1}</Typography>
                                     <Typography variant="body2" fontWeight={600} flex={1}>{ex.name}</Typography>
                                     <Typography variant="body2" fontWeight={700} color="text.secondary">{ex.total?.toLocaleString()} kg</Typography>

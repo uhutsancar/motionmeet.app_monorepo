@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TextInput, ActivityIndicator } from 'react-native';
+import { TextInput, ActivityIndicator, View } from 'react-native';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '../context/ThemeContext';
@@ -9,6 +9,9 @@ import { setAuthToken } from '../api/client';
 import { getExercises, createRoutine } from '../api/endpoints';
 import { BottomSheetModal } from './ResponsiveModal';
 import KeyboardAwareScrollView from './KeyboardAwareScrollView';
+import { resolvePublicMediaUrl } from '@motionmeet/shared';
+import { API_URL } from '../config/environment';
+import { Image } from 'expo-image';
 import {
   getUserFacingError,
   logHandledError,
@@ -191,28 +194,51 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
                     {t('exercises.not_found', 'Egzersiz bulunamadı')}
                   </Text>
                 ) : (
-                  exercisesData.slice(0, 20).map(ex => (
+                  exercisesData.slice(0, 20).map(ex => {
+                    const mediaUrl = resolvePublicMediaUrl(ex.gifUrl, API_URL);
+                    return (
                     <TouchableRipple borderless key={ex._id} onPress={() => addExercise(ex)} style={styles.resItem}>
                       <Surface
                         elevation={0}
                         style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'transparent' }}
                       >
-                        <Surface elevation={0} style={{ flex: 1, backgroundColor: 'transparent' }}>
-                          <Text style={{ color: theme.text, fontWeight: '500' }}>{ex.name}</Text>
-                          <Text style={{ color: theme.textMuted, fontSize: 12 }}>{ex.muscleGroup} • {ex.equipment}</Text>
+                        <Surface elevation={0} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'transparent' }}>
+                          <Surface elevation={0} style={{ width: 40, height: 40, borderRadius: 8, overflow: 'hidden', backgroundColor: theme.surfaceLight, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
+                            {mediaUrl ? (
+                              <Image source={{ uri: mediaUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                            ) : (
+                              <Ionicons name="barbell-outline" size={20} color={theme.textMuted} />
+                            )}
+                          </Surface>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ color: theme.text, fontWeight: '500' }}>{ex.name}</Text>
+                            <Text style={{ color: theme.textMuted, fontSize: 12 }}>{ex.muscleGroup} • {ex.equipment}</Text>
+                          </View>
                         </Surface>
                         <Ionicons name="add-circle-outline" size={22} color={theme.primary} />
                       </Surface>
                     </TouchableRipple>
-                  ))
+                    );
+                  })
                 )}
               </Surface>
             </Surface>
 
-            {selectedExercises.map((se, exIndex) => (
+            {selectedExercises.map((se, exIndex) => {
+              const selectedMediaUrl = resolvePublicMediaUrl(se.exerciseId.gifUrl, API_URL);
+              return (
               <Surface elevation={0} key={exIndex} style={styles.exCard}>
                 <Surface elevation={0} style={styles.exCardHeader}>
-                  <Text style={styles.exName}>{se.exerciseId.name}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    <Surface elevation={0} style={{ width: 32, height: 32, borderRadius: 6, overflow: 'hidden', backgroundColor: theme.surfaceLight, marginRight: 10, alignItems: 'center', justifyContent: 'center' }}>
+                      {selectedMediaUrl ? (
+                        <Image source={{ uri: selectedMediaUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                      ) : (
+                        <Ionicons name="barbell-outline" size={16} color={theme.textMuted} />
+                      )}
+                    </Surface>
+                    <Text style={styles.exName}>{se.exerciseId.name}</Text>
+                  </View>
                   <TouchableRipple borderless onPress={() => removeExercise(se.exerciseId._id)}>
                     <Ionicons name="trash-outline" size={18} color="#ef4444" />
                   </TouchableRipple>
@@ -242,7 +268,8 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
                   <Text style={styles.addSetText}>+ {t('routines.add_set', 'SET EKLE')}</Text>
                 </TouchableRipple>
               </Surface>
-            ))}
+              );
+            })}
 
             <Surface elevation={0} style={{ height: 100 }} />
           </KeyboardAwareScrollView>

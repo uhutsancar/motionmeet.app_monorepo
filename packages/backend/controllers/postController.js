@@ -10,6 +10,7 @@ import {
   resolveReservedUploads,
 } from "../services/mediaUploadService.js";
 import { deleteMediaOrQueue } from "../services/mediaDeletionService.js";
+import { pushPostToTimelines } from "../services/timelineService.js";
 
 const POST_TYPES = new Set(["text", "image", "text_with_image", "video", "workout"]);
 const VISIBILITIES = new Set(["public", "followers", "private"]);
@@ -106,6 +107,14 @@ export const addPost = async (req, res, next) => {
       throw error;
     }
     await commitReservedUploads(reservedImages.map(({ key }) => key));
+
+    // Yüksek ölçekli feed mimarisi (Fan-out on write)
+    // Post oluşturulduğunda takipçilerin ve bağlantıların Redis timeline'larına ekle
+    if (visibility !== "private") {
+      pushPostToTimelines(post._id, userId).catch((err) =>
+        console.error("Failed to push post to timelines in background:", err.message)
+      );
+    }
 
     return res.json({ success: true, post, message: "Post created successfully" });
   } catch (error) {

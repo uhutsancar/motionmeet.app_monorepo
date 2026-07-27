@@ -13,6 +13,10 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from '../context/AuthProvider';
 import { getExercises } from '../api/endpoints';
 import { BottomSheetModal } from './ResponsiveModal';
+import { resolvePublicMediaUrl } from '@motionmeet/shared';
+import { API_URL } from '../config/environment';
+import { Image } from 'expo-image';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 const ExercisePickerModal = ({ visible, onDismiss, onSelect, excludedIds = [] }) => {
   const { t } = useTranslation();
@@ -79,6 +83,7 @@ const ExercisePickerModal = ({ visible, onDismiss, onSelect, excludedIds = [] })
             keyExtractor={(item) => item._id}
             renderItem={({ item }) => {
               const disabled = excluded.has(item._id);
+              const mediaUrl = resolvePublicMediaUrl(item.gifUrl, API_URL);
               return (
                 <TouchableRipple
                   disabled={disabled}
@@ -89,9 +94,18 @@ const ExercisePickerModal = ({ visible, onDismiss, onSelect, excludedIds = [] })
                   accessibilityRole="button"
                   accessibilityLabel={`${t('active_workout.add_exercise', 'Add exercise')}: ${item.name}`}
                 >
-                  <Surface elevation={0} style={{ paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: theme.border, backgroundColor: 'transparent' }}>
-                    <Text style={{ color: disabled ? theme.textMuted : theme.text, fontWeight: '700' }}>{item.name}</Text>
-                    <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 3 }}>{item.muscleGroup} · {item.equipment}</Text>
+                  <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: theme.border, backgroundColor: 'transparent' }}>
+                    <Surface elevation={0} style={{ width: 44, height: 44, borderRadius: 8, overflow: 'hidden', backgroundColor: theme.surfaceLight, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
+                      {mediaUrl ? (
+                        <Image source={{ uri: mediaUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                      ) : (
+                        <Ionicons name="barbell-outline" size={20} color={theme.textMuted} />
+                      )}
+                    </Surface>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: disabled ? theme.textMuted : theme.text, fontWeight: '700' }}>{item.name}</Text>
+                      <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 3 }}>{item.muscleGroup} · {item.equipment}</Text>
+                    </View>
                   </Surface>
                 </TouchableRipple>
               );

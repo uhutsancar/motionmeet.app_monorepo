@@ -51,8 +51,15 @@ export const createExercise = async (exerciseData) => {
     name: exerciseData.name.trim(),
     muscleGroup: String(exerciseData.muscleGroup || "Other").trim(),
     equipment: String(exerciseData.equipment || "Body Weight").trim(),
-    gifUrl: exerciseData.gifUrl ? String(exerciseData.gifUrl).trim() : undefined,
-    isCustom: true,
+    // Yeni alanlar (opsiyonel)
+    target:            exerciseData.target            ? String(exerciseData.target).trim()   : undefined,
+    category:          exerciseData.category          ? String(exerciseData.category).trim() : undefined,
+    secondary_muscles: Array.isArray(exerciseData.secondary_muscles)
+      ? exerciseData.secondary_muscles.map((m) => String(m).trim()).filter(Boolean)
+      : [],
+    imageUrl: exerciseData.imageUrl ? String(exerciseData.imageUrl).trim() : undefined,
+    gifUrl:   exerciseData.gifUrl   ? String(exerciseData.gifUrl).trim()   : undefined,
+    isCustom:  true,
     createdBy: exerciseData.userId,
   });
 };

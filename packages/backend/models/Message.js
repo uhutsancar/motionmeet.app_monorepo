@@ -15,6 +15,9 @@ const messageSchema = new mongoose.Schema(
 
 messageSchema.index({ from_user_id: 1, to_user_id: 1, createdAt: -1 });
 messageSchema.index({ to_user_id: 1, seen: 1, createdAt: -1 });
+// getUserConversationsList: kullanıcıya ait tüm mesajları tarih sırasıyla çekmek için
+messageSchema.index({ from_user_id: 1, createdAt: -1 });
+messageSchema.index({ to_user_id: 1, createdAt: -1 });
 
 const Message = mongoose.model("Message", messageSchema);
 

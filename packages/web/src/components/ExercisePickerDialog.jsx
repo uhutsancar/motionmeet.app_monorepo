@@ -7,11 +7,15 @@ import {
   InputAdornment,
   List,
   ListItemButton,
-  ListItemText,
+  ListItemAvatar,
+  Avatar,
   TextField,
   Typography,
+  Box,
 } from "@mui/material";
 import SearchRounded from "@mui/icons-material/SearchRounded";
+import FitnessCenterRounded from "@mui/icons-material/FitnessCenterRounded";
+import { resolvePublicMediaUrl } from "@motionmeet/shared";
 import { useTranslation } from "react-i18next";
 import { useAuthContext } from "../context/AuthProvider";
 import { getExercises } from "../services/exerciseService";
@@ -83,6 +87,15 @@ const ExercisePickerDialog = ({ open, onClose, onSelect, excludedIds = [] }) => 
                     onClose();
                   }}
                 >
+                  <ListItemAvatar>
+                    <Avatar
+                      variant="rounded"
+                      src={resolvePublicMediaUrl(exercise.gifUrl)}
+                      sx={{ width: 44, height: 44, mr: 2, bgcolor: "action.hover" }}
+                    >
+                      <FitnessCenterRounded sx={{ color: "text.secondary" }} />
+                    </Avatar>
+                  </ListItemAvatar>
                   <ListItemText
                     primary={exercise.name}
                     secondary={`${exercise.muscleGroup} · ${exercise.equipment}`}

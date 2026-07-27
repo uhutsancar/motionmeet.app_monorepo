@@ -4,8 +4,14 @@ import Connection from "../models/Connection.js";
 
 const PUBLIC_USER_FIELDS = "_id full_name username profile_picture";
 
+// Hikayenin ne kadar süreyle görünür kalacağı (saat cinsinden)
+const STORY_DURATION_HOURS = 24;
+
 export const createStory = async (storyData) => {
-  return await Story.create(storyData);
+  // expiresAt = oluşturma zamanı + 24 saat
+  // Bu alan Story TTL index tarafından izlenir; süresi dolduğunda MongoDB otomatik siler.
+  const expiresAt = new Date(Date.now() + STORY_DURATION_HOURS * 60 * 60 * 1000);
+  return await Story.create({ ...storyData, expiresAt });
 };
 
 export const getStoriesForUser = async (userId) => {
@@ -22,12 +28,13 @@ export const getStoriesForUser = async (userId) => {
     c.from_user_id === userId ? c.to_user_id : c.from_user_id
   );
 
-  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const now = new Date();
   const userIds = [userId, ...followeeIds, ...connectionUserIds];
   
+  // expiresAt > şu an: hem aktif story'leri hem de TTL index'le tutarlı filtreleme yapar
   return await Story.find({
     user: { $in: userIds },
-    createdAt: { $gte: cutoff },
+    expiresAt: { $gt: now },
   })
     .populate("user", PUBLIC_USER_FIELDS)
     .sort({ createdAt: -1 });

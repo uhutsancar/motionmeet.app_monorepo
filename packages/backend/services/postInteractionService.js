@@ -181,6 +181,7 @@ export const unlikePost = async (postId, userId) => {
 
 export const createPostComment = async (postId, userId, content) => {
   const session = await mongoose.startSession();
+  /** @type {any} */
   let comment;
   try {
     await session.withTransaction(async () => {
@@ -199,6 +200,10 @@ export const createPostComment = async (postId, userId, content) => {
     });
   } finally {
     await session.endSession();
+  }
+
+  if (!comment) {
+    throw new Error("Failed to create comment");
   }
   const [user, postDoc] = await Promise.all([
     User.findById(userId).select(PUBLIC_USER_FIELDS).lean(),

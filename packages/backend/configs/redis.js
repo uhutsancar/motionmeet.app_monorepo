@@ -16,12 +16,20 @@ const localLimits = new Map();
 
 if (redisClient) {
   redisClient.on("error", (error) => {
+    // Sadece önemli hataları logla, lokalde Redis yoksa timeout beklenen bir durum olabilir.
+    if (error.code === "ECONNREFUSED" || error.message.includes("timeout") || error.message.includes("closed")) {
+      return;
+    }
     console.error("Redis client error:", error.message);
   });
   try {
     await redisClient.connect();
   } catch (error) {
-    console.error("Initial Redis connection failed:", error.message);
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("Lokal ortamda Redis başlatılamadı, fallback mekanizması kullanılacak.");
+    } else {
+      console.error("Initial Redis connection failed:", error.message);
+    }
   }
 }
 

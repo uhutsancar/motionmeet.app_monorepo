@@ -44,7 +44,23 @@ export const checkUsernameTaken = async (username, excludeUserId) => {
   return await User.exists({ username, _id: { $ne: excludeUserId } });
 };
 
+const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL || "sancaruhut@gmail.com";
+
 export const updateUser = async (userId, updatedData) => {
+  // SuperAdmin'in email adresinin değiştirilmesini engelle:
+  // Email değiştirilirse superadmin kimliği kaybedilebilir.
+  // Not: Mevcut userController'da email güncelleme yoktur (normal kullanıcı için),
+  //      ama ileriki bir değişiklikte bunu koruma altına alıyoruz.
+  if (updatedData.email !== undefined) {
+    const existing = await User.findById(userId).select("email role").lean();
+    if (existing?.role === "superadmin" && existing.email === SUPER_ADMIN_EMAIL) {
+      throw Object.assign(
+        new Error("SuperAdmin email address cannot be changed"),
+        { status: 403 }
+      );
+    }
+  }
+
   const user = await User.findByIdAndUpdate(userId, updatedData, { new: true }).populate("plan");
 
   if (
@@ -225,7 +241,7 @@ export const getUserConnectionsData = async (userId) => {
   ]);
 
   const connections = connectionsDocs.map(c => 
-    c.from_user_id?._id?.toString() === userId ? c.to_user_id : c.from_user_id
+    (/** @type {any} */ (c.from_user_id))?._id?.toString() === userId ? c.to_user_id : c.from_user_id
   ).filter(Boolean);
   
   const followers = followersDocs.map(f => f.followerId).filter(Boolean);
@@ -343,8 +359,9 @@ export const getUserProfileAndPosts = async (profileId, requesterId, pagination)
   return { profile, posts: page.items, nextCursor: page.nextCursor };
 };
 
-export const getSuggestedUsersList = async (userId) => {
-  const followingDocs = await UserFollow.find({ followerId: userId }).select("followeeId");
+export const getSuggestedUsersList = async (userId, limit = 10) => {
+  const safeLimit = Math.min(Math.max(Number(limit) || 10, 1), 50);
+  const followingDocs = await UserFollow.find({ followerId: userId }).select("followeeId").lean();
   const excludedIds = [...followingDocs.map(doc => doc.followeeId), userId];
   
   const userDocuments = await User.find({
@@ -352,7 +369,7 @@ export const getSuggestedUsersList = async (userId) => {
     "privacy.showInSearch": { $ne: false },
   })
     .select(USER_SUMMARY_FIELDS)
-    .limit(5);
+    .limit(safeLimit);
 
   return userDocuments;
 };

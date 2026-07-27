@@ -21,6 +21,7 @@ import PlusRounded from '@mui/icons-material/AddRounded';
 import SearchRounded from '@mui/icons-material/SearchRounded';
 import Trash2Rounded from '@mui/icons-material/DeleteOutlineRounded';
 import DumbbellRounded from '@mui/icons-material/FitnessCenterRounded';
+import { resolvePublicMediaUrl } from '@motionmeet/shared';
 
 const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
     const { getToken } = useAuthContext();
@@ -178,19 +179,29 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
                             {searchQuery && (
                                 <Paper variant="outlined" sx={{ maxHeight: 160, overflowY: 'auto', mb: 2, p: 1, borderRadius: 2 }}>
                                     {exercisesData.length > 0 ? exercisesData.map(ex => (
-                                        <Stack
-                                            key={ex._id}
-                                            direction="row"
-                                            sx={{ justifyContent: "space-between",  alignItems: "center" }}
-                                           
-                                            sx={{ p: 1.5, cursor: 'pointer', borderRadius: 1.5, '&:hover': { bgcolor: 'action.hover' } }}
-                                            onClick={() => addExercise(ex)}
-                                        >
-                                            <Typography variant="body2" fontWeight={600}>{ex.name}</Typography>
-                                            <PlusRounded color="primary" fontSize="small" />
-                                        </Stack>
+                                            <Stack
+                                                key={ex._id}
+                                                direction="row"
+                                                sx={{ justifyContent: "space-between",  alignItems: "center", p: 1.5, cursor: 'pointer', borderRadius: 1.5, '&:hover': { bgcolor: 'action.hover' } }}
+                                                onClick={() => addExercise(ex)}
+                                            >
+                                                <Stack direction="row" sx={{ alignItems: "center" }} spacing={1.5}>
+                                                    {resolvePublicMediaUrl(ex.gifUrl) ? (
+                                                        <Box component="img" src={resolvePublicMediaUrl(ex.gifUrl)} sx={{ width: 40, height: 40, borderRadius: 1, objectFit: 'cover', bgcolor: 'action.hover' }} />
+                                                    ) : (
+                                                        <Box sx={{ width: 40, height: 40, borderRadius: 1, bgcolor: 'action.hover', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                            <DumbbellRounded fontSize="small" color="disabled" />
+                                                        </Box>
+                                                    )}
+                                                    <Box>
+                                                        <Typography variant="body2" fontWeight={600}>{ex.name}</Typography>
+                                                        <Typography variant="caption" color="text.secondary">{ex.muscleGroup} · {ex.equipment}</Typography>
+                                                    </Box>
+                                                </Stack>
+                                                <PlusRounded color="primary" fontSize="small" />
+                                            </Stack>
                                     )) : (
-                                        <Typography variant="caption" color="text.secondary" display="block" textAlign="center" py={1}>No exercises found.</Typography>
+                                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", textAlign: "center", py: 1 }}>No exercises found.</Typography>
                                     )}
                                 </Paper>
                             )}
@@ -200,8 +211,14 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
                                     {selectedExercises.map((se, exIndex) => (
                                         <Paper key={exIndex} variant="outlined" sx={{ p: 2, borderRadius: 3, bgcolor: 'background.paper' }}>
                                             <Stack direction="row" sx={{ justifyContent: "space-between",  alignItems: "center" }} mb={2}>
-                                                <Stack direction="row" sx={{ alignItems: "center" }} spacing={1}>
-                                                    <DumbbellRounded color="primary" fontSize="small" />
+                                                <Stack direction="row" sx={{ alignItems: "center" }} spacing={1.5}>
+                                                    {resolvePublicMediaUrl(se.exerciseId.gifUrl) ? (
+                                                        <Box component="img" src={resolvePublicMediaUrl(se.exerciseId.gifUrl)} sx={{ width: 40, height: 40, borderRadius: 1, objectFit: 'cover', bgcolor: 'action.hover' }} />
+                                                    ) : (
+                                                        <Box sx={{ width: 40, height: 40, borderRadius: 1, bgcolor: 'action.hover', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                            <DumbbellRounded color="primary" fontSize="small" />
+                                                        </Box>
+                                                    )}
                                                     <Typography variant="subtitle2" fontWeight={700}>{se.exerciseId.name}</Typography>
                                                 </Stack>
                                                 <IconButton size="small" color="error" onClick={() => removeExercise(exIndex)}>
@@ -209,16 +226,16 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
                                                 </IconButton>
                                             </Stack>
 
-                                            <Box display="grid" gridTemplateColumns="1fr 2fr 2fr 1fr" gap={1} mb={1} px={1}>
-                                                <Typography variant="caption" fontWeight={700} color="text.secondary" textTransform="uppercase">Set</Typography>
-                                                <Typography variant="caption" fontWeight={700} color="text.secondary" textTransform="uppercase" textAlign="center">kg</Typography>
-                                                <Typography variant="caption" fontWeight={700} color="text.secondary" textTransform="uppercase" textAlign="center">reps</Typography>
-                                                <Typography variant="caption" fontWeight={700} color="text.secondary" textTransform="uppercase" textAlign="center"></Typography>
+                                            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 2fr 2fr 1fr", gap: 1, mb: 1, px: 1 }}>
+                                                <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: "uppercase" }}>Set</Typography>
+                                                <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: "uppercase", textAlign: "center" }}>kg</Typography>
+                                                <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: "uppercase", textAlign: "center" }}>reps</Typography>
+                                                <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: "uppercase", textAlign: "center" }}></Typography>
                                             </Box>
 
                                             <Stack spacing={1}>
                                                 {se.sets.map((set, setIndex) => (
-                                                    <Box key={setIndex} display="grid" gridTemplateColumns="1fr 2fr 2fr 1fr" gap={1} alignItems="center">
+                                                    <Box key={setIndex} sx={{ display: "grid", gridTemplateColumns: "1fr 2fr 2fr 1fr", gap: 1, alignItems: "center" }}>
                                                         <Box sx={{ p: 1, bgcolor: 'background.default', border: 1, borderColor: 'divider', borderRadius: 2, display: 'flex', justifyContent: 'center' }}>
                                                             <Typography variant="body2" fontWeight={600} color="text.secondary">{setIndex + 1}</Typography>
                                                         </Box>
@@ -238,7 +255,7 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
                                                             slotProps={{ htmlInput: { style: { textAlign: 'center' } } }}
                                                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, bgcolor: 'background.default' } }}
                                                         />
-                                                        <Box display="flex" justifyContent="center">
+                                                        <Box sx={{ display: "flex", justifyContent: "center" }}>
                                                             <IconButton size="small" sx={{ color: 'text.secondary', '&:hover': { color: 'error.main' } }} onClick={() => removeSet(exIndex, setIndex)}>
                                                                 <Trash2Rounded fontSize="small" />
                                                             </IconButton>

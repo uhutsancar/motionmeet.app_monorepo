@@ -134,7 +134,7 @@ const Pricing = () => {
         }}
       >
         <Container maxWidth="lg">
-          <Stack spacing={2} sx={{ alignItems: "center" }} sx={{ textAlign: "center" }} mb={7}>
+          <Stack spacing={2} sx={{ alignItems: "center", textAlign: "center", mb: 7 }}>
             <Typography variant="overline" color="primary" fontWeight={800}>
               {t("pricing_page.hero_badge", "Simple, transparent pricing")}
             </Typography>

@@ -30,7 +30,7 @@ export const updateMyPlan = async (req, res, next) => {
       });
     }
 
-    const user = await planService.updateUserPlan(req.userId, plan._id);
+    const user = await planService.updateUserPlan(req.userId, plan._id.toString());
 
     res.status(200).json({ success: true, message: "Plan updated successfully", user });
   } catch (error) {

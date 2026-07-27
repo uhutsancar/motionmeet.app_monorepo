@@ -1,4 +1,5 @@
 import Message from "../models/Message.js";
+import Conversation from "../models/Conversation.js";
 import User from "../models/User.js";
 import { isUserId } from "../utils/validation.js";
 import { cursorFilter, pageFromDocuments } from "../utils/pagination.js";
@@ -17,6 +18,17 @@ export const canSendToUser = async (sender, recipientId) => {
 
 export const createMessage = async (data) => {
   const message = await Message.create(data);
+  
+  // Mesaj gönderildiğinde Conversation modelini güncelle veya oluştur
+  await Conversation.findOneAndUpdate(
+    { participants: { $all: [data.from_user_id, data.to_user_id] } },
+    {
+      $set: { lastMessage: message._id, updatedAt: new Date() },
+      $setOnInsert: { participants: [data.from_user_id, data.to_user_id] }
+    },
+    { upsert: true, new: true }
+  );
+
   return await Message.findById(message._id).populate("from_user_id", PUBLIC_USER_FIELDS);
 };
 
@@ -47,59 +59,44 @@ export const getChatMessagesList = async (userId, recipientId, pagination) => {
   return page;
 };
 
-export const getUserConversationsList = async (userId) => {
-  const rows = await Message.aggregate([
-    {
-      $match: {
-        $or: [{ from_user_id: userId }, { to_user_id: userId }],
-      },
-    },
-    { $sort: { createdAt: -1, _id: -1 } },
-    {
-      $set: {
-        partnerId: {
-          $cond: [
-            { $eq: ["$from_user_id", userId] },
-            "$to_user_id",
-            "$from_user_id",
-          ],
-        },
-      },
-    },
-    {
-      $group: {
-        _id: "$partnerId",
-        lastMessage: { $first: "$$ROOT" },
-      },
-    },
-    { $sort: { "lastMessage.createdAt": -1 } },
-    { $limit: 100 },
-  ]);
-
-  const messages = rows.map((row) => row.lastMessage);
-  await Message.populate(messages, [
-    { path: "from_user_id", select: PUBLIC_USER_FIELDS },
-    { path: "to_user_id", select: PUBLIC_USER_FIELDS },
-  ]);
+export const getUserConversationsList = async (userId, limit = 50) => {
+  const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 100);
+  
+  // 1. Conversation tablosundan doğrudan çekiyoruz (Önceden Message tablosundan $group aggregation yapılıyordu ve bu çok pahalıydı)
+  const conversations = await Conversation.find({ participants: userId })
+    .populate({
+      path: "lastMessage",
+      populate: [
+        { path: "from_user_id", select: PUBLIC_USER_FIELDS },
+        { path: "to_user_id", select: PUBLIC_USER_FIELDS }
+      ]
+    })
+    .sort({ updatedAt: -1 })
+    .limit(safeLimit)
+    .lean();
 
   const conversationMap = new Map();
-  messages.forEach((message) => {
-    const fromUser = /** @type {any} */ (message.from_user_id);
-    const toUser = /** @type {any} */ (message.to_user_id);
-    const fromId = fromUser?._id?.toString();
-    const toId = toUser?._id?.toString();
+  
+  conversations.forEach((conv) => {
+    const message = conv.lastMessage;
+    if (!message) return;
+    
+    const msgAny = /** @type {any} */ (message);
+    const fromId = msgAny.from_user_id?._id?.toString();
+    const toId = msgAny.to_user_id?._id?.toString();
     if (!fromId || !toId) return;
 
     const partnerId = fromId === userId ? toId : fromId;
     if (!conversationMap.has(partnerId)) {
       conversationMap.set(partnerId, {
-        partner: fromId === userId ? toUser : fromUser,
+        partner: fromId === userId ? msgAny.to_user_id : msgAny.from_user_id,
         lastMessage: message,
         unreadCount: 0,
       });
     }
   });
 
+  // 2. Sadece okunmamış mesaj sayısını bulmak için aggregate (Bu da çok daha ucuzdur)
   const unreadCounts = await Message.aggregate([
     { $match: { to_user_id: userId, seen: false } },
     { $group: { _id: "$from_user_id", count: { $sum: 1 } } },

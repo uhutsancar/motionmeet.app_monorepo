@@ -120,7 +120,7 @@ export const streamAccountData = async (userId, response) => {
 };
 
 export const deleteAccountData = async (userId) => {
-  const [user, posts, stories, messages, reservations] = await Promise.all([
+  const [user, posts, stories, messages, reservations, followingDocs, followersDocs, connectionsDocs, postLikesDocs] = await Promise.all([
     User.findById(userId)
       .select("profile_picture cover_photo +profile_picture_key +cover_photo_key")
       .lean(),
@@ -140,10 +140,10 @@ export const deleteAccountData = async (userId) => {
 
   if (!user) return false;
   const ownedPostIds = posts.map((post) => post._id);
-  const followeeIds = reservations[1]?.map(f => f.followeeId) || [];
-  const followerIds = reservations[2]?.map(f => f.followerId) || [];
-  const connectionUserIds = (reservations[3] || []).map(c => c.from_user_id === userId ? c.to_user_id : c.from_user_id);
-  const likedPostIds = (reservations[4] || []).map(l => l.postId);
+  const followeeIds = followingDocs?.map(f => f.followeeId) || [];
+  const followerIds = followersDocs?.map(f => f.followerId) || [];
+  const connectionUserIds = (connectionsDocs || []).map(c => c.from_user_id === userId ? c.to_user_id : c.from_user_id);
+  const likedPostIds = (postLikesDocs || []).map(l => l.postId);
 
   const mediaKeys = uniqueMediaKeys([
     user.profile_picture_key || user.profile_picture,

@@ -190,3 +190,8 @@ svg {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Fix Tailwind preflight breaking MUI Input heights */
+.MuiInputBase-input {
+  box-sizing: content-box !important;
+}

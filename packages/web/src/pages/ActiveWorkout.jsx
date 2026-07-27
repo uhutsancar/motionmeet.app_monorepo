@@ -66,7 +66,7 @@ const ActiveWorkout = () => {
                         </Stack>
                     </Stack>
 
-                    <Stack direction="row" spacing={{ xs: 2, sm: 4 }} sx={{ alignItems: "center" }} sx={{ overflowX: 'auto', px: 1 }}>
+                    <Stack direction="row" spacing={{ xs: 2, sm: 4 }} sx={{ alignItems: "center", overflowX: 'auto', px: 1 }}>
                         <Stack sx={{ alignItems: "center" }}>
                             <Typography variant="overline" sx={{ fontSize: '0.65rem', fontWeight: 900, color: 'text.secondary', lineHeight: 1 }}>
                                 {t('statistics.volume', 'Hacim')}
@@ -125,7 +125,7 @@ const ActiveWorkout = () => {
                             {/* Sets List */}
                             <Box sx={{ p: { xs: 1, sm: 2 } }}>
                                 {/* Columns Header */}
-                                <Stack direction="row" sx={{ alignItems: "center" }} sx={{ px: 1, py: 1, mb: 1 }}>
+                                <Stack direction="row" sx={{ alignItems: "center", px: 1, py: 1, mb: 1 }}>
                                     <Typography variant="overline" sx={{ width: 40, textAlign: 'center', fontSize: '0.65rem', fontWeight: 900 }}>Set</Typography>
                                     <Typography variant="overline" sx={{ flex: 1, minWidth: 60, textAlign: 'center', fontSize: '0.65rem', fontWeight: 900, display: { xs: 'none', sm: 'block' } }}>Önceki</Typography>
                                     <Typography variant="overline" sx={{ flex: 1, textAlign: 'center', fontSize: '0.65rem', fontWeight: 900 }}>kg</Typography>
@@ -138,9 +138,8 @@ const ActiveWorkout = () => {
                                     <Stack
                                         key={setIdx}
                                         direction="row"
-                                        sx={{ alignItems: "center" }}
-                                        spacing={{ xs: 1, sm: 2 }}
                                         sx={{
+                                            alignItems: "center",
                                             px: { xs: 0.5, sm: 1 }, py: 1, mb: 1, borderRadius: 2,
                                             bgcolor: set.completed ? 'success.light' : 'transparent',
                                             transition: 'background-color 0.2s'

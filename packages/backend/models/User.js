@@ -23,24 +23,51 @@ const userSchema = new mongoose.Schema(
     cover_photo_key: { type: String, default: "", select: false },
     location: { type: String, default: "" },
     role: { type: String, enum: ["user", "admin", "superadmin"], default: "user" },
+
+    // ── Plan & Subscription ─────────────────────────────────────
     plan: { type: mongoose.Schema.Types.ObjectId, ref: "Plan" },
-    weight: { type: Number, default: 0 }, // Added for user measurements
-    height: { type: Number, default: 0 }, // Added for user measurements
-    followers_count: { type: Number, default: 0 },
-    following_count: { type: Number, default: 0 },
-    connections_count: { type: Number, default: 0 },
-    privacy: {
-      publicProfile: { type: Boolean, default: true },
-      showWorkoutsOnFeed: { type: Boolean, default: true },
-      allowFollowers: { type: Boolean, default: true },
-      showInSearch: { type: Boolean, default: true },
-      allowMessages: { type: Boolean, default: true },
+    // Abonelik durumu: free = ücretsiz plan, active = ücretli plan aktif,
+    // trialing = deneme sürecinde, cancelled = iptal edildi (bitiş tarihine kadar aktif),
+    // expired = süresi dolmuş
+    planStatus: {
+      type: String,
+      enum: ["free", "active", "trialing", "cancelled", "expired"],
+      default: "free",
     },
+    planStartDate: { type: Date, default: null },
+    planEndDate:   { type: Date, default: null },
+    planCancelledAt: { type: Date, default: null },
+    // Ödeme sağlayıcı referansları (Stripe vb. entegrasyonu için)
+    stripeCustomerId:     { type: String, default: "", select: false },
+    stripeSubscriptionId: { type: String, default: "", select: false },
+
+    // ── Profil Ölçümleri ────────────────────────────────────────
+    weight: { type: Number, default: 0 },
+    height: { type: Number, default: 0 },
+
+    // ── Sosyal Sayaçlar ─────────────────────────────────────────
+    followers_count:   { type: Number, default: 0 },
+    following_count:   { type: Number, default: 0 },
+    connections_count: { type: Number, default: 0 },
+
+    // Kabul edilmiş bağlantıların ID listesi (mesajlaşma erişim kontrolü için)
+    connections: { type: [String], default: [], select: false },
+
+    // ── Gizlilik Ayarları ───────────────────────────────────────
+    privacy: {
+      publicProfile:      { type: Boolean, default: true },
+      showWorkoutsOnFeed: { type: Boolean, default: true },
+      allowFollowers:     { type: Boolean, default: true },
+      showInSearch:       { type: Boolean, default: true },
+      allowMessages:      { type: Boolean, default: true },
+    },
+
+    // ── İstatistikler ───────────────────────────────────────────
     statistics: {
-      totalWorkouts: { type: Number, default: 0 },
-      totalDurationMinutes: { type: Number, default: 0 },
-      totalVolumeKg: { type: Number, default: 0 }
-    }
+      totalWorkouts:       { type: Number, default: 0 },
+      totalDurationMinutes:{ type: Number, default: 0 },
+      totalVolumeKg:       { type: Number, default: 0 },
+    },
   },
   { timestamps: true, minimize: false }
 );
@@ -50,6 +77,8 @@ userSchema.index(
   { weights: { username: 3, full_name: 1 }, name: "UserSearchTextIndex" }
 );
 
+// Plan durumu üzerinden sorgu yapılabilmesi için
+userSchema.index({ planStatus: 1, planEndDate: 1 });
 
 const User = mongoose.model("User", userSchema);
 

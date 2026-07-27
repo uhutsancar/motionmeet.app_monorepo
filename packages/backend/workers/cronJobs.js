@@ -11,13 +11,16 @@ import {
 } from "../services/mediaDeletionService.js";
 
 const deleteExpiredStories = async () => {
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  // NOT: MongoDB TTL index story'leri DB'den otomatik siler.
+  // Bu cron job ise S3 medya dosyalarını temizlemek için çalışır.
+  // expiresAt alanı kullanılır (TTL index ile tutarlı).
+  const now = new Date();
   let deleted = 0;
 
   while (true) {
-    const expiredStories = await Story.find({ createdAt: { $lt: oneDayAgo } })
+    const expiredStories = await Story.find({ expiresAt: { $lte: now } })
       .select("media_url +media_key")
-      .sort({ createdAt: 1 })
+      .sort({ expiresAt: 1 })
       .limit(200);
     if (!expiredStories.length) break;
 
@@ -29,7 +32,7 @@ const deleteExpiredStories = async () => {
     }
   }
 
-  if (deleted) console.log(`Deleted ${deleted} expired stories.`);
+  if (deleted) console.log(`Deleted ${deleted} expired stories (+ S3 media queued).`);
 };
 
 const deleteAbandonedUploads = async () => {
@@ -75,7 +78,7 @@ const flushRedisBuffers = async () => {
       }
     }));
     if (operations.length) {
-      await model.bulkWrite(operations);
+      await (/** @type {any} */ (model)).bulkWrite(operations);
     }
   }
 };

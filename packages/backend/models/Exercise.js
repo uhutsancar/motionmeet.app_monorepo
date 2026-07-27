@@ -2,22 +2,57 @@ import mongoose from "mongoose";
 
 const exerciseSchema = new mongoose.Schema(
   {
-    externalId: { type: String, unique: true, sparse: true, index: true }, // dataset's "id"
+    // Dataset'ten gelen orijinal kimlik (örn. "0001")
+    externalId: { type: String, unique: true, sparse: true, index: true },
+
     name: { type: String, required: true, index: true },
-    muscleGroup: { type: String, required: true, index: true },  // maps to body_part
+
+    // Dataset'teki "body_part" alanına map edilir (geniş kas grubu, örn. "waist", "chest")
+    muscleGroup: { type: String, required: true, index: true },
+
+    // Dataset'teki "target" alanı (birincil hedef kas, örn. "abs", "pectorals")
+    target: { type: String, default: "" },
+
+    // Dataset'teki "category" alanı (örn. "strength", "cardio", "stretching")
+    category: { type: String, default: "" },
+
+    // Dataset'teki "secondary_muscles" alanı (ikincil kaslar listesi)
+    secondary_muscles: { type: [String], default: [] },
+
     equipment: { type: String, required: true },
+
+    // Thumbnail görsel URL'si (S3/CloudFront)
+    imageUrl: { type: String, default: "" },
+
+    // Animasyon GIF URL'si (S3/CloudFront)
     gifUrl: { type: String, default: "" },
-    instructions: { type: Map, of: String, default: {} }, // { en, tr, es, it }
+
+    // Çok dilli talimat metinleri: { en: "...", tr: "...", es: "...", it: "..." }
+    instructions: { type: Map, of: String, default: {} },
+
+    // Çok dilli adım adım talimatlar: { en: ["adım1", "adım2"], tr: [...] }
     instructionSteps: { type: Map, of: [String], default: {} },
+
+    // true = kullanıcı tarafından oluşturulmuş özel egzersiz
     isCustom: { type: Boolean, default: false },
+
+    // Özel egzersiz oluşturan kullanıcının ID'si
     createdBy: { type: String, ref: "User", default: null },
   },
   { timestamps: true }
 );
 
-// Text search index
+// Tam metin arama (isim + kas grubu)
 exerciseSchema.index({ name: "text", muscleGroup: "text" });
+
+// Kullanıcının kendi özel egzersizlerini sıralı getirmek için
 exerciseSchema.index({ createdBy: 1, name: 1 });
+
+// Filtreleme sorguları: muscleGroup + equipment kombinasyonu çok yaygın
+exerciseSchema.index({ muscleGroup: 1, equipment: 1 });
+
+// category bazlı filtreleme
+exerciseSchema.index({ category: 1 });
 
 const Exercise = mongoose.model("Exercise", exerciseSchema);
 
