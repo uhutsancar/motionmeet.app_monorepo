@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import process from "process";
 
 const getFiles = (dir) => {
   const dirents = fs.readdirSync(dir, { withFileTypes: true });

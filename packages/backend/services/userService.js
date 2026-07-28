@@ -3,7 +3,6 @@ import User from "../models/User.js";
 import Connection from "../models/Connection.js";
 import UserFollow from "../models/UserFollow.js";
 import Post from "../models/Post.js";
-import escapeStringRegexp from "escape-string-regexp";
 import { isUserId } from "../utils/validation.js";
 import { cursorFilter, pageFromDocuments } from "../utils/pagination.js";
 import { hydratePostInteractions } from "./postInteractionService.js";

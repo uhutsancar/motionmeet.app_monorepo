@@ -15,8 +15,6 @@ import {
   unlikePost,
 } from "./postInteractionService.js";
 
-const PUBLIC_USER_FIELDS = "_id full_name username profile_picture";
-
 export const canAccessPost = async (post, requester) => {
   const ownerId = post.user.toString();
   if (ownerId === requester._id.toString() || post.visibility === "public") return true;

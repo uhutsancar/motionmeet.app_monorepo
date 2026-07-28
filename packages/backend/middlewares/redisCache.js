@@ -1,4 +1,4 @@
-import { getRedisStatus, initializeRedis } from "../configs/redis.js";
+import { initializeRedis } from "../configs/redis.js";
 
 let redisClient = null;
 const ensureRedis = async () => {

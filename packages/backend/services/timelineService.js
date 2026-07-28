@@ -1,4 +1,4 @@
-import { getRedisStatus, initializeRedis } from "../configs/redis.js";
+import { initializeRedis } from "../configs/redis.js";
 import UserFollow from "../models/UserFollow.js";
 import Connection from "../models/Connection.js";
 import Post from "../models/Post.js";

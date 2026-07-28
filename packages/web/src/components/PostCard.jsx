@@ -57,7 +57,6 @@ const PostCard = ({ post }) => {
 
   if (!post?.user) return null;
 
-  const isOwner = currentUser?._id === post?.user?._id;
   const hasWorkout = post?.post_type === "workout" && post?.workout;
   const isVideo = post.post_type === "video";
   const imageUrls = post.image_urls || [];

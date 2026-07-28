@@ -1,7 +1,6 @@
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
-import mongoose from "mongoose";
 import Exercise from "../models/Exercise.js";
 import connectDB from "../configs/db.js";
 

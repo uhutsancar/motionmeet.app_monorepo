@@ -11,7 +11,6 @@ import {
   Avatar,
   TextField,
   Typography,
-  Box,
 } from "@mui/material";
 import SearchRounded from "@mui/icons-material/SearchRounded";
 import FitnessCenterRounded from "@mui/icons-material/FitnessCenterRounded";
