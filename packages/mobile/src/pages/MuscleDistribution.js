@@ -21,9 +21,10 @@ const MuscleDistribution = ({ navigation }) => {
   } = useResponsiveLayout();
   const statCardWidth =
     columns === 2 ? (contentWidth - columnGap) / 2 : contentWidth;
-  const SIZE = Math.max(200, Math.min(contentWidth - 40, 420));
+  const SIZE = Math.max(1, Math.min(contentWidth, 420));
   const CENTER = SIZE / 2;
-  const RADIUS = SIZE / 2 - 30;
+  const labelGutter = SIZE < 300 ? 36 : 44;
+  const RADIUS = Math.max(24, SIZE / 2 - labelGutter);
   const { t } = useTranslation();
   const { theme } = useTheme();
   const chartAccent = theme.dark ? '#60A5FA' : '#2563EB';
@@ -66,7 +67,8 @@ const MuscleDistribution = ({ navigation }) => {
   const angles = MUSCLE_KEYS.map((_, i) => (Math.PI * 2 * i) / (MUSCLE_KEYS.length || 1) - Math.PI / 2);
 
   const getPoint = (val, idx) => {
-    const r = RADIUS * Math.max(val, 0.03);
+    const normalizedValue = Math.min(1, Math.max(Number(val) || 0, 0.03));
+    const r = RADIUS * normalizedValue;
     return `${CENTER + r * Math.cos(angles[idx])},${CENTER + r * Math.sin(angles[idx])}`;
   };
 
@@ -150,7 +152,10 @@ const MuscleDistribution = ({ navigation }) => {
                     fill={`${chartAccent}28`}
                   />
                   {values.map((value, index) => {
-                    const pointRadius = RADIUS * Math.max(value, 0.03);
+                    const pointRadius = RADIUS * Math.min(
+                      1,
+                      Math.max(Number(value) || 0, 0.03),
+                    );
                     return (
                       <Circle
                         key={`${MUSCLE_KEYS[index]}-point`}
@@ -169,17 +174,18 @@ const MuscleDistribution = ({ navigation }) => {
 
               {/* Labels */}
               {MUSCLE_KEYS.map((key, i) => {
-                const x = CENTER + (RADIUS + 20) * Math.cos(angles[i]);
-                const y = CENTER + (RADIUS + 20) * Math.sin(angles[i]);
+                const cosine = Math.cos(angles[i]);
+                const x = CENTER + (RADIUS + 18) * cosine;
+                const y = CENTER + (RADIUS + 18) * Math.sin(angles[i]);
                 const mg = muscleGroupsList.find(m => m.code === key);
                 return (
                   <SvgText
                     key={`label-${i}`}
                     x={x} y={y + 4}
-                    fontSize="10"
+                    fontSize={SIZE < 280 ? 8.5 : 10}
                     fontWeight="600"
                     fill={theme.textSecondary}
-                    textAnchor="middle"
+                    textAnchor={cosine > 0.25 ? 'end' : cosine < -0.25 ? 'start' : 'middle'}
                   >
                     {t(`muscle_groups.${key}`, mg?.name || key)}
                   </SvgText>
@@ -248,6 +254,7 @@ const getStyles = (theme, chartAccent) => ({
   },
   dropdownItem: { padding: 14, borderBottomWidth: 1 },
   chartContainer: {
+    width: '100%',
     alignItems: 'center',
     marginTop: 24,
     paddingTop: 18,
@@ -255,8 +262,17 @@ const getStyles = (theme, chartAccent) => ({
     borderWidth: 1,
     borderColor: theme.border,
     backgroundColor: theme.surface,
+    overflow: 'hidden',
   },
-  legendRow: { flexDirection: 'row', gap: 16, marginTop: 10, marginBottom: 20 },
+  legendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 16,
+    marginTop: 10,
+    marginBottom: 20,
+    paddingHorizontal: 12,
+  },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendText: { fontSize: 12, color: theme.textMuted },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap' },

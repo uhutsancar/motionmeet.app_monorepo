@@ -16,6 +16,7 @@ import { useAuthContext } from '../context/AuthProvider';
 import { getRoutines } from '../api/endpoints';
 import RoutineBuilderModal from '../components/RoutineBuilderModal';
 import { logHandledError } from '../utils/feedback';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 const RoutineCard = ({ routine, theme, navigation }) => {
   const { t } = useTranslation();
@@ -95,6 +96,7 @@ const Routines = ({ navigation }) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
   const { getToken } = useAuthContext();
+  const { horizontalPadding } = useResponsiveLayout();
   const [routines, setRoutines] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -151,7 +153,7 @@ const Routines = ({ navigation }) => {
           width: '100%',
           maxWidth: 720,
           alignSelf: 'center',
-          paddingHorizontal: 16,
+          paddingHorizontal: horizontalPadding,
           paddingTop: 20,
           paddingBottom: 32,
         }}

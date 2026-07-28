@@ -10,6 +10,7 @@ import { fetchUser } from '../features/user/userSlice';
 import { getPlans, updatePlan } from '../api/endpoints';
 import { useTranslation } from 'react-i18next';
 import { logHandledError } from '../utils/feedback';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 const PricingScreen = ({ navigation }) => {
   const { theme } = useTheme();
@@ -17,6 +18,7 @@ const PricingScreen = ({ navigation }) => {
   const { getToken } = useAuthContext();
   const dispatch = useDispatch();
   const currentUser = useSelector((state) => state.user.value);
+  const { horizontalPadding, isNarrow } = useResponsiveLayout();
 
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -102,7 +104,16 @@ const PricingScreen = ({ navigation }) => {
         <Appbar.Content title={t('pricing_page.plans_title', 'Plans & Features')} titleStyle={{ color: theme.text, fontWeight: '700' }} />
       </Appbar.Header>
 
-      <ScrollView contentContainerStyle={{ padding: 20 }}>
+      <ScrollView
+        contentContainerStyle={{
+          width: '100%',
+          maxWidth: 720,
+          alignSelf: 'center',
+          paddingHorizontal: horizontalPadding,
+          paddingTop: 20,
+          paddingBottom: 40,
+        }}
+      >
         <Text style={{ fontSize: 14, textAlign: 'center', marginBottom: 24, lineHeight: 22, color: theme.textMuted }}>
           {t('pricing_page.production_subtitle', 'Only plans currently available in MotionMeet are shown here.')}
         </Text>
@@ -117,7 +128,7 @@ const PricingScreen = ({ navigation }) => {
               key={plan._id}
               mode="contained"
               style={{
-                borderRadius: 24, padding: 24, marginBottom: 20,
+                borderRadius: 24, padding: isNarrow ? 18 : 24, marginBottom: 20,
                 borderWidth: isPremium ? 2 : 1,
                 borderColor: isPremium ? theme.primary : theme.border,
                 backgroundColor: theme.surface, elevation: 4,
@@ -134,7 +145,12 @@ const PricingScreen = ({ navigation }) => {
               )}
 
               <Text style={{ fontSize: 22, fontWeight: '800', marginBottom: 6, color: theme.text }}>{plan.name}</Text>
-              <Text style={{ fontSize: 36, fontWeight: '900', marginBottom: 20, color: isPremium ? theme.primary : theme.text }}>
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.72}
+                style={{ fontSize: 36, fontWeight: '900', marginBottom: 20, color: isPremium ? theme.primary : theme.text }}
+              >
                 {plan.price === 0
                   ? t('pricing_page.free_name', 'Free')
                   : new Intl.NumberFormat(i18n.resolvedLanguage || 'en', {
@@ -148,7 +164,7 @@ const PricingScreen = ({ navigation }) => {
                 {FEATURES(plan).map((f, i) => (
                   <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <Ionicons name={f.icon} size={20} color={f.ok ? theme.primary : theme.textMuted} />
-                    <Text style={{ fontSize: 15, fontWeight: '500', color: theme.text }}>{f.label}</Text>
+                    <Text style={{ flex: 1, fontSize: 15, fontWeight: '500', color: theme.text }}>{f.label}</Text>
                   </View>
                 ))}
               </View>

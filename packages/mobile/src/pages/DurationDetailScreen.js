@@ -1,15 +1,18 @@
 import React from 'react';
-import { ScrollView, useWindowDimensions } from 'react-native';
+import { ScrollView } from 'react-native';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { BarChart } from 'react-native-chart-kit';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 const DurationDetailScreen = ({ navigation, route }) => {
-  const { width } = useWindowDimensions();
-  const chartWidth = Math.min(width - 32, 688);
+  const { columns, contentWidth, horizontalPadding } = useResponsiveLayout({
+    minTwoColumnWidth: 420,
+  });
+  const chartWidth = Math.max(1, Math.min(contentWidth, 688));
   const { t } = useTranslation();
   const { theme } = useTheme();
   const styles = getStyles(theme);
@@ -22,11 +25,12 @@ const DurationDetailScreen = ({ navigation, route }) => {
   const avgDuration = totalWorkouts > 0
     ? Math.round(totalDuration / totalWorkouts)
     : 0;
-  const hasData = labels.length > 0;
+  const chartValues = durations.slice(-6).map(value => Number(value) || 0);
+  const hasData = chartValues.length > 0;
 
   const chartData = {
-    labels: labels.slice(-6),
-    datasets: [{ data: durations.slice(-6).map(v => v || 0) }],
+    labels: labels.slice(-chartValues.length),
+    datasets: [{ data: chartValues }],
   };
 
   return (
@@ -39,14 +43,17 @@ const DurationDetailScreen = ({ navigation, route }) => {
         <Surface elevation={0} style={{ width: 34 }} />
       </Surface>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Surface elevation={0} style={styles.summaryRow}>
-          <Surface elevation={0} style={styles.summaryCard}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingHorizontal: horizontalPadding }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <Surface elevation={0} style={[styles.summaryRow, columns === 1 && styles.summaryRowNarrow]}>
+          <Surface elevation={0} style={[styles.summaryCard, columns === 1 && styles.summaryCardNarrow]}>
             <Text style={styles.summaryLabel}>{t('monthly_report.total', 'Toplam')}</Text>
             <Text style={styles.summaryValue}>{totalDuration}</Text>
             <Text style={styles.summaryUnit}>{t('monthly_report.chart_unit_duration', 'dk')}</Text>
           </Surface>
-          <Surface elevation={0} style={styles.summaryCard}>
+          <Surface elevation={0} style={[styles.summaryCard, columns === 1 && styles.summaryCardNarrow]}>
             <Text style={styles.summaryLabel}>{t('monthly_report.avg_per_session', 'Seans Başına Ort.')}</Text>
             <Text style={styles.summaryValue}>{avgDuration}</Text>
             <Text style={styles.summaryUnit}>{t('monthly_report.chart_unit_duration', 'dk')}</Text>
@@ -97,16 +104,18 @@ const getStyles = (theme) => ({
   },
   iconBtn: { width: 34, height: 34, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '700', color: theme.text },
-  content: { width: '100%', maxWidth: 720, alignSelf: 'center', padding: 16 },
+  content: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingTop: 16, paddingBottom: 40 },
   summaryRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
+  summaryRowNarrow: { flexDirection: 'column' },
   summaryCard: {
     flex: 1, backgroundColor: theme.surface, borderRadius: 16, padding: 16,
     borderWidth: 1, borderColor: theme.border,
   },
+  summaryCardNarrow: { flex: 0, width: '100%' },
   summaryLabel: { fontSize: 13, color: theme.textMuted, marginBottom: 8, fontWeight: '500' },
   summaryValue: { fontSize: 28, fontWeight: 'bold', color: theme.text },
   summaryUnit: { fontSize: 13, color: theme.textMuted, marginTop: 2 },
-  chartSection: { marginBottom: 24 },
+  chartSection: { marginBottom: 24, overflow: 'hidden' },
   sectionTitle: { fontSize: 15, fontWeight: '600', color: theme.textMuted, marginBottom: 12, paddingHorizontal: 4 },
   chart: { borderRadius: 16, overflow: 'hidden' },
   noData: { alignItems: 'center', paddingVertical: 40, gap: 12 },

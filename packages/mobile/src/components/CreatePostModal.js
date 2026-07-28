@@ -12,6 +12,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { FullScreenModal } from './ResponsiveModal';
 import KeyboardAwareScrollView from './KeyboardAwareScrollView';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import {
   getUserFacingError,
   logHandledError,
@@ -22,7 +23,13 @@ import {
 const CreatePostModal = ({ visible, onClose, onSuccess }) => {
   const { theme, isDark } = useTheme();
   const { t } = useTranslation();
-  const styles = getStyles(theme);
+  const { usableWidth } = useResponsiveLayout();
+  const contentPadding = usableWidth < 360 ? 12 : 20;
+  const imageSize = Math.max(
+    64,
+    Math.min(100, (usableWidth - contentPadding * 2 - 8) / 2),
+  );
+  const styles = getStyles(theme, contentPadding, imageSize);
   const dispatch = useDispatch();
   const { getToken } = useAuthContext();
   const user = useSelector((state) => state.user.value);
@@ -128,7 +135,7 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
           <TouchableRipple borderless onPress={onClose} style={styles.closeButton}>
             <Ionicons name="close" size={28} color={theme.text} />
           </TouchableRipple>
-          <Text style={styles.headerTitle}>{t('feed.create_post', 'Yeni Gönderi')}</Text>
+          <Text numberOfLines={1} style={styles.headerTitle}>{t('feed.create_post', 'Yeni Gönderi')}</Text>
           <Surface elevation={0} style={{ width: 28 }} />
         </Surface>
 
@@ -212,7 +219,7 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
   );
 };
 
-const getStyles = (theme) => ({
+const getStyles = (theme, contentPadding, imageSize) => ({
   container: {
     flex: 1,
     backgroundColor: theme.background,
@@ -239,7 +246,7 @@ const getStyles = (theme) => ({
   },
   contentContainer: {
     flexGrow: 1,
-    padding: 20,
+    padding: contentPadding,
     paddingBottom: 28,
   },
   userSection: {
@@ -278,8 +285,8 @@ const getStyles = (theme) => ({
     position: 'relative',
   },
   image: {
-    width: 100,
-    height: 100,
+    width: imageSize,
+    height: imageSize,
     borderRadius: 8,
   },
   removeButton: {
@@ -293,7 +300,7 @@ const getStyles = (theme) => ({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: contentPadding,
     paddingVertical: 16,
     borderTopWidth: 1,
     borderTopColor: theme.border,

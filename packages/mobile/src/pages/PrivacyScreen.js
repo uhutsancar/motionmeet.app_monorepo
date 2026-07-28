@@ -276,7 +276,7 @@ const getStyles = (theme) => ({
   },
   rowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
   rowText: { flex: 1, paddingRight: 12 },
-  rowLabel: { fontSize: 15, fontWeight: '600', color: theme.text },
+  rowLabel: { flexShrink: 1, fontSize: 15, fontWeight: '600', color: theme.text },
   rowSub: { fontSize: 12, color: theme.textMuted, marginTop: 2 },
   passwordInput: { marginTop: 16 },
   dialogKeyboardView: { flex: 1, justifyContent: 'center' },

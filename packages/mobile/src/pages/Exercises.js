@@ -26,6 +26,7 @@ import { useEquipment } from '../hooks/useEquipment';
 import { API_URL } from '../config/environment';
 import { BottomSheetModal } from '../components/ResponsiveModal';
 import { logHandledError } from '../utils/feedback';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 const Exercises = ({ navigation }) => {
   const { theme } = useTheme();
@@ -33,6 +34,7 @@ const Exercises = ({ navigation }) => {
   const { getToken } = useAuthContext();
   const { data: muscleGroupsList } = useMuscleGroups();
   const { data: equipmentListItems } = useEquipment();
+  const { horizontalPadding } = useResponsiveLayout();
 
   const muscleGroups = ['all', ...muscleGroupsList.map((group) => group.code)];
   const equipment = ['all', ...equipmentListItems.map((item) => item.code)];
@@ -125,7 +127,7 @@ const Exercises = ({ navigation }) => {
         onPress={() => navigation.navigate('ExerciseDetail', { exercise: item })}
         style={{
           minHeight: 76,
-          marginHorizontal: 16,
+          marginHorizontal: horizontalPadding,
           paddingVertical: 10,
           paddingHorizontal: 12,
           flexDirection: 'row',
@@ -183,7 +185,7 @@ const Exercises = ({ navigation }) => {
         <Appbar.Action icon="plus" color={theme.text} onPress={() => setShowCreateModal(true)} />
       </Appbar.Header>
 
-      <View style={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 18 }}>
+      <View style={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: horizontalPadding, paddingTop: 18 }}>
         <Text style={{ color: theme.text, fontSize: 21, lineHeight: 27, fontWeight: '800', letterSpacing: -0.3 }}>
           {t('exercises.library_title', 'Movement library')}
         </Text>
@@ -280,7 +282,7 @@ const Exercises = ({ navigation }) => {
             <Surface
               elevation={0}
               style={{
-                marginHorizontal: 16,
+                marginHorizontal: horizontalPadding,
                 marginTop: 4,
                 padding: 24,
                 alignItems: 'center',

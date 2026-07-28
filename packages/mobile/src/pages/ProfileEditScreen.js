@@ -212,13 +212,14 @@ const ProfileEditScreen = ({ navigation }) => {
                     position: 'absolute',
                     right: 12,
                     bottom: 12,
+                    maxWidth: '76%',
                     paddingHorizontal: 12,
                     paddingVertical: 7,
                     borderRadius: 10,
                     backgroundColor: theme.overlay,
                   }}
                 >
-                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>
+                  <Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>
                     {t('profile.change_cover', 'Change cover')}
                   </Text>
                 </View>
@@ -248,7 +249,15 @@ const ProfileEditScreen = ({ navigation }) => {
               <Text style={{ marginTop: 8, color: theme.primary, fontSize: 12, fontWeight: '800' }}>
                 {t('profile.change_photo', 'Change profile photo')}
               </Text>
-              <Text style={{ marginTop: 3, color: theme.textMuted, fontSize: 10.5 }}>
+              <Text
+                style={{
+                  marginTop: 3,
+                  paddingHorizontal: 12,
+                  color: theme.textMuted,
+                  fontSize: 10.5,
+                  textAlign: 'center',
+                }}
+              >
                 {t('profile.photo_requirements', 'JPG, PNG, WebP, GIF, HEIC · max 5 MB')}
               </Text>
             </View>

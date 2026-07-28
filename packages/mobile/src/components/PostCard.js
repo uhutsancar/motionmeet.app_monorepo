@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, memo, useMemo } from 'react';
-import { Image, Alert, TextInput, FlatList, ActivityIndicator, Share, StyleSheet, useWindowDimensions } from 'react-native';
+import { Image, Alert, TextInput, FlatList, ActivityIndicator, Share, StyleSheet } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useSelector, useDispatch } from 'react-redux';
 import { useAuthContext } from "../context/AuthProvider";
@@ -10,6 +10,7 @@ import api from '../api/client';
 import moment from 'moment';
 import 'moment/locale/tr';
 import { useTranslation } from 'react-i18next';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useTheme } from '../context/ThemeContext';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { logHandledError } from '../utils/feedback';
@@ -38,8 +39,8 @@ const PostVideo = ({ source, style }) => {
 const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete, showDelete = false }) => {
   const { t, i18n } = useTranslation();
   const { theme, isDark } = useTheme();
-  const { width: screenWidth } = useWindowDimensions();
-  const carouselWidth = Math.min(screenWidth - 32, 688);
+  const { usableWidth } = useResponsiveLayout();
+  const carouselWidth = Math.max(1, Math.min(usableWidth - 32, 688));
   const hasWorkout = post?.post_type === 'workout' && post.workout && typeof post.workout === 'object';
   const isVideo = post?.post_type === 'video';
   const imageUrls = (Array.isArray(post?.image_urls) ? post.image_urls : [])
@@ -124,6 +125,8 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
       fontWeight: '900',
     },
     userInfo: {
+      flex: 1,
+      minWidth: 0,
       marginLeft: 12,
       backgroundColor: 'transparent'
     },
@@ -134,17 +137,21 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
       backgroundColor: 'transparent'
     },
     username: {
+      flexShrink: 1,
       fontSize: 15,
       fontWeight: '700',
       color: theme.text,
     },
     timestamp: {
+      flexShrink: 1,
       fontSize: 12,
       color: theme.textMuted,
       fontWeight: '600',
       marginTop: 2,
     },
     followBtn: {
+      flexShrink: 0,
+      maxWidth: 104,
       minHeight: 34,
       justifyContent: 'center',
       paddingVertical: 6,
@@ -591,7 +598,7 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
       {/* User Info & Follow Button */}
       <Surface elevation={0} style={s.userSection}>
         <TouchableRipple style={s.userInfoLeft} onPress={() => onUserPress?.(post.user?._id)} accessibilityLabel={post.user?.full_name}>
-          <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'transparent' }}>
+          <Surface elevation={0} style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', backgroundColor: 'transparent' }}>
             {postProfilePicture ? (
               <Image source={{ uri: postProfilePicture }} style={s.avatar} />
             ) : (
@@ -603,11 +610,11 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
             )}
             <Surface elevation={0} style={s.userInfo}>
               <Surface elevation={0} style={s.nameContainer}>
-                <Text style={s.username}>{post.user?.full_name}</Text>
+                <Text numberOfLines={1} style={s.username}>{post.user?.full_name}</Text>
                 {post.user?.is_verified && <Ionicons name="checkmark-circle" size={14} color={theme.primary} />}
               </Surface>
-              <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'transparent' }}>
-                <Text style={s.timestamp}>@{post.user?.username} • {moment(post.createdAt).fromNow()}</Text>
+              <Surface elevation={0} style={{ minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'transparent' }}>
+                <Text numberOfLines={1} style={s.timestamp}>@{post.user?.username} • {moment(post.createdAt).fromNow()}</Text>
                 {post.visibility === 'private' && (
                   <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'transparent' }}>
                     <Ionicons name="lock-closed" size={10} color={theme.textMuted} />
@@ -635,7 +642,12 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
             {followProcessing ? (
                <ActivityIndicator size="small" color={theme.primary} />
             ) : (
-                <Text style={[s.followBtnText, currentUser?.following?.includes(post.user?._id) && s.followingBtnText]}>
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.78}
+                  style={[s.followBtnText, currentUser?.following?.includes(post.user?._id) && s.followingBtnText]}
+                >
                 {currentUser?.following?.includes(post.user?._id) ? t('feed.following_status', 'Following') : t('feed.follow')}
                 </Text>
             )}

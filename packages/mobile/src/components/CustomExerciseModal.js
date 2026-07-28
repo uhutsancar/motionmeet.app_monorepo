@@ -177,7 +177,7 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
           </Appbar.Header>
 
           <KeyboardAwareScrollView
-            avoidKeyboard={false}
+            avoidKeyboard
             style={{ flex: 1 }}
             contentContainerStyle={styles.formContent}
             keyboardShouldPersistTaps="handled"

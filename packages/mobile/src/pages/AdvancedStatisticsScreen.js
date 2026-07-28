@@ -66,13 +66,18 @@ const ChartCard = ({ icon, title, color, theme, children }) => (
       borderWidth: 1,
       borderColor: theme.border,
       backgroundColor: theme.surface,
+      overflow: 'hidden',
     }}
   >
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, marginBottom: 12 }}>
       <Ionicons name={icon} size={18} color={color} />
-      <Text style={{ color: theme.text, fontSize: 15, fontWeight: '800' }}>{title}</Text>
+      <Text numberOfLines={1} style={{ flex: 1, color: theme.text, fontSize: 15, fontWeight: '800' }}>
+        {title}
+      </Text>
     </View>
-    {children}
+    <View style={{ width: '100%', alignItems: 'center', overflow: 'hidden' }}>
+      {children}
+    </View>
   </Surface>
 );
 
@@ -93,7 +98,7 @@ const AdvancedStatisticsScreen = ({ navigation }) => {
   const metricWidth =
     columns === 2 ? (contentWidth - columnGap) / 2 : contentWidth;
 
-  const chartWidth = Math.max(220, Math.min(contentWidth - 2, 670));
+  const chartWidth = Math.max(1, Math.min(contentWidth - 2, 670));
   const blue = theme.dark ? '#60A5FA' : '#2563EB';
   const green = '#22A06B';
   const purple = '#8B5CF6';
@@ -131,7 +136,9 @@ const AdvancedStatisticsScreen = ({ navigation }) => {
   const chartData = useMemo(() => {
     const stats = statsData?.stats || {};
     const labels = stats.labels || [];
-    const pointLimit = period === 'year' ? 12 : period === 'week' ? 7 : 10;
+    const narrowPointLimit = period === 'year' ? 6 : 5;
+    const regularPointLimit = period === 'year' ? 12 : period === 'week' ? 7 : 10;
+    const pointLimit = contentWidth < 400 ? narrowPointLimit : regularPointLimit;
     const start = Math.max(0, labels.length - pointLimit);
     return {
       labels: labels.slice(start),
@@ -139,7 +146,7 @@ const AdvancedStatisticsScreen = ({ navigation }) => {
       reps: (stats.reps || []).slice(start),
       durations: (stats.durations || []).slice(start),
     };
-  }, [period, statsData]);
+  }, [contentWidth, period, statsData]);
 
   const safeSeries = (values) => (
     values.length ? values.map(value => Number(value) || 0) : [0]
@@ -148,7 +155,10 @@ const AdvancedStatisticsScreen = ({ navigation }) => {
   const totalReps = (statsData?.stats?.reps || []).reduce((sum, value) => sum + (Number(value) || 0), 0);
   const hasData = (statsData?.totalWorkouts || 0) > 0;
   const muscleData = Object.entries(statsData?.muscleDistribution || {})
-    .map(([name, value]) => ({ name, value: Math.round((Number(value) || 0) * 100) }))
+    .map(([name, value]) => ({
+      name,
+      value: Math.max(0, Math.min(100, Math.round((Number(value) || 0) * 100))),
+    }))
     .sort((a, b) => b.value - a.value);
 
   const chartConfig = (color) => ({
@@ -334,7 +344,7 @@ const AdvancedStatisticsScreen = ({ navigation }) => {
                 bezier
                 withShadow={false}
                 chartConfig={chartConfig(blue)}
-                style={{ marginLeft: -6, borderRadius: 14 }}
+                style={{ borderRadius: 14 }}
               />
             </ChartCard>
 
@@ -351,7 +361,7 @@ const AdvancedStatisticsScreen = ({ navigation }) => {
                 fromZero
                 showValuesOnTopOfBars
                 chartConfig={chartConfig(green)}
-                style={{ marginLeft: -6, borderRadius: 14 }}
+                style={{ borderRadius: 14 }}
               />
             </ChartCard>
 
@@ -368,7 +378,7 @@ const AdvancedStatisticsScreen = ({ navigation }) => {
                 fromZero
                 withShadow={false}
                 chartConfig={chartConfig('#3284FF')}
-                style={{ marginLeft: -6, borderRadius: 14 }}
+                style={{ borderRadius: 14 }}
               />
             </ChartCard>
 

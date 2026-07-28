@@ -33,7 +33,14 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
   const [media, setMedia] = useState(null);
   const [background, setBackground] = useState('#000000');
   const [loading, setLoading] = useState(false);
-  const previewHeight = Math.max(260, Math.min(width * 1.12, height * 0.46, 420));
+  const isNarrow = width < 360;
+  const contentPadding = isNarrow ? 12 : 16;
+  const headerSideWidth = Math.max(64, Math.min(82, width * 0.23));
+  const previewHeight = Math.max(220, Math.min(
+    (width - contentPadding * 2) * 1.12,
+    height * 0.46,
+    420,
+  ));
   const canPublish = !loading && (
     mode === 'text' ? text.trim().length > 0 : Boolean(media)
   );
@@ -57,15 +64,17 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
       flexDirection: 'row',
       alignItems: 'center',
       height: 58,
-      paddingHorizontal: 16,
+      paddingHorizontal: isNarrow ? 8 : 16,
       borderBottomWidth: 1,
       borderBottomColor: theme.border,
       backgroundColor: theme.background,
+      flexShrink: 0,
     },
     headerSide: {
-      width: 82,
+      width: headerSideWidth,
       height: 58,
       justifyContent: 'center',
+      flexShrink: 0,
     },
     backButton: {
       width: 42,
@@ -87,7 +96,7 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
       color: theme.text,
     },
     postButton: {
-      fontSize: 13,
+      fontSize: isNarrow ? 12 : 13,
       fontWeight: '900',
       textTransform: 'uppercase',
       letterSpacing: 0.5,
@@ -96,7 +105,10 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
       flex: 1,
     },
     contentContainer: {
-      padding: 16,
+      width: '100%',
+      maxWidth: 620,
+      alignSelf: 'center',
+      padding: contentPadding,
       paddingBottom: 36,
     },
     modeSelector: {
@@ -191,7 +203,13 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
     selectedColor: {
       borderColor: theme.text,
     },
-  }), [previewHeight, theme]);
+  }), [
+    contentPadding,
+    headerSideWidth,
+    isNarrow,
+    previewHeight,
+    theme,
+  ]);
 
   const resetDraft = () => {
     setMode('text');
@@ -291,7 +309,14 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
               <Ionicons name="arrow-back" size={23} color={theme.text} />
             </TouchableRipple>
           </View>
-          <Text style={styles.headerTitle}>{t('feed.create_story')}</Text>
+          <Text
+            style={styles.headerTitle}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.78}
+          >
+            {t('feed.create_story')}
+          </Text>
           <View style={[styles.headerSide, { alignItems: 'flex-end' }]}>
             <TouchableRipple
               onPress={handleCreateStory}
@@ -300,7 +325,12 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
               borderless
               accessibilityLabel={t('feed.post_action')}
             >
-              <Text style={[styles.postButton, { color: canPublish ? theme.primary : theme.textMuted }]}>
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.72}
+                style={[styles.postButton, { color: canPublish ? theme.primary : theme.textMuted }]}
+              >
                 {loading ? t('common.saving') : t('feed.post_action')}
               </Text>
             </TouchableRipple>
@@ -325,7 +355,12 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
             >
               <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'transparent' }}>
                 <Ionicons name="text" size={20} color={mode === 'text' ? theme.primary : theme.textMuted} />
-                <Text style={[styles.modeText, { color: mode === 'text' ? theme.primary : theme.textMuted }]}>{t('feed.text')}</Text>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.modeText, { color: mode === 'text' ? theme.primary : theme.textMuted }]}
+                >
+                  {t('feed.text')}
+                </Text>
               </Surface>
             </TouchableRipple>
             <TouchableRipple
@@ -335,7 +370,12 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
             >
               <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'transparent' }}>
                 <Ionicons name="image" size={20} color={mode === 'media' ? theme.primary : theme.textMuted} />
-                <Text style={[styles.modeText, { color: mode === 'media' ? theme.primary : theme.textMuted }]}>{t('feed.media')}</Text>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.modeText, { color: mode === 'media' ? theme.primary : theme.textMuted }]}
+                >
+                  {t('feed.media')}
+                </Text>
               </Surface>
             </TouchableRipple>
           </Surface>

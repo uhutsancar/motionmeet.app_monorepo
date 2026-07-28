@@ -23,10 +23,15 @@ const MonthlyReportScreen = ({ navigation }) => {
   } = useResponsiveLayout();
   const statCardWidth =
     columns === 2 ? (contentWidth - columnGap) / 2 : contentWidth;
-  const chartWidth = Math.max(220, Math.min(contentWidth, 688));
-  const RADAR_SIZE = Math.max(200, Math.min(contentWidth - 40, 420));
+  const chartWidth = Math.max(1, Math.min(contentWidth, 688));
+  const RADAR_SIZE = Math.max(1, Math.min(contentWidth, 420));
   const CENTER = RADAR_SIZE / 2;
-  const RADIUS = RADAR_SIZE / 2 - 30;
+  const radarLabelGutter = RADAR_SIZE < 300 ? 36 : 44;
+  const RADIUS = Math.max(24, RADAR_SIZE / 2 - radarLabelGutter);
+  const calendarCellSize = Math.max(
+    22,
+    Math.min(34, (contentWidth - 32) / 7 - 3),
+  );
   const { t, i18n } = useTranslation();
   const { theme } = useTheme();
   const chartAccent = theme.dark ? '#60A5FA' : '#2563EB';
@@ -77,8 +82,10 @@ const MonthlyReportScreen = ({ navigation }) => {
   const radarLabels = muscleGroupsList.map(mg => t(`muscle_groups.${mg.code}`, mg.name));
   const currentRadarValues = muscleGroupsList.map(mg => statsData?.muscleDistribution?.[mg.code] ?? 0);
   const angles = radarLabels.map((_, i) => (Math.PI * 2 * i) / Math.max(radarLabels.length, 1) - Math.PI / 2);
-  const getPoint = (val, idx) =>
-    `${CENTER + (RADIUS * Math.max(val, 0)) * Math.cos(angles[idx])},${CENTER + (RADIUS * Math.max(val, 0)) * Math.sin(angles[idx])}`;
+  const getPoint = (val, idx) => {
+    const normalizedValue = Math.min(1, Math.max(Number(val) || 0, 0));
+    return `${CENTER + (RADIUS * normalizedValue) * Math.cos(angles[idx])},${CENTER + (RADIUS * normalizedValue) * Math.sin(angles[idx])}`;
+  };
   const currentPolygon = currentRadarValues.map((v, i) => getPoint(v, i)).join(' ');
   const gridLevels = [0.2, 0.4, 0.6, 0.8, 1.0];
   const hasDistribution = currentRadarValues.some(value => value > 0);
@@ -200,7 +207,7 @@ const MonthlyReportScreen = ({ navigation }) => {
         {loading ? (
           <ActivityIndicator animating={true} color={theme.primary} size="large" style={{ marginVertical: 40 }} />
         ) : (
-          <View style={{ paddingHorizontal: horizontalPadding, marginTop: 8, position: 'relative' }}>
+          <View style={{ paddingHorizontal: horizontalPadding, marginTop: 8, position: 'relative', overflow: 'hidden' }}>
             <BarChart
               data={{
                 labels: safeLabels,
@@ -267,7 +274,7 @@ const MonthlyReportScreen = ({ navigation }) => {
         <Surface
           elevation={0}
           style={{
-            marginHorizontal: 16,
+            marginHorizontal: horizontalPadding,
             padding: 16,
             borderRadius: 18,
             borderWidth: 1,
@@ -305,9 +312,9 @@ const MonthlyReportScreen = ({ navigation }) => {
                   {num && (
                     <View
                       style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: 10,
+                        width: calendarCellSize,
+                        height: calendarCellSize,
+                        borderRadius: Math.min(10, calendarCellSize * 0.3),
                         justifyContent: 'center',
                         alignItems: 'center',
                         borderWidth: isToday && !isWorkoutDay ? 1 : 0,
@@ -359,7 +366,10 @@ const MonthlyReportScreen = ({ navigation }) => {
               <>
                 <Polygon points={currentPolygon} stroke={chartAccent} strokeWidth="3" strokeLinejoin="round" fill={`${chartAccent}28`} />
                 {currentRadarValues.map((value, index) => {
-                  const pointRadius = RADIUS * Math.max(value, 0);
+                  const pointRadius = RADIUS * Math.min(
+                    1,
+                    Math.max(Number(value) || 0, 0),
+                  );
                   return (
                     <Circle
                       key={`${radarLabels[index]}-point`}
@@ -376,10 +386,19 @@ const MonthlyReportScreen = ({ navigation }) => {
             )}
             <Circle cx={CENTER} cy={CENTER} r="2.5" fill={chartAccent} />
             {radarLabels.map((label, i) => {
-              const x = CENTER + (RADIUS + 22) * Math.cos(angles[i]);
-              const y = CENTER + (RADIUS + 22) * Math.sin(angles[i]);
+              const cosine = Math.cos(angles[i]);
+              const x = CENTER + (RADIUS + 18) * cosine;
+              const y = CENTER + (RADIUS + 18) * Math.sin(angles[i]);
               return (
-                <SvgText key={`label-${i}`} x={x} y={y + 4} fontSize="10" fontWeight="600" fill={theme.textSecondary} textAnchor="middle">
+                <SvgText
+                  key={`label-${i}`}
+                  x={x}
+                  y={y + 4}
+                  fontSize={RADAR_SIZE < 280 ? 8.5 : 10}
+                  fontWeight="600"
+                  fill={theme.textSecondary}
+                  textAnchor={cosine > 0.25 ? 'end' : cosine < -0.25 ? 'start' : 'middle'}
+                >
                   {label}
                 </SvgText>
               );

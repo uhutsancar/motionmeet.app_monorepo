@@ -154,7 +154,7 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }) => {
           </Surface>
 
           <KeyboardAwareScrollView
-            avoidKeyboard={false}
+            avoidKeyboard
             style={styles.scroll}
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"

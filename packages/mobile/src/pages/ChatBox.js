@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { FlatList, Image, KeyboardAvoidingView, Platform, Alert, StatusBar } from 'react-native';
+import { FlatList, Image, Alert, StatusBar } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthContext } from "../context/AuthProvider";
@@ -14,6 +14,7 @@ import moment from 'moment';
 import { Appbar, Avatar, Text, TextInput, IconButton, Surface, ActivityIndicator, Badge, useTheme as usePaperTheme, TouchableRipple } from 'react-native-paper';
 import { showError } from '../utils/feedback';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { KeyboardResponsiveView } from '../components/KeyboardAwareScrollView';
 
 const ChatBox = ({ route, navigation }) => {
   const { userId, user: routeUser } = route?.params || {};
@@ -25,7 +26,7 @@ const ChatBox = ({ route, navigation }) => {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { contentWidth } = useResponsiveLayout();
-  const messageMediaWidth = Math.max(140, Math.min(220, contentWidth * 0.72));
+  const messageMediaWidth = Math.max(80, Math.min(220, contentWidth * 0.72));
   const s = getStyles(theme, paperTheme, insets);
 
   const currentUser = useSelector((state) => state.user.value);
@@ -340,9 +341,8 @@ const ChatBox = ({ route, navigation }) => {
         </Surface>
       </Appbar.Header>
 
-      <KeyboardAvoidingView 
+      <KeyboardResponsiveView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         {initialLoading ? (
           <Surface elevation={0} style={s.loader}><ActivityIndicator color={theme.primary} /></Surface>
@@ -418,7 +418,7 @@ const ChatBox = ({ route, navigation }) => {
             />
           </Surface>
         </Surface>
-      </KeyboardAvoidingView>
+      </KeyboardResponsiveView>
     </SafeAreaView>
   );
 };

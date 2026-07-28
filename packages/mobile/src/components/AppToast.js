@@ -9,7 +9,8 @@ const AppToast = () => {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const toastWidth = Math.min(Math.max(width - 24, 260), 560);
+  const usableWidth = Math.max(0, width - insets.left - insets.right);
+  const toastWidth = Math.max(1, Math.min(usableWidth - 24, 560));
 
   const config = useMemo(() => {
     const sharedProps = {

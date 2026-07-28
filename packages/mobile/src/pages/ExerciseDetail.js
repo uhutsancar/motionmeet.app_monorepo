@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ScrollView, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { API_URL } from '../config/environment';
@@ -8,14 +9,17 @@ import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { getExerciseStats } from '../api/endpoints';
 import { useAuthContext } from '../context/AuthProvider';
-import { Appbar, Text, Surface, Button, useTheme as usePaperTheme, TouchableRipple } from 'react-native-paper';
+import { Appbar, Text, Surface, Button } from 'react-native-paper';
 import { logHandledError } from '../utils/feedback';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 const ExerciseDetail = ({ route, navigation }) => {
   const { exercise } = route.params;
-  const { theme, isDark } = useTheme();
-  const paperTheme = usePaperTheme();
-  const styles = getStyles(theme, paperTheme);
+  const { theme } = useTheme();
+  const { horizontalPadding, isNarrow } = useResponsiveLayout({
+    minTwoColumnWidth: 420,
+  });
+  const styles = getStyles(theme);
   const { t, i18n } = useTranslation();
 
   const [stats, setStats] = useState(null);
@@ -57,14 +61,17 @@ const ExerciseDetail = ({ route, navigation }) => {
   };
 
   return (
-    <Surface elevation={0} style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Header */}
-      <Appbar.Header style={styles.header}>
+      <Appbar.Header style={styles.header} statusBarHeight={0}>
         <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
         <Appbar.Content title="" />
       </Appbar.Header>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: horizontalPadding }]}
+      >
         
         <Surface elevation={0} style={styles.mediaContainer}>
           {mediaUrl ? (
@@ -98,12 +105,12 @@ const ExerciseDetail = ({ route, navigation }) => {
           {loading ? (
             <ActivityIndicator color={theme.primary} style={{ marginTop: 20 }} />
           ) : (
-            <Surface elevation={0} style={styles.statsGrid}>
-              <Surface style={[styles.statBox, { borderColor: theme.border, backgroundColor: theme.surface }]} elevation={1}>
+            <Surface elevation={0} style={[styles.statsGrid, isNarrow && styles.statsGridNarrow]}>
+              <Surface style={[styles.statBox, isNarrow && styles.statBoxNarrow, { borderColor: theme.border, backgroundColor: theme.surface }]} elevation={1}>
                   <Text variant="labelMedium" style={styles.statLabel}>{t('exercises.personal_record', 'Personal Record')}</Text>
                   <Text variant="headlineSmall" style={styles.statValue}>{stats?.personalRecord || 0} <Text variant="bodyMedium" style={{color: theme.textMuted}}>kg</Text></Text>
               </Surface>
-              <Surface style={[styles.statBox, { borderColor: theme.border, backgroundColor: theme.surface }]} elevation={1}>
+              <Surface style={[styles.statBox, isNarrow && styles.statBoxNarrow, { borderColor: theme.border, backgroundColor: theme.surface }]} elevation={1}>
                   <Text variant="labelMedium" style={styles.statLabel}>{t('exercises.total_sessions', 'Total Sessions')}</Text>
                   <Text variant="headlineSmall" style={styles.statValue}>{stats?.totalSessions || 0}</Text>
               </Surface>
@@ -123,27 +130,30 @@ const ExerciseDetail = ({ route, navigation }) => {
         </Button>
 
       </ScrollView>
-    </Surface>
+    </SafeAreaView>
   );
 };
 
-const getStyles = (theme, paperTheme) => ({
+const getStyles = (theme) => ({
   container: { flex: 1, backgroundColor: theme.background },
   header: { backgroundColor: theme.background, elevation: 0 },
-  mediaContainer: { width: '100%', aspectRatio: 16/9, paddingHorizontal: 20, marginTop: 10 },
+  scrollContent: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingBottom: 40 },
+  mediaContainer: { width: '100%', aspectRatio: 16/9, marginTop: 10 },
   media: { flex: 1, borderRadius: 16, backgroundColor: theme.surface },
   placeholderMedia: { flex: 1, borderRadius: 16, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.border },
-  infoSection: { paddingHorizontal: 20, marginTop: 24, paddingBottom: 24, borderBottomWidth: 1, borderBottomColor: theme.border },
+  infoSection: { marginTop: 24, paddingBottom: 24, borderBottomWidth: 1, borderBottomColor: theme.border },
   title: { fontWeight: 'bold', color: theme.text, marginBottom: 4 },
   subtitle: { color: theme.textMuted, fontWeight: '500' },
-  section: { paddingHorizontal: 20, marginTop: 24 },
+  section: { marginTop: 24 },
   sectionTitle: { fontWeight: 'bold', color: theme.text, marginBottom: 12 },
   bodyText: { color: theme.text, lineHeight: 24, opacity: 0.9 },
   statsGrid: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  statsGridNarrow: { flexDirection: 'column' },
   statBox: { flex: 1, borderRadius: 16, padding: 16, borderWidth: 1 },
+  statBoxNarrow: { flex: 0, width: '100%' },
   statLabel: { fontWeight: '700', color: theme.textMuted, marginBottom: 6 },
   statValue: { fontWeight: '900', color: theme.text },
-  logButton: { marginHorizontal: 20, marginTop: 32, borderRadius: 100 },
+  logButton: { marginTop: 32, borderRadius: 100 },
   logButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' }
 });
 

@@ -229,7 +229,13 @@ const ActiveWorkoutScreen = ({ navigation, route }) => {
         {exercises.map((ex, exIndex) => (
           <Surface key={exIndex} elevation={1} style={{ marginBottom: 24, borderRadius: 16, padding: isNarrow ? 12 : 16, backgroundColor: theme.surface }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <Text variant="titleMedium" style={{ color: theme.primary, fontWeight: 'bold' }}>{ex.name}</Text>
+              <Text
+                variant="titleMedium"
+                numberOfLines={2}
+                style={{ flex: 1, color: theme.primary, fontWeight: 'bold', paddingRight: 8 }}
+              >
+                {ex.name}
+              </Text>
               <IconButton
                 icon="dots-horizontal"
                 size={20}

@@ -20,6 +20,7 @@ import { useTheme } from '../context/ThemeContext';
 import { setAuthToken } from '../api/client';
 import { logHandledError } from '../utils/feedback';
 import { getUserProfile, getWorkouts } from '../api/endpoints';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 const Profile = ({ route, navigation }) => {
   const { signOut, getToken } = useAuthContext();
@@ -27,6 +28,7 @@ const Profile = ({ route, navigation }) => {
   const loading = useSelector((state) => state.user.loading);
   const { theme } = useTheme();
   const { t, i18n } = useTranslation();
+  const { horizontalPadding, isNarrow } = useResponsiveLayout();
   const profileId = route?.params?.userId;
   const isOwnProfile = !profileId || profileId === currentUser?._id;
   const [activeStatTab, setActiveStatTab] = useState('duration');
@@ -159,7 +161,7 @@ const Profile = ({ route, navigation }) => {
           width: '100%',
           maxWidth: 720,
           alignSelf: 'center',
-          paddingHorizontal: 16,
+          paddingHorizontal: horizontalPadding,
           paddingTop: 16,
           paddingBottom: 32,
         }}
@@ -227,7 +229,14 @@ const Profile = ({ route, navigation }) => {
                 {index > 0 && <Divider style={{ width: 1, height: 38, backgroundColor: theme.border }} />}
                 <View style={{ flex: 1, alignItems: 'center' }}>
                   <Text style={{ color: theme.text, fontSize: 17, fontWeight: '800' }}>{stat.value}</Text>
-                  <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: 3 }}>{stat.label}</Text>
+                  <Text
+                    numberOfLines={2}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.8}
+                    style={{ color: theme.textMuted, fontSize: 11, marginTop: 3, textAlign: 'center' }}
+                  >
+                    {stat.label}
+                  </Text>
                 </View>
               </React.Fragment>
             ))}
@@ -319,7 +328,7 @@ const Profile = ({ route, navigation }) => {
                   onPress={() => navigation.navigate(item.route)}
                   style={{
                     flex: 1,
-                    minHeight: 78,
+                    minHeight: isNarrow ? 90 : 78,
                     paddingHorizontal: 6,
                     paddingVertical: 10,
                     alignItems: 'center',
@@ -333,6 +342,8 @@ const Profile = ({ route, navigation }) => {
                   <Ionicons name={item.icon} size={19} color={item.color} />
                   <Text
                     numberOfLines={2}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.78}
                     style={{
                       color: theme.textSecondary,
                       fontSize: 9.5,

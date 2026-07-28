@@ -19,7 +19,8 @@ export const KeyboardResponsiveView = ({
 }) => (
   <KeyboardAvoidingView
     style={style}
-    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    enabled={Platform.OS === 'ios'}
     keyboardVerticalOffset={keyboardVerticalOffset}
   >
     {children}
@@ -27,9 +28,9 @@ export const KeyboardResponsiveView = ({
 );
 
 /**
- * A ScrollView that both resizes for the keyboard and scrolls the active input
- * above it. The extra bottom room is important on Android devices whose IME is
- * taller than the viewport area left to the app.
+ * A ScrollView that follows the platform's resized viewport and scrolls the
+ * active input above the keyboard. Only the requested focus clearance is added
+ * so iOS keyboard insets and Android adjustResize are never counted twice.
  */
 const KeyboardAwareScrollView = React.forwardRef(({
   avoidKeyboard = true,
@@ -98,13 +99,13 @@ const KeyboardAwareScrollView = React.forwardRef(({
         ref={setRefs}
         keyboardShouldPersistTaps={props.keyboardShouldPersistTaps || 'handled'}
         keyboardDismissMode={props.keyboardDismissMode || (Platform.OS === 'ios' ? 'interactive' : 'on-drag')}
-        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+        automaticallyAdjustKeyboardInsets={false}
         contentContainerStyle={[
           contentContainerStyle,
           {
             paddingBottom:
               basePaddingBottom +
-              (keyboardHeight > 0 ? keyboardHeight + extraScrollHeight : 0),
+              (keyboardHeight > 0 ? extraScrollHeight : 0),
           },
         ]}
         onFocus={(event) => {

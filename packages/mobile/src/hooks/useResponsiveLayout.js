@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const clamp = (value, minimum, maximum) =>
   Math.min(Math.max(value, minimum), maximum);
@@ -14,10 +15,17 @@ export const useResponsiveLayout = ({
   minTwoColumnWidth = 520,
 } = {}) => {
   const { width, height, fontScale } = useWindowDimensions();
+  const {
+    top: insetTop,
+    right: insetRight,
+    bottom: insetBottom,
+    left: insetLeft,
+  } = useSafeAreaInsets();
 
   return useMemo(() => {
-    const horizontalPadding = width < 360 ? 12 : width < 600 ? 16 : 20;
-    const boundedWidth = Math.min(width, maxContentWidth);
+    const usableWidth = Math.max(0, width - insetLeft - insetRight);
+    const horizontalPadding = usableWidth < 360 ? 12 : usableWidth < 600 ? 16 : 20;
+    const boundedWidth = Math.min(usableWidth, maxContentWidth);
     const contentWidth = Math.max(0, boundedWidth - horizontalPadding * 2);
     const prefersSingleColumn =
       contentWidth < minTwoColumnWidth || fontScale > 1.2;
@@ -26,13 +34,24 @@ export const useResponsiveLayout = ({
       width,
       height,
       fontScale,
+      usableWidth,
       horizontalPadding,
       contentWidth,
       isNarrow: contentWidth < 340 || fontScale > 1.25,
       isPhone: width < 600,
+      isCompactHeight: height - insetTop - insetBottom < 640,
       columns: prefersSingleColumn ? 1 : 2,
       columnGap: clamp(Math.round(contentWidth * 0.025), 8, 14),
     };
-  }, [fontScale, height, maxContentWidth, minTwoColumnWidth, width]);
+  }, [
+    fontScale,
+    height,
+    insetBottom,
+    insetLeft,
+    insetRight,
+    insetTop,
+    maxContentWidth,
+    minTwoColumnWidth,
+    width,
+  ]);
 };
-

@@ -29,7 +29,8 @@ export const FullScreenModal = ({
   >
     <KeyboardAvoidingView
       style={[styles.flex, { backgroundColor }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      enabled={Platform.OS === 'ios'}
     >
       <SafeAreaView
         style={[styles.flex, { backgroundColor }]}
@@ -73,11 +74,7 @@ export const BottomSheetModal = ({
           onPress={onRequestClose}
           style={StyleSheet.absoluteFill}
         />
-        <KeyboardAvoidingView
-          pointerEvents="box-none"
-          style={styles.sheetPositioner}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
+        <View pointerEvents="box-none" style={styles.sheetPositioner}>
           <SafeAreaView
             edges={['right', 'bottom', 'left']}
             style={[
@@ -91,7 +88,7 @@ export const BottomSheetModal = ({
           >
             {children}
           </SafeAreaView>
-        </KeyboardAvoidingView>
+        </View>
       </View>
     </Modal>
   );

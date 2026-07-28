@@ -179,7 +179,14 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }) => {
             />
           )}
           {(currentStory.media_type === 'text' || !mediaUrl) && currentStory.content && (
-            <Text style={styles.storyText}>{currentStory.content}</Text>
+            <Text
+              style={styles.storyText}
+              numberOfLines={10}
+              adjustsFontSizeToFit
+              minimumFontScale={0.55}
+            >
+              {currentStory.content}
+            </Text>
           )}
         </Surface>
 
@@ -239,8 +246,8 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }) => {
                 <Text style={styles.avatarPlaceholderText}>{avatarLabel}</Text>
               </View>
             )}
-            <View>
-              <Text style={styles.userName}>{displayName}</Text>
+            <View style={styles.userText}>
+              <Text numberOfLines={1} style={styles.userName}>{displayName}</Text>
               <Text style={styles.timeAgo}>{moment(currentStory.createdAt).fromNow()}</Text>
             </View>
           </View>
@@ -287,6 +294,7 @@ const styles = {
     textAlign: 'center',
     paddingHorizontal: 36,
     lineHeight: 42,
+    maxHeight: '72%',
   },
   // Progress bars row
   progressBarsRow: {
@@ -321,10 +329,14 @@ const styles = {
     elevation: 30,
   },
   userInfo: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    paddingRight: 12,
   },
+  userText: { flex: 1, minWidth: 0 },
   avatar: {
     width: 40,
     height: 40,
