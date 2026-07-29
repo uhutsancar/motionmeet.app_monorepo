@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Appbar, Surface, Switch, Text, useTheme as usePaperTheme, TouchableRipple } from 'react-native-paper';
+import { logHandledError, showError } from '../utils/feedback';
 
 const STORAGE_KEY = '@mm_notification_prefs';
 
@@ -21,15 +22,33 @@ const NotificationsScreen = ({ navigation }) => {
   const [prefs, setPrefs] = useState(DEFAULT_PREFS);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then(val => {
-      if (val) setPrefs(JSON.parse(val));
-    });
+    let active = true;
+    AsyncStorage.getItem(STORAGE_KEY)
+      .then((value) => {
+        if (!active || !value) return;
+        const parsed = JSON.parse(value);
+        setPrefs({ ...DEFAULT_PREFS, ...parsed });
+      })
+      .catch((error) => logHandledError('load-notification-preferences', error));
+    return () => {
+      active = false;
+    };
   }, []);
 
   const toggle = async (key) => {
+    const previous = prefs;
     const updated = { ...prefs, [key]: !prefs[key] };
     setPrefs(updated);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    } catch (error) {
+      setPrefs(previous);
+      logHandledError('save-notification-preferences', error);
+      showError(
+        t('common.error', 'Hata'),
+        t('settings.save_failed', 'Ayar kaydedilemedi'),
+      );
+    }
   };
 
   const SwitchRow = ({ label, subtitle, prefKey, isLast }) => (
@@ -60,15 +79,18 @@ const NotificationsScreen = ({ navigation }) => {
   ];
 
   return (
-    <Surface elevation={0} style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      <Appbar.Header style={styles.header}>
+      <Appbar.Header style={styles.header} statusBarHeight={0}>
         <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
         <Appbar.Content title={t('settings.notifications', 'Bildirimler')} titleStyle={styles.headerTitle} />
       </Appbar.Header>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         {sections.map((section) => (
           <Surface elevation={0} key={section.title} style={styles.section}>
             <Text variant="labelMedium" style={styles.sectionLabel}>{section.title.toUpperCase()}</Text>
@@ -86,7 +108,7 @@ const NotificationsScreen = ({ navigation }) => {
           </Surface>
         ))}
       </ScrollView>
-    </Surface>
+    </SafeAreaView>
   );
 };
 
@@ -99,6 +121,12 @@ const getStyles = (theme, paperTheme) => ({
     elevation: 0,
   },
   headerTitle: { fontSize: 18, fontWeight: '700', color: theme.text },
+  scrollContent: {
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
+    paddingBottom: 40,
+  },
   section: { marginTop: 24 },
   sectionLabel: {
     fontWeight: '700', letterSpacing: 0.8, color: theme.textMuted,
@@ -113,7 +141,7 @@ const getStyles = (theme, paperTheme) => ({
     paddingHorizontal: 16, paddingVertical: 14,
   },
   rowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
-  rowText: { flex: 1, paddingRight: 12 },
+  rowText: { flex: 1, minWidth: 0, paddingRight: 12 },
   rowLabel: { fontWeight: '600', color: theme.text },
   rowSub: { color: theme.textMuted, marginTop: 2 },
 });

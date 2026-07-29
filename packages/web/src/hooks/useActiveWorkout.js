@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
-import api from '~/api/axios';
 import { useAuthContext } from "../context/AuthProvider";
 import toast from 'react-hot-toast';
+import { createOperationId } from '@motionmeet/shared';
+import { createWorkout } from '~/api/endpoints';
 
 export const useActiveWorkout = (routine) => {
     const { getToken } = useAuthContext();
@@ -21,6 +22,11 @@ export const useActiveWorkout = (routine) => {
     });
 
     const intervalRef = useRef(null);
+    const saveSubmissionRef = useRef(null);
+
+    const invalidatePendingSave = () => {
+        saveSubmissionRef.current = null;
+    };
 
     useEffect(() => {
         if (!routine) {
@@ -35,34 +41,68 @@ export const useActiveWorkout = (routine) => {
         return () => clearInterval(intervalRef.current);
     }, [paused, routine, navigate]);
 
-    const togglePause = () => setPaused(!paused);
+    const togglePause = () => {
+        invalidatePendingSave();
+        setPaused((current) => !current);
+    };
 
     const toggleSet = (exIdx, setIdx) => {
-        const newEx = [...exercises];
-        newEx[exIdx].sets[setIdx].completed = !newEx[exIdx].sets[setIdx].completed;
-        setExercises(newEx);
+        invalidatePendingSave();
+        setExercises((current) => current.map((exercise, exerciseIndex) => (
+            exerciseIndex !== exIdx
+                ? exercise
+                : {
+                    ...exercise,
+                    sets: exercise.sets.map((set, setIndex) => (
+                        setIndex === setIdx ? { ...set, completed: !set.completed } : set
+                    )),
+                }
+        )));
     };
 
     const updateSet = (exIdx, setIdx, field, value) => {
-        const newEx = [...exercises];
-        newEx[exIdx].sets[setIdx][field] = value;
-        setExercises(newEx);
+        invalidatePendingSave();
+        setExercises((current) => current.map((exercise, exerciseIndex) => (
+            exerciseIndex !== exIdx
+                ? exercise
+                : {
+                    ...exercise,
+                    sets: exercise.sets.map((set, setIndex) => (
+                        setIndex === setIdx ? { ...set, [field]: value } : set
+                    )),
+                }
+        )));
     };
 
     const addSet = (exIdx) => {
-        const newEx = [...exercises];
-        const lastSet = newEx[exIdx].sets[newEx[exIdx].sets.length - 1] || { weight: '', reps: '' };
-        newEx[exIdx].sets.push({ weight: lastSet.weight, reps: lastSet.reps, completed: false });
-        setExercises(newEx);
+        invalidatePendingSave();
+        setExercises((current) => current.map((exercise, exerciseIndex) => {
+            if (exerciseIndex !== exIdx) return exercise;
+            const lastSet = exercise.sets[exercise.sets.length - 1] || { weight: '', reps: '' };
+            return {
+                ...exercise,
+                sets: [
+                    ...exercise.sets,
+                    { weight: lastSet.weight, reps: lastSet.reps, completed: false },
+                ],
+            };
+        }));
     };
 
     const removeSet = (exIdx, setIdx) => {
-        const newEx = [...exercises];
-        newEx[exIdx].sets.splice(setIdx, 1);
-        setExercises(newEx);
+        invalidatePendingSave();
+        setExercises((current) => current.map((exercise, exerciseIndex) => (
+            exerciseIndex !== exIdx
+                ? exercise
+                : {
+                    ...exercise,
+                    sets: exercise.sets.filter((_, setIndex) => setIndex !== setIdx),
+                }
+        )));
     };
 
     const addExercise = (exercise) => {
+        invalidatePendingSave();
         setExercises((current) => {
             if (current.some((item) => (item.exerciseId?._id || item.exerciseId) === exercise._id)) {
                 return current;
@@ -78,6 +118,7 @@ export const useActiveWorkout = (routine) => {
     };
 
     const removeExercise = (exIdx) => {
+        invalidatePendingSave();
         setExercises((current) => current.filter((_, index) => index !== exIdx));
     };
 
@@ -105,30 +146,33 @@ export const useActiveWorkout = (routine) => {
         setSaving(true);
         try {
             const token = await getToken();
-            const endTime = new Date();
-            const startTime = new Date(endTime.getTime() - (elapsed * 1000));
-            const payload = {
-                name: routine.name,
-                startTime: startTime.toISOString(),
-                endTime: endTime.toISOString(),
-                durationMinutes: Math.round(elapsed / 60),
-                volumeKg: totalVolume,
-                exercises: exercises.map(ex => ({
-                    exerciseId: ex.exerciseId._id || ex.exerciseId,
-                    sets: ex.sets.filter(set => set.completed).map(({ weight, reps, setType }) => ({
-                        setType: setType || 'normal',
-                        weight: Number(weight) || 0,
-                        reps: Number(reps) || 0,
-                        completed: true,
-                    })),
-                })).filter(ex => ex.sets.length > 0)
-            };
-
-            const { data } = await api.post('/api/workout', payload, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            if (!token) throw new Error("Authentication required");
+            if (!saveSubmissionRef.current) {
+                const endTime = new Date();
+                const startTime = new Date(endTime.getTime() - (elapsed * 1000));
+                saveSubmissionRef.current = {
+                    operationId: createOperationId('workout'),
+                    name: routine.name,
+                    startTime: startTime.toISOString(),
+                    endTime: endTime.toISOString(),
+                    durationMinutes: Math.round(elapsed / 60),
+                    volumeKg: totalVolume,
+                    exercises: exercises.map(ex => ({
+                        exerciseId: ex.exerciseId._id || ex.exerciseId,
+                        sets: ex.sets.filter(set => set.completed).map(({ weight, reps, setType }) => ({
+                            setType: setType || 'normal',
+                            weight: Number(weight) || 0,
+                            reps: Number(reps) || 0,
+                            completed: true,
+                        })),
+                    })).filter(ex => ex.sets.length > 0)
+                };
+            }
+            const payload = saveSubmissionRef.current;
+            const data = await createWorkout(payload, token);
 
             if (data.success) {
+                saveSubmissionRef.current = null;
                 const completedWorkout = {
                     ...payload,
                     ...(data.workout || {}),

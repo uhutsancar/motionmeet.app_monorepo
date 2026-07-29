@@ -7,6 +7,7 @@ import { useDispatch } from "react-redux";
 import { useNavigate } from "react-router";
 import api from "~/api/axios";
 import { fetchUser } from "~/features/user/userSlice";
+import { API_ROUTES } from "@motionmeet/shared";
 
 const SuggestedAthletes = () => {
   const { t } = useTranslation();
@@ -18,7 +19,7 @@ const SuggestedAthletes = () => {
 
   const fetchSuggested = useCallback(async () => {
     try {
-      const { data } = await api.get("/api/user/suggested", {
+      const { data } = await api.get(API_ROUTES.user_extras.suggested, {
         headers: { Authorization: `Bearer ${await getToken()}` },
       });
       if (data.success) setUsers(data.users);
@@ -33,7 +34,7 @@ const SuggestedAthletes = () => {
     try {
       const token = await getToken();
       const { data } = await api.post(
-        "/api/user/follow",
+        API_ROUTES.user_extras.follow,
         { id: userId },
         { headers: { Authorization: `Bearer ${token}` } },
       );

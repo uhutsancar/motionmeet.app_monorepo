@@ -3,12 +3,12 @@ import Post from "../models/Post.js";
 import PostComment from "../models/PostComment.js";
 import PostLike from "../models/PostLike.js";
 import User from "../models/User.js";
+import UserFollow from "../models/UserFollow.js";
 import {
   createCursor,
   cursorFilter,
   pageFromDocuments,
 } from "../utils/pagination.js";
-import { bufferCountIncrement } from "../configs/redis.js";
 
 const PUBLIC_USER_FIELDS = "_id full_name username profile_picture";
 const COMMENT_PREVIEW_LIMIT = 20;
@@ -24,8 +24,16 @@ export const hydratePostInteractions = async (
   const posts = documents.map(asPlainObject);
   const postIds = posts.map((post) => post._id).filter(Boolean);
   if (!postIds.length) return posts;
+  const authorIds = [
+    ...new Set(
+      posts
+        .map((post) => post.user?._id || post.user)
+        .filter(Boolean)
+        .map(String)
+    ),
+  ];
 
-  const [requesterLikes, commentPreviews] =
+  const [requesterLikes, requesterFollows, commentPreviews] =
     await Promise.all([
       requesterId
         ? PostLike.find({
@@ -33,6 +41,14 @@ export const hydratePostInteractions = async (
             userId: requesterId,
           })
             .select("postId")
+            .lean()
+        : [],
+      requesterId && authorIds.length
+        ? UserFollow.find({
+            followerId: String(requesterId),
+            followeeId: { $in: authorIds },
+          })
+            .select("followeeId")
             .lean()
         : [],
       PostComment.aggregate([
@@ -63,6 +79,9 @@ export const hydratePostInteractions = async (
   const likedPostIds = new Set(
     requesterLikes.map((entry) => entry.postId.toString())
   );
+  const followedAuthorIds = new Set(
+    requesterFollows.map((entry) => String(entry.followeeId))
+  );
   const userById = new Map(commentUsers.map((user) => [user._id, user]));
   const commentsByPost = new Map();
 
@@ -87,12 +106,14 @@ export const hydratePostInteractions = async (
 
   return posts.map((post) => {
     const postId = post._id.toString();
+    const authorId = String(post.user?._id || post.user || "");
     const comments = commentsByPost.get(postId) || [];
     const commentCount = post.comment_count || 0;
     return {
       ...post,
       like_count: post.like_count || 0,
       liked_by_me: likedPostIds.has(postId),
+      author_followed_by_me: followedAuthorIds.has(authorId),
       comment_count: commentCount,
       comment_next_cursor:
         commentCount > comments.length ? createCursor(comments[0]) : null,
@@ -106,26 +127,38 @@ export const hydratePostInteractions = async (
  * Kept for backward compatibility with older mobile clients.
  */
 export const togglePostLike = async (postId, userId) => {
-  const removed = await PostLike.findOneAndDelete({ postId, userId });
   let liked = false;
-
-  if (!removed) {
-    try {
-      await PostLike.create({ postId, userId });
-      liked = true;
-      const buffered = await bufferCountIncrement("post_likes", postId.toString(), 1);
-      if (!buffered) {
-        await Post.updateOne({ _id: postId }, { $inc: { like_count: 1 } });
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      const removed = await PostLike.findOneAndDelete(
+        { postId, userId },
+        { session }
+      );
+      if (removed) {
+        await Post.updateOne(
+          { _id: postId },
+          [{ $set: { like_count: { $max: [0, { $subtract: [{ $ifNull: ["$like_count", 0] }, 1] }] } } }],
+          { session }
+        );
+        return;
       }
-    } catch (error) {
-      if (error?.code !== 11000) throw error;
+      const post = await Post.exists({ _id: postId }).session(session);
+      if (!post) {
+        throw Object.assign(new Error("Post not found"), { status: 404 });
+      }
+      await PostLike.create([{ postId, userId }], { session });
+      await Post.updateOne(
+        { _id: postId },
+        { $inc: { like_count: 1 } },
+        { session }
+      );
       liked = true;
-    }
-  } else {
-    const buffered = await bufferCountIncrement("post_likes", postId.toString(), -1);
-    if (!buffered) {
-      await Post.updateOne({ _id: postId }, { $inc: { like_count: -1 } });
-    }
+    });
+  } catch (error) {
+    if (error?.code !== 11000) throw error;
+  } finally {
+    await session.endSession();
   }
 
   const postDoc = await Post.findById(postId).select("like_count").lean();
@@ -145,17 +178,21 @@ export const likePost = async (postId, userId) => {
       if (!post) {
         throw Object.assign(new Error("Post not found"), { status: 404 });
       }
-      try {
-        await PostLike.create([{ postId, userId }], { session });
-        const buffered = await bufferCountIncrement("post_likes", postId.toString(), 1);
-        if (!buffered) {
-          await Post.updateOne({ _id: postId }, { $inc: { like_count: 1 } }, { session });
-        }
-      } catch (error) {
-        // 11000 = duplicate key — already liked, which is the desired state
-        if (error?.code !== 11000) throw error;
+      const edge = await PostLike.updateOne(
+        { postId, userId },
+        { $setOnInsert: { postId, userId } },
+        { upsert: true, session }
+      );
+      if (edge.upsertedCount === 1) {
+        await Post.updateOne(
+          { _id: postId },
+          { $inc: { like_count: 1 } },
+          { session }
+        );
       }
     });
+  } catch (error) {
+    if (error?.code !== 11000) throw error;
   } finally {
     await session.endSession();
   }
@@ -168,12 +205,20 @@ export const likePost = async (postId, userId) => {
  * Safe to call even if the like doesn't exist.
  */
 export const unlikePost = async (postId, userId) => {
-  const removed = await PostLike.findOneAndDelete({ postId, userId });
-  if (removed) {
-    const buffered = await bufferCountIncrement("post_likes", postId.toString(), -1);
-    if (!buffered) {
-      await Post.updateOne({ _id: postId }, { $inc: { like_count: -1 } });
-    }
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      const removed = await PostLike.deleteOne({ postId, userId }, { session });
+      if (removed.deletedCount) {
+        await Post.updateOne(
+          { _id: postId },
+          [{ $set: { like_count: { $max: [0, { $subtract: [{ $ifNull: ["$like_count", 0] }, 1] }] } } }],
+          { session }
+        );
+      }
+    });
+  } finally {
+    await session.endSession();
   }
   const postDoc = await Post.findById(postId).select("like_count").lean();
   return { liked: false, likeCount: postDoc?.like_count || 0 };
@@ -193,10 +238,11 @@ export const createPostComment = async (postId, userId, content) => {
         [{ postId, userId, content: content.trim() }],
         { session }
       );
-      const buffered = await bufferCountIncrement("post_comments", postId.toString(), 1);
-      if (!buffered) {
-        await Post.updateOne({ _id: postId }, { $inc: { comment_count: 1 } }, { session });
-      }
+      await Post.updateOne(
+        { _id: postId },
+        { $inc: { comment_count: 1 } },
+        { session }
+      );
     });
   } finally {
     await session.endSession();

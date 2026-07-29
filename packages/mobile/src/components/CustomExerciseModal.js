@@ -18,6 +18,7 @@ import {
   logHandledError,
   showError,
 } from '../utils/feedback';
+import { CONTENT_LIMITS } from '@motionmeet/shared';
 
 const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
   const { theme } = useTheme();
@@ -39,6 +40,7 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
   const equipmentList = equipmentListItems.map(eq => eq.code);
 
   const handleSubmit = async () => {
+    if (saving) return;
     if (!name.trim()) {
       showError(t('common.error'), t('exercises.missing_name', 'Exercise name is required'));
       return;
@@ -53,9 +55,8 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
       setSaving(true);
 
       const freshToken = await getToken();
-      if (freshToken) {
-        setAuthToken(freshToken);
-      }
+      if (!freshToken) throw new Error('Authentication required');
+      setAuthToken(freshToken);
 
       const data = await createExercise({
         name: name.trim(),
@@ -65,7 +66,8 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
 
       if (data.success) {
         if (onExerciseCreated) onExerciseCreated(data.exercise);
-        handleClose();
+        resetDraft();
+        onClose();
       } else {
         showError(t('common.error'), data.message || t('exercises.create_failed', 'Failed to create exercise'));
       }
@@ -80,12 +82,17 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
     }
   };
 
-  const handleClose = () => {
+  const resetDraft = () => {
     setName("");
     setMuscleGroup("");
     setEquipment("");
     setShowMuscles(false);
     setShowEquipment(false);
+  };
+
+  const handleClose = () => {
+    if (saving) return;
+    resetDraft();
     onClose();
   };
 
@@ -107,6 +114,9 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
       fontWeight: 'bold',
     },
     formContent: {
+      width: '100%',
+      maxWidth: 620,
+      alignSelf: 'center',
       padding: 20,
       paddingBottom: 40,
     },
@@ -160,8 +170,8 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
     >
         <Surface style={styles.modalContent} elevation={0}>
           
-          <Appbar.Header style={styles.header}>
-            <Appbar.Action icon="close" onPress={handleClose} color={theme.text} />
+          <Appbar.Header style={styles.header} statusBarHeight={0}>
+            <Appbar.Action icon="close" onPress={handleClose} disabled={saving} color={theme.text} />
             <Appbar.Content title={t('exercises.new_exercise', 'Yeni Egzersiz')} titleStyle={styles.headerTitle} />
             <Button 
               mode="contained" 
@@ -190,6 +200,8 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
               <TextInput
                 mode="outlined"
                 value={name}
+                editable={!saving}
+                maxLength={CONTENT_LIMITS.exerciseName}
                 onChangeText={setName}
                 placeholder={t('exercises.exercise_name_placeholder', 'Örn. Meyilli Dumbbell Press')}
                 placeholderTextColor={theme.textMuted}
@@ -205,10 +217,11 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
               <Text variant="titleMedium" style={styles.label}>{t('exercises.muscle_group', 'Hedef Kas Grubu')} *</Text>
               <TouchableRipple 
                 style={[styles.selectBtn, muscleGroup && styles.selectBtnActive]} 
+                disabled={saving}
                 onPress={() => { setShowMuscles(!showMuscles); setShowEquipment(false); }}
               >
                 <Surface elevation={0} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', backgroundColor: 'transparent' }}>
-                  <Text style={{ color: muscleGroup ? theme.text : theme.textMuted }}>
+                  <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, paddingRight: 8, color: muscleGroup ? theme.text : theme.textMuted }}>
                     {muscleGroup ? t(`muscle_groups.${muscleGroup}`, muscleGroup) : t('exercises.select_muscle', 'Kas Grubu Seç')}
                   </Text>
                   <Ionicons name={showMuscles ? "chevron-up" : "chevron-down"} size={16} color={theme.textMuted} />
@@ -220,11 +233,12 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
                     {muscleGroups.map(m => (
                       <TouchableRipple 
                         key={m} 
+                        disabled={saving}
                         style={[styles.optionItem, muscleGroup === m && { backgroundColor: theme.primary + '20' }]} 
                         onPress={() => { setMuscleGroup(m); setShowMuscles(false); }}
                       >
                         <Surface elevation={0} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', backgroundColor: 'transparent' }}>
-                          <Text style={{ color: muscleGroup === m ? theme.primary : theme.text, fontWeight: muscleGroup === m ? 'bold' : 'normal' }}>
+                          <Text numberOfLines={2} style={{ flex: 1, minWidth: 0, paddingRight: 8, color: muscleGroup === m ? theme.primary : theme.text, fontWeight: muscleGroup === m ? 'bold' : 'normal' }}>
                             {t(`muscle_groups.${m}`, muscleGroupsList.find(mg => mg.code === m)?.name || m)}
                           </Text>
                           {muscleGroup === m && <Ionicons name="checkmark" size={16} color={theme.primary} />}
@@ -240,10 +254,11 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
               <Text variant="titleMedium" style={styles.label}>{t('exercises.equipment', 'Ekipman')} *</Text>
               <TouchableRipple 
                 style={[styles.selectBtn, equipment && styles.selectBtnActive]} 
+                disabled={saving}
                 onPress={() => { setShowEquipment(!showEquipment); setShowMuscles(false); }}
               >
                 <Surface elevation={0} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', backgroundColor: 'transparent' }}>
-                  <Text style={{ color: equipment ? theme.text : theme.textMuted }}>
+                  <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, paddingRight: 8, color: equipment ? theme.text : theme.textMuted }}>
                     {equipment ? t(`equipment.${equipment}`, equipment) : t('exercises.select_equipment', 'Ekipman Seç')}
                   </Text>
                   <Ionicons name={showEquipment ? "chevron-up" : "chevron-down"} size={16} color={theme.textMuted} />
@@ -254,11 +269,12 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }) => {
                   {equipmentList.map(e => (
                     <TouchableRipple 
                       key={e} 
+                      disabled={saving}
                       style={[styles.optionItem, equipment === e && { backgroundColor: theme.primary + '20' }]} 
                       onPress={() => { setEquipment(e); setShowEquipment(false); }}
                     >
                       <Surface elevation={0} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', backgroundColor: 'transparent' }}>
-                        <Text style={{ color: equipment === e ? theme.primary : theme.text, fontWeight: equipment === e ? 'bold' : 'normal' }}>
+                        <Text numberOfLines={2} style={{ flex: 1, minWidth: 0, paddingRight: 8, color: equipment === e ? theme.primary : theme.text, fontWeight: equipment === e ? 'bold' : 'normal' }}>
                           {t(`equipment.${e}`, equipmentListItems.find(eq => eq.code === e)?.name || e)}
                         </Text>
                         {equipment === e && <Ionicons name="checkmark" size={16} color={theme.primary} />}

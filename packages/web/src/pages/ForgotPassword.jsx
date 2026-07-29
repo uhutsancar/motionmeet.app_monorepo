@@ -24,7 +24,7 @@ const ForgotPassword = () => {
     setLoading(true);
     setError("");
     try {
-      await api.post(API_ROUTES.auth.forgotPassword, { email });
+      await api.post(API_ROUTES.auth.forgotPassword, { email: email.trim() });
       setSubmitted(true);
     } catch (requestError) {
       setError(
@@ -40,7 +40,7 @@ const ForgotPassword = () => {
     <AuthShell
       eyebrow="Account recovery"
       title="Reset your password"
-      subtitle="Enter the email address connected to your MotionMeet account."
+      description="Enter the email address connected to your MotionMeet account."
     >
       {submitted ? (
         <Stack spacing={3}>

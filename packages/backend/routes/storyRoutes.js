@@ -7,6 +7,6 @@ const storyRouter = express.Router();
 
 storyRouter.post("/create", protect, attachDbUser, storyMediaUpload.single("media"), addUserStory);
 storyRouter.get("/get", protect, getStories);
-storyRouter.delete("/delete/:storyId", protect, attachDbUser, deleteStory);
+storyRouter.delete("/delete/:storyId", protect, deleteStory);
 
 export default storyRouter;

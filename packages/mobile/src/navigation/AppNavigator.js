@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   DarkTheme as NavigationDarkTheme,
@@ -9,12 +9,14 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useSocket } from '../hooks/useSocket';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuthContext } from '../context/AuthProvider';
+import { getUserConversations } from '../api/endpoints';
 
 import Feed from '../pages/Feed';
 import Routines from '../pages/Routines';
@@ -113,13 +115,42 @@ const TabNavigator = () => {
   const { theme } = useTheme();
   const { t } = useTranslation();
   const { socket } = useSocket();
+  const { getToken } = useAuthContext();
   const insets = useSafeAreaInsets();
+  const { fontScale } = useWindowDimensions();
+  const tabBarBaseHeight = fontScale > 1.5 ? 72 : fontScale > 1.2 ? 66 : 60;
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const messagesTabFocusedRef = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    const initializeUnread = async () => {
+      try {
+        const token = await getToken();
+        const data = await getUserConversations(token);
+        if (active && data.success) {
+          setUnreadMessages(
+            (data.conversations || []).reduce(
+              (total, conversation) => total + Number(conversation.unreadCount || 0),
+              0,
+            ),
+          );
+        }
+      } catch {
+        // Navigation remains available if the badge cannot be initialized.
+      }
+    };
+    void initializeUnread();
+    return () => {
+      active = false;
+    };
+  }, [getToken]);
 
   // Listen for new messages globally to show badge
   useEffect(() => {
     if (!socket) return;
     const onMsg = async (msg) => {
+      if (messagesTabFocusedRef.current) return;
       setUnreadMessages(prev => prev + 1);
       try {
         const stored = await AsyncStorage.getItem('@mm_notification_prefs');
@@ -206,7 +237,7 @@ const TabNavigator = () => {
       backgroundColor: theme.surface,
       borderColor: theme.border,
       borderTopWidth: 1,
-      height: 60 + insets.bottom,
+      height: tabBarBaseHeight + insets.bottom,
       paddingTop: 5,
       paddingBottom: Math.max(insets.bottom, 5),
       elevation: 0,
@@ -218,7 +249,7 @@ const TabNavigator = () => {
     headerShown: false,
     lazy: true,
     freezeOnBlur: true,
-  }), [theme, unreadMessages, iconForRoute, insets.bottom]);
+  }), [theme, unreadMessages, iconForRoute, insets.bottom, tabBarBaseHeight]);
 
   return (
     <Tab.Navigator screenOptions={screenOptions}>
@@ -229,7 +260,16 @@ const TabNavigator = () => {
         name="MessagesTab"
         component={MessagesStack}
         options={{ tabBarLabel: t('tabs.messages', 'Mesajlar') }}
-        listeners={{ tabPress: () => setUnreadMessages(0) }}
+        listeners={{
+          focus: () => {
+            messagesTabFocusedRef.current = true;
+            setUnreadMessages(0);
+          },
+          blur: () => {
+            messagesTabFocusedRef.current = false;
+          },
+          tabPress: () => setUnreadMessages(0),
+        }}
       />
       <Tab.Screen
         name="ProfileTab"

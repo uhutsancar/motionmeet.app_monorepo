@@ -21,7 +21,6 @@ import { useTheme } from '../context/ThemeContext';
 import { fetchPosts } from '../features/posts/postsSlice';
 import { fetchStories } from '../features/stories/storiesSlice';
 import { fetchUser } from '../features/user/userSlice';
-import { fetchConnections } from '../features/connections/connectionsSlice';
 import { setAuthToken } from '../api/client';
 import StoriesBar from '../components/StoriesBar';
 import PostCard from '../components/PostCard';
@@ -30,10 +29,12 @@ import StoryModal from '../components/StoryModal';
 import SuggestedAthletes from '../components/SuggestedAthletes';
 import MotionMark from '../components/MotionMark';
 import { logHandledError } from '../utils/feedback';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 const Feed = ({ navigation }) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
+  const { isNarrow } = useResponsiveLayout();
   const dispatch = useDispatch();
   const { getToken } = useAuthContext();
   const {
@@ -48,29 +49,46 @@ const Feed = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('discover');
 
-  const loadData = useCallback(async () => {
+  const loadStaticData = useCallback(async () => {
     try {
       const token = await getToken();
-      if (token) setAuthToken(token);
+      if (!token) return;
+      setAuthToken(token);
       await Promise.all([
         dispatch(fetchUser(token)),
         dispatch(fetchStories(token)),
-        dispatch(fetchPosts({ token, mode: activeTab })),
-        dispatch(fetchConnections(token)),
       ]);
     } catch (error) {
-      logHandledError('load-feed', error);
+      logHandledError('load-feed-static-data', error);
+    }
+  }, [dispatch, getToken]);
+
+  useEffect(() => {
+    void loadStaticData();
+  }, [loadStaticData]);
+
+  const loadPosts = useCallback(async () => {
+    try {
+      const token = await getToken();
+      if (!token) return;
+      setAuthToken(token);
+      await dispatch(fetchPosts({ token, mode: activeTab }));
+    } catch (error) {
+      logHandledError('load-feed-posts', error);
     }
   }, [activeTab, dispatch, getToken]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    void loadPosts();
+  }, [loadPosts]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
-    setRefreshing(false);
+    try {
+      await Promise.all([loadStaticData(), loadPosts()]);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleLoadMore = useCallback(async () => {
@@ -116,7 +134,7 @@ const Feed = ({ navigation }) => {
         }}
       >
         <MotionMark size={30} />
-        <View style={{ flex: 1, flexDirection: 'row', alignSelf: 'stretch', marginLeft: 14, gap: 18 }}>
+        <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignSelf: 'stretch', marginLeft: isNarrow ? 8 : 14, gap: isNarrow ? 9 : 18 }}>
           {[
             { key: 'discover', label: t('feed.discover', 'Discover') },
             { key: 'following', label: t('feed.following', 'Following') },
@@ -130,12 +148,18 @@ const Feed = ({ navigation }) => {
                 accessibilityState={{ selected: active }}
                 accessibilityLabel={tab.label}
                 style={{
+                  flexShrink: 1,
                   justifyContent: 'center',
                   borderBottomWidth: active ? 2 : 0,
                   borderBottomColor: theme.primary,
                 }}
               >
-                <Text style={{ color: active ? theme.text : theme.textMuted, fontSize: 15, fontWeight: '800' }}>
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.72}
+                  style={{ color: active ? theme.text : theme.textMuted, fontSize: 15, fontWeight: '800' }}
+                >
                   {tab.label}
                 </Text>
               </TouchableOpacity>
@@ -179,7 +203,7 @@ const Feed = ({ navigation }) => {
                 backgroundColor: theme.surface,
               }}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' }}>
                 <View
                   style={{
                     width: 42,
@@ -192,8 +216,8 @@ const Feed = ({ navigation }) => {
                 >
                   <Ionicons name="barbell-outline" size={21} color={theme.text} />
                 </View>
-                <View style={{ flex: 1, paddingHorizontal: 11 }}>
-                  <Text style={{ color: theme.text, fontSize: 15, fontWeight: '800' }}>
+                <View style={{ flex: 1, minWidth: 0, paddingHorizontal: 11 }}>
+                  <Text numberOfLines={2} style={{ color: theme.text, fontSize: 15, fontWeight: '800' }}>
                     {t('feed.next_session', 'Your next session')}
                   </Text>
                   <Text style={{ color: theme.textMuted, fontSize: 12, lineHeight: 17, marginTop: 2 }}>
@@ -206,7 +230,9 @@ const Feed = ({ navigation }) => {
                   accessibilityRole="button"
                   accessibilityLabel={t('feed.next_session', 'Start your next session')}
                   style={{
+                    flexBasis: isNarrow ? '100%' : undefined,
                     minHeight: 38,
+                    marginTop: isNarrow ? 10 : 0,
                     paddingHorizontal: 13,
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -250,7 +276,7 @@ const Feed = ({ navigation }) => {
                   style={{ backgroundColor: theme.primary }}
                 />
               )}
-              <Text style={{ flex: 1, color: theme.textMuted, fontSize: 13, marginHorizontal: 11 }}>
+              <Text numberOfLines={2} style={{ flex: 1, minWidth: 0, color: theme.textMuted, fontSize: 13, marginHorizontal: 11 }}>
                 {t('feed.share_progress', 'Share an update with your community')}
               </Text>
               <Ionicons name="image-outline" size={20} color={theme.textSecondary} />
@@ -306,7 +332,7 @@ const Feed = ({ navigation }) => {
         onClose={() => setShowCreatePost(false)}
         onSuccess={() => {
           setShowCreatePost(false);
-          loadData();
+          void loadPosts();
         }}
       />
       <StoryModal
@@ -314,7 +340,7 @@ const Feed = ({ navigation }) => {
         onClose={() => setShowStoryModal(false)}
         onSuccess={() => {
           setShowStoryModal(false);
-          loadData();
+          void loadStaticData();
         }}
       />
     </SafeAreaView>

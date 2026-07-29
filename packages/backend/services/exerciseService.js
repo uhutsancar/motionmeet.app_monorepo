@@ -1,6 +1,10 @@
 import Exercise from "../models/Exercise.js";
 import escapeStringRegexp from "escape-string-regexp";
 import mongoose from "mongoose";
+import {
+  getComputedExerciseStats,
+  getComputedPersonalRecords,
+} from "./workoutAnalyticsService.js";
 
 export const getExercisesList = async ({
   search,
@@ -8,18 +12,22 @@ export const getExercisesList = async ({
   equipment,
   limitNum,
   skipNum,
+  cursor,
+  includeTotal,
   userId,
 }) => {
   const query = {
     $or: [
-      { isCustom: { $ne: true } },
+      { isCustom: false },
       { isCustom: true, createdBy: userId },
     ],
   };
 
   if (search) {
     const escapedSearch = escapeStringRegexp(search.trim());
-    query.name = new RegExp(escapedSearch, "i");
+    query.nameNormalized = new RegExp(
+      `^${escapedSearch.toLocaleLowerCase("en-US")}`
+    );
   }
   if (muscleGroup && muscleGroup !== "All Muscles") {
     query.muscleGroup = muscleGroup;
@@ -28,12 +36,37 @@ export const getExercisesList = async ({
     query.equipment = equipment;
   }
 
-  const [exercises, total] = await Promise.all([
-    Exercise.find(query).sort({ name: 1 }).skip(skipNum).limit(limitNum),
-    Exercise.countDocuments(query),
-  ]);
+  const cursorFilter = cursor
+    ? {
+        $or: [
+          { nameNormalized: { $gt: cursor.name } },
+          {
+            nameNormalized: cursor.name,
+            _id: { $gt: cursor.id },
+          },
+        ],
+      }
+    : null;
+  const resolvedQuery = cursorFilter ? { $and: [query, cursorFilter] } : query;
+  const documents = await Exercise.find(resolvedQuery)
+    .sort({ nameNormalized: 1, _id: 1 })
+    .skip(cursor ? 0 : skipNum)
+    .limit(limitNum + 1);
+  const hasMore = documents.length > limitNum;
+  const exercises = hasMore ? documents.slice(0, limitNum) : documents;
+  const last = exercises.at(-1);
+  const nextCursor =
+    hasMore && last
+      ? Buffer.from(
+          JSON.stringify({
+            name: String(last.name).trim().toLocaleLowerCase("en-US"),
+            id: last._id.toString(),
+          })
+        ).toString("base64url")
+      : null;
+  const total = includeTotal ? await Exercise.countDocuments(query) : null;
 
-  return { exercises, total };
+  return { exercises, total, nextCursor };
 };
 
 export const getExerciseById = async (id, userId) => {
@@ -78,7 +111,39 @@ export const validateExerciseReferences = async (exercises, userId) => {
   return count === exerciseIds.length;
 };
 
-export const getExerciseStats = async (id, userId) => {
+export const addExerciseSnapshots = async (exercises, userId) => {
+  const exerciseIds = [
+    ...new Set((exercises || []).map((exercise) => exercise.exerciseId)),
+  ];
+  const documents = await Exercise.find({
+    _id: { $in: exerciseIds },
+    $or: [
+      { isCustom: { $ne: true } },
+      { isCustom: true, createdBy: userId },
+    ],
+  })
+    .select("name muscleGroup equipment")
+    .lean();
+  const byId = new Map(
+    documents.map((exercise) => [exercise._id.toString(), exercise])
+  );
+  return (exercises || []).map((exercise) => {
+    const snapshot = byId.get(String(exercise.exerciseId));
+    if (!snapshot) {
+      throw Object.assign(new Error("Exercise is no longer available"), {
+        status: 409,
+      });
+    }
+    return {
+      ...exercise,
+      exerciseName: snapshot.name,
+      muscleGroup: snapshot.muscleGroup,
+      equipment: snapshot.equipment,
+    };
+  });
+};
+
+export const getExerciseStatsLegacy = async (id, userId) => {
   const Workout = (await import("../models/Workout.js")).default;
   const exerciseId = new mongoose.Types.ObjectId(id);
   const [result] = await Workout.aggregate([
@@ -143,7 +208,7 @@ export const getExerciseStats = async (id, userId) => {
   };
 };
 
-export const getPersonalRecords = async (userId, limit = 50) => {
+export const getPersonalRecordsLegacy = async (userId, limit = 50) => {
   const Workout = (await import("../models/Workout.js")).default;
   return Workout.aggregate([
     { $match: { userId } },
@@ -195,3 +260,6 @@ export const getPersonalRecords = async (userId, limit = 50) => {
     },
   ]);
 };
+
+export const getExerciseStats = getComputedExerciseStats;
+export const getPersonalRecords = getComputedPersonalRecords;

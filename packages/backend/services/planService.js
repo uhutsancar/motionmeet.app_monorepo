@@ -31,5 +31,8 @@ export const updateUserPlan = async (userId, planId, options = {}) => {
     planCancelledAt: status === "cancelled" ? new Date() : null,
   };
 
-  return await User.findByIdAndUpdate(userId, updateFields, { new: true }).populate("plan");
+  return await User.findByIdAndUpdate(userId, updateFields, {
+    new: true,
+    runValidators: true,
+  }).populate("plan");
 };

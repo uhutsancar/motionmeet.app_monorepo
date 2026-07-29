@@ -11,17 +11,20 @@ import {
   Typography,
 } from "@mui/material";
 import { Image, Send, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router";
-import api from "~/api/axios";
 import { uploadMedia } from "~/api/mediaUpload";
-import { API_ROUTES } from "@motionmeet/shared";
+import { createPost } from "~/api/endpoints";
+import {
+  CONTENT_LIMITS,
+  createOperationId,
+} from "@motionmeet/shared";
 
 
-const MediaPreview = ({ file, onRemove }) => {
+const MediaPreview = ({ file, onRemove, disabled = false }) => {
   const [url, setUrl] = useState("");
 
   useEffect(() => {
@@ -50,6 +53,7 @@ const MediaPreview = ({ file, onRemove }) => {
       <IconButton
         size="small"
         onClick={onRemove}
+        disabled={disabled}
         aria-label="Remove media"
         sx={{ position: "absolute", top: 6, right: 6, color: "common.white", bgcolor: "rgba(0,0,0,.65)", "&:hover": { bgcolor: "rgba(0,0,0,.85)" } }}
       >
@@ -67,6 +71,21 @@ const CreatePost = ({ onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const user = useSelector((state) => state.user.value);
   const { getToken } = useAuthContext();
+  const operationIdRef = useRef(null);
+  const uploadCacheRef = useRef(null);
+
+  const resetPendingSubmission = () => {
+    operationIdRef.current = null;
+    uploadCacheRef.current = null;
+  };
+
+  const replaceImages = (updater) => {
+    setImages((current) => {
+      const next = typeof updater === "function" ? updater(current) : updater;
+      resetPendingSubmission();
+      return next;
+    });
+  };
 
   const handleSubmit = async () => {
     if (!images.length && !content.trim()) return toast.error(t("feed.whats_on_mind"));
@@ -83,21 +102,32 @@ const CreatePost = ({ onSuccess }) => {
 
     try {
       const token = await getToken();
-      const uploadedKeys = await Promise.all(
-        images.map((image) => uploadMedia(image, "posts", token))
-      );
-      const { data } = await api.post(API_ROUTES.post.add, {
+      if (!token) throw new Error("Your session has expired. Please sign in again.");
+      const mediaSignature = images
+        .map((image) => `${image.name}:${image.size}:${image.lastModified}`)
+        .join("|");
+      let uploadedKeys = uploadCacheRef.current?.signature === mediaSignature
+        ? uploadCacheRef.current.keys
+        : null;
+      if (!uploadedKeys) {
+        uploadedKeys = await Promise.all(
+          images.map((image) => uploadMedia(image, "posts", token))
+        );
+        uploadCacheRef.current = { signature: mediaSignature, keys: uploadedKeys };
+      }
+      operationIdRef.current ||= createOperationId("post");
+      const data = await createPost({
+        operationId: operationIdRef.current,
         content,
         post_type: postType,
         uploadedKeys,
-      }, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      }, token);
 
       if (!data.success) throw new Error(data.message);
 
       setContent("");
       setImages([]);
+      resetPendingSubmission();
       toast.success(t("feed.post_published"));
       if (onSuccess) onSuccess();
       else navigate("/");
@@ -150,8 +180,13 @@ const CreatePost = ({ onSuccess }) => {
             variant="standard"
             placeholder={t("feed.whats_on_mind")}
             value={content}
-            onChange={(event) => setContent(event.target.value)}
+            disabled={loading}
+            onChange={(event) => {
+              setContent(event.target.value);
+              operationIdRef.current = null;
+            }}
             slotProps={{
+              htmlInput: { maxLength: CONTENT_LIMITS.post },
               input: {
                 disableUnderline: true,
                 sx: { fontSize: 14, lineHeight: 1.55 },
@@ -165,14 +200,15 @@ const CreatePost = ({ onSuccess }) => {
                 <MediaPreview
                   key={`${image.name}-${image.lastModified}-${index}`}
                   file={image}
-                  onRemove={() => setImages((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                  disabled={loading}
+                  onRemove={() => replaceImages((current) => current.filter((_, itemIndex) => itemIndex !== index))}
                 />
               ))}
             </Stack>
           )}
 
           <Stack direction="row" spacing={2} sx={{ alignItems: "center", justifyContent: "space-between", pt: 1.25, borderTop: 1, borderColor: "divider" }}>
-            <Button component="label" color="inherit" startIcon={<Image size={19} />}>
+            <Button component="label" color="inherit" startIcon={<Image size={19} />} disabled={loading}>
               {t("feed.photo_video")}
               <Box
                 component="input"
@@ -187,14 +223,23 @@ const CreatePost = ({ onSuccess }) => {
                     event.target.value = "";
                     return;
                   }
-                  setImages((current) => {
-                    const next = [...current, ...selected].slice(0, 4);
-                    if (current.length + selected.length > 4) {
-                      toast.error("A post can contain at most four media files.");
+                  const videoCount = selected.filter((file) => file.type.startsWith("video/")).length;
+                  replaceImages((current) => {
+                    const hasExistingVideo = current.some((file) => file.type.startsWith("video/"));
+                    if (
+                      videoCount > 1 ||
+                      (videoCount === 1 && (selected.length > 1 || current.length > 0)) ||
+                      (hasExistingVideo && selected.length > 0)
+                    ) {
+                      toast.error("A video post can contain one video and no additional media.");
+                      return current;
+                    }
+                    const next = [...current, ...selected].slice(0, CONTENT_LIMITS.postMediaItems);
+                    if (current.length + selected.length > CONTENT_LIMITS.postMediaItems) {
+                      toast.error(`A post can contain at most ${CONTENT_LIMITS.postMediaItems} media files.`);
                     }
                     return next;
                   });
-                  event.target.value = "";
                   event.target.value = "";
                 }}
                 sx={{ display: "none" }}

@@ -1,22 +1,19 @@
 import imagekit from "../configs/imageKit.js";
 import bcrypt from "bcryptjs";
-import { extractS3Key, uploadToS3 } from "../utils/s3Utils.js";
+import { extractS3Key } from "../utils/s3Utils.js";
 import { isFiniteNumber, isNonEmptyString, isOptionalString, isUserId } from "../utils/validation.js";
 import { hasValidMediaSignature } from "../utils/mediaValidation.js";
 import * as userService from "../services/userService.js";
 import * as accountService from "../services/accountService.js";
 import { parsePagination } from "../utils/pagination.js";
-import { escapeHtml } from "../utils/html.js";
 import {
-  commitReservedUploads,
   discardReservedUploads,
   resolveReservedUploads,
+  uploadAndReserve,
 } from "../services/mediaUploadService.js";
 import { PRIVACY_KEYS } from "@motionmeet/shared";
 import { deleteMediaOrQueue } from "../services/mediaDeletionService.js";
 import { runWithRedisLock } from "../configs/redis.js";
-
-import sendEmail from "../configs/nodeMailer.js";
 
 export const getUserData = async (req, res, next) => {
   try {
@@ -185,7 +182,13 @@ export const updateUserData = async (req, res, next) => {
     }
     try {
       if (profile) {
-        const { key } = await uploadToS3(profile.buffer, profile.originalname, "profiles", profile.mimetype);
+        const { key } = await uploadAndReserve({
+          file: profile.buffer,
+          fileName: profile.originalname,
+          userId,
+          purpose: "profiles",
+          contentType: profile.mimetype,
+        });
         newMediaKeys.push(key);
         updatedData.profile_picture = imagekit.url({
           path: key,
@@ -198,7 +201,13 @@ export const updateUserData = async (req, res, next) => {
       }
 
       if (cover) {
-        const { key } = await uploadToS3(cover.buffer, cover.originalname, "covers", cover.mimetype);
+        const { key } = await uploadAndReserve({
+          file: cover.buffer,
+          fileName: cover.originalname,
+          userId,
+          purpose: "covers",
+          contentType: cover.mimetype,
+        });
         newMediaKeys.push(key);
         updatedData.cover_photo = imagekit.url({
           path: key,
@@ -216,12 +225,13 @@ export const updateUserData = async (req, res, next) => {
 
     let updatedUser;
     try {
-      updatedUser = await userService.updateUser(userId, updatedData);
+      updatedUser = await userService.updateUser(userId, updatedData, {
+        reservationKeys: newMediaKeys,
+      });
     } catch (error) {
       await discardReservedUploads(newMediaKeys);
       throw error;
     }
-    await commitReservedUploads(reservedUploads.map(({ key }) => key));
     await deleteMediaOrQueue(oldMediaKeys);
     return res.json({ success: true, user: updatedUser, message: "Profile updated successfully" });
   } catch (error) {
@@ -278,11 +288,6 @@ export const sendConnectionRequest = async (req, res, next) => {
       return res.status(403).json({ success: false, message: "This user does not allow connection requests" });
     }
 
-    const recentRequestCount = await userService.checkRecentConnectionRequests(req.userId);
-    if (recentRequestCount >= 20) {
-      return res.status(429).json({ success: false, message: "Daily connection request limit reached" });
-    }
-
     const connection = await userService.getConnectionBetweenUsers(req.userId, targetId);
 
     if (connection?.status === "accepted") {
@@ -302,24 +307,6 @@ export const sendConnectionRequest = async (req, res, next) => {
       throw error;
     }
     
-    const recipient = await userService.getUserById(targetId);
-    const sender = await userService.getUserById(req.userId);
-    if (recipient && sender) {
-      void sendEmail({
-        to: recipient.email,
-        subject: "New Connection Request",
-        body: `
-          <div style="font-family: Arial, sans-serif; padding: 20px;">
-            <h2>Hi ${escapeHtml(recipient.full_name)},</h2>
-            <p>You have a new connection request from ${escapeHtml(sender.full_name)} - @${escapeHtml(sender.username)}</p>
-            <p>Click <a href="${process.env.FRONTEND_URL}/connections">here</a> to review it.</p>
-            <p>Thanks,<br/>MotionMeet</p>
-          </div>`,
-      }).catch((error) => {
-        console.error("Connection email failed:", error.message);
-      });
-    }
-
     return res.json({ success: true, message: "Connection request sent successfully" });
   } catch (error) {
     return next(error);
@@ -328,6 +315,30 @@ export const sendConnectionRequest = async (req, res, next) => {
 
 export const getUserConnection = async (req, res, next) => {
   try {
+    const section = req.query?.section;
+    if (section !== undefined) {
+      if (
+        !["connections", "followers", "following", "pendingConnections"].includes(
+          section
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid relationship section",
+        });
+      }
+      const pagination = parsePagination(req.query, {
+        defaultLimit: 50,
+        maxLimit: 100,
+      });
+      const page = await userService.getUserRelationshipPage(
+        req.userId,
+        section,
+        pagination
+      );
+      return res.json({ success: true, section, ...page });
+    }
+
     const connectionData = await userService.getUserConnectionsData(req.userId);
     if (!connectionData) return res.json({ success: false, message: "User not found" });
 
@@ -348,6 +359,22 @@ export const acceptConnectionRequest = async (req, res, next) => {
     if (!connection) return res.json({ success: false, message: "Connection not found" });
 
     return res.json({ success: true, message: "Connection accepted successfully" });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const removeConnection = async (req, res, next) => {
+  try {
+    const targetId = req.body?.id;
+    if (!isUserId(targetId) || targetId === req.userId) {
+      return res.status(400).json({ success: false, message: "Invalid user" });
+    }
+    const removed = await userService.removeConnection(req.userId, targetId);
+    if (!removed) {
+      return res.status(404).json({ success: false, message: "Connection not found" });
+    }
+    return res.json({ success: true, message: "Connection removed" });
   } catch (error) {
     return next(error);
   }

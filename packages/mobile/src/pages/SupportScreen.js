@@ -72,11 +72,21 @@ const SupportScreen = ({ navigation }) => {
         <TouchableOpacity borderless style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('settings.support', 'Destek')}</Text>
+        <Text
+          style={styles.headerTitle}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.75}
+        >
+          {t('settings.support', 'Destek')}
+        </Text>
         <Surface elevation={0} style={{ width: 40 }} />
       </Surface>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         {/* Contact */}
         <Surface elevation={0} style={styles.section}>
           <Text style={styles.sectionLabel}>{t('support.contact_section', 'İLETİŞİM')}</Text>
@@ -92,7 +102,7 @@ const SupportScreen = ({ navigation }) => {
                   <Surface elevation={0} style={[styles.iconBox, { backgroundColor: theme.surfaceLight }]}>
                     <Ionicons name={item.icon} size={22} color={item.iconColor} />
                   </Surface>
-                  <Surface elevation={0}>
+                  <Surface elevation={0} style={styles.rowText}>
                     <Text style={styles.rowLabel}>{item.label}</Text>
                     <Text style={styles.rowSub}>{item.subtitle}</Text>
                   </Surface>
@@ -132,7 +142,21 @@ const getStyles = (theme) => ({
     paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: theme.border,
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: theme.text },
+  headerTitle: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 8,
+    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.text,
+  },
+  scrollContent: {
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
+    paddingBottom: 40,
+  },
   section: { marginTop: 24 },
   sectionLabel: {
     fontSize: 12, fontWeight: '700', letterSpacing: 0.8, color: theme.textMuted,
@@ -147,7 +171,8 @@ const getStyles = (theme) => ({
     paddingHorizontal: 16, paddingVertical: 14,
   },
   rowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
-  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 },
+  rowText: { flex: 1, minWidth: 0 },
   iconBox: { width: 38, height: 38, borderRadius: 11, justifyContent: 'center', alignItems: 'center' },
   rowLabel: { fontSize: 15, fontWeight: '600', color: theme.text },
   rowSub: { fontSize: 12, color: theme.textMuted, marginTop: 1 },

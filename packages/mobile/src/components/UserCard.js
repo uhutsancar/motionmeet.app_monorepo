@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Alert, Image, View } from 'react-native';
 import { Surface, Text, TouchableRipple } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useDispatch, useSelector } from 'react-redux';
+import { useDispatch } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 import { useAuthContext } from '../context/AuthProvider';
 import { useTheme } from '../context/ThemeContext';
@@ -13,12 +13,9 @@ const UserCard = ({ user, onPress }) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
   const dispatch = useDispatch();
-  const currentUser = useSelector((state) => state.user.value);
-  const { connections } = useSelector((state) => state.connections);
   const { getToken } = useAuthContext();
   const [processing, setProcessing] = useState(false);
-  const isFollowing = currentUser?.following?.includes(user._id);
-  const isConnected = connections?.some((connection) => connection._id === user._id);
+  const [isFollowing, setIsFollowing] = useState(Boolean(user.isFollowing));
 
   const handleFollow = async () => {
     if (processing) return;
@@ -27,6 +24,7 @@ const UserCard = ({ user, onPress }) => {
       const token = await getToken();
       if (isFollowing) await unfollowUser(user._id, token);
       else await followUser(user._id, token);
+      setIsFollowing(!isFollowing);
       dispatch(fetchUser(token));
     } catch {
       Alert.alert(t('common.error'), t('feed.follow_failed'));
@@ -79,7 +77,6 @@ const UserCard = ({ user, onPress }) => {
           </Text>
           <Text style={{ color: theme.textMuted, fontSize: 10, marginTop: 3 }} numberOfLines={1}>
             {user.followers_count ?? user.followers?.length ?? 0} {t('feed.followers', 'followers')}
-            {isConnected ? ` · ${t('feed.connected', 'connected')}` : ''}
           </Text>
         </View>
       </View>

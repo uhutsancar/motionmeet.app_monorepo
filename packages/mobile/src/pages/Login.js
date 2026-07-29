@@ -12,6 +12,10 @@ import MotionMark from '../components/MotionMark';
 import { WEB_URL } from '../config/environment';
 import KeyboardAwareScrollView from '../components/KeyboardAwareScrollView';
 import { showError } from '../utils/feedback';
+import { AUTH_LIMITS, hasValidPasswordByteLength } from '@motionmeet/shared';
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const USERNAME_PATTERN = /^[a-z0-9._-]{3,30}$/;
 
 const Login = () => {
   const { theme } = useTheme();
@@ -43,15 +47,42 @@ const Login = () => {
         : 'Please complete every field.');
       return;
     }
+    const normalizedEmail = formData.email.trim().toLowerCase();
+    if (!EMAIL_PATTERN.test(normalizedEmail) || normalizedEmail.length > AUTH_LIMITS.email) {
+      showError('Invalid email', 'Enter a valid email address.');
+      return;
+    }
+    if (!isLogin) {
+      const normalizedUsername = formData.username.trim().toLowerCase();
+      const normalizedName = formData.full_name.trim();
+      if (!USERNAME_PATTERN.test(normalizedUsername)) {
+        showError(
+          'Invalid username',
+          'Use 3–30 lowercase letters, numbers, dots, underscores or hyphens.',
+        );
+        return;
+      }
+      if (
+        normalizedName.length < AUTH_LIMITS.fullNameMin ||
+        normalizedName.length > AUTH_LIMITS.fullNameMax
+      ) {
+        showError('Invalid name', 'Full name must be between 2 and 100 characters.');
+        return;
+      }
+      if (!hasValidPasswordByteLength(formData.password)) {
+        showError('Invalid password', 'Password must be between 10 and 72 UTF-8 bytes.');
+        return;
+      }
+    }
 
     setLoading(true);
     try {
       const result = isLogin
-        ? await login(formData.email.trim(), formData.password)
+        ? await login(normalizedEmail, formData.password)
         : await register({
           ...formData,
-          email: formData.email.trim(),
-          username: formData.username.trim(),
+          email: normalizedEmail,
+          username: formData.username.trim().toLowerCase(),
           full_name: formData.full_name.trim(),
         });
 

@@ -6,11 +6,16 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "crypto";
 import path from "path";
+import mongoose from "mongoose";
 import s3Client from "../configs/aws.js";
 import imagekit from "../configs/imageKit.js";
 import UploadReservation from "../models/UploadReservation.js";
 import { hasValidMediaSignature } from "../utils/mediaValidation.js";
-import { deleteMediaOrQueue } from "./mediaDeletionService.js";
+import { createS3Key, uploadToS3 } from "../utils/s3Utils.js";
+import {
+  processMediaDeletionJobs,
+  queueMediaDeletions,
+} from "./mediaDeletionService.js";
 
 const IMAGE_TYPES = new Set([
   "image/jpeg",
@@ -26,10 +31,10 @@ const STORY_TYPES = new Set([...IMAGE_TYPES, ...VIDEO_TYPES]);
 const PURPOSES = {
   profiles: { maxBytes: 5 * 1024 * 1024, maxFiles: 1, types: IMAGE_TYPES },
   covers: { maxBytes: 5 * 1024 * 1024, maxFiles: 1, types: IMAGE_TYPES },
-  posts: { maxBytes: 20 * 1024 * 1024, maxFiles: 4, types: STORY_TYPES },
+  posts: { maxBytes: 100 * 1024 * 1024, maxFiles: 4, types: STORY_TYPES },
   messages: { maxBytes: 5 * 1024 * 1024, maxFiles: 1, types: IMAGE_TYPES },
   stories: {
-    maxBytes: 20 * 1024 * 1024,
+    maxBytes: 100 * 1024 * 1024,
     maxFiles: 1,
     types: STORY_TYPES,
   },
@@ -61,6 +66,7 @@ export const createUploadReservation = async ({
   fileName,
   contentType,
   size,
+  maxUploadMb = -1,
 }) => {
   if (process.env.MEDIA_UPLOADS_ENABLED === "false") {
     throw Object.assign(new Error("Media uploads are disabled"), {
@@ -69,6 +75,14 @@ export const createUploadReservation = async ({
   }
   const rules = PURPOSES[purpose];
   const numericSize = Number(size);
+  const numericPlanLimit = Number(maxUploadMb);
+  const planMaxBytes =
+    Number.isFinite(numericPlanLimit) && numericPlanLimit >= 0
+      ? numericPlanLimit * 1024 * 1024
+      : rules?.maxBytes;
+  const effectiveMaxBytes = rules
+    ? Math.min(rules.maxBytes, planMaxBytes)
+    : 0;
   if (
     !rules ||
     typeof fileName !== "string" ||
@@ -77,7 +91,7 @@ export const createUploadReservation = async ({
     !rules.types.has(contentType) ||
     !Number.isSafeInteger(numericSize) ||
     numericSize < 1 ||
-    numericSize > rules.maxBytes
+    numericSize > effectiveMaxBytes
   ) {
     return null;
   }
@@ -108,7 +122,7 @@ export const createUploadReservation = async ({
     userId,
     purpose,
     contentType,
-    maxBytes: rules.maxBytes,
+    maxBytes: effectiveMaxBytes,
     expiresAt: new Date(Date.now() + 60 * 60 * 1000),
   });
 
@@ -219,12 +233,85 @@ export const resolveReservedUploads = async (userId, purpose, value) => {
   return uploads;
 };
 
-export const commitReservedUploads = async (keys) => {
-  if (keys.length) await UploadReservation.deleteMany({ key: { $in: keys } });
+export const uploadAndReserve = async ({
+  file,
+  fileName,
+  userId,
+  purpose,
+  contentType,
+}) => {
+  const rules = PURPOSES[purpose];
+  if (!rules || !rules.types.has(contentType)) {
+    throw Object.assign(new Error("Invalid media upload purpose"), {
+      status: 400,
+    });
+  }
+  const key = createS3Key(fileName, purpose);
+  await UploadReservation.create({
+    key,
+    userId,
+    purpose,
+    contentType,
+    maxBytes: rules.maxBytes,
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+  });
+  try {
+    await uploadToS3(file, fileName, purpose, contentType, key);
+  } catch (error) {
+    await discardReservedUploads([key]);
+    throw error;
+  }
+  return { key };
+};
+
+export const commitReservedUploads = async (
+  keys,
+  { session = null, userId = null } = {}
+) => {
+  const uniqueKeys = [...new Set(keys.filter(Boolean))];
+  if (!uniqueKeys.length) return;
+  const result = await UploadReservation.deleteMany(
+    {
+      key: { $in: uniqueKeys },
+      ...(userId ? { userId } : {}),
+    },
+    { session }
+  );
+  if (result.deletedCount !== uniqueKeys.length) {
+    throw Object.assign(
+      new Error("Upload reservation expired before database commit"),
+      { status: 409 }
+    );
+  }
 };
 
 export const discardReservedUploads = async (keys) => {
-  if (!keys.length) return;
-  await deleteMediaOrQueue(keys);
-  await UploadReservation.deleteMany({ key: { $in: keys } });
+  const uniqueKeys = [...new Set(keys.filter(Boolean))];
+  if (!uniqueKeys.length) return;
+  const session = await mongoose.startSession();
+  let discardedKeys = [];
+  try {
+    await session.withTransaction(async () => {
+      const reservations = await UploadReservation.find({
+        key: { $in: uniqueKeys },
+      })
+        .select("_id key")
+        .session(session);
+      discardedKeys = reservations.map((reservation) => reservation.key);
+      if (!discardedKeys.length) return;
+      await queueMediaDeletions(discardedKeys, { session });
+      await UploadReservation.deleteMany(
+        { _id: { $in: reservations.map((reservation) => reservation._id) } },
+        { session }
+      );
+    });
+  } finally {
+    await session.endSession();
+  }
+  if (discardedKeys.length) {
+    await processMediaDeletionJobs({
+      limit: discardedKeys.length,
+      keys: discardedKeys,
+    });
+  }
 };

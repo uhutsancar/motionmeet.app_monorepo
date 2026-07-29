@@ -9,6 +9,7 @@ import React, {
 import { AppState } from 'react-native';
 import { useAuthContext } from "../context/AuthProvider";
 import { io } from 'socket.io-client';
+import { createOperationId } from '@motionmeet/shared';
 import { SOCKET_URL } from '../config/environment';
 import { logHandledError } from '../utils/feedback';
 
@@ -100,10 +101,14 @@ export const SocketProvider = ({ children }) => {
     };
   }, [isLoaded, isSignedIn, userId]);
 
-  const sendMessage = useCallback((toUserId, text) => {
+  const sendMessage = useCallback((toUserId, text, operationId) => {
     const normalizedText = typeof text === 'string' ? text.trim() : '';
     if (!socketRef.current?.connected || !toUserId || !normalizedText) return false;
-    socketRef.current.emit('send_message', { to_user_id: toUserId, text: normalizedText });
+    socketRef.current.emit('send_message', {
+      to_user_id: toUserId,
+      text: normalizedText,
+      operationId: operationId || createOperationId('message'),
+    });
     return true;
   }, []);
 

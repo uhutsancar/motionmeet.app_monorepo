@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "~/api/axios";
+import { API_ROUTES } from "@motionmeet/shared";
 
 const initialState = {
   messages: [],
@@ -9,7 +10,7 @@ export const fetchMessages = createAsyncThunk(
   "messages/fetchMessages",
   async ({ token, userId }) => {
     const { data } = await api.post(
-      "/api/message/get",
+      API_ROUTES.message.get,
       { to_user_id: userId },
       {
         headers: { Authorization: `Bearer ${token}` },

@@ -17,6 +17,10 @@ import { useState } from "react";
 import { Link as RouterLink, useNavigate } from "react-router";
 import AuthShell from "~/components/AuthShell";
 import { useAuthContext } from "../context/AuthProvider.jsx";
+import { AUTH_LIMITS, hasValidPasswordByteLength } from "@motionmeet/shared";
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const USERNAME_PATTERN = /^[a-z0-9._-]{3,30}$/;
 
 const Signup = () => {
   const { register } = useAuthContext();
@@ -33,14 +37,36 @@ const Signup = () => {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
+    const email = formData.email.trim().toLowerCase();
+    const username = formData.username.trim().toLowerCase();
+    const fullName = formData.full_name.trim();
+    if (!EMAIL_PATTERN.test(email) || email.length > AUTH_LIMITS.email) {
+      setError("Enter a valid email address.");
+      return;
+    }
+    if (!USERNAME_PATTERN.test(username)) {
+      setError("Use 3–30 lowercase letters, numbers, dots, underscores or hyphens.");
+      return;
+    }
+    if (
+      fullName.length < AUTH_LIMITS.fullNameMin ||
+      fullName.length > AUTH_LIMITS.fullNameMax
+    ) {
+      setError("Full name must be between 2 and 100 characters.");
+      return;
+    }
+    if (!hasValidPasswordByteLength(formData.password)) {
+      setError("Password must be between 10 and 72 UTF-8 bytes.");
+      return;
+    }
     setLoading(true);
 
     try {
       const result = await register({
         ...formData,
-        email: formData.email.trim(),
-        username: formData.username.trim(),
-        full_name: formData.full_name.trim(),
+        email,
+        username,
+        full_name: fullName,
       });
       if (result.success) {
         navigate("/feed");
@@ -107,7 +133,7 @@ const Signup = () => {
             onChange={updateField("password")}
             helperText="Use at least 10 characters."
             slotProps={{
-              htmlInput: { minLength: 8 },
+              htmlInput: { minLength: AUTH_LIMITS.passwordMinBytes },
               input: {
                 startAdornment: inputIcon(LockOutlined),
                 endAdornment: (

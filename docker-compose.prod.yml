@@ -1,56 +1,9 @@
 name: motionmeet_prod
 
+# Production intentionally does not bundle single-node MongoDB or Redis.
+# .env.production must point at authenticated, backed-up, highly available
+# managed services.
 services:
-  mongo:
-    image: mongo:8.0
-    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
-    expose:
-      - "27017"
-    healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-    restart: unless-stopped
-    volumes:
-      - mongo_prod_data:/data/db
-    networks:
-      - data
-
-  mongo-init:
-    image: mongo:8.0
-    depends_on:
-      mongo:
-        condition: service_healthy
-    restart: "no"
-    command:
-      - mongosh
-      - mongodb://mongo:27017/admin
-      - --quiet
-      - --eval
-      - >-
-        try { rs.status() } catch (error) {
-          rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]})
-        }
-    networks:
-      - data
-
-  redis:
-    image: redis:7.4-alpine
-    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
-    expose:
-      - "6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 10
-    restart: unless-stopped
-    volumes:
-      - redis_prod_data:/data
-    networks:
-      - data
-
   backend:
     build:
       context: .
@@ -61,22 +14,14 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
-      MONGODB_URL: ${MONGODB_URL:-mongodb://mongo:27017/motionmeet?replicaSet=rs0}
-      MONGODB_DB_NAME: ${MONGODB_DB_NAME:-motionmeet}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
     expose:
       - "4000"
-    depends_on:
-      mongo-init:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 20s
       timeout: 5s
       retries: 6
-      start_period: 20s
+      start_period: 30s
     restart: unless-stopped
     init: true
     read_only: true
@@ -88,7 +33,6 @@ services:
       - ALL
     networks:
       - edge
-      - data
 
   web:
     build:
@@ -123,9 +67,3 @@ services:
 
 networks:
   edge:
-  data:
-    internal: true
-
-volumes:
-  mongo_prod_data:
-  redis_prod_data:

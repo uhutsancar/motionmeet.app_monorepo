@@ -1,5 +1,6 @@
 import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
@@ -43,7 +44,13 @@ const MainExercisesScreen = ({ navigation }) => {
       elevation: 0,
     },
     headerTitle: { fontSize: 17, fontWeight: '700', color: theme.text },
-    content: { padding: 16 },
+    content: {
+      width: '100%',
+      maxWidth: 720,
+      alignSelf: 'center',
+      padding: 16,
+      paddingBottom: 40,
+    },
     list: { backgroundColor: theme.surface, borderRadius: 20, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' },
     listItem: {
       flexDirection: 'row', alignItems: 'center', padding: 16,
@@ -55,7 +62,7 @@ const MainExercisesScreen = ({ navigation }) => {
       justifyContent: 'center', alignItems: 'center', marginRight: 16
     },
     rankText: { fontWeight: '800', color: theme.primary },
-    itemInfo: { flex: 1, backgroundColor: 'transparent' },
+    itemInfo: { flex: 1, minWidth: 0, backgroundColor: 'transparent' },
     itemName: { fontWeight: '600', color: theme.text, marginBottom: 4 },
     itemValue: { color: theme.textMuted },
     emptyState: { alignItems: 'center', marginTop: 60, backgroundColor: 'transparent' },
@@ -63,8 +70,8 @@ const MainExercisesScreen = ({ navigation }) => {
   }), [theme]);
 
   return (
-    <Surface style={styles.container} elevation={0}>
-      <Appbar.Header style={styles.header}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <Appbar.Header style={styles.header} statusBarHeight={0}>
         <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
         <Appbar.Content title={t('statistics.main_exercises', 'Ana egzersizler')} titleStyle={styles.headerTitle} />
       </Appbar.Header>
@@ -88,7 +95,7 @@ const MainExercisesScreen = ({ navigation }) => {
                         <Text variant="titleMedium" style={styles.rankText}>#{index + 1}</Text>
                     </Surface>
                     <Surface style={styles.itemInfo} elevation={0}>
-                        <Text variant="titleMedium" style={styles.itemName}>{translatedName}</Text>
+                        <Text variant="titleMedium" numberOfLines={2} style={styles.itemName}>{translatedName}</Text>
                         <Text variant="bodyMedium" style={styles.itemValue}>
                           {(item.volume || 0).toLocaleString()} {t('common.kg', 'kg')} · {(item.reps || 0).toLocaleString()} {t('routines.reps', 'reps').toLowerCase()} · {item.sets || 0} {t('statistics.sets', 'sets').toLowerCase()}
                         </Text>
@@ -98,7 +105,7 @@ const MainExercisesScreen = ({ navigation }) => {
           </Surface>
         )}
       </ScrollView>
-    </Surface>
+    </SafeAreaView>
   );
 };
 

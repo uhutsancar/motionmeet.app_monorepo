@@ -5,13 +5,32 @@ import path from "path";
 import s3Client from "../configs/aws.js";
 
 /**
+ * @param {string} fileName - The name of the file.
+ * @param {string} folder - The folder in S3 (e.g., 'posts', 'profiles').
+ * @returns {string}
+ */
+export const createS3Key = (fileName, folder = "") => {
+    const safeName = path.basename(fileName || "upload").replace(/[^A-Za-z0-9._-]/g, "-");
+    const objectName = `${Date.now()}-${randomUUID()}-${safeName}`;
+    return folder ? `${folder}/${objectName}` : objectName;
+};
+
+/**
  * Uploads a file to AWS S3.
  * @param {Buffer|ReadableStream} file - The file content.
  * @param {string} fileName - The name of the file.
- * @param {string} folder - The folder in S3 (e.g., 'posts', 'profiles').
- * @returns {Promise<Object>} - S3 upload response containing the Key.
+ * @param {string} folder - The folder in S3.
+ * @param {string} [contentType] - The object content type.
+ * @param {string|null} [objectKey] - A pre-reserved object key.
+ * @returns {Promise<{key: string}>}
  */
-export const uploadToS3 = async (file, fileName, folder = "", contentType) => {
+export const uploadToS3 = async (
+    file,
+    fileName,
+    folder = "",
+    contentType,
+    objectKey = null
+) => {
     if (process.env.MEDIA_UPLOADS_ENABLED === "false") {
         throw Object.assign(new Error("Media uploads are disabled"), {
             status: 503,
@@ -23,9 +42,7 @@ export const uploadToS3 = async (file, fileName, folder = "", contentType) => {
         });
     }
 
-    const safeName = path.basename(fileName || "upload").replace(/[^A-Za-z0-9._-]/g, "-");
-    const objectName = `${Date.now()}-${randomUUID()}-${safeName}`;
-    const key = folder ? `${folder}/${objectName}` : objectName;
+    const key = objectKey || createS3Key(fileName, folder);
     
     const parallelUploads3 = new Upload({
         client: s3Client,

@@ -5,7 +5,13 @@ const exerciseSchema = new mongoose.Schema(
     // Dataset'ten gelen orijinal kimlik (örn. "0001")
     externalId: { type: String, unique: true, sparse: true, index: true },
 
-    name: { type: String, required: true, index: true },
+    name: { type: String, required: true, trim: true, maxlength: 200 },
+    nameNormalized: {
+      type: String,
+      required: true,
+      select: false,
+      maxlength: 200,
+    },
 
     // Dataset'teki "body_part" alanına map edilir (geniş kas grubu, örn. "waist", "chest")
     muscleGroup: { type: String, required: true, index: true },
@@ -53,6 +59,18 @@ exerciseSchema.index({ muscleGroup: 1, equipment: 1 });
 
 // category bazlı filtreleme
 exerciseSchema.index({ category: 1 });
+exerciseSchema.index({
+  isCustom: 1,
+  muscleGroup: 1,
+  equipment: 1,
+  nameNormalized: 1,
+  _id: 1,
+});
+exerciseSchema.index({ createdBy: 1, nameNormalized: 1, _id: 1 });
+
+exerciseSchema.pre("validate", function normalizeName() {
+  this.nameNormalized = String(this.name || "").trim().toLocaleLowerCase("en-US");
+});
 
 const Exercise = mongoose.model("Exercise", exerciseSchema);
 

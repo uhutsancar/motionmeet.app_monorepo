@@ -21,6 +21,8 @@ const managedKeys = [
   "SMTP_USER",
   "SMTP_PASS",
   "SENDER_EMAIL",
+  "ALLOW_INSECURE_MONGO_TLS",
+  "ALLOW_INSECURE_REDIS_TLS",
 ];
 
 const originalEnvironment = Object.fromEntries(
@@ -36,9 +38,10 @@ const restoreEnvironment = () => {
 
 const configureProductionBase = () => {
   process.env.NODE_ENV = "production";
-  process.env.MONGODB_URL = "mongodb://mongo:27017/motionmeet";
+  process.env.MONGODB_URL =
+    "mongodb://app:secret@mongo:27017/motionmeet?replicaSet=rs0&tls=true";
   process.env.MONGODB_DB_NAME = "motionmeet";
-  process.env.REDIS_URL = "redis://redis:6379";
+  process.env.REDIS_URL = "rediss://default:secret@redis:6379";
   process.env.FRONTEND_URL = "https://app.example.com";
   process.env.CORS_ORIGINS = "https://app.example.com";
   process.env.JWT_SECRET = "0123456789abcdef0123456789abcdef";
@@ -94,6 +97,26 @@ test("enabled media and email capabilities require credentials", () => {
     process.env.MEDIA_UPLOADS_ENABLED = "false";
     process.env.EMAIL_ENABLED = "true";
     assert.throws(() => validateEnvironment(), /email environment variables/);
+  } finally {
+    restoreEnvironment();
+  }
+});
+
+test("production rejects unauthenticated or non-replica database URLs", () => {
+  try {
+    configureProductionBase();
+    process.env.MONGODB_URL =
+      "mongodb://mongo:27017/motionmeet?replicaSet=rs0&tls=true";
+    assert.throws(() => validateEnvironment(), /credentials/);
+
+    process.env.MONGODB_URL =
+      "mongodb://app:secret@mongo:27017/motionmeet?tls=true";
+    assert.throws(() => validateEnvironment(), /replica set/);
+
+    process.env.MONGODB_URL =
+      "mongodb://app:secret@mongo:27017/motionmeet?replicaSet=rs0&tls=true";
+    process.env.REDIS_URL = "redis://redis:6379";
+    assert.throws(() => validateEnvironment(), /password/);
   } finally {
     restoreEnvironment();
   }

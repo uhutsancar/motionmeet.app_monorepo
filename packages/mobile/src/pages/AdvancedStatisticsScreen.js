@@ -400,11 +400,11 @@ const AdvancedStatisticsScreen = ({ navigation }) => {
               </View>
               {muscleData.map(item => (
                 <View key={item.name} style={{ marginBottom: 14 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <Text style={{ color: theme.textSecondary, fontSize: 12, fontWeight: '700' }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                    <Text numberOfLines={2} style={{ flex: 1, minWidth: 0, color: theme.textSecondary, fontSize: 12, fontWeight: '700' }}>
                       {t(`muscle_groups.${item.name}`, item.name)}
                     </Text>
-                    <Text style={{ color: blue, fontSize: 12, fontWeight: '900' }}>{item.value}%</Text>
+                    <Text style={{ flexShrink: 0, color: blue, fontSize: 12, fontWeight: '900' }}>{item.value}%</Text>
                   </View>
                   <View style={{ height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: theme.surfaceLight }}>
                     <View

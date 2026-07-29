@@ -1,0 +1,31 @@
+name: motionmeet_test
+
+services:
+  mongo-test:
+    image: mongo:8.0
+    command: ["mongod", "--port", "27018", "--replSet", "rsTest", "--bind_ip_all"]
+    ports:
+      - "${MONGO_TEST_PORT:-27018}:27018"
+    healthcheck:
+      test: ["CMD", "mongosh", "--port", "27018", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    tmpfs:
+      - /data/db
+
+  mongo-test-init:
+    image: mongo:8.0
+    depends_on:
+      mongo-test:
+        condition: service_healthy
+    restart: "no"
+    command:
+      - mongosh
+      - mongodb://mongo-test:27018/admin
+      - --quiet
+      - --eval
+      - >-
+        try { rs.status() } catch (error) {
+          rs.initiate({_id: "rsTest", members: [{_id: 0, host: "localhost:${MONGO_TEST_PORT:-27018}"}]})
+        }

@@ -73,7 +73,8 @@ overrides are needed. A physical device must use LAN-accessible
 ## Docker production
 
 1. Copy `.env.production.example` to `.env.production`.
-2. Replace `JWT_SECRET`, `FRONTEND_URL`, and `CORS_ORIGINS`.
+2. Set authenticated `MONGODB_URL`, `REDIS_URL`, `JWT_SECRET`,
+   `FRONTEND_URL`, and `CORS_ORIGINS`.
 3. Enable media/email only after their credentials are supplied.
 4. Validate and start:
 
@@ -85,15 +86,12 @@ docker compose -f docker-compose.prod.yml ps
 ```
 
 The production stack serves the SPA and reverse-proxies `/api`, `/health`, and
-Socket.IO from one origin. The API and web containers are read-only and
-drop Linux capabilities. MongoDB and Redis are on an internal network and are
-not published on the host.
-
-The included MongoDB service is suitable for a single-host deployment. For
-serious production workloads, supply `MONGODB_URL` for an authenticated managed
-replica set with backups and multi-zone failover. Put the web container behind
-an HTTPS reverse proxy or load balancer; `FRONTEND_URL` and `CORS_ORIGINS` must
-use that exact HTTPS origin.
+Socket.IO from one origin. The API and web containers are read-only and drop
+Linux capabilities. Production intentionally requires external authenticated,
+TLS-enabled MongoDB replica-set and Redis services; it does not bundle
+single-node data stores. Put the web container behind an HTTPS reverse proxy or
+load balancer; `FRONTEND_URL` and `CORS_ORIGINS` must use that exact HTTPS
+origin.
 
 Native iOS/Android binaries are not server containers. Build them with the Expo
 native/EAS workflow using production HTTPS values.
@@ -103,7 +101,7 @@ See [docs/production.md](docs/production.md) for the deployment checklist and
 
 ## Data migrations
 
-Both commands are dry-run by default:
+Migration commands are dry-run by default:
 
 ```bash
 corepack pnpm --filter @motionmeet/backend migrate:database-namespace
@@ -122,6 +120,15 @@ corepack pnpm --filter @motionmeet/backend migrate:workout-metrics:apply
 The namespace migration safely merges legacy data from the implicit `test`
 database into `MONGODB_DB_NAME` and leaves the source database intact. Run it
 before changing an existing deployment from an unnamed MongoDB database.
+
+Production startup requires the integrity migration and verified index
+contract. Run namespace, integrity and workout-metrics migrations in that order
+after a tested backup. See [docs/database.md](docs/database.md) for the data
+model, reconciliation and high-traffic operating rules.
+
+Public registration always creates a normal user. Promote the first
+administrator only through the explicit confirmed command documented in
+[docs/production.md](docs/production.md).
 
 ## Exercise media
 

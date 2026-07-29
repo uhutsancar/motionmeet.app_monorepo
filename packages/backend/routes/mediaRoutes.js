@@ -2,7 +2,7 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import { presignMediaUpload } from "../controllers/mediaController.js";
 import { createRateLimitStore } from "../configs/redis.js";
-import { protect } from "../middlewares/auth.js";
+import { attachDbUser, protect } from "../middlewares/auth.js";
 
 const mediaRouter = express.Router();
 const presignLimiter = rateLimit({
@@ -14,6 +14,12 @@ const presignLimiter = rateLimit({
   message: { success: false, message: "Too many upload requests" },
 });
 
-mediaRouter.post("/presign", protect, presignLimiter, presignMediaUpload);
+mediaRouter.post(
+  "/presign",
+  protect,
+  presignLimiter,
+  attachDbUser,
+  presignMediaUpload
+);
 
 export default mediaRouter;

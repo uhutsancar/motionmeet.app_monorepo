@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import Connection from "../models/Connection.js";
+import Conversation from "../models/Conversation.js";
 import Exercise from "../models/Exercise.js";
 import Message from "../models/Message.js";
 import Post from "../models/Post.js";
@@ -15,11 +16,12 @@ import Usage from "../models/Usage.js";
 import UploadReservation from "../models/UploadReservation.js";
 import Workout from "../models/Workout.js";
 import PasswordResetToken from "../models/PasswordResetToken.js";
+import PersonalRecord from "../models/PersonalRecord.js";
+import UserDailyWorkoutStat from "../models/UserDailyWorkoutStat.js";
+import UserExerciseDailyStat from "../models/UserExerciseDailyStat.js";
+import OutboxEvent from "../models/OutboxEvent.js";
 import { extractS3Key } from "../utils/s3Utils.js";
-import {
-  deleteMediaOrQueue,
-  queueMediaDeletions,
-} from "./mediaDeletionService.js";
+import { queueMediaDeletions } from "./mediaDeletionService.js";
 
 const uniqueMediaKeys = (values) => [
   ...new Set(
@@ -89,6 +91,7 @@ export const streamAccountData = async (userId, response) => {
         $or: [{ from_user_id: userId }, { to_user_id: userId }],
       }),
     ],
+    ["conversations", Conversation.find({ participants: userId })],
   ];
 
   for (const [name, query] of sections) {
@@ -108,6 +111,9 @@ export const streamAccountData = async (userId, response) => {
     ["passwordResetTokens", PasswordResetToken.find({ userId })],
     ["usage", Usage.find({ userId })],
     ["uploadReservations", UploadReservation.find({ userId })],
+    ["personalRecords", PersonalRecord.find({ userId })],
+    ["dailyWorkoutStats", UserDailyWorkoutStat.find({ userId })],
+    ["exerciseDailyStats", UserExerciseDailyStat.find({ userId })],
   ];
   for (const [name, query] of privateSections) {
     await writeChunk(response, `,${JSON.stringify(name)}:`);
@@ -120,7 +126,7 @@ export const streamAccountData = async (userId, response) => {
 };
 
 export const deleteAccountData = async (userId) => {
-  const [user, posts, stories, messages, reservations, followingDocs, followersDocs, connectionsDocs, postLikesDocs] = await Promise.all([
+  const [user, posts, stories, messages, reservations, followingDocs, followersDocs, connectionsDocs, postLikesDocs, postCommentsDocs] = await Promise.all([
     User.findById(userId)
       .select("profile_picture cover_photo +profile_picture_key +cover_photo_key")
       .lean(),
@@ -136,14 +142,21 @@ export const deleteAccountData = async (userId) => {
     UserFollow.find({ followeeId: userId }).select("followerId").lean(),
     Connection.find({ $or: [{ from_user_id: userId }, { to_user_id: userId }], status: "accepted" }).lean(),
     PostLike.find({ userId }).select("postId").lean(),
+    PostComment.find({ userId }).select("postId").lean(),
   ]);
 
   if (!user) return false;
   const ownedPostIds = posts.map((post) => post._id);
+  const ownedStoryIds = stories.map((story) => story._id);
   const followeeIds = followingDocs?.map(f => f.followeeId) || [];
   const followerIds = followersDocs?.map(f => f.followerId) || [];
   const connectionUserIds = (connectionsDocs || []).map(c => c.from_user_id === userId ? c.to_user_id : c.from_user_id);
   const likedPostIds = (postLikesDocs || []).map(l => l.postId);
+  const commentCountsByPost = new Map();
+  for (const comment of postCommentsDocs || []) {
+    const postId = comment.postId.toString();
+    commentCountsByPost.set(postId, (commentCountsByPost.get(postId) || 0) + 1);
+  }
 
   const mediaKeys = uniqueMediaKeys([
     user.profile_picture_key || user.profile_picture,
@@ -168,6 +181,7 @@ export const deleteAccountData = async (userId) => {
         { $or: [{ from_user_id: userId }, { to_user_id: userId }] },
         { session }
       );
+      await Conversation.deleteMany({ participants: userId }, { session });
       await Message.deleteMany(
         { $or: [{ from_user_id: userId }, { to_user_id: userId }] },
         { session }
@@ -182,22 +196,81 @@ export const deleteAccountData = async (userId) => {
       );
       await Exercise.deleteMany({ createdBy: userId }, { session });
       await Post.deleteMany({ user: userId }, { session });
-      await Post.updateMany({ _id: { $in: likedPostIds } }, { $inc: { like_count: -1 } }, { session });
+      await Post.updateMany(
+        { _id: { $in: likedPostIds } },
+        [{ $set: { like_count: { $max: [0, { $subtract: [{ $ifNull: ["$like_count", 0] }, 1] }] } } }],
+        { session }
+      );
+      if (commentCountsByPost.size > 0) {
+        await Post.bulkWrite(
+          [...commentCountsByPost.entries()].map(([postId, count]) => ({
+            updateOne: {
+              filter: { _id: postId },
+              update: [
+                {
+                  $set: {
+                    comment_count: {
+                      $max: [
+                        0,
+                        {
+                          $subtract: [
+                            { $ifNull: ["$comment_count", 0] },
+                            count,
+                          ],
+                        },
+                      ],
+                    },
+                  },
+                },
+              ],
+            },
+          })),
+          { session }
+        );
+      }
       await Story.deleteMany({ user: userId }, { session });
-      await StoryView.deleteMany({ userId }, { session });
+      await StoryView.deleteMany(
+        { $or: [{ userId }, { storyId: { $in: ownedStoryIds } }] },
+        { session }
+      );
       await Routine.deleteMany({ userId }, { session });
       await Workout.deleteMany({ userId }, { session });
+      await PersonalRecord.deleteMany({ userId }, { session });
+      await UserDailyWorkoutStat.deleteMany({ userId }, { session });
+      await UserExerciseDailyStat.deleteMany({ userId }, { session });
+      await OutboxEvent.deleteMany(
+        {
+          $or: [
+            { aggregateId: userId },
+            { "payload.senderId": userId },
+            { "payload.recipientId": userId },
+          ],
+        },
+        { session }
+      );
       
       await UserFollow.deleteMany({ $or: [{ followerId: userId }, { followeeId: userId }] }, { session });
       
       if (followeeIds.length > 0) {
-        await User.updateMany({ _id: { $in: followeeIds } }, { $inc: { followers_count: -1 } }, { session });
+        await User.updateMany(
+          { _id: { $in: followeeIds } },
+          [{ $set: { followers_count: { $max: [0, { $subtract: [{ $ifNull: ["$followers_count", 0] }, 1] }] } } }],
+          { session }
+        );
       }
       if (followerIds.length > 0) {
-        await User.updateMany({ _id: { $in: followerIds } }, { $inc: { following_count: -1 } }, { session });
+        await User.updateMany(
+          { _id: { $in: followerIds } },
+          [{ $set: { following_count: { $max: [0, { $subtract: [{ $ifNull: ["$following_count", 0] }, 1] }] } } }],
+          { session }
+        );
       }
       if (connectionUserIds.length > 0) {
-        await User.updateMany({ _id: { $in: connectionUserIds } }, { $inc: { connections_count: -1 } }, { session });
+        await User.updateMany(
+          { _id: { $in: connectionUserIds } },
+          [{ $set: { connections_count: { $max: [0, { $subtract: [{ $ifNull: ["$connections_count", 0] }, 1] }] } } }],
+          { session }
+        );
       }
       await User.deleteOne({ _id: userId }, { session });
     });
@@ -205,6 +278,5 @@ export const deleteAccountData = async (userId) => {
     await session.endSession();
   }
 
-  await deleteMediaOrQueue(mediaKeys);
   return true;
 };

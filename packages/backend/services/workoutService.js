@@ -5,35 +5,87 @@ import {
   cursorFilter,
   pageFromDocuments,
 } from "../utils/pagination.js";
+import * as quotaService from "./quotaService.js";
+import {
+  applyWorkoutAnalytics,
+  getComputedWorkoutStats,
+} from "./workoutAnalyticsService.js";
 
-export const countUserWorkoutsFromDate = async (userId, startDate) => {
+export const countUserWorkoutsFromDate = async (userId, startDate, session) => {
   return await Workout.countDocuments({ 
     userId,
     createdAt: { $gte: startDate }
-  });
+  }).session(session || null);
 };
 
-export const createWorkoutWithStatistics = async (workoutData) => {
+export const createWorkoutWithStatistics = async (
+  workoutData,
+  { quotaLimit = -1 } = {}
+) => {
+  if (workoutData.operationId) {
+    const existing = await Workout.findOne({
+      userId: workoutData.userId,
+      operationId: workoutData.operationId,
+    });
+    if (existing) return existing;
+  }
+
   const session = await mongoose.startSession();
   let workout = null;
   try {
-    await session.withTransaction(async () => {
-      [workout] = await Workout.create([workoutData], { session });
-      const result = await User.updateOne(
-        { _id: workoutData.userId },
-        {
-          $inc: {
-            "statistics.totalWorkouts": 1,
-            "statistics.totalDurationMinutes": Number(workoutData.durationMinutes || 0),
-            "statistics.totalVolumeKg": Number(workoutData.volumeKg || 0),
+    try {
+      await session.withTransaction(async () => {
+        if (quotaLimit !== -1) {
+          const now = new Date();
+          const startOfMonth = new Date(
+            Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
+          );
+          const reserved = await quotaService.reserveQuota({
+            userId: workoutData.userId,
+            bucket: quotaService.workoutBucket(now),
+            limit: quotaLimit,
+            getCurrentCount: () =>
+              countUserWorkoutsFromDate(
+                workoutData.userId,
+                startOfMonth,
+                session
+              ),
+            session,
+            expiresAt: quotaService.monthlyUsageExpiry(now),
+          });
+          if (!reserved) {
+            throw Object.assign(
+              new Error(`Monthly workout limit reached (${quotaLimit})`),
+              { status: 403 }
+            );
+          }
+        }
+
+        [workout] = await Workout.create([workoutData], { session });
+        await applyWorkoutAnalytics(workout, { session });
+        const result = await User.updateOne(
+          { _id: workoutData.userId },
+          {
+            $inc: {
+              "statistics.totalWorkouts": 1,
+              "statistics.totalDurationMinutes": Number(workoutData.durationMinutes || 0),
+              "statistics.totalVolumeKg": Number(workoutData.volumeKg || 0),
+            },
           },
-        },
-        { session }
-      );
-      if (result.matchedCount !== 1) {
-        throw new Error("Workout owner no longer exists");
-      }
-    });
+          { session }
+        );
+        if (result.matchedCount !== 1) {
+          throw new Error("Workout owner no longer exists");
+        }
+      });
+    } catch (error) {
+      if (error?.code !== 11000 || !workoutData.operationId) throw error;
+      workout = await Workout.findOne({
+        userId: workoutData.userId,
+        operationId: workoutData.operationId,
+      });
+      if (!workout) throw error;
+    }
     return workout;
   } finally {
     await session.endSession();
@@ -45,7 +97,7 @@ export const getUserWorkoutsList = async (userId, pagination) => {
     userId,
     ...cursorFilter(pagination.cursor, "startTime"),
   })
-    .populate("exercises.exerciseId")
+    .populate("exercises.exerciseId", "name muscleGroup equipment imageUrl gifUrl")
     .sort({ startTime: -1, _id: -1 })
     .limit(pagination.limit + 1);
   return pageFromDocuments(documents, pagination.limit, "startTime");
@@ -87,7 +139,7 @@ const getCurrentWorkoutStreak = async (userId, now) => {
   return streak;
 };
 
-export const getWorkoutStatsData = async (userId, period) => {
+export const getWorkoutStatsDataLegacy = async (userId, period) => {
   const now = new Date();
   const isMonthly = period === "month" || period === "calendar_month";
   const cutoff =
@@ -105,7 +157,6 @@ export const getWorkoutStatsData = async (userId, period) => {
     startTime: { $gte: cutoff, $lte: now },
   })
     .select("startTime createdAt durationMinutes volumeKg totalSets totalReps metricsVersion exercises")
-    .populate("exercises.exerciseId", "name muscleGroup")
     .sort({ startTime: 1, _id: 1 })
     .lean();
 
@@ -166,8 +217,8 @@ export const getWorkoutStatsData = async (userId, period) => {
     if (w.exercises) {
       w.exercises.forEach((ex) => {
         const exerciseDoc = /** @type {any} */ (ex.exerciseId);
-        const name = exerciseDoc?.name || "Exercise";
-        const rawMuscle = (exerciseDoc?.muscleGroup || "").toLowerCase();
+        const name = ex.exerciseName || exerciseDoc?.name || "Exercise";
+        const rawMuscle = (ex.muscleGroup || exerciseDoc?.muscleGroup || "").toLowerCase();
         const normalizedMuscle = muscleMap[rawMuscle] || rawMuscle;
 
         if (!exerciseTotals[name]) {
@@ -237,3 +288,5 @@ export const getWorkoutStatsData = async (userId, period) => {
     currentStreakDays: await getCurrentWorkoutStreak(userId, now),
   };
 };
+
+export const getWorkoutStatsData = getComputedWorkoutStats;

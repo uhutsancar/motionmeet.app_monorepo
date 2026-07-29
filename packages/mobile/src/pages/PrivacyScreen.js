@@ -133,7 +133,14 @@ const PrivacyScreen = ({ navigation }) => {
         <TouchableOpacity borderless style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('settings.privacy', 'Gizlilik')}</Text>
+        <Text
+          style={styles.headerTitle}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.75}
+        >
+          {t('settings.privacy', 'Gizlilik')}
+        </Text>
         <Surface elevation={0} style={styles.headerRight} />
       </Surface>
 
@@ -260,7 +267,15 @@ const getStyles = (theme) => ({
     paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: theme.border,
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: theme.text },
+  headerTitle: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 8,
+    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.text,
+  },
   section: { marginTop: 24 },
   sectionLabel: {
     fontSize: 12, fontWeight: '700', letterSpacing: 0.8, color: theme.textMuted,
@@ -275,13 +290,18 @@ const getStyles = (theme) => ({
     paddingHorizontal: 16, paddingVertical: 14,
   },
   rowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
-  rowText: { flex: 1, paddingRight: 12 },
+  rowText: { flex: 1, minWidth: 0, paddingRight: 12 },
   rowLabel: { flexShrink: 1, fontSize: 15, fontWeight: '600', color: theme.text },
   rowSub: { fontSize: 12, color: theme.textMuted, marginTop: 2 },
   passwordInput: { marginTop: 16 },
   dialogKeyboardView: { flex: 1, justifyContent: 'center' },
   headerRight: { width: 40 },
-  scrollContent: { paddingBottom: 40 },
+  scrollContent: {
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
+    paddingBottom: 40,
+  },
   dangerText: { color: '#ef4444' },
 });
 

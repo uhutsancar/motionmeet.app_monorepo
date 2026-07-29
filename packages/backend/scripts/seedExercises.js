@@ -8,8 +8,8 @@
 import path from "path";
 import { fileURLToPath } from "url";
 import { readFileSync } from "fs";
-import mongoose from "mongoose";
 import dotenv from "dotenv";
+import connectDB, { disconnectDB } from "../configs/db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
@@ -59,6 +59,7 @@ const mapExercise = (ex) => {
   return {
     externalId: ex.id,
     name: ex.name,
+    nameNormalized: String(ex.name || "").trim().toLocaleLowerCase("en-US"),
     muscleGroup: muscleMap[rawMuscle] || "other",
     equipment: equipmentMap[rawEq] || "other",
     gifUrl: ex.gif_url || ex.gifUrl || "",
@@ -72,7 +73,7 @@ const mapExercise = (ex) => {
 const BATCH = 200;
 
 async function seed() {
-  await mongoose.connect(MONGO_URI);
+  await connectDB();
   console.log("✅  Connected to MongoDB");
 
   const Exercise = (await import("../models/Exercise.js")).default;
@@ -101,7 +102,7 @@ async function seed() {
   }
 
   console.log(`\n\n✅  Done. Upserted/Updated: ${upserted}, Unchanged: ${skipped - upserted}`);
-  await mongoose.disconnect();
+  await disconnectDB();
 }
 
 seed().catch((err) => {

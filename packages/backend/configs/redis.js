@@ -12,6 +12,7 @@ const redisClient = redisUrl
   : null;
 let redisPublisher = null;
 let redisSubscriber = null;
+let redisInitialization = null;
 const localLimits = new Map();
 
 if (redisClient) {
@@ -35,23 +36,35 @@ if (redisClient) {
 
 export const initializeRedis = async () => {
   if (!redisClient) return null;
-  if (!redisClient.isOpen) await redisClient.connect();
-
-  redisPublisher = redisClient.duplicate();
-  redisSubscriber = redisClient.duplicate();
-  redisPublisher.on("error", (error) =>
-    console.error("Redis publisher error:", error.message)
-  );
-  redisSubscriber.on("error", (error) =>
-    console.error("Redis subscriber error:", error.message)
-  );
-  await Promise.all([redisPublisher.connect(), redisSubscriber.connect()]);
-
-  return {
-    client: redisClient,
-    publisher: redisPublisher,
-    subscriber: redisSubscriber,
-  };
+  if (redisPublisher?.isReady && redisSubscriber?.isReady) {
+    return {
+      client: redisClient,
+      publisher: redisPublisher,
+      subscriber: redisSubscriber,
+    };
+  }
+  if (!redisInitialization) {
+    redisInitialization = (async () => {
+      if (!redisClient.isOpen) await redisClient.connect();
+      redisPublisher = redisClient.duplicate();
+      redisSubscriber = redisClient.duplicate();
+      redisPublisher.on("error", (error) =>
+        console.error("Redis publisher error:", error.message)
+      );
+      redisSubscriber.on("error", (error) =>
+        console.error("Redis subscriber error:", error.message)
+      );
+      await Promise.all([redisPublisher.connect(), redisSubscriber.connect()]);
+      return {
+        client: redisClient,
+        publisher: redisPublisher,
+        subscriber: redisSubscriber,
+      };
+    })().finally(() => {
+      redisInitialization = null;
+    });
+  }
+  return redisInitialization;
 };
 
 export const createRateLimitStore = (prefix) => {
@@ -77,10 +90,26 @@ export const runWithRedisLock = async (name, ttlSeconds, task) => {
   });
   if (acquired !== "OK") return false;
 
+  const renewalInterval = setInterval(() => {
+    void redisClient
+      .eval(
+        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('expire', KEYS[1], ARGV[2]) else return 0 end",
+        {
+          keys: [key],
+          arguments: [value, String(ttlSeconds)],
+        }
+      )
+      .catch((error) =>
+        console.error(`Redis lock renewal failed (${name}):`, error.message)
+      );
+  }, Math.max(1_000, Math.floor((ttlSeconds * 1000) / 3)));
+  renewalInterval.unref();
+
   try {
     await task();
     return true;
   } finally {
+    clearInterval(renewalInterval);
     await redisClient.eval(
       "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
       { keys: [key], arguments: [value] }
@@ -102,6 +131,11 @@ export const consumeDistributedLimit = async (
 ) => {
   if (!redisClient?.isReady) {
     const now = Date.now();
+    if (localLimits.size > 10_000) {
+      for (const [entryKey, entry] of localLimits) {
+        if (entry.expiresAt <= now) localLimits.delete(entryKey);
+      }
+    }
     const existing = localLimits.get(key);
     const entry =
       !existing || existing.expiresAt <= now
@@ -126,39 +160,4 @@ export const disconnectRedis = async () => {
     (client) => client?.isOpen
   );
   await Promise.allSettled(clients.map((client) => client.quit()));
-};
-
-/**
- * DBA Optimization: Buffer count increments in Redis to avoid MongoDB hot document lock contention.
- * Example key: motionmeet:buffer:like:post123
- */
-export const bufferCountIncrement = async (type, id, value = 1) => {
-  if (!redisClient?.isReady) return false;
-  try {
-    await redisClient.hIncrBy(`motionmeet:buffer:${type}`, id, value);
-    return true;
-  } catch (error) {
-    console.error(`Redis buffer increment error (${type}:${id}):`, error.message);
-    return false;
-  }
-};
-
-/**
- * Returns buffered increments for a given type and resets the buffer.
- */
-export const getAndClearBufferedIncrements = async (type) => {
-  if (!redisClient?.isReady) return {};
-  const key = `motionmeet:buffer:${type}`;
-  try {
-    // Pipeline: Get all fields and values, then delete the hash
-    const [data] = await redisClient
-      .multi()
-      .hGetAll(key)
-      .del(key)
-      .exec();
-    return data || {};
-  } catch (error) {
-    console.error(`Redis buffer clear error (${type}):`, error.message);
-    return {};
-  }
 };

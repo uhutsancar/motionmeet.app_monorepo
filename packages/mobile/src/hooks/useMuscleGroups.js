@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useAuthContext } from "../context/AuthProvider";
 import api from '../api/client';
+import { API_ROUTES } from '@motionmeet/shared';
 
 let muscleGroupsCache = null;
+let muscleGroupsRequest = null;
 
 export const useMuscleGroups = (options = {}) => {
   const { getToken } = useAuthContext();
@@ -20,9 +22,12 @@ export const useMuscleGroups = (options = {}) => {
       setIsLoading(true);
       try {
         const token = await getToken();
-        const response = await api.get('/api/muscle-groups', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        if (!muscleGroupsRequest || options.forceRefresh) {
+          muscleGroupsRequest = api.get(API_ROUTES.metadata.muscleGroups, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+        }
+        const response = await muscleGroupsRequest;
         
         if (response.data.success) {
           muscleGroupsCache = response.data.data;
@@ -33,6 +38,7 @@ export const useMuscleGroups = (options = {}) => {
       } catch (err) {
         if (isMounted) setError(err);
       } finally {
+        muscleGroupsRequest = null;
         if (isMounted) setIsLoading(false);
       }
     };

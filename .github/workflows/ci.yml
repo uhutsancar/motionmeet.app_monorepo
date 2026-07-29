@@ -13,10 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
+          package-manager-cache: false
       - run: corepack enable
       - run: corepack prepare pnpm@11.10.0 --activate
       - run: pnpm config set store-dir ~/.pnpm-store
@@ -25,7 +26,16 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      - name: Run MongoDB concurrency integration tests
+        run: |
+          set -euo pipefail
+          trap 'docker compose -f docker-compose.test.yml down --remove-orphans' EXIT
+          docker compose -f docker-compose.test.yml up -d --wait
+          MONGODB_TEST_URL='mongodb://127.0.0.1:27018/?replicaSet=rsTest' \
+            pnpm --filter @motionmeet/backend test:integration
       - run: pnpm build
         env:
           EXPO_PUBLIC_API_URL: https://api.example.invalid
       - run: docker compose -f docker-compose.prod.yml config
+        env:
+          MOTIONMEET_ENV_FILE: .env.production.example

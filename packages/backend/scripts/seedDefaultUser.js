@@ -2,18 +2,25 @@ import path from "path";
 import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
-import connectDB from "../configs/db.js";
+import connectDB, { disconnectDB } from "../configs/db.js";
 
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
 async function seedDefaultUser() {
   try {
+    if (process.env.ALLOW_DEFAULT_USER_SEED !== "true") {
+      throw new Error("Set ALLOW_DEFAULT_USER_SEED=true to run this script");
+    }
+    const email = process.env.SEED_DEFAULT_USER_EMAIL?.trim();
+    const password = process.env.SEED_DEFAULT_USER_PASSWORD;
+    if (!email || !password || Buffer.byteLength(password, "utf8") < 16) {
+      throw new Error(
+        "SEED_DEFAULT_USER_EMAIL and a 16+ byte SEED_DEFAULT_USER_PASSWORD are required"
+      );
+    }
     await connectDB();
     console.log("Connected to MongoDB");
 
-    const email = "admin@motionmeet.app";
-    const password = "password123";
-    
     let user = await User.findOne({ email });
     if (!user) {
       const salt = await bcrypt.genSalt(10);
@@ -30,15 +37,16 @@ async function seedDefaultUser() {
         isEmailVerified: true
       });
       await user.save();
-      console.log(`Default user created: ${email} / ${password}`);
+      console.log(`Default user created: ${email}`);
     } else {
       console.log(`Default user already exists: ${email}`);
     }
 
-    process.exit(0);
+    await disconnectDB();
   } catch (error) {
     console.error("Error creating default user:", error);
-    process.exit(1);
+    await disconnectDB().catch(() => {});
+    process.exitCode = 1;
   }
 }
 

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { SocketContext } from "./socketContext";
 import { SOCKET_URL } from "~/config/env";
+import { createOperationId } from "@motionmeet/shared";
 
 export const SocketProvider = ({ children }) => {
   const { getToken, userId } = useAuthContext();
@@ -57,9 +58,13 @@ export const SocketProvider = ({ children }) => {
     };
   }, [getToken, userId]);
 
-  const sendMessage = useCallback((toUserId, text) => {
+  const sendMessage = useCallback((toUserId, text, operationId) => {
     if (!socketRef.current?.connected) return false;
-    socketRef.current.emit("send_message", { to_user_id: toUserId, text });
+    socketRef.current.emit("send_message", {
+      to_user_id: toUserId,
+      text,
+      operationId: operationId || createOperationId("message"),
+    });
     return true;
   }, []);
 

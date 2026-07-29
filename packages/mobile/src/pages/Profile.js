@@ -200,7 +200,7 @@ const Profile = ({ route, navigation }) => {
                 style={{ backgroundColor: theme.primary, borderWidth: 4, borderColor: theme.surface }}
               />
             )}
-            <View style={{ flex: 1, marginLeft: 14, paddingTop: 34 }}>
+            <View style={{ flex: 1, minWidth: 0, marginLeft: 14, paddingTop: 34 }}>
               <Text style={{ color: theme.text, fontSize: 20, fontWeight: '800' }} numberOfLines={1}>
                 {user?.full_name || user?.username}
               </Text>
@@ -286,7 +286,7 @@ const Profile = ({ route, navigation }) => {
               >
                 <Ionicons name="stats-chart-outline" size={20} color={theme.primary} />
               </View>
-              <View style={{ flex: 1, paddingHorizontal: 11 }}>
+              <View style={{ flex: 1, minWidth: 0, paddingHorizontal: 11 }}>
                 <Text style={{ color: theme.text, fontSize: 16, fontWeight: '900' }}>
                   {t('statistics.title', 'Statistics')}
                 </Text>
@@ -374,8 +374,8 @@ const Profile = ({ route, navigation }) => {
             }}
           >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <View>
-                <Text style={{ color: theme.text, fontSize: 17, fontWeight: '800' }}>
+              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                <Text numberOfLines={2} style={{ color: theme.text, fontSize: 17, fontWeight: '800' }}>
                   {t('profile.weekly_activity', 'Training activity')}
                 </Text>
                 <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 3 }}>
@@ -506,7 +506,7 @@ const Profile = ({ route, navigation }) => {
                 >
                   <Ionicons name="barbell-outline" size={20} color={theme.primary} />
                 </View>
-                <View style={{ flex: 1, paddingHorizontal: 12 }}>
+                <View style={{ flex: 1, minWidth: 0, paddingHorizontal: 12 }}>
                   <Text style={{ color: theme.text, fontSize: 14, fontWeight: '700' }} numberOfLines={1}>
                     {workout.name || t('workout.my_workout', 'Workout')}
                   </Text>
@@ -514,7 +514,12 @@ const Profile = ({ route, navigation }) => {
                     {moment(workout.createdAt || workout.startTime).fromNow()} · {workout.exercises?.length || 0} {t('workout.exercises', 'exercises')}
                   </Text>
                 </View>
-                <Text style={{ color: theme.textSecondary, fontSize: 12, fontWeight: '700' }}>
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.72}
+                  style={{ maxWidth: '32%', color: theme.textSecondary, fontSize: 12, fontWeight: '700' }}
+                >
                   {workout.durationMinutes || 0} {t('common.min', 'min')}
                 </Text>
               </TouchableOpacity>

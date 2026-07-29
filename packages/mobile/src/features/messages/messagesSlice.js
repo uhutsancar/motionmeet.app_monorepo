@@ -39,6 +39,12 @@ const messagesSlice = createSlice({
     removeMessage: (state, action) => {
       state.messages = state.messages.filter(msg => msg._id !== action.payload);
     },
+    markMessagesSeenByUser: (state, action) => {
+      state.messages = state.messages.map((message) => {
+        const toId = message.to_user_id?._id || message.to_user_id;
+        return toId === action.payload ? { ...message, seen: true } : message;
+      });
+    },
     resetMessages: (state) => {
       state.messages = [];
     },
@@ -67,6 +73,7 @@ export const {
   addMessage,
   prependMessages,
   removeMessage,
+  markMessagesSeenByUser,
   resetMessages,
   setCurrentChat,
 } = messagesSlice.actions;

@@ -83,7 +83,9 @@ const MuscleDistribution = ({ navigation }) => {
         <TouchableOpacity borderless style={styles.iconBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('statistics.muscle_dist', 'Kas Dağılımı')}</Text>
+        <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+          {t('statistics.muscle_dist', 'Kas Dağılımı')}
+        </Text>
         <Surface elevation={0} style={styles.iconBtn} />
       </Surface>
 
@@ -241,7 +243,7 @@ const getStyles = (theme, chartAccent) => ({
     paddingHorizontal: 16, paddingVertical: 12,
   },
   iconBtn: { width: 34, height: 34, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: theme.text },
+  headerTitle: { flex: 1, minWidth: 0, paddingHorizontal: 8, textAlign: 'center', fontSize: 18, fontWeight: '700', color: theme.text },
   dropdownBtn: {
     backgroundColor: theme.surface, alignSelf: 'center', paddingHorizontal: 20,
     paddingVertical: 10, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6,

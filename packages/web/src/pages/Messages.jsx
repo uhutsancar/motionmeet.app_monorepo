@@ -23,6 +23,7 @@ import ListItemAvatar from '@mui/material/ListItemAvatar';
 import ListItemText from '@mui/material/ListItemText';
 import Paper from '@mui/material/Paper';
 import Button from '@mui/material/Button';
+import { CONTENT_LIMITS, createOperationId } from '@motionmeet/shared';
 
 import { getConversations, getMessages, markSeen, deleteMessage } from '../services/messageService';
 import { getConnections } from '../services/userService';
@@ -67,6 +68,10 @@ const WebMessages = () => {
   const [text, setText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [loadingConvs, setLoadingConvs] = useState(true);
+  const [loadingMoreConvs, setLoadingMoreConvs] = useState(false);
+  const [conversationCursor, setConversationCursor] = useState(null);
+  const [connectionCursor, setConnectionCursor] = useState(null);
+  const [loadingMoreConnections, setLoadingMoreConnections] = useState(false);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [nextCursor, setNextCursor] = useState(null);
@@ -78,46 +83,112 @@ const WebMessages = () => {
   const activeConvRef = useRef(null);
   const pendingDraftRef = useRef('');
   const skipAutoScrollRef = useRef(false);
+  const conversationRequestRef = useRef(0);
+  const typingActiveRef = useRef(false);
+  const sendTimeoutRef = useRef(null);
+  const pendingOperationIdRef = useRef(null);
 
-  const loadConversations = useCallback(async (token) => {
-    setLoadingConvs(true);
+  const loadConversations = useCallback(async (
+    token,
+    { cursor = null, append = false } = {},
+  ) => {
+    if (append) setLoadingMoreConvs(true);
+    else setLoadingConvs(true);
     try {
       const [data, connData] = await Promise.all([
-        getConversations(token),
-        getConnections(token),
+        getConversations(token, cursor),
+        append ? Promise.resolve(null) : getConnections(token, 'connections'),
       ]);
       if (data.success) {
-        setConversations((data.conversations || []).sort((a, b) => new Date(b.lastMessage?.createdAt || 0) - new Date(a.lastMessage?.createdAt || 0)));
+        setConversations((current) => {
+          const incoming = data.conversations || [];
+          if (!append) return incoming;
+          const knownIds = new Set(current.map((item) => item.conversationId));
+          return [
+            ...current,
+            ...incoming.filter((item) => !knownIds.has(item.conversationId)),
+          ];
+        });
+        setConversationCursor(data.nextCursor || null);
       }
-      if (connData.success) setConnections(connData.connections || []);
+      if (connData?.success) {
+        setConnections(connData.items || []);
+        setConnectionCursor(connData.nextCursor || null);
+      }
     } catch (error) {
       toast.error(error.message || 'Conversations could not be loaded');
     } finally {
-      setLoadingConvs(false);
+      if (append) setLoadingMoreConvs(false);
+      else setLoadingConvs(false);
     }
   }, []);
 
+  const loadMoreConversations = useCallback(async () => {
+    if (!conversationCursor || loadingMoreConvs) return;
+    const token = await getToken();
+    if (token) {
+      await loadConversations(token, {
+        cursor: conversationCursor,
+        append: true,
+      });
+    }
+  }, [conversationCursor, getToken, loadConversations, loadingMoreConvs]);
+
+  const loadMoreConnections = useCallback(async () => {
+    if (!connectionCursor || loadingMoreConnections) return;
+    setLoadingMoreConnections(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const data = await getConnections(token, 'connections', connectionCursor);
+      if (data.success) {
+        setConnections((current) => {
+          const knownIds = new Set(current.map((connection) => connection._id));
+          return [
+            ...current,
+            ...(data.items || []).filter((connection) => !knownIds.has(connection._id)),
+          ];
+        });
+        setConnectionCursor(data.nextCursor || null);
+      }
+    } catch (error) {
+      toast.error(error.message || 'Connections could not be loaded');
+    } finally {
+      setLoadingMoreConnections(false);
+    }
+  }, [connectionCursor, getToken, loadingMoreConnections]);
+
   const openConversation = useCallback(async (conv) => {
     if (!conv?.partner?._id) return;
+    if (typingActiveRef.current && activeConvRef.current?.partner?._id) {
+      socketRef.current?.emit('typing_stop', {
+        to_user_id: activeConvRef.current.partner._id,
+      });
+      typingActiveRef.current = false;
+    }
+    pendingOperationIdRef.current = null;
     setActiveConv(conv);
     setMessages([]);
     setNextCursor(null);
     setPartnerTyping(false);
     setLoadingMsgs(true);
+    const requestId = ++conversationRequestRef.current;
     setConversations(prev => prev.map(c => c.partner?._id === conv.partner?._id ? { ...c, unreadCount: 0 } : c));
     try {
       const token = await getToken();
       const data = await getMessages(token, conv.partner._id);
-      if (data.success) {
+      if (conversationRequestRef.current === requestId && data.success) {
         setMessages(data.messages || []);
         setNextCursor(data.nextCursor);
       }
     } catch (error) {
-      toast.error(error.message || 'Messages could not be loaded');
+      if (conversationRequestRef.current === requestId) {
+        toast.error(error.message || 'Messages could not be loaded');
+      }
     } finally {
-      setLoadingMsgs(false);
+      if (conversationRequestRef.current === requestId) setLoadingMsgs(false);
     }
-  }, [getToken]);
+  }, [getToken, socketRef]);
 
   useEffect(() => {
     moment.locale(i18n.language.startsWith('tr') ? 'tr' : 'en');
@@ -164,7 +235,10 @@ const WebMessages = () => {
   }, [activeConv, getToken, loadingOlder, nextCursor]);
 
   useEffect(() => {
-    return () => clearTimeout(typingTimerRef.current);
+    return () => {
+      clearTimeout(typingTimerRef.current);
+      clearTimeout(sendTimeoutRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -194,7 +268,9 @@ const WebMessages = () => {
       const partnerId = msg.from_user_id?._id || msg.from_user_id;
       if (activeConvRef.current?.partner?._id === partnerId) {
         setMessages(prev => prev.some(item => item._id === msg._id) ? prev : [...prev, msg]);
-        getToken().then(tok => markSeen(tok, partnerId));
+        getToken()
+          .then((token) => token && markSeen(token, partnerId))
+          .catch(() => undefined);
       }
       setConversations(prev => {
         const exists = prev.some(c => c.partner?._id === partnerId);
@@ -209,10 +285,12 @@ const WebMessages = () => {
     };
 
     const onSent = (msg) => {
-      pendingDraftRef.current = '';
-      setSending(false);
       const partnerId = msg.to_user_id?._id || msg.to_user_id;
       if (activeConvRef.current?.partner?._id === partnerId) {
+        clearTimeout(sendTimeoutRef.current);
+        pendingDraftRef.current = '';
+        pendingOperationIdRef.current = null;
+        setSending(false);
         setMessages(prev => {
           if (!prev.some(m => m._id === msg._id)) {
             return [...prev, msg];
@@ -235,7 +313,12 @@ const WebMessages = () => {
 
     const onTypStart = ({ from_user_id }) => { if (activeConvRef.current?.partner?._id === from_user_id) setPartnerTyping(true); };
     const onTypStop = ({ from_user_id }) => { if (activeConvRef.current?.partner?._id === from_user_id) setPartnerTyping(false); };
-    const restorePendingDraft = ({ message } = {}) => {
+    const restorePendingDraft = ({ message, operationId } = {}) => {
+      if (
+        operationId &&
+        operationId !== pendingOperationIdRef.current
+      ) return;
+      clearTimeout(sendTimeoutRef.current);
       setText((current) => current || pendingDraftRef.current);
       pendingDraftRef.current = '';
       setSending(false);
@@ -248,6 +331,14 @@ const WebMessages = () => {
     socket.on('typing_stop', onTypStop);
     socket.on('message_error', restorePendingDraft);
     socket.on('disconnect', restorePendingDraft);
+    const onSeen = ({ by_user_id: byUserId } = {}) => {
+      if (activeConvRef.current?.partner?._id !== byUserId) return;
+      setMessages((current) => current.map((message) => {
+        const toId = message.to_user_id?._id || message.to_user_id;
+        return toId === byUserId ? { ...message, seen: true } : message;
+      }));
+    };
+    socket.on('messages_seen', onSeen);
     const onDeleted = ({ messageId }) => {
       setMessages(prev => prev.filter(m => m._id !== messageId));
     };
@@ -259,6 +350,7 @@ const WebMessages = () => {
       socket.off('typing_stop', onTypStop);
       socket.off('message_error', restorePendingDraft);
       socket.off('disconnect', restorePendingDraft);
+      socket.off('messages_seen', onSeen);
       socket.off('message_deleted', onDeleted);
     };
   }, [getToken, socket]);
@@ -266,22 +358,48 @@ const WebMessages = () => {
   const handleSend = useCallback(() => {
     if (!text.trim() || !activeConv || sending) return;
     const draft = text.trim();
-    const sent = socketSend(activeConv.partner._id, draft);
+    pendingOperationIdRef.current ||= createOperationId('message');
+    const sent = socketSend(
+      activeConv.partner._id,
+      draft,
+      pendingOperationIdRef.current,
+    );
     if (!sent) return;
     pendingDraftRef.current = draft;
     setSending(true);
     setText('');
+    typingActiveRef.current = false;
+    clearTimeout(sendTimeoutRef.current);
+    sendTimeoutRef.current = setTimeout(() => {
+      setText((current) => current || pendingDraftRef.current);
+      pendingDraftRef.current = '';
+      setSending(false);
+      toast.error(t('messages.send_failed', 'Message could not be sent. Please retry.'));
+    }, 15_000);
     socketRef.current?.emit('typing_stop', { to_user_id: activeConv.partner._id });
-  }, [text, activeConv, sending, socketRef, socketSend]);
+  }, [text, activeConv, sending, socketRef, socketSend, t]);
 
   const handleKeyDown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } };
 
   const handleTextChange = (val) => {
     setText(val);
+    pendingOperationIdRef.current = null;
     if (!activeConv) return;
-    socketRef.current?.emit('typing_start', { to_user_id: activeConv.partner._id });
+    if (val.trim() && !typingActiveRef.current) {
+      typingActiveRef.current = true;
+      socketRef.current?.emit('typing_start', { to_user_id: activeConv.partner._id });
+    }
+    if (!val.trim() && typingActiveRef.current) {
+      typingActiveRef.current = false;
+      socketRef.current?.emit('typing_stop', { to_user_id: activeConv.partner._id });
+    }
     clearTimeout(typingTimerRef.current);
-    typingTimerRef.current = setTimeout(() => socketRef.current?.emit('typing_stop', { to_user_id: activeConv.partner._id }), 1500);
+    if (val.trim()) {
+      typingTimerRef.current = setTimeout(() => {
+        typingActiveRef.current = false;
+        socketRef.current?.emit('typing_stop', { to_user_id: activeConv.partner._id });
+      }, 1500);
+    }
   };
 
   const displayedConvs = React.useMemo(() => {
@@ -379,13 +497,13 @@ const WebMessages = () => {
                 <Stack key={i} direction="row" spacing={2} p={1}>
                   <Box sx={{ borderRadius: '50%', bgcolor: 'action.hover', width: 48, height: 48 }} />
                   <Stack flex={1} spacing={1} sx={{ justifyContent: "center" }}>
-                    <Box sx={{ h: 12, w: 96, bgcolor: 'action.hover', borderRadius: 1 }} />
-                    <Box sx={{ h: 10, w: 144, bgcolor: 'action.hover', borderRadius: 1 }} />
+                    <Box sx={{ height: 12, width: 96, bgcolor: 'action.hover', borderRadius: 1 }} />
+                    <Box sx={{ height: 10, width: 144, bgcolor: 'action.hover', borderRadius: 1 }} />
                   </Stack>
                 </Stack>
               ))}
             </Stack>
-          ) : displayedConvs.length === 0 ? (
+          ) : displayedConvs.length === 0 && !(searchQuery && connectionCursor) ? (
             <Stack height={220} spacing={1.25} px={4} sx={{ justifyContent: "center",  alignItems: "center", textAlign: "center" }}>
               <Box sx={{ width: 42, height: 42, borderRadius: 2.5, bgcolor: 'action.hover', display: 'grid', placeItems: 'center', color: 'text.secondary' }}>
                 <MessageSquare size={20} />
@@ -424,6 +542,30 @@ const WebMessages = () => {
                   </ListItemButton>
                 );
               })}
+              {!searchQuery && conversationCursor && (
+                <Button
+                  fullWidth
+                  size="small"
+                  onClick={loadMoreConversations}
+                  disabled={loadingMoreConvs}
+                  startIcon={loadingMoreConvs ? <CircularProgress size={14} /> : null}
+                  sx={{ my: 1 }}
+                >
+                  {t('common.load_more', 'Load more')}
+                </Button>
+              )}
+              {searchQuery && connectionCursor && (
+                <Button
+                  fullWidth
+                  size="small"
+                  onClick={loadMoreConnections}
+                  disabled={loadingMoreConnections}
+                  startIcon={loadingMoreConnections ? <CircularProgress size={14} /> : null}
+                  sx={{ my: 1 }}
+                >
+                  {t('messages.search_more_connections', 'Search more connections')}
+                </Button>
+              )}
             </List>
           )}
         </Box>
@@ -498,13 +640,17 @@ const WebMessages = () => {
                 multiline
                 maxRows={4}
                 placeholder={t('messages.type_message', 'Type a message...')}
-                value={text}
-                onChange={e => handleTextChange(e.target.value)}
-                onKeyDown={handleKeyDown}
-                variant="standard"
-                fullWidth
-                slotProps={{ input: { disableUnderline: true, sx: { fontSize: 14, py: 0.5 } } }}
-                sx={{ flex: 1 }}
+                  value={text}
+                  onChange={e => handleTextChange(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  disabled={sending}
+                  slotProps={{
+                    htmlInput: { maxLength: CONTENT_LIMITS.message },
+                    input: { disableUnderline: true, sx: { fontSize: 14, py: 0.5 } },
+                  }}
+                  variant="standard"
+                  fullWidth
+                  sx={{ flex: 1 }}
               />
               <IconButton
                 onClick={handleSend}

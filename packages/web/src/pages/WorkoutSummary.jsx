@@ -14,6 +14,7 @@ import {
     Divider, CircularProgress, Select, MenuItem, InputLabel, FormControl
 } from '@mui/material';
 import { uploadMedia } from '~/api/mediaUpload';
+import { CONTENT_LIMITS, createOperationId } from '@motionmeet/shared';
 const formatTime = (seconds) => {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
@@ -44,6 +45,10 @@ const WorkoutSummary = () => {
     const [mediaPreview, setMediaPreview] = useState(null);
     const fileInputRef = useRef(null);
     const savedWorkoutIdRef = useRef(workoutId);
+    const workoutOperationIdRef = useRef(createOperationId('workout'));
+    const workoutPayloadRef = useRef(null);
+    const postOperationIdRef = useRef(createOperationId('post'));
+    const uploadedMediaRef = useRef(null);
 
     const totalSets = workout?.exercises?.reduce((acc, ex) => acc + ex.sets.length, 0) || 0;
     const exerciseSummary = useMemo(
@@ -68,22 +73,29 @@ const WorkoutSummary = () => {
 
     // ── Media Picker ───────────────────────────────────────────────
     const handleFileChange = (e) => {
+        if (saving) return;
         const file = e.target.files[0];
         if (!file) return;
         if (mediaPreview) URL.revokeObjectURL(mediaPreview);
         setMediaFile(file);
         setMediaPreview(URL.createObjectURL(file));
+        postOperationIdRef.current = createOperationId('post');
+        uploadedMediaRef.current = null;
     };
 
     const removeMedia = () => {
+        if (saving) return;
         if (mediaPreview) URL.revokeObjectURL(mediaPreview);
         setMediaFile(null);
         setMediaPreview(null);
+        postOperationIdRef.current = createOperationId('post');
+        uploadedMediaRef.current = null;
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
     // ── Save & Post ────────────────────────────────────────────────
     const handleSave = async () => {
+        if (saving) return;
         if (!workout) {
             toast.error(t('workout_summary.missing_workout', 'Antrenman bilgisi bulunamadı.'));
             return;
@@ -91,11 +103,13 @@ const WorkoutSummary = () => {
         setSaving(true);
         try {
             const token = await getToken();
+            if (!token) throw new Error('Authentication required');
 
             // 1. Save workout to DB (if not already saved from ActiveWorkout)
             let savedWorkoutId = savedWorkoutIdRef.current;
             if (!savedWorkoutId) {
-                const workoutData = {
+                workoutPayloadRef.current ||= {
+                    operationId: workoutOperationIdRef.current,
                     name: workout.name,
                     durationMinutes: workout.durationMinutes || 0,
                     volumeKg: workout.volumeKg || 0,
@@ -103,7 +117,7 @@ const WorkoutSummary = () => {
                     endTime: new Date(),
                     exercises: workout.exercises || [],
                 };
-                const workoutRes = await createWorkout(workoutData, token);
+                const workoutRes = await createWorkout(workoutPayloadRef.current, token);
 
                 if (!workoutRes.success) {
                     toast.error(workoutRes.message || 'Antrenman kaydedilemedi');
@@ -115,8 +129,16 @@ const WorkoutSummary = () => {
 
             // 2. Create workout post (ALWAYS, visibility controls who sees it)
             if (mediaFile) {
-                const uploadedKey = await uploadMedia(mediaFile, 'posts', token);
+                const mediaSignature = `${mediaFile.name}:${mediaFile.size}:${mediaFile.lastModified}`;
+                let uploadedKey = uploadedMediaRef.current?.signature === mediaSignature
+                    ? uploadedMediaRef.current.key
+                    : null;
+                if (!uploadedKey) {
+                    uploadedKey = await uploadMedia(mediaFile, 'posts', token);
+                    uploadedMediaRef.current = { signature: mediaSignature, key: uploadedKey };
+                }
                 const postRes = await createPost({
+                    operationId: postOperationIdRef.current,
                     content: note.trim() || '',
                     post_type: 'workout',
                     visibility,
@@ -127,6 +149,7 @@ const WorkoutSummary = () => {
             } else {
                 // No photo → JSON
                 const postRes = await createPost({
+                    operationId: postOperationIdRef.current,
                     content: note.trim() || '',
                     post_type: 'workout',
                     visibility,
@@ -146,7 +169,11 @@ const WorkoutSummary = () => {
     };
 
     const handleDiscard = () => {
-        if (window.confirm('Paylaşmadan çıkmak istediğinize emin misiniz? Antrenman kaydınız korunacak.')) {
+        if (saving) return;
+        const message = savedWorkoutIdRef.current
+            ? 'Paylaşmadan çıkmak istediğinize emin misiniz? Antrenman kaydınız korunacak.'
+            : 'Çıkarsanız bu antrenman kaydedilmeyecek. Devam etmek istiyor musunuz?';
+        if (window.confirm(message)) {
             navigate('/routines');
         }
     };
@@ -174,7 +201,7 @@ const WorkoutSummary = () => {
             <Box sx={{ position: 'sticky', top: 0, zIndex: 50, bgcolor: 'background.paper', backdropFilter: 'blur(10px)', borderBottom: 1, borderColor: 'divider', p: 2 }}>
                 <Box sx={{ maxWidth: 'md', mx: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Stack direction="row" sx={{ alignItems: "center" }} spacing={2}>
-                        <IconButton onClick={handleDiscard}>
+                        <IconButton onClick={handleDiscard} disabled={saving}>
                             <ArrowLeft size={24} />
                         </IconButton>
                         <Stack>
@@ -240,6 +267,7 @@ const WorkoutSummary = () => {
                             <Box component="img" src={mediaPreview} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             <IconButton
                                 onClick={removeMedia}
+                                disabled={saving}
                                 sx={{ position: 'absolute', top: 8, right: 8, bgcolor: 'background.paper', '&:hover': { bgcolor: 'error.light', color: 'error.main' } }}
                             >
                                 <X size={20} />
@@ -250,6 +278,7 @@ const WorkoutSummary = () => {
                             variant="outlined"
                             fullWidth
                             onClick={() => fileInputRef.current?.click()}
+                            disabled={saving}
                             sx={{
                                 py: 4, borderRadius: 4, borderStyle: 'dashed', borderWidth: 2,
                                 display: 'flex', flexDirection: 'column', gap: 1, color: 'text.secondary'
@@ -270,8 +299,13 @@ const WorkoutSummary = () => {
                         fullWidth
                         placeholder={t('workout_summary.note_placeholder', 'Nasıl hissettin?')}
                         value={note}
-                        onChange={(e) => setNote(e.target.value)}
+                        disabled={saving}
+                        onChange={(e) => {
+                            setNote(e.target.value);
+                            postOperationIdRef.current = createOperationId('post');
+                        }}
                         variant="outlined"
+                        slotProps={{ htmlInput: { maxLength: CONTENT_LIMITS.post } }}
                         sx={{ bgcolor: 'background.paper', borderRadius: 2, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
                     />
                 </Box>
@@ -282,8 +316,12 @@ const WorkoutSummary = () => {
                     <Select
                         labelId="visibility-label"
                         value={visibility}
+                        disabled={saving}
                         label={t('settings.visibility', 'Görünürlük')}
-                        onChange={(e) => setVisibility(e.target.value)}
+                        onChange={(e) => {
+                            setVisibility(e.target.value);
+                            postOperationIdRef.current = createOperationId('post');
+                        }}
                         sx={{ bgcolor: 'background.paper', borderRadius: 2 }}
                     >
                         {VISIBILITY_OPTIONS.map(opt => (

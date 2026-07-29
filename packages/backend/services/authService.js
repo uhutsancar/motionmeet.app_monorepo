@@ -19,18 +19,9 @@ export const getUserByEmailWithPassword = async (email) => {
   return await User.findOne({ email: String(email).trim().toLowerCase() }).select("+password");
 };
 
-// SuperAdmin email adresi (env den okunur, yoksa sabit)
-const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL || "sancaruhut@gmail.com";
-
 export const createUser = async (email, hashedPassword, full_name, username) => {
   const freePlan = await getOrCreateFreePlan();
   const userId = uuidv4();
-
-  // Eğer kaydolan kullanıcı superadmin email'iyle eşleşiyorsa otomatik rol ata
-  const role = email === SUPER_ADMIN_EMAIL ? "superadmin" : "user";
-  if (role === "superadmin") {
-    console.log(`[Auth] SuperAdmin account created: ${email}`);
-  }
 
   return await User.create({
     _id: userId,
@@ -40,7 +31,7 @@ export const createUser = async (email, hashedPassword, full_name, username) => 
     username,
     plan: freePlan._id,
     planStatus: "free",
-    role,
+    role: "user",
   });
 };
 
@@ -49,12 +40,27 @@ const hashResetToken = (token) =>
 
 export const createPasswordResetToken = async (userId) => {
   const rawToken = crypto.randomBytes(32).toString("base64url");
-  await PasswordResetToken.deleteMany({ userId, consumedAt: null });
-  await PasswordResetToken.create({
-    userId,
-    tokenHash: hashResetToken(rawToken),
-    expiresAt: new Date(Date.now() + 30 * 60 * 1000),
-  });
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      await PasswordResetToken.deleteMany(
+        { userId, consumedAt: null },
+        { session }
+      );
+      await PasswordResetToken.create(
+        [
+          {
+            userId,
+            tokenHash: hashResetToken(rawToken),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+          },
+        ],
+        { session }
+      );
+    });
+  } finally {
+    await session.endSession();
+  }
   return rawToken;
 };
 

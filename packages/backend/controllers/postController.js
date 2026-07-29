@@ -1,16 +1,13 @@
 import imagekit from "../configs/imageKit.js";
-import { extractS3Key, uploadToS3 } from "../utils/s3Utils.js";
 import { isObjectId, isOptionalString } from "../utils/validation.js";
 import { hasValidMediaSignature } from "../utils/mediaValidation.js";
 import * as postService from "../services/postService.js";
 import { parsePagination } from "../utils/pagination.js";
 import {
-  commitReservedUploads,
   discardReservedUploads,
   resolveReservedUploads,
+  uploadAndReserve,
 } from "../services/mediaUploadService.js";
-import { deleteMediaOrQueue } from "../services/mediaDeletionService.js";
-import { pushPostToTimelines } from "../services/timelineService.js";
 
 const POST_TYPES = new Set(["text", "image", "text_with_image", "video", "workout"]);
 const VISIBILITIES = new Set(["public", "followers", "private"]);
@@ -20,6 +17,24 @@ export const addPost = async (req, res, next) => {
     const userId = req.userId;
     const { content, post_type, workout, visibility } = req.body || {};
     const images = req.files || [];
+    const operationId = req.get("Idempotency-Key") || req.body?.operationId;
+    if (
+      typeof operationId !== "string" ||
+      operationId.length < 8 ||
+      operationId.length > 128
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "A valid Idempotency-Key header is required",
+      });
+    }
+    const existingPost = await postService.findPostByOperation(
+      userId,
+      operationId
+    );
+    if (existingPost) {
+      return res.json({ success: true, post: existingPost, idempotentReplay: true });
+    }
 
     if (!isOptionalString(content, 5000)) {
       return res.status(400).json({ success: false, message: "Post content is too long" });
@@ -61,7 +76,13 @@ export const addPost = async (req, res, next) => {
     const uploadedImages = [...reservedImages];
     try {
       for (const image of images) {
-        const { key } = await uploadToS3(image.buffer, image.originalname, "posts", image.mimetype);
+        const { key } = await uploadAndReserve({
+          file: image.buffer,
+          fileName: image.originalname,
+          userId,
+          purpose: "posts",
+          contentType: image.mimetype,
+        });
         const cleanKey = key.startsWith('/') ? key.slice(1) : key;
         uploadedImages.push({
           key,
@@ -93,29 +114,30 @@ export const addPost = async (req, res, next) => {
 
     let post;
     try {
-      post = await postService.createPost({
-        user: userId,
-        content: content?.trim() || "",
-        image_urls: imageUrls,
-        image_keys: uploadedImages.map(({ key }) => key),
-        post_type: resolvedType,
-        visibility: visibility || "public",
-        workout: workout || undefined,
-      });
+      const quotaLimit =
+        req.dbUser?.role === "superadmin"
+          ? -1
+          : req.dbUser?.plan?.features?.max_posts_per_day ?? -1;
+      post = await postService.createPost(
+        {
+          user: userId,
+          operationId,
+          content: content?.trim() || "",
+          image_urls: imageUrls,
+          image_keys: uploadedImages.map(({ key }) => key),
+          post_type: resolvedType,
+          visibility: visibility || "public",
+          workout: workout || undefined,
+        },
+        {
+          quotaLimit,
+          reservationKeys: uploadedImages.map(({ key }) => key),
+        }
+      );
     } catch (error) {
       await discardReservedUploads(uploadedImages.map(({ key }) => key));
       throw error;
     }
-    await commitReservedUploads(reservedImages.map(({ key }) => key));
-
-    // Yüksek ölçekli feed mimarisi (Fan-out on write)
-    // Post oluşturulduğunda takipçilerin ve bağlantıların Redis timeline'larına ekle
-    if (visibility !== "private") {
-      pushPostToTimelines(post._id, userId).catch((err) =>
-        console.error("Failed to push post to timelines in background:", err.message)
-      );
-    }
-
     return res.json({ success: true, post, message: "Post created successfully" });
   } catch (error) {
     return next(error);
@@ -152,7 +174,7 @@ export const likePost = async (req, res, next) => {
 
     const post = await postService.getPostForLike(postId);
     if (!post) return res.json({ success: false, message: "Post not found" });
-    if (!(await postService.canAccessPost(post, req.dbUser))) {
+    if (!(await postService.canAccessPost(post, { _id: req.userId }))) {
       return res.status(403).json({ success: false, message: "Post is not accessible" });
     }
 
@@ -178,7 +200,7 @@ export const likePostIdempotent = async (req, res, next) => {
 
     const post = await postService.getPostForLike(postId);
     if (!post) return res.status(404).json({ success: false, message: "Post not found" });
-    if (!(await postService.canAccessPost(post, req.dbUser))) {
+    if (!(await postService.canAccessPost(post, { _id: req.userId }))) {
       return res.status(403).json({ success: false, message: "Post is not accessible" });
     }
 
@@ -204,7 +226,7 @@ export const unlikePost = async (req, res, next) => {
 
     const post = await postService.getPostForLike(postId);
     if (!post) return res.status(404).json({ success: false, message: "Post not found" });
-    if (!(await postService.canAccessPost(post, req.dbUser))) {
+    if (!(await postService.canAccessPost(post, { _id: req.userId }))) {
       return res.status(403).json({ success: false, message: "Post is not accessible" });
     }
 
@@ -230,7 +252,7 @@ export const addComment = async (req, res, next) => {
 
     const existingPost = await postService.getPostForComment(postId);
     if (!existingPost) return res.json({ success: false, message: "Post not found" });
-    if (!(await postService.canAccessPost(existingPost, req.dbUser))) {
+    if (!(await postService.canAccessPost(existingPost, { _id: req.userId }))) {
       return res.status(403).json({ success: false, message: "Post is not accessible" });
     }
 
@@ -254,7 +276,7 @@ export const getComments = async (req, res, next) => {
 
     const post = await postService.getPostForComment(postId);
     if (!post) return res.status(404).json({ success: false, message: "Post not found" });
-    if (!(await postService.canAccessPost(post, req.dbUser))) {
+    if (!(await postService.canAccessPost(post, { _id: req.userId }))) {
       return res.status(403).json({ success: false, message: "Post is not accessible" });
     }
 
@@ -283,11 +305,7 @@ export const deletePost = async (req, res, next) => {
       return res.status(403).json({ success: false, message: "Unauthorized to delete this post" });
     }
 
-    const mediaKeys = (post.image_urls || [])
-      .map((url, index) => post.image_keys?.[index] || extractS3Key(url))
-      .filter(Boolean);
     await postService.deletePostById(post);
-    await deleteMediaOrQueue(mediaKeys);
 
     return res.json({ success: true, postId, message: "Post deleted successfully" });
   } catch (error) {

@@ -61,7 +61,9 @@ const MuscleDistributionBodyScreen = ({ navigation }) => {
         <TouchableRipple borderless style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableRipple>
-        <Text style={styles.headerTitle}>{t('statistics.muscle_dist_body', 'Muscle load grid')}</Text>
+        <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+          {t('statistics.muscle_dist_body', 'Muscle load grid')}
+        </Text>
         <Surface elevation={0} style={{ width: 40 }} />
       </Surface>
 
@@ -105,7 +107,7 @@ const getStyles = (theme) => ({
     paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: theme.border
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: theme.text },
+  headerTitle: { flex: 1, minWidth: 0, paddingHorizontal: 8, textAlign: 'center', fontSize: 17, fontWeight: '700', color: theme.text },
   content: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingTop: 16, paddingBottom: 40 },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   gridItem: {

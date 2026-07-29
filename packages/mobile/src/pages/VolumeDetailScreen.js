@@ -39,7 +39,9 @@ const VolumeDetailScreen = ({ navigation, route }) => {
         <TouchableRipple borderless style={styles.iconBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableRipple>
-        <Text style={styles.headerTitle}>{t('monthly_report.volume_detail', 'Hacim Detayı')}</Text>
+        <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+          {t('monthly_report.volume_detail', 'Hacim Detayı')}
+        </Text>
         <Surface elevation={0} style={{ width: 34 }} />
       </Surface>
 
@@ -50,12 +52,12 @@ const VolumeDetailScreen = ({ navigation, route }) => {
         <Surface elevation={0} style={[styles.summaryRow, columns === 1 && styles.summaryRowNarrow]}>
           <Surface elevation={0} style={[styles.summaryCard, columns === 1 && styles.summaryCardNarrow]}>
             <Text style={styles.summaryLabel}>{t('monthly_report.total', 'Toplam')}</Text>
-            <Text style={styles.summaryValue}>{totalVolume.toLocaleString()}</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={styles.summaryValue}>{totalVolume.toLocaleString()}</Text>
             <Text style={styles.summaryUnit}>{t('monthly_report.chart_unit_volume', 'kg')}</Text>
           </Surface>
           <Surface elevation={0} style={[styles.summaryCard, columns === 1 && styles.summaryCardNarrow]}>
             <Text style={styles.summaryLabel}>{t('monthly_report.avg_per_session', 'Seans Başına Ort.')}</Text>
-            <Text style={styles.summaryValue}>{avgVolume.toLocaleString()}</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={styles.summaryValue}>{avgVolume.toLocaleString()}</Text>
             <Text style={styles.summaryUnit}>{t('monthly_report.chart_unit_volume', 'kg')}</Text>
           </Surface>
         </Surface>
@@ -97,7 +99,7 @@ const VolumeDetailScreen = ({ navigation, route }) => {
             {statsData.exerciseBreakdown.slice(0, 5).map((ex, i) => (
               <Surface elevation={0} key={i} style={styles.breakdownRow}>
                 <Text style={styles.breakdownRank}>#{i + 1}</Text>
-                <Text style={styles.breakdownName}>{ex.name}</Text>
+                <Text numberOfLines={2} style={styles.breakdownName}>{ex.name}</Text>
                 <Text style={styles.breakdownValue}>{ex.total?.toLocaleString()} kg</Text>
               </Surface>
             ))}
@@ -117,7 +119,7 @@ const getStyles = (theme) => ({
     paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.border,
   },
   iconBtn: { width: 34, height: 34, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: theme.text },
+  headerTitle: { flex: 1, minWidth: 0, paddingHorizontal: 8, textAlign: 'center', fontSize: 17, fontWeight: '700', color: theme.text },
   content: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingTop: 16, paddingBottom: 40 },
   summaryRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
   summaryRowNarrow: { flexDirection: 'column' },
@@ -140,8 +142,8 @@ const getStyles = (theme) => ({
     borderBottomWidth: 1, borderBottomColor: theme.border, gap: 12,
   },
   breakdownRank: { fontSize: 14, fontWeight: '700', color: theme.primary, width: 28 },
-  breakdownName: { flex: 1, fontSize: 15, color: theme.text, fontWeight: '500' },
-  breakdownValue: { fontSize: 14, color: theme.textMuted, fontWeight: '600' },
+  breakdownName: { flex: 1, minWidth: 0, fontSize: 15, color: theme.text, fontWeight: '500' },
+  breakdownValue: { flexShrink: 0, fontSize: 14, color: theme.textMuted, fontWeight: '600' },
 });
 
 export default VolumeDetailScreen;

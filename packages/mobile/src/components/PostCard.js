@@ -6,7 +6,7 @@ import { useAuthContext } from "../context/AuthProvider";
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { likePostIdempotent, unlikePostIdempotent, followUser, unfollowUser, addComment, getPostComments } from '../api/endpoints';
 import { fetchUser } from '../features/user/userSlice';
-import api from '../api/client';
+import { setAuthorFollowState } from '../features/posts/postsSlice';
 import moment from 'moment';
 import 'moment/locale/tr';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +14,7 @@ import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useTheme } from '../context/ThemeContext';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { logHandledError } from '../utils/feedback';
+import { CONTENT_LIMITS } from '@motionmeet/shared';
 
 const POST_PADDING = 16;
 const normalizeUri = (value) => (
@@ -39,7 +40,7 @@ const PostVideo = ({ source, style }) => {
 const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete, showDelete = false }) => {
   const { t, i18n } = useTranslation();
   const { theme, isDark } = useTheme();
-  const { usableWidth } = useResponsiveLayout();
+  const { usableWidth, isNarrow } = useResponsiveLayout();
   const carouselWidth = Math.max(1, Math.min(usableWidth - 32, 688));
   const hasWorkout = post?.post_type === 'workout' && post.workout && typeof post.workout === 'object';
   const isVideo = post?.post_type === 'video';
@@ -96,6 +97,7 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
     },
     userSection: {
       flexDirection: 'row',
+      flexWrap: isNarrow ? 'wrap' : 'nowrap',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: POST_PADDING,
@@ -105,7 +107,9 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
     userInfoLeft: {
       flexDirection: 'row',
       alignItems: 'center',
-      flex: 1,
+      flex: isNarrow ? undefined : 1,
+      width: isNarrow ? '100%' : undefined,
+      minWidth: 0,
     },
     avatar: {
       width: 44,
@@ -151,11 +155,13 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
     },
     followBtn: {
       flexShrink: 0,
+      alignSelf: isNarrow ? 'flex-end' : 'center',
       maxWidth: 104,
       minHeight: 34,
       justifyContent: 'center',
       paddingVertical: 6,
       paddingHorizontal: 12,
+      marginTop: isNarrow ? 8 : 0,
       borderRadius: 9,
       backgroundColor: theme.primarySoft,
     },
@@ -363,6 +369,7 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
     },
     commentContent: {
       flex: 1,
+      minWidth: 0,
       backgroundColor: 'transparent'
     },
     commentBubble: {
@@ -404,6 +411,7 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
     },
     commentInput: {
       flex: 1,
+      minWidth: 0,
       color: theme.text,
       fontSize: 14,
       paddingTop: 0,
@@ -418,7 +426,7 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
       justifyContent: 'center',
       alignItems: 'center',
     },
-  }), [carouselWidth, mediaSlideHeight, theme, workoutSlideHeight]);
+  }), [carouselWidth, isNarrow, mediaSlideHeight, theme, workoutSlideHeight]);
 
   moment.locale(i18n.language.startsWith('tr') ? 'tr' : 'en');
 
@@ -455,7 +463,7 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
     }
   };
 
-  const isFollowing = currentUser?.following?.includes(post.user?._id);
+  const isFollowing = Boolean(post.author_followed_by_me);
 
   const handleFollow = async () => {
     if (followProcessing) return;
@@ -467,6 +475,10 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
       } else {
         await followUser(post.user?._id, token);
       }
+      dispatch(setAuthorFollowState({
+        authorId: post.user?._id,
+        isFollowing: !isFollowing,
+      }));
       dispatch(fetchUser(token));
     } catch (error) {
       logHandledError('follow-user', error);
@@ -477,11 +489,12 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
   };
 
   const handleAddComment = async () => {
-    if (!commentText.trim() || isProcessing) return;
+    const content = commentText.trim();
+    if (!content || isProcessing) return;
     try {
       setIsProcessing(true);
       const token = await getToken();
-      const data = await addComment(post._id, commentText, token);
+      const data = await addComment(post._id, content, token);
       if (data.success) {
         setComments((currentComments) => [...currentComments, data.comment]);
         setCommentCount(data.comment_count);
@@ -522,14 +535,19 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
   };
 
   const handleShare = async () => {
-    if (onShare) {
-      await onShare(post);
-      return;
-    }
+    try {
+      if (onShare) {
+        await onShare(post);
+        return;
+      }
 
-    await Share.share({
-      message: [post.content, post.workout?.name].filter(Boolean).join('\n') || 'MotionMeet',
-    });
+      await Share.share({
+        message: [post.content, post.workout?.name].filter(Boolean).join('\n') || 'MotionMeet',
+      });
+    } catch (error) {
+      logHandledError('share-post', error);
+      Alert.alert(t('common.error', 'Error'), t('feed.share_failed', 'Could not share this post'));
+    }
   };
 
   const carouselData = [];
@@ -634,10 +652,10 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
 
         {currentUser?._id !== post.user?._id && (
           <TouchableRipple 
-            style={[s.followBtn, currentUser?.following?.includes(post.user?._id) && s.followingBtn]} 
+            style={[s.followBtn, isFollowing && s.followingBtn]}
             onPress={handleFollow}
             disabled={followProcessing}
-            accessibilityLabel={currentUser?.following?.includes(post.user?._id) ? t('feed.unfollow', 'Unfollow') : t('feed.follow', 'Follow')}
+            accessibilityLabel={isFollowing ? t('feed.unfollow', 'Unfollow') : t('feed.follow', 'Follow')}
           >
             {followProcessing ? (
                <ActivityIndicator size="small" color={theme.primary} />
@@ -646,9 +664,9 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.78}
-                  style={[s.followBtnText, currentUser?.following?.includes(post.user?._id) && s.followingBtnText]}
+                  style={[s.followBtnText, isFollowing && s.followingBtnText]}
                 >
-                {currentUser?.following?.includes(post.user?._id) ? t('feed.following_status', 'Following') : t('feed.follow')}
+                {isFollowing ? t('feed.following_status', 'Following') : t('feed.follow')}
                 </Text>
             )}
           </TouchableRipple>
@@ -769,7 +787,11 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
             </TouchableRipple>
           )}
           {comments.map((comment, i) => (
-            <Surface elevation={0} key={i} style={s.commentItem}>
+            <Surface
+              elevation={0}
+              key={comment._id || `${comment.user?._id}-${comment.createdAt}-${i}`}
+              style={s.commentItem}
+            >
               {normalizeUri(comment.user?.profile_picture) ? (
                 <Image source={{ uri: normalizeUri(comment.user.profile_picture) }} style={s.commentAvatar} />
               ) : (
@@ -797,6 +819,7 @@ const PostCard = ({ post, onComment, onShare, onUserPress, navigation, onDelete,
               value={commentText}
               onChangeText={setCommentText}
               multiline
+              maxLength={CONTENT_LIMITS.comment}
               keyboardAppearance={isDark ? 'dark' : 'light'}
             />
             <TouchableRipple 

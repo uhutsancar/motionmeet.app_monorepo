@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import api from "~/api/axios";
 import StoryModal from "./StoryModal";
 import StoryViewer from "./StoryViewer";
+import { API_ROUTES } from "@motionmeet/shared";
 
 const StoriesBar = () => {
   const { t, i18n } = useTranslation();
@@ -22,7 +23,7 @@ const StoriesBar = () => {
   const fetchStories = useCallback(async () => {
     try {
       const token = await getToken();
-      const { data } = await api.get("/api/story/get", {
+      const { data } = await api.get(API_ROUTES.story.get, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (data.success) setStories(data.stories);
@@ -83,9 +84,11 @@ const StoriesBar = () => {
                     component={story.media_type === "image" ? "img" : "video"}
                     src={story.media_url}
                     alt={story.media_type === "image" ? "Story" : undefined}
+                    loading={story.media_type === "image" ? "lazy" : undefined}
+                    decoding={story.media_type === "image" ? "async" : undefined}
                     muted={story.media_type === "video" ? true : undefined}
-                    loop={story.media_type === "video" ? true : undefined}
-                    autoPlay={story.media_type === "video" ? true : undefined}
+                    playsInline={story.media_type === "video" ? true : undefined}
+                    preload={story.media_type === "video" ? "metadata" : undefined}
                     sx={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
                   />
                 )}

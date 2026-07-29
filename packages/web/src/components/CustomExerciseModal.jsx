@@ -19,6 +19,7 @@ import DumbbellRounded from '@mui/icons-material/FitnessCenterRounded';
 import { useTranslation } from "react-i18next";
 import { useMuscleGroups } from "../hooks/useMuscleGroups";
 import { useEquipment } from "../hooks/useEquipment";
+import { API_ROUTES, CONTENT_LIMITS } from "@motionmeet/shared";
 
 const CustomExerciseModal = ({ setShowModal, onExerciseCreated }) => {
     const { t } = useTranslation();
@@ -31,9 +32,11 @@ const CustomExerciseModal = ({ setShowModal, onExerciseCreated }) => {
         muscleGroup: "All Muscles",
         equipment: "All Equipment",
     });
+    const [saving, setSaving] = useState(false);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (saving) return;
         if (!form.name.trim()) {
             toast.error("Exercise name is required.");
             return;
@@ -45,9 +48,11 @@ const CustomExerciseModal = ({ setShowModal, onExerciseCreated }) => {
         }
 
         try {
+            setSaving(true);
             const token = await getToken();
+            if (!token) throw new Error("Authentication required");
             const { data } = await api.post(
-                "/api/exercise",
+                API_ROUTES.exercise.base,
                 {
                     name: form.name,
                     muscleGroup: form.muscleGroup,
@@ -67,11 +72,13 @@ const CustomExerciseModal = ({ setShowModal, onExerciseCreated }) => {
             }
         } catch (error) {
             toast.error(error.message || "An error occurred.");
+        } finally {
+            setSaving(false);
         }
     };
 
     return (
-        <Dialog open={true} onClose={() => setShowModal(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 4, bgcolor: 'background.paper', backgroundImage: 'none' } }}>
+        <Dialog open={true} onClose={() => !saving && setShowModal(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 4, bgcolor: 'background.paper', backgroundImage: 'none' } }}>
             <Box component="form" onSubmit={handleSubmit}>
                 <DialogTitle sx={{ pb: 1, pt: 3, px: 3 }}>
                     <Stack direction="row" sx={{ alignItems: "center" }} spacing={2}>
@@ -90,8 +97,12 @@ const CustomExerciseModal = ({ setShowModal, onExerciseCreated }) => {
                             required
                             placeholder="e.g. Incline Bench Press"
                             value={form.name}
+                            disabled={saving}
                             onChange={(e) => setForm({ ...form, name: e.target.value })}
-                            slotProps={{ input: { sx: { borderRadius: 3 } } }}
+                            slotProps={{
+                                htmlInput: { maxLength: CONTENT_LIMITS.exerciseName },
+                                input: { sx: { borderRadius: 3 } },
+                            }}
                         />
 
                         <TextField
@@ -99,6 +110,7 @@ const CustomExerciseModal = ({ setShowModal, onExerciseCreated }) => {
                             label="Target Muscle Group"
                             fullWidth
                             value={form.muscleGroup}
+                            disabled={saving}
                             onChange={(e) => setForm({ ...form, muscleGroup: e.target.value })}
                             slotProps={{ input: { sx: { borderRadius: 3 } } }}
                         >
@@ -115,6 +127,7 @@ const CustomExerciseModal = ({ setShowModal, onExerciseCreated }) => {
                             label="Equipment Required"
                             fullWidth
                             value={form.equipment}
+                            disabled={saving}
                             onChange={(e) => setForm({ ...form, equipment: e.target.value })}
                             slotProps={{ input: { sx: { borderRadius: 3 } } }}
                         >
@@ -129,11 +142,11 @@ const CustomExerciseModal = ({ setShowModal, onExerciseCreated }) => {
                 </DialogContent>
 
                 <DialogActions sx={{ px: 3, pb: 3, pt: 1, borderTop: 1, borderColor: 'divider' }}>
-                    <Button onClick={() => setShowModal(false)} color="inherit" sx={{ fontWeight: 600, borderRadius: 2, textTransform: 'none', px: 3 }}>
+                    <Button onClick={() => setShowModal(false)} disabled={saving} color="inherit" sx={{ fontWeight: 600, borderRadius: 2, textTransform: 'none', px: 3 }}>
                         Cancel
                     </Button>
-                    <Button type="submit" variant="contained" sx={{ fontWeight: 600, borderRadius: 2, textTransform: 'none', px: 3, boxShadow: 'none' }}>
-                        Create
+                    <Button type="submit" variant="contained" disabled={saving} sx={{ fontWeight: 600, borderRadius: 2, textTransform: 'none', px: 3, boxShadow: 'none' }}>
+                        {saving ? "Creating…" : "Create"}
                     </Button>
                 </DialogActions>
             </Box>

@@ -38,8 +38,11 @@ const ExercisePickerDialog = ({ open, onClose, onSelect, excludedIds = [] }) => 
           search,
           muscleGroup: "",
           equipment: "",
+          limit: 100,
         });
         if (active && data.success) setExercises(data.exercises || []);
+      } catch {
+        if (active) setExercises([]);
       } finally {
         if (active) setLoading(false);
       }

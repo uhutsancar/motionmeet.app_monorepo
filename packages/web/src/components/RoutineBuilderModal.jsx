@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import api from "~/api/axios";
 import { useAuthContext } from "../context/AuthProvider";
@@ -21,7 +21,7 @@ import PlusRounded from '@mui/icons-material/AddRounded';
 import SearchRounded from '@mui/icons-material/SearchRounded';
 import Trash2Rounded from '@mui/icons-material/DeleteOutlineRounded';
 import DumbbellRounded from '@mui/icons-material/FitnessCenterRounded';
-import { resolvePublicMediaUrl } from '@motionmeet/shared';
+import { API_ROUTES, CONTENT_LIMITS, createOperationId, resolvePublicMediaUrl } from '@motionmeet/shared';
 
 const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
     const { getToken } = useAuthContext();
@@ -31,14 +31,21 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
     const [searchQuery, setSearchQuery] = useState("");
 
     const [selectedExercises, setSelectedExercises] = useState([]);
+    const [saving, setSaving] = useState(false);
+    const operationIdRef = useRef(null);
+
+    const invalidateDraft = () => {
+        operationIdRef.current = null;
+    };
 
     useEffect(() => {
         const fetchExercises = async () => {
             try {
                 const token = await getToken();
                 if (!token) return;
-                const { data } = await api.get(`/api/exercise?search=${searchQuery}`, {
+                const { data } = await api.get(API_ROUTES.exercise.base, {
                     headers: { Authorization: `Bearer ${token}` },
+                    params: { search: searchQuery, limit: 100 },
                 });
                 if (data.success) {
                     setExercisesData(data.exercises);
@@ -53,6 +60,7 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
     }, [searchQuery, getToken]);
 
     const addExercise = (exercise) => {
+        if (saving) return;
         if (selectedExercises.find((e) => e.exerciseId._id === exercise._id)) {
             toast.error("Exercise already added.");
             return;
@@ -64,35 +72,45 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
                 sets: [{ setType: "normal", reps: 0, weight: 0, completed: false }]
             }
         ]);
+        invalidateDraft();
         setSearchQuery("");
     };
 
     const removeExercise = (index) => {
+        if (saving) return;
         const updated = [...selectedExercises];
         updated.splice(index, 1);
         setSelectedExercises(updated);
+        invalidateDraft();
     };
 
     const addSet = (exerciseIndex) => {
+        if (saving) return;
         const updated = [...selectedExercises];
         updated[exerciseIndex].sets.push({ setType: "normal", reps: 0, weight: 0, completed: false });
         setSelectedExercises(updated);
+        invalidateDraft();
     };
 
     const removeSet = (exerciseIndex, setIndex) => {
+        if (saving) return;
         const updated = [...selectedExercises];
         updated[exerciseIndex].sets.splice(setIndex, 1);
         setSelectedExercises(updated);
+        invalidateDraft();
     };
 
     const updateSet = (exerciseIndex, setIndex, field, value) => {
+        if (saving) return;
         const updated = [...selectedExercises];
         updated[exerciseIndex].sets[setIndex][field] = value;
         setSelectedExercises(updated);
+        invalidateDraft();
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (saving) return;
         if (!form.name.trim()) {
             toast.error("Routine name is required.");
             return;
@@ -102,8 +120,11 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
             return;
         }
 
+        setSaving(true);
         try {
+            operationIdRef.current ||= createOperationId('routine');
             const payload = {
+                operationId: operationIdRef.current,
                 name: form.name,
                 folder: form.folder,
                 exercises: selectedExercises.map(e => ({
@@ -113,8 +134,12 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
             };
 
             const token = await getToken();
-            const { data } = await api.post("/api/routine", payload, {
-                headers: { Authorization: `Bearer ${token}` },
+            if (!token) throw new Error("Authentication required");
+            const { data } = await api.post(API_ROUTES.routine.base, payload, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Idempotency-Key': payload.operationId,
+                },
             });
 
             if (data.success) {
@@ -126,11 +151,13 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
             }
         } catch (error) {
             toast.error(error.response?.data?.message || error.message || "An error occurred.");
+        } finally {
+            setSaving(false);
         }
     };
 
     return (
-        <Dialog open={true} onClose={() => setShowModal(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 4, bgcolor: 'background.paper', backgroundImage: 'none' } }}>
+        <Dialog open={true} onClose={() => !saving && setShowModal(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 4, bgcolor: 'background.paper', backgroundImage: 'none' } }}>
             <Box component="form" onSubmit={handleSubmit}>
                 <DialogTitle sx={{ pb: 1, pt: 3, px: 3 }}>
                     <Stack direction="row" sx={{ alignItems: "center" }} spacing={2}>
@@ -149,8 +176,15 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
                             required
                             placeholder="e.g. Leg Day Destroyer"
                             value={form.name}
-                            onChange={(e) => setForm({ ...form, name: e.target.value })}
-                            slotProps={{ input: { sx: { borderRadius: 3 } } }}
+                            disabled={saving}
+                            onChange={(e) => {
+                                setForm({ ...form, name: e.target.value });
+                                invalidateDraft();
+                            }}
+                            slotProps={{
+                                htmlInput: { maxLength: CONTENT_LIMITS.routineName },
+                                input: { sx: { borderRadius: 3 } },
+                            }}
                         />
 
                         <Paper variant="outlined" sx={{ p: 2, borderRadius: 3, bgcolor: 'background.default' }}>
@@ -162,6 +196,7 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
                                 variant="outlined"
                                 size="small"
                                 value={searchQuery}
+                                disabled={saving}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 slotProps={{
                                     input: {
@@ -221,7 +256,7 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
                                                     )}
                                                     <Typography variant="subtitle2" fontWeight={700}>{se.exerciseId.name}</Typography>
                                                 </Stack>
-                                                <IconButton size="small" color="error" onClick={() => removeExercise(exIndex)}>
+                                                <IconButton size="small" color="error" onClick={() => removeExercise(exIndex)} disabled={saving}>
                                                     <Trash2Rounded fontSize="small" />
                                                 </IconButton>
                                             </Stack>
@@ -243,6 +278,7 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
                                                             type="number"
                                                             size="small"
                                                             value={set.weight}
+                                                            disabled={saving}
                                                             onChange={(e) => updateSet(exIndex, setIndex, "weight", Number(e.target.value))}
                                                             slotProps={{ htmlInput: { style: { textAlign: 'center' } } }}
                                                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, bgcolor: 'background.default' } }}
@@ -251,12 +287,13 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
                                                             type="number"
                                                             size="small"
                                                             value={set.reps}
+                                                            disabled={saving}
                                                             onChange={(e) => updateSet(exIndex, setIndex, "reps", Number(e.target.value))}
                                                             slotProps={{ htmlInput: { style: { textAlign: 'center' } } }}
                                                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, bgcolor: 'background.default' } }}
                                                         />
                                                         <Box sx={{ display: "flex", justifyContent: "center" }}>
-                                                            <IconButton size="small" sx={{ color: 'text.secondary', '&:hover': { color: 'error.main' } }} onClick={() => removeSet(exIndex, setIndex)}>
+                                                            <IconButton size="small" disabled={saving} sx={{ color: 'text.secondary', '&:hover': { color: 'error.main' } }} onClick={() => removeSet(exIndex, setIndex)}>
                                                                 <Trash2Rounded fontSize="small" />
                                                             </IconButton>
                                                         </Box>
@@ -270,6 +307,7 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
                                                 fullWidth
                                                 startIcon={<PlusRounded />}
                                                 onClick={() => addSet(exIndex)}
+                                                disabled={saving}
                                                 sx={{ mt: 2, borderRadius: 2, borderStyle: 'dashed', textTransform: 'none', fontWeight: 600 }}
                                             >
                                                 Add Set
@@ -283,11 +321,11 @@ const RoutineBuilderModal = ({ setShowModal, onRoutineCreated }) => {
                 </DialogContent>
                 
                 <DialogActions sx={{ px: 3, pb: 3, pt: 1, borderTop: 1, borderColor: 'divider' }}>
-                    <Button onClick={() => setShowModal(false)} color="inherit" sx={{ fontWeight: 600, borderRadius: 2, textTransform: 'none', px: 3 }}>
+                    <Button onClick={() => setShowModal(false)} disabled={saving} color="inherit" sx={{ fontWeight: 600, borderRadius: 2, textTransform: 'none', px: 3 }}>
                         Cancel
                     </Button>
-                    <Button type="submit" variant="contained" sx={{ fontWeight: 600, borderRadius: 2, textTransform: 'none', px: 3, boxShadow: 'none' }}>
-                        Save Routine
+                    <Button type="submit" variant="contained" disabled={saving} sx={{ fontWeight: 600, borderRadius: 2, textTransform: 'none', px: 3, boxShadow: 'none' }}>
+                        {saving ? "Saving…" : "Save Routine"}
                     </Button>
                 </DialogActions>
             </Box>

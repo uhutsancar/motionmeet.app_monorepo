@@ -1,13 +1,14 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import toast from "react-hot-toast";
 import api from "~/api/axios.js";
+import { API_ROUTES } from "@motionmeet/shared";
 
 const initialState = {
   value: null,
 };
 
 export const fetchUser = createAsyncThunk("user/fetchUser", async (token) => {
-  const { data } = await api.get("/api/user/data", {
+  const { data } = await api.get(API_ROUTES.user.data, {
     headers: { Authorization: `Bearer ${token}` },
   });
   return data.success ? data.user : null;
@@ -16,7 +17,7 @@ export const fetchUser = createAsyncThunk("user/fetchUser", async (token) => {
 export const updateUser = createAsyncThunk(
   "user/update",
   async ({ userData, token }) => {
-    const { data } = await api.post("/api/user/update", userData, {
+    const { data } = await api.post(API_ROUTES.user_extras.update, userData, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (data.success) {

@@ -1,5 +1,21 @@
 import api from './client';
-import { API_ROUTES } from '@motionmeet/shared';
+import { API_ROUTES, createOperationId } from '@motionmeet/shared';
+
+const withOperationId = (payload, prefix) => {
+  const isFormData =
+    typeof FormData !== 'undefined' && payload instanceof FormData;
+  const existing =
+    isFormData && typeof payload.get === 'function'
+      ? payload.get('operationId')
+      : payload?.operationId;
+  const operationId =
+    typeof existing === 'string' && existing ? existing : createOperationId(prefix);
+  if (isFormData) {
+    if (!existing) payload.append('operationId', operationId);
+    return { payload, operationId };
+  }
+  return { payload: { ...(payload || {}), operationId }, operationId };
+};
 
 // ============= USER APIs =============
 export const getUserData = async (token) => {
@@ -58,9 +74,12 @@ export const acceptConnectionRequest = async (userId, token) => {
   return data;
 };
 
-export const getUserConnections = async (token) => {
+export const getUserConnections = async (token, section, cursor) => {
   const { data } = await api.get(API_ROUTES.user_extras.connections, {
     headers: { Authorization: `Bearer ${token}` },
+    params: section
+      ? { section, ...(cursor ? { cursor } : {}) }
+      : undefined,
   });
   return data;
 };
@@ -72,9 +91,10 @@ export const getUserRecentMessages = async (token) => {
   return data;
 };
 
-export const getUserConversations = async (token) => {
+export const getUserConversations = async (token, cursor) => {
   const { data } = await api.get(API_ROUTES.message.conversations, {
     headers: { Authorization: `Bearer ${token}` },
+    params: cursor ? { cursor } : undefined,
   });
   return data;
 };
@@ -89,8 +109,12 @@ export const getPosts = async (token, cursor, mode = 'discover') => {
 };
 
 export const createPost = async (postData, token) => {
-  const { data } = await api.post(API_ROUTES.post.add, postData, {
-    headers: { Authorization: `Bearer ${token}` },
+  const request = withOperationId(postData, 'post');
+  const { data } = await api.post(API_ROUTES.post.add, request.payload, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Idempotency-Key': request.operationId,
+    },
   });
   return data;
 };
@@ -134,8 +158,12 @@ export const getMessages = async (userId, token, cursor) => {
 };
 
 export const sendMessage = async (messageData, token) => {
-  const { data } = await api.post(API_ROUTES.message.send, messageData, {
-    headers: { Authorization: `Bearer ${token}` },
+  const request = withOperationId(messageData, 'message');
+  const { data } = await api.post(API_ROUTES.message.send, request.payload, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Idempotency-Key': request.operationId,
+    },
   });
   return data;
 };
@@ -144,6 +172,15 @@ export const deleteMessage = async (messageId, token) => {
   const { data } = await api.delete(API_ROUTES.message.delete(messageId), {
     headers: { Authorization: `Bearer ${token}` },
   });
+  return data;
+};
+
+export const markMessageSeen = async (fromUserId, token) => {
+  const { data } = await api.post(
+    API_ROUTES.message.seen,
+    { from_user_id: fromUserId },
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
   return data;
 };
 
@@ -156,8 +193,12 @@ export const getStories = async (token) => {
 };
 
 export const createStory = async (storyData, token) => {
-  const { data } = await api.post(API_ROUTES.story.create, storyData, {
-    headers: { Authorization: `Bearer ${token}` },
+  const request = withOperationId(storyData, 'story');
+  const { data } = await api.post(API_ROUTES.story.create, request.payload, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Idempotency-Key': request.operationId,
+    },
   });
   return data;
 };
@@ -187,8 +228,12 @@ export const getWorkouts = async (token, cursor) => {
 };
 
 export const createWorkout = async (workoutData, token) => {
-  const { data } = await api.post(API_ROUTES.workout.base, workoutData, {
-    headers: { Authorization: `Bearer ${token}` },
+  const operationId = workoutData.operationId || createOperationId('workout');
+  const { data } = await api.post(API_ROUTES.workout.base, { ...workoutData, operationId }, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Idempotency-Key': operationId,
+    },
   });
   return data;
 };
@@ -203,8 +248,12 @@ export const getRoutines = async (token, cursor) => {
 };
 
 export const createRoutine = async (routineData, token) => {
-  const { data } = await api.post(API_ROUTES.routine.base, routineData, {
-    headers: { Authorization: `Bearer ${token}` },
+  const operationId = routineData.operationId || createOperationId('routine');
+  const { data } = await api.post(API_ROUTES.routine.base, { ...routineData, operationId }, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Idempotency-Key': operationId,
+    },
   });
   return data;
 };
@@ -303,6 +352,7 @@ export default {
   getMessages,
   sendMessage,
   deleteMessage,
+  markMessageSeen,
   
   // Story
   getStories,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { TextInput, Image, ActivityIndicator } from 'react-native';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { FullScreenModal } from './ResponsiveModal';
 import KeyboardAwareScrollView from './KeyboardAwareScrollView';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { CONTENT_LIMITS, createOperationId } from '@motionmeet/shared';
 import {
   getUserFacingError,
   logHandledError,
@@ -40,6 +41,21 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
   const [content, setContent] = useState('');
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(false);
+  const operationIdRef = useRef(null);
+  const uploadCacheRef = useRef(null);
+
+  const resetPendingSubmission = () => {
+    operationIdRef.current = null;
+    uploadCacheRef.current = null;
+  };
+
+  const handleClose = () => {
+    if (loading) return;
+    setContent('');
+    setImages([]);
+    resetPendingSubmission();
+    onClose?.();
+  };
 
   const pickImages = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -53,16 +69,34 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
       mediaTypes: ['images'],
       allowsEditing: false,
       allowsMultipleSelection: true,
+      selectionLimit: Math.max(1, CONTENT_LIMITS.postMediaItems - images.length),
       quality: 0.8,
     });
 
     if (!result.canceled) {
-      setImages([...images, ...result.assets]);
+      const availableSlots = Math.max(0, CONTENT_LIMITS.postMediaItems - images.length);
+      if (availableSlots === 0) {
+        showError(
+          t('common.error'),
+          t('feed.media_limit', `A post can contain at most ${CONTENT_LIMITS.postMediaItems} images.`),
+        );
+        return;
+      }
+      const selected = result.assets.slice(0, availableSlots);
+      if (result.assets.length > availableSlots) {
+        showError(
+          t('common.error'),
+          t('feed.media_limit', `A post can contain at most ${CONTENT_LIMITS.postMediaItems} images.`),
+        );
+      }
+      setImages((current) => [...current, ...selected]);
+      resetPendingSubmission();
     }
   };
 
   const removeImage = (index) => {
-    setImages(images.filter((_, i) => i !== index));
+    setImages((current) => current.filter((_, i) => i !== index));
+    resetPendingSubmission();
   };
 
   const handlePublish = async () => {
@@ -85,24 +119,36 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
       } else if (images.length > 0) {
         postType = 'image';
       }
-      // Retry once if token is stale on first call
-      let token = await getToken();
-      if (!token) {
-        await new Promise(res => setTimeout(res, 500));
-        token = await getToken();
-      }
+      const token = await getToken();
+      if (!token) throw new Error('Your session has expired. Please sign in again.');
 
-      const uploadedKeys = await Promise.all(
-        images.map((image) => uploadMedia(image, 'posts', token))
-      );
+      const mediaSignature = images
+        .map((image) => `${image.assetId || image.uri}:${image.fileSize || 0}`)
+        .join('|');
+      let uploadedKeys = uploadCacheRef.current?.signature === mediaSignature
+        ? uploadCacheRef.current.keys
+        : null;
+      if (!uploadedKeys) {
+        uploadedKeys = await Promise.all(
+          images.map((image) => uploadMedia(image, 'posts', token))
+        );
+        uploadCacheRef.current = { signature: mediaSignature, keys: uploadedKeys };
+      }
+      operationIdRef.current ||= createOperationId('post');
       await dispatch(createNewPost({
-        postData: { content, post_type: postType, uploadedKeys },
+        postData: {
+          operationId: operationIdRef.current,
+          content,
+          post_type: postType,
+          uploadedKeys,
+        },
         token,
       })).unwrap();
       
       showSuccess(t('common.success'), t('feed.post_published'));
       setContent('');
       setImages([]);
+      resetPendingSubmission();
       
       if (onSuccess) {
         onSuccess();
@@ -127,16 +173,23 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
   return (
     <FullScreenModal
       visible={visible}
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
       backgroundColor={theme.background}
     >
       <Surface elevation={0} style={styles.container}>
         <Surface elevation={0} style={styles.header}>
-          <TouchableRipple borderless onPress={onClose} style={styles.closeButton}>
+          <TouchableRipple borderless onPress={handleClose} disabled={loading} style={styles.closeButton}>
             <Ionicons name="close" size={28} color={theme.text} />
           </TouchableRipple>
-          <Text numberOfLines={1} style={styles.headerTitle}>{t('feed.create_post', 'Yeni Gönderi')}</Text>
-          <Surface elevation={0} style={{ width: 28 }} />
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+            style={styles.headerTitle}
+          >
+            {t('feed.create_post', 'Yeni Gönderi')}
+          </Text>
+          <Surface elevation={0} style={{ width: 40 }} />
         </Surface>
 
         <KeyboardAwareScrollView
@@ -160,9 +213,9 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
                 </Text>
               </Surface>
             )}
-            <Surface elevation={0}>
-              <Text style={styles.userName}>{user.full_name}</Text>
-              <Text style={styles.username}>@{user.username}</Text>
+            <Surface elevation={0} style={styles.userText}>
+              <Text numberOfLines={1} style={styles.userName}>{user.full_name}</Text>
+              <Text numberOfLines={1} style={styles.username}>@{user.username}</Text>
             </Surface>
           </Surface>
 
@@ -171,20 +224,25 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
             placeholder={t('feed.whats_on_mind', 'Neler düşünüyorsun?')}
             placeholderTextColor={theme.textMuted}
             value={content}
-            onChangeText={setContent}
+            editable={!loading}
+            onChangeText={(value) => {
+              setContent(value);
+              operationIdRef.current = null;
+            }}
             multiline
-            maxLength={1000}
+            maxLength={CONTENT_LIMITS.post}
             keyboardAppearance={isDark ? 'dark' : 'light'}
           />
 
           {images.length > 0 && (
             <Surface elevation={0} style={styles.imagesContainer}>
               {images.map((image, index) => (
-                <Surface elevation={0} key={index} style={styles.imageWrapper}>
+                <Surface elevation={0} key={image.assetId || image.uri || String(index)} style={styles.imageWrapper}>
                   <Image source={{ uri: image.uri }} style={styles.image} />
                   <TouchableRipple borderless
                     style={styles.removeButton}
                     onPress={() => removeImage(index)}
+                    disabled={loading}
                   >
                     <Ionicons name="close-circle" size={28} color="#ef4444" />
                   </TouchableRipple>
@@ -198,6 +256,7 @@ const CreatePostModal = ({ visible, onClose, onSuccess }) => {
           <TouchableRipple borderless
             style={styles.imageButton}
             onPress={pickImages}
+            disabled={loading}
           >
             <Ionicons name="image-outline" size={24} color={theme.textMuted} />
           </TouchableRipple>
@@ -234,9 +293,15 @@ const getStyles = (theme, contentPadding, imageSize) => ({
     borderBottomColor: theme.border,
   },
   closeButton: {
-    padding: 4,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
+    flex: 1,
+    minWidth: 0,
+    textAlign: 'center',
     fontSize: 20,
     fontWeight: 'bold',
     color: theme.text,
@@ -246,6 +311,9 @@ const getStyles = (theme, contentPadding, imageSize) => ({
   },
   contentContainer: {
     flexGrow: 1,
+    width: '100%',
+    maxWidth: 620,
+    alignSelf: 'center',
     padding: contentPadding,
     paddingBottom: 28,
   },
@@ -254,6 +322,10 @@ const getStyles = (theme, contentPadding, imageSize) => ({
     alignItems: 'center',
     gap: 12,
     marginBottom: 16,
+  },
+  userText: {
+    flex: 1,
+    minWidth: 0,
   },
   avatar: {
     width: 48,
@@ -297,6 +369,9 @@ const getStyles = (theme, contentPadding, imageSize) => ({
     borderRadius: 10,
   },
   bottomBar: {
+    width: '100%',
+    maxWidth: 620,
+    alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

@@ -55,7 +55,7 @@ const WorkoutsDetail = () => {
                 </Stack>
 
                 {/* Summary Cards */}
-                <Box display="grid" gridTemplateColumns="1fr 1fr" gap={2} mb={4}>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 4 }}>
                     <Paper variant="outlined" sx={{ p: 3, borderRadius: 4 }}>
                         <Typography variant="body2" fontWeight={600} color="text.secondary" mb={2}>{t('monthly_report.total', 'Toplam')}</Typography>
                         <Typography variant="h4" fontWeight={900}>{totalWorkouts}</Typography>

@@ -9,7 +9,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { API_ROUTES } from "@motionmeet/shared";
+import { API_ROUTES, hasValidPasswordByteLength } from "@motionmeet/shared";
 import AuthShell from "../components/AuthShell";
 import api from "~/api/axios";
 
@@ -26,6 +26,10 @@ const ResetPassword = () => {
     event.preventDefault();
     if (password !== confirmation) {
       setError("Passwords do not match.");
+      return;
+    }
+    if (!hasValidPasswordByteLength(password)) {
+      setError("Password must be between 10 and 72 UTF-8 bytes.");
       return;
     }
     setLoading(true);
@@ -47,7 +51,7 @@ const ResetPassword = () => {
     <AuthShell
       eyebrow="Account recovery"
       title="Choose a new password"
-      subtitle="Use 10–72 UTF-8 bytes. All existing sessions will be signed out."
+      description="Use 10–72 UTF-8 bytes. All existing sessions will be signed out."
     >
       {!token ? (
         <Alert severity="error">This reset link is incomplete.</Alert>

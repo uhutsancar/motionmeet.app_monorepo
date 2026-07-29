@@ -39,7 +39,9 @@ const DurationDetailScreen = ({ navigation, route }) => {
         <TouchableRipple borderless style={styles.iconBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableRipple>
-        <Text style={styles.headerTitle}>{t('monthly_report.duration_detail', 'Süre Detayı')}</Text>
+        <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+          {t('monthly_report.duration_detail', 'Süre Detayı')}
+        </Text>
         <Surface elevation={0} style={{ width: 34 }} />
       </Surface>
 
@@ -103,7 +105,7 @@ const getStyles = (theme) => ({
     paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.border,
   },
   iconBtn: { width: 34, height: 34, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: theme.text },
+  headerTitle: { flex: 1, minWidth: 0, paddingHorizontal: 8, textAlign: 'center', fontSize: 17, fontWeight: '700', color: theme.text },
   content: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingTop: 16, paddingBottom: 40 },
   summaryRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
   summaryRowNarrow: { flexDirection: 'column' },

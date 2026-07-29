@@ -39,6 +39,7 @@ import {
 import mongoose from "mongoose";
 import { requestContext } from "./middlewares/requestContext.js";
 import { ensureApplicationData } from "./services/bootstrapService.js";
+import { assertDatabaseContract } from "./services/databaseMigrationService.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -77,10 +78,17 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: "500kb", strict: true }));
 app.use(express.urlencoded({ extended: true, limit: "500kb" }));
 
+const configuredGlobalLimit = Number.parseInt(
+  process.env.GLOBAL_RATE_LIMIT_PER_15_MIN || "",
+  10
+);
+const globalRateLimit = Number.isFinite(configuredGlobalLimit)
+  ? Math.min(Math.max(configuredGlobalLimit, 100), 10_000)
+  : 1_000;
 
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 200,
+  limit: globalRateLimit,
   standardHeaders: true,
   legacyHeaders: false,
   store: createRateLimitStore("global"),
@@ -100,7 +108,7 @@ app.get("/health/ready", (req, res) => {
   const ready = databaseReady && (redisReady || (!isProduction && redisStatus === "disabled"));
   const mediaEnabled = process.env.MEDIA_UPLOADS_ENABLED !== "false";
   const emailEnabled = process.env.EMAIL_ENABLED !== "false";
-  const backgroundJobsEnabled = process.env.RUN_SCHEDULED_JOBS === "true";
+  const backgroundJobsEnabled = process.env.RUN_SCHEDULED_JOBS !== "false";
   res.status(ready ? 200 : 503).json({
     status: ready ? "ready" : "not-ready",
     database: databaseReady ? "ready" : "not-ready",
@@ -194,6 +202,9 @@ process.once("unhandledRejection", (error) => {
 
 try {
   await connectDB();
+  if (isProduction) {
+    await assertDatabaseContract();
+  }
   await ensureApplicationData();
   const redis = await initializeRedis();
   if (redis) {

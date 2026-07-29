@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -64,6 +64,11 @@ const Exercises = () => {
   const [selectedExercise, setSelectedExercise] = useState(null);
   const [exerciseStats, setExerciseStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
+  const [libraryLoading, setLibraryLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [libraryError, setLibraryError] = useState("");
+  const libraryRequestRef = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -87,6 +92,11 @@ const Exercises = () => {
   }, [selectedExercise, getToken]);
 
   useEffect(() => {
+    const requestId = ++libraryRequestRef.current;
+    setLibraryLoading(true);
+    setLoadingMore(false);
+    setLibraryError("");
+    setNextCursor(null);
     const timeoutId = setTimeout(async () => {
       try {
         const token = await getToken();
@@ -94,14 +104,59 @@ const Exercises = () => {
           search: searchQuery,
           muscleGroup: muscleFilter,
           equipment: equipmentFilter,
+          limit: 50,
         });
-        if (data.success) setExercises(data.exercises);
+        if (libraryRequestRef.current !== requestId) return;
+        if (data.success) {
+          setExercises(data.exercises || []);
+          setNextCursor(data.nextCursor || null);
+        } else {
+          throw new Error(data.message || "Exercises could not be loaded");
+        }
       } catch (error) {
-        console.error("Error fetching exercises:", error);
+        if (libraryRequestRef.current === requestId) {
+          setExercises([]);
+          setLibraryError(error.message || "Exercises could not be loaded");
+        }
+      } finally {
+        if (libraryRequestRef.current === requestId) setLibraryLoading(false);
       }
     }, 300);
     return () => clearTimeout(timeoutId);
   }, [searchQuery, muscleFilter, equipmentFilter, getToken]);
+
+  const loadMoreExercises = async () => {
+    if (!nextCursor || loadingMore) return;
+    const requestId = ++libraryRequestRef.current;
+    setLoadingMore(true);
+    setLibraryError("");
+    try {
+      const token = await getToken();
+      const data = await getExercises(token, {
+        search: searchQuery,
+        muscleGroup: muscleFilter,
+        equipment: equipmentFilter,
+        cursor: nextCursor,
+        limit: 50,
+      });
+      if (libraryRequestRef.current !== requestId) return;
+      if (!data.success) throw new Error(data.message || "Exercises could not be loaded");
+      setExercises((current) => {
+        const knownIds = new Set(current.map((exercise) => exercise._id));
+        return [
+          ...current,
+          ...(data.exercises || []).filter((exercise) => !knownIds.has(exercise._id)),
+        ];
+      });
+      setNextCursor(data.nextCursor || null);
+    } catch (error) {
+      if (libraryRequestRef.current === requestId) {
+        setLibraryError(error.message || "Exercises could not be loaded");
+      }
+    } finally {
+      if (libraryRequestRef.current === requestId) setLoadingMore(false);
+    }
+  };
 
   return (
     <PageShell maxWidth={1200}>
@@ -229,7 +284,11 @@ const Exercises = () => {
 
           <Divider />
           <Box className="no-scrollbar" sx={{ mt: 1, maxHeight: { xs: 360, md: 580 }, overflowY: "auto" }}>
-            {exercises.length > 0 ? exercises.map((exercise) => {
+            {libraryLoading ? (
+              <Stack sx={{ minHeight: 180, alignItems: "center", justifyContent: "center" }}>
+                <CircularProgress size={26} />
+              </Stack>
+            ) : exercises.length > 0 ? exercises.map((exercise) => {
               const selected = selectedExercise?._id === exercise._id;
               return (
                 <Box
@@ -263,8 +322,22 @@ const Exercises = () => {
             }) : (
               <Stack spacing={1} sx={{ minHeight: 180, alignItems: "center", justifyContent: "center", textAlign: "center" }}>
                 <FitnessCenter sx={{ color: "text.disabled" }} />
-                <Typography variant="body2" color="text.secondary">{t("exercises.not_found", "No exercises found")}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {libraryError || t("exercises.not_found", "No exercises found")}
+                </Typography>
               </Stack>
+            )}
+            {!libraryLoading && nextCursor && (
+              <Button
+                fullWidth
+                size="small"
+                onClick={loadMoreExercises}
+                disabled={loadingMore}
+                startIcon={loadingMore ? <CircularProgress size={14} /> : null}
+                sx={{ mt: 0.75 }}
+              >
+                {t("common.load_more", "Load more")}
+              </Button>
             )}
           </Box>
         </Paper>

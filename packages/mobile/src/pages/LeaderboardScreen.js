@@ -51,7 +51,16 @@ const LeaderboardScreen = ({ navigation }) => {
           <ActivityIndicator color={theme.primary} />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: 16 }}>
+        <ScrollView
+          contentContainerStyle={{
+            width: '100%',
+            maxWidth: 720,
+            alignSelf: 'center',
+            padding: 16,
+            paddingBottom: 40,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
           <Surface elevation={0} style={{ backgroundColor: theme.surfaceLight, borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: theme.border }}>
             <Text style={{ fontSize: 14, color: theme.textMuted, lineHeight: 20 }}>
               {t('statistics.records_desc', 'Your strongest completed set for each exercise.')}
@@ -76,14 +85,21 @@ const LeaderboardScreen = ({ navigation }) => {
                   <View style={{ width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginRight: 12, backgroundColor: `${accent}20` }}>
                     <Ionicons name="trophy-outline" size={22} color={accent} />
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: theme.text, fontSize: 16, fontWeight: '800' }}>{record.name}</Text>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text numberOfLines={2} style={{ color: theme.text, fontSize: 16, fontWeight: '800' }}>{record.name}</Text>
                     <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 3 }}>
                       {new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(record.recordedAt))}
                     </Text>
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ color: accent, fontSize: 20, fontWeight: '900' }}>{record.value} kg</Text>
+                  <View style={{ alignItems: 'flex-end', flexShrink: 1, maxWidth: '40%' }}>
+                    <Text
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.7}
+                      style={{ color: accent, fontSize: 20, fontWeight: '900' }}
+                    >
+                      {record.value} kg
+                    </Text>
                     <Text style={{ color: theme.textMuted, fontSize: 11 }}>
                       {record.reps} {t('routines.reps', 'reps').toLowerCase()}
                     </Text>

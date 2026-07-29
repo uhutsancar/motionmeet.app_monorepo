@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View, Image, Alert, StyleSheet
 } from 'react-native';
@@ -22,6 +22,7 @@ import {
   showInfo,
   showSuccess,
 } from '../utils/feedback';
+import { CONTENT_LIMITS, createOperationId } from '@motionmeet/shared';
 
 const VISIBILITY_OPTIONS = ['public', 'followers', 'private'];
 
@@ -44,6 +45,18 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
   const [mediaAsset, setMediaAsset] = useState(null);
   const [visibility, setVisibility] = useState('public');
   const [saving, setSaving] = useState(false);
+  const savedWorkoutIdRef = useRef(null);
+  const workoutOperationIdRef = useRef(createOperationId('workout'));
+  const workoutPayloadRef = useRef(null);
+  const postOperationIdRef = useRef(createOperationId('post'));
+  const uploadedMediaRef = useRef(null);
+
+  const updateMediaAsset = (asset) => {
+    if (saving) return;
+    setMediaAsset(asset);
+    postOperationIdRef.current = createOperationId('post');
+    uploadedMediaRef.current = null;
+  };
 
   // Format duration for display
   const formatDuration = (secs) => {
@@ -64,6 +77,7 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
   };
 
   const pickMedia = () => {
+    if (saving) return;
     Alert.alert(t('workout.add_photo_title', 'Fotoğraf Ekle'), '', [
       {
         text: t('workout.take_photo', 'Fotoğraf Çek'),
@@ -78,7 +92,7 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
             allowsEditing: true,
             quality: 0.8,
           });
-          if (!result.canceled && result.assets?.length > 0) setMediaAsset(result.assets[0]);
+          if (!result.canceled && result.assets?.length > 0) updateMediaAsset(result.assets[0]);
         }
       },
       {
@@ -90,7 +104,7 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
             return;
           }
           const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.8 });
-          if (!result.canceled && result.assets?.length > 0) setMediaAsset(result.assets[0]);
+          if (!result.canceled && result.assets?.length > 0) updateMediaAsset(result.assets[0]);
         }
       },
       { text: t('common.cancel', 'İptal'), style: 'cancel' }
@@ -98,56 +112,78 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
   };
 
   const pickVisibility = () => {
+    if (saving) return;
     Alert.alert(t('settings.visibility', 'Görünürlük'), '', VISIBILITY_OPTIONS.map(key => ({
       text: VISIBILITY_LABELS[key],
-      onPress: () => setVisibility(key),
+      onPress: () => {
+        setVisibility(key);
+        postOperationIdRef.current = createOperationId('post');
+      },
       style: visibility === key ? 'destructive' : 'default'
     })).concat([{ text: t('common.cancel', 'İptal'), style: 'cancel' }]));
   };
 
   const handleSave = async () => {
+    if (saving) return;
     try {
       setSaving(true);
       const freshToken = await getToken();
-      if (freshToken) setAuthToken(freshToken);
+      if (!freshToken) throw new Error('Authentication required');
+      setAuthToken(freshToken);
 
-      const workoutPayload = {
-        name: workoutData.name || t('workout.my_workout', 'Antrenmanım'),
-        durationMinutes: Math.round((workoutData.duration || 0) / 60),
-        volumeKg: workoutData.totalVolume || 0,
-        startTime: new Date(Date.now() - (workoutData.duration || 0) * 1000),
-        endTime: new Date(),
-        exercises: workoutData.exercises || [],
-      };
-      const workoutRes = await createWorkout(workoutPayload, freshToken);
-      if (!workoutRes.success) {
-        showError(
-          t('common.error'),
-          workoutRes.message || t('workout.save_failed', 'Antrenman kaydedilemedi.'),
-        );
-        return;
+      let savedWorkoutId = savedWorkoutIdRef.current;
+      if (!savedWorkoutId) {
+        workoutPayloadRef.current ||= {
+          operationId: workoutOperationIdRef.current,
+          name: workoutData.name || t('workout.my_workout', 'Antrenmanım'),
+          durationMinutes: Math.round((workoutData.duration || 0) / 60),
+          volumeKg: workoutData.totalVolume || 0,
+          startTime: new Date(Date.now() - (workoutData.duration || 0) * 1000),
+          endTime: new Date(),
+          exercises: workoutData.exercises || [],
+        };
+        const workoutRes = await createWorkout(workoutPayloadRef.current, freshToken);
+        if (!workoutRes.success) {
+          showError(
+            t('common.error'),
+            workoutRes.message || t('workout.save_failed', 'Antrenman kaydedilemedi.'),
+          );
+          return;
+        }
+        savedWorkoutId = workoutRes.workout?._id;
+        savedWorkoutIdRef.current = savedWorkoutId;
       }
 
-      const savedWorkoutId = workoutRes.workout?._id;
       let postError = null;
 
       try {
         if (mediaAsset) {
-          const uploadedKey = await uploadMedia(mediaAsset, 'posts', freshToken);
-          await createPost({
+          const mediaSignature = `${mediaAsset.assetId || mediaAsset.uri}:${mediaAsset.fileSize || 0}`;
+          let uploadedKey = uploadedMediaRef.current?.signature === mediaSignature
+            ? uploadedMediaRef.current.key
+            : null;
+          if (!uploadedKey) {
+            uploadedKey = await uploadMedia(mediaAsset, 'posts', freshToken);
+            uploadedMediaRef.current = { signature: mediaSignature, key: uploadedKey };
+          }
+          const postResponse = await createPost({
+            operationId: postOperationIdRef.current,
             content: note.trim() || '',
             post_type: 'workout',
             visibility,
             workout: savedWorkoutId,
             uploadedKeys: [uploadedKey],
           }, freshToken);
+          if (!postResponse.success) throw new Error(postResponse.message);
         } else {
-          await createPost({
+          const postResponse = await createPost({
+            operationId: postOperationIdRef.current,
             content: note.trim() || '',
             post_type: 'workout',
             visibility,
             workout: savedWorkoutId,
           }, freshToken);
+          if (!postResponse.success) throw new Error(postResponse.message);
         }
       } catch (postErr) {
         postError = postErr;
@@ -166,13 +202,14 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
           ),
           { visibilityTime: 5200 },
         );
+        return;
       } else {
         showSuccess(
           t('common.success', 'Başarılı'),
           t('workout.saved', 'Antrenman kaydedildi!'),
         );
       }
-      navigation.navigate('Tabs');
+      navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });
     } catch (error) {
       logHandledError('save-workout', error);
       showError(
@@ -185,12 +222,24 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
   };
 
   const handleDiscard = () => {
+    if (saving) return;
+    const workoutAlreadySaved = Boolean(savedWorkoutIdRef.current);
     Alert.alert(
-      t('workout.discard_title', 'Antrenmanı Sil'),
-      t('workout.discard_msg', 'Bu antrenman kaydedilmeyecek. Emin misin?'),
+      workoutAlreadySaved
+        ? t('workout.leave_summary_title', 'Paylaşmadan çık')
+        : t('workout.discard_title', 'Antrenmanı sil'),
+      workoutAlreadySaved
+        ? t('workout.leave_summary_saved', 'Antrenman kaydedildi ancak gönderi paylaşılmadı. Bu ekrandan çıkmak istiyor musun?')
+        : t('workout.discard_msg', 'Bu antrenman kaydedilmeyecek. Emin misin?'),
       [
         { text: t('common.cancel', 'İptal'), style: 'cancel' },
-        { text: t('common.delete', 'Sil'), style: 'destructive', onPress: () => navigation.navigate('Tabs') }
+        {
+          text: workoutAlreadySaved
+            ? t('common.leave', 'Çık')
+            : t('common.delete', 'Sil'),
+          style: 'destructive',
+          onPress: () => navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] }),
+        }
       ]
     );
   };
@@ -198,7 +247,7 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
       <Appbar.Header style={styles.header} statusBarHeight={0}>
-        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
+        <Appbar.BackAction onPress={handleDiscard} disabled={saving} color={theme.text} />
         <Appbar.Content title={t('workout.save_workout', 'Antrenmanı Kaydet')} titleStyle={styles.headerTitle} />
         {saving ? (
           <ActivityIndicator size="small" color={theme.primary} style={styles.activityIndicator} />
@@ -261,7 +310,8 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
                 iconColor="#ef4444"
                 size={28}
                 style={styles.mediaCloseButton}
-                onPress={() => setMediaAsset(null)}
+                onPress={() => updateMediaAsset(null)}
+                disabled={saving}
               />
             </View>
           ) : (
@@ -271,6 +321,7 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
                 titleStyle={styles.listItemTitle}
                 left={props => <List.Icon {...props} icon="image-plus" color={theme.textMuted} />}
                 onPress={pickMedia}
+                disabled={saving}
                 style={styles.listItemPadding}
               />
             </Surface>
@@ -289,7 +340,12 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
               multiline
               numberOfLines={4}
               value={note}
-              onChangeText={setNote}
+              editable={!saving}
+              maxLength={CONTENT_LIMITS.post}
+              onChangeText={(value) => {
+                setNote(value);
+                postOperationIdRef.current = createOperationId('post');
+              }}
               style={styles.textInputStyle}
               outlineColor={theme.border}
               activeOutlineColor={theme.primary}
@@ -308,6 +364,7 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
               left={props => <List.Icon {...props} icon={visibility === 'public' ? 'earth' : visibility === 'followers' ? 'account-multiple' : 'lock'} color={theme.textMuted} />}
               right={props => <List.Icon {...props} icon="chevron-right" color={theme.textMuted} />}
               onPress={pickVisibility}
+              disabled={saving}
             />
           </Surface>
 
@@ -340,8 +397,10 @@ const WorkoutSummaryScreen = ({ navigation, route }) => {
           )}
 
           {/* Delete */}
-          <Button mode="text" textColor="#ef4444" onPress={handleDiscard} style={styles.deleteButton}>
-            {t('workout.delete', 'Antrenmanı Sil')}
+          <Button mode="text" textColor="#ef4444" onPress={handleDiscard} disabled={saving} style={styles.deleteButton}>
+            {savedWorkoutIdRef.current
+              ? t('workout.leave_without_sharing', 'Paylaşmadan çık')
+              : t('workout.delete', 'Antrenmanı sil')}
           </Button>
 
         </KeyboardAwareScrollView>

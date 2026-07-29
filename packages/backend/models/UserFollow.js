@@ -9,8 +9,14 @@ const userFollowSchema = new mongoose.Schema(
 );
 
 userFollowSchema.index({ followerId: 1, followeeId: 1 }, { unique: true });
-userFollowSchema.index({ followeeId: 1, createdAt: -1 });
-userFollowSchema.index({ followerId: 1, createdAt: -1 });
+userFollowSchema.index({ followeeId: 1, createdAt: -1, _id: -1 });
+userFollowSchema.index({ followerId: 1, createdAt: -1, _id: -1 });
+
+userFollowSchema.pre("validate", function rejectSelfFollow() {
+  if (String(this.followerId) === String(this.followeeId)) {
+    this.invalidate("followeeId", "A user cannot follow itself");
+  }
+});
 
 const UserFollow = mongoose.model("UserFollow", userFollowSchema);
 

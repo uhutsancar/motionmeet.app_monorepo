@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   TextInput,
   Image,
@@ -22,6 +22,27 @@ import {
   showError,
   showSuccess,
 } from '../utils/feedback';
+import { createOperationId } from '@motionmeet/shared';
+import { VideoView, useVideoPlayer } from 'expo-video';
+
+const StoryVideoPreview = ({ uri, style }) => {
+  const player = useVideoPlayer(uri, (instance) => {
+    instance.loop = true;
+    instance.muted = true;
+    instance.play();
+  });
+
+  return (
+    <VideoView
+      player={player}
+      style={style}
+      contentFit="cover"
+      nativeControls={false}
+      surfaceType="textureView"
+      accessibilityLabel="Story video preview"
+    />
+  );
+};
 
 const StoryModal = ({ visible, onClose, onSuccess }) => {
   const { width, height } = useWindowDimensions();
@@ -33,6 +54,8 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
   const [media, setMedia] = useState(null);
   const [background, setBackground] = useState('#000000');
   const [loading, setLoading] = useState(false);
+  const operationIdRef = useRef(createOperationId('story'));
+  const uploadedMediaRef = useRef(null);
   const isNarrow = width < 360;
   const contentPadding = isNarrow ? 12 : 16;
   const headerSideWidth = Math.max(64, Math.min(82, width * 0.23));
@@ -216,6 +239,8 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
     setText('');
     setMedia(null);
     setBackground('#000000');
+    operationIdRef.current = createOperationId('story');
+    uploadedMediaRef.current = null;
   };
 
   const handleClose = () => {
@@ -244,6 +269,8 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
       setMedia(result.assets[0]);
       setMode('media');
       setText('');
+      operationIdRef.current = createOperationId('story');
+      uploadedMediaRef.current = null;
     }
   };
 
@@ -260,11 +287,19 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
     try {
       setLoading(true);
       const token = await getToken();
-      const uploadedKey =
+      const mediaSignature =
         media && mode === 'media'
-          ? await uploadMedia(media, 'stories', token)
-          : undefined;
+          ? `${media.assetId || media.uri}:${media.fileSize || 0}`
+          : '';
+      let uploadedKey = uploadedMediaRef.current?.signature === mediaSignature
+        ? uploadedMediaRef.current.key
+        : undefined;
+      if (media && mode === 'media' && !uploadedKey) {
+        uploadedKey = await uploadMedia(media, 'stories', token);
+        uploadedMediaRef.current = { signature: mediaSignature, key: uploadedKey };
+      }
       const data = await createStory({
+        operationId: operationIdRef.current,
         content: text,
         media_type: mediaType,
         background_color: background,
@@ -347,9 +382,12 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
           <Surface elevation={0} style={styles.modeSelector}>
             <TouchableRipple
               style={[styles.modeButton, { backgroundColor: mode === 'text' ? theme.surface + '80' : theme.surface }]}
+              disabled={loading}
               onPress={() => {
                 setMode('text');
                 setMedia(null);
+                operationIdRef.current = createOperationId('story');
+                uploadedMediaRef.current = null;
               }}
               borderless
             >
@@ -366,6 +404,7 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
             <TouchableRipple
               style={[styles.modeButton, { backgroundColor: mode === 'media' ? theme.surface + '80' : theme.surface }]}
               onPress={pickMedia}
+              disabled={loading}
               borderless
             >
               <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'transparent' }}>
@@ -383,7 +422,11 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
           <Surface elevation={0} style={[styles.preview, { backgroundColor: mode === 'text' ? background : '#000' }]}>
             {mode === 'media' ? (
               media ? (
-                <Image source={{ uri: media.uri }} style={styles.mediaPreview} />
+                media.type?.includes('video') ? (
+                  <StoryVideoPreview uri={media.uri} style={styles.mediaPreview} />
+                ) : (
+                  <Image source={{ uri: media.uri }} style={styles.mediaPreview} />
+                )
               ) : (
                 <View style={styles.emptyMedia}>
                   <Ionicons name="images-outline" size={38} color={theme.textMuted} />
@@ -404,7 +447,11 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
                 placeholder={t('feed.whats_on_mind')}
                 placeholderTextColor={theme.textMuted}
                 value={text}
-                onChangeText={setText}
+                editable={!loading}
+                onChangeText={(value) => {
+                  setText(value);
+                  operationIdRef.current = createOperationId('story');
+                }}
                 multiline
                 maxLength={200}
               />
@@ -419,7 +466,11 @@ const StoryModal = ({ visible, onClose, onSuccess }) => {
                       { backgroundColor: color },
                       background === color && styles.selectedColor,
                     ]}
-                    onPress={() => setBackground(color)}
+                    disabled={loading}
+                    onPress={() => {
+                      setBackground(color);
+                      operationIdRef.current = createOperationId('story');
+                    }}
                     borderless
                     accessibilityRole="button"
                     accessibilityLabel={color}

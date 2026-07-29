@@ -1,89 +1,138 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, FlatList, Image, ScrollView, StatusBar, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, FlatList, Image, RefreshControl, ScrollView, StatusBar, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActivityIndicator, Appbar, Button, Chip, Divider, Surface, Text } from 'react-native-paper';
-import { useDispatch, useSelector } from 'react-redux';
+import { useDispatch } from 'react-redux';
 import { useAuthContext } from "../context/AuthProvider";
 import { useTranslation } from 'react-i18next';
 import { fetchConnections } from '../features/connections/connectionsSlice';
-import { acceptConnectionRequest, unfollowUser } from '../api/endpoints';
+import { acceptConnectionRequest, getUserConnections, unfollowUser } from '../api/endpoints';
 import { useTheme } from '../context/ThemeContext';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
-const TABS = ['Followers', 'Following', 'Pending', 'Connections'];
+const TABS = [
+  { key: 'Followers', section: 'followers', labelKey: 'profile.followers', fallback: 'Followers' },
+  { key: 'Following', section: 'following', labelKey: 'profile.following', fallback: 'Following' },
+  { key: 'Pending', section: 'pendingConnections', labelKey: 'connections.pending', fallback: 'Pending' },
+  { key: 'Connections', section: 'connections', labelKey: 'connections.title', fallback: 'Connections' },
+];
+
+const createEmptyPages = () => Object.fromEntries(
+  TABS.map(({ key }) => [
+    key,
+    { items: [], nextCursor: null, loaded: false, loading: false },
+  ]),
+);
 
 const Connections = ({ navigation }) => {
   const dispatch = useDispatch();
   const { getToken } = useAuthContext();
   const { t } = useTranslation();
   const { theme, isDark } = useTheme();
-  const [currentTab, setCurrentTab] = useState('Followers');
-  const [loading, setLoading] = useState(false);
+  const { horizontalPadding, isNarrow } = useResponsiveLayout();
+  const [currentTab, setCurrentTab] = useState(TABS[0].key);
+  const [pages, setPages] = useState(createEmptyPages);
+  const [actionLoading, setActionLoading] = useState(false);
+  const inFlightSectionsRef = useRef(new Set());
 
-  const { connections, pendingConnections, followers, following } = useSelector(
-    (state) => state.connections
-  );
+  const loadSection = useCallback(async (tabKey, { append = false } = {}) => {
+    const tab = TABS.find((item) => item.key === tabKey);
+    if (!tab || inFlightSectionsRef.current.has(tab.section)) return;
+    const currentPage = pages[tabKey];
+    const cursor = append ? currentPage?.nextCursor : null;
+    if (append && !cursor) return;
 
-  const tabData = {
-    Followers: followers,
-    Following: following,
-    Pending: pendingConnections,
-    Connections: connections,
-  };
-
-  const loadConnections = useCallback(async () => {
+    inFlightSectionsRef.current.add(tab.section);
+    setPages((current) => ({
+      ...current,
+      [tabKey]: { ...current[tabKey], loading: true },
+    }));
     try {
       const token = await getToken();
-      dispatch(fetchConnections(token));
+      const data = await getUserConnections(token, tab.section, cursor);
+      if (!data.success) throw new Error(data.message || 'Connections could not be loaded');
+      setPages((current) => {
+        const previousItems = append ? current[tabKey].items : [];
+        const knownIds = new Set(previousItems.map((user) => user?._id));
+        const newItems = (data.items || []).filter((user) => user?._id && !knownIds.has(user._id));
+        return {
+          ...current,
+          [tabKey]: {
+            items: [...previousItems, ...newItems],
+            nextCursor: data.nextCursor || null,
+            loaded: true,
+            loading: false,
+          },
+        };
+      });
     } catch (error) {
       Alert.alert(t('common.error', 'Hata'), error.message);
+      setPages((current) => ({
+        ...current,
+        [tabKey]: { ...current[tabKey], loaded: true, loading: false },
+      }));
+    } finally {
+      inFlightSectionsRef.current.delete(tab.section);
     }
-  }, [dispatch, getToken, t]);
+  }, [getToken, pages, t]);
 
   useEffect(() => {
-    loadConnections();
-  }, [loadConnections]);
+    if (!pages[currentTab].loaded) void loadSection(currentTab);
+  }, [currentTab, loadSection, pages]);
 
   const handleUnfollow = async (userId) => {
     try {
-      setLoading(true);
+      setActionLoading(true);
       const token = await getToken();
       const data = await unfollowUser(userId, token);
       if (data.success) {
-        loadConnections();
+        await Promise.all([
+          loadSection('Following'),
+          dispatch(fetchConnections(token)),
+        ]);
       } else {
         Alert.alert(t('common.error', 'Hata'), data.message);
       }
     } catch (error) {
       Alert.alert(t('common.error', 'Hata'), error.message);
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
   const handleAcceptConnection = async (userId) => {
     try {
-      setLoading(true);
+      setActionLoading(true);
       const token = await getToken();
       const data = await acceptConnectionRequest(userId, token);
       if (data.success) {
-        loadConnections();
+        await Promise.all([
+          loadSection('Pending'),
+          loadSection('Connections'),
+          dispatch(fetchConnections(token)),
+        ]);
       } else {
         Alert.alert(t('common.error', 'Hata'), data.message);
       }
     } catch (error) {
       Alert.alert(t('common.error', 'Hata'), error.message);
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
-  const currentData = (tabData[currentTab] || []).filter(
-    (u) => u && u._id
-  );
+  const currentPage = pages[currentTab];
+  const currentData = currentPage.items;
 
   const renderUser = ({ item: user }) => (
     <Surface
-      style={{ marginHorizontal: 12, marginVertical: 4, borderRadius: 14, padding: 12, backgroundColor: theme.surface }}
+      style={{
+        marginHorizontal: horizontalPadding,
+        marginVertical: 4,
+        borderRadius: 14,
+        padding: 12,
+        backgroundColor: theme.surface,
+      }}
       elevation={1}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -103,11 +152,15 @@ const Connections = ({ navigation }) => {
             </Text>
           </Surface>
         )}
-        <View style={{ flex: 1 }}>
-          <Text variant="titleSmall" style={{ color: theme.text, fontWeight: '700' }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text
+            variant="titleSmall"
+            numberOfLines={1}
+            style={{ color: theme.text, fontWeight: '700' }}
+          >
             {user.full_name}
           </Text>
-          <Text variant="bodySmall" style={{ color: theme.textMuted }}>
+          <Text variant="bodySmall" numberOfLines={1} style={{ color: theme.textMuted }}>
             @{user.username}
           </Text>
           {user.bio ? (
@@ -116,52 +169,53 @@ const Connections = ({ navigation }) => {
             </Text>
           ) : null}
         </View>
-        <View style={{ gap: 6 }}>
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+        <Button
+          mode="outlined"
+          compact
+          onPress={() => navigation.navigate('Profile', { userId: user._id })}
+          style={{ flexGrow: 1, borderRadius: 20 }}
+          labelStyle={{ fontSize: 11, fontWeight: '700' }}
+        >
+          {t('common.view', 'Görüntüle')}
+        </Button>
+        {currentTab === 'Pending' && (
           <Button
-            mode="outlined"
+            mode="contained"
             compact
-            onPress={() => navigation.navigate('Profile', { userId: user._id })}
-            style={{ borderRadius: 20 }}
+            onPress={() => handleAcceptConnection(user._id)}
+            disabled={actionLoading}
+            style={{ flexGrow: 1, borderRadius: 20 }}
             labelStyle={{ fontSize: 11, fontWeight: '700' }}
           >
-            {t('common.view', 'Görüntüle')}
+            {t('connections.accept', 'Kabul Et')}
           </Button>
-          {currentTab === 'Pending' && (
-            <Button
-              mode="contained"
-              compact
-              onPress={() => handleAcceptConnection(user._id)}
-              disabled={loading}
-              style={{ borderRadius: 20 }}
-              labelStyle={{ fontSize: 11, fontWeight: '700' }}
-            >
-              {t('connections.accept', 'Kabul Et')}
-            </Button>
-          )}
-          {(currentTab === 'Following' || currentTab === 'Connections') && (
-            <Button
-              mode="contained"
-              compact
-              onPress={() => navigation.navigate('ChatBox', { userId: user._id, user })}
-              style={{ borderRadius: 20 }}
-              labelStyle={{ fontSize: 11, fontWeight: '700' }}
-              icon="chat-outline"
-            >
-              {t('common.message', 'Mesaj')}
-            </Button>
-          )}
-          {currentTab === 'Following' && (
-            <Button
-              mode="text"
-              compact
-              onPress={() => handleUnfollow(user._id)}
-              disabled={loading}
-              labelStyle={{ fontSize: 11, fontWeight: '700' }}
-            >
-              {t('connections.unfollow', 'Unfollow')}
-            </Button>
-          )}
-        </View>
+        )}
+        {(currentTab === 'Following' || currentTab === 'Connections') && (
+          <Button
+            mode="contained"
+            compact
+            onPress={() => navigation.navigate('ChatBox', { userId: user._id, user })}
+            style={{ flexGrow: 1, borderRadius: 20 }}
+            labelStyle={{ fontSize: 11, fontWeight: '700' }}
+            icon="chat-outline"
+          >
+            {t('common.message', 'Mesaj')}
+          </Button>
+        )}
+        {currentTab === 'Following' && (
+          <Button
+            mode="text"
+            compact
+            onPress={() => handleUnfollow(user._id)}
+            disabled={actionLoading}
+            style={{ flexGrow: 1 }}
+            labelStyle={{ fontSize: 11, fontWeight: '700' }}
+          >
+            {t('connections.unfollow', 'Unfollow')}
+          </Button>
+        )}
       </View>
     </Surface>
   );
@@ -173,37 +227,87 @@ const Connections = ({ navigation }) => {
       <Appbar.Header statusBarHeight={0} style={{ backgroundColor: theme.surface, elevation: 0 }}>
         <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
         <Appbar.Content
-          title="Connections"
+          title={t('connections.title', 'Connections')}
           titleStyle={{ color: theme.text, fontWeight: '700' }}
         />
       </Appbar.Header>
 
       {/* Stats row */}
-      <View style={{ flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 10, gap: 8 }}>
+      <View
+        style={{
+          width: '100%',
+          maxWidth: 720,
+          alignSelf: 'center',
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          paddingHorizontal: horizontalPadding,
+          paddingVertical: 10,
+          gap: 8,
+        }}
+      >
         {TABS.map((tab) => (
-          <Surface key={tab} style={{ flex: 1, borderRadius: 12, backgroundColor: theme.surface, alignItems: 'center', padding: 10 }} elevation={1}>
+          <Surface
+            key={tab.key}
+            style={{
+              width: isNarrow ? '48%' : undefined,
+              flex: isNarrow ? undefined : 1,
+              flexGrow: 1,
+              minWidth: isNarrow ? 0 : 120,
+              borderRadius: 12,
+              backgroundColor: theme.surface,
+              alignItems: 'center',
+              padding: 10,
+            }}
+            elevation={1}
+          >
             <Text variant="titleMedium" style={{ color: theme.primary, fontWeight: '800' }}>
-              {tabData[tab]?.length || 0}
+              {pages[tab.key].loaded
+                ? `${pages[tab.key].items.length}${pages[tab.key].nextCursor ? '+' : ''}`
+                : '—'}
             </Text>
-            <Text variant="labelSmall" style={{ color: theme.textMuted }}>
-              {tab}
+            <Text
+              variant="labelSmall"
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.75}
+              style={{ color: theme.textMuted, textAlign: 'center' }}
+            >
+              {t(tab.labelKey, tab.fallback)}
             </Text>
           </Surface>
         ))}
       </View>
 
       {/* Tab chips */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: 12, paddingBottom: 8, flexGrow: 0 }}>
-        <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{
+          width: '100%',
+          maxWidth: 720,
+          alignSelf: 'center',
+          paddingHorizontal: horizontalPadding,
+          paddingBottom: 8,
+          flexGrow: 0,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: 'row',
+            gap: 8,
+            paddingVertical: 4,
+            paddingRight: horizontalPadding,
+          }}
+        >
           {TABS.map((tab) => (
             <Chip
-              key={tab}
-              selected={currentTab === tab}
-              onPress={() => setCurrentTab(tab)}
-              style={{ backgroundColor: currentTab === tab ? theme.primary : theme.surface }}
-              textStyle={{ color: currentTab === tab ? '#fff' : theme.text, fontWeight: '600' }}
+              key={tab.key}
+              selected={currentTab === tab.key}
+              onPress={() => setCurrentTab(tab.key)}
+              style={{ backgroundColor: currentTab === tab.key ? theme.primary : theme.surface }}
+              textStyle={{ color: currentTab === tab.key ? '#fff' : theme.text, fontWeight: '600' }}
             >
-              {tab}
+              {t(tab.labelKey, tab.fallback)}
             </Chip>
           ))}
         </View>
@@ -211,15 +315,30 @@ const Connections = ({ navigation }) => {
 
       <Divider />
 
-      {loading ? (
+      {currentPage.loading && currentData.length === 0 ? (
         <ActivityIndicator style={{ marginTop: 40 }} color={theme.primary} />
       ) : (
         <FlatList
           data={currentData}
           keyExtractor={(item) => item._id}
           renderItem={renderUser}
+          style={{ width: '100%', maxWidth: 720, alignSelf: 'center' }}
           contentContainerStyle={{ paddingVertical: 8, paddingBottom: 32 }}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={currentPage.loading && currentData.length > 0}
+              onRefresh={() => loadSection(currentTab)}
+              tintColor={theme.primary}
+            />
+          }
+          onEndReached={() => loadSection(currentTab, { append: true })}
+          onEndReachedThreshold={0.35}
+          ListFooterComponent={
+            currentPage.loading && currentData.length > 0
+              ? <ActivityIndicator style={{ paddingVertical: 18 }} color={theme.primary} />
+              : null
+          }
           ListEmptyComponent={
             <Text style={{ textAlign: 'center', marginTop: 48, color: theme.textMuted }}>
               {t('connections.empty', 'Henüz kimse yok')}

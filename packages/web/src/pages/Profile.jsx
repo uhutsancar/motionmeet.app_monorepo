@@ -17,14 +17,15 @@ import {
 } from "@mui/material";
 import { Calendar as CalendarIcon, Dumbbell, LineChart, Share2, Target, TrendingUp, Trophy } from "lucide-react";
 import moment from "moment";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router";
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis } from "recharts";
-import { API_ROUTES } from "@motionmeet/shared";
+import { API_ROUTES, createOperationId } from "@motionmeet/shared";
 import api from "~/api/axios";
+import { createPost } from "~/api/endpoints";
 import Loading from "~/components/Loading";
 import ProfileModal from "~/components/ProfileModal";
 import { EmptyState, PageShell, SectionHeader } from "~/components/AppPage";
@@ -47,6 +48,8 @@ const Profile = () => {
   const [workoutCursor, setWorkoutCursor] = useState(null);
   const [loadingMoreWorkouts, setLoadingMoreWorkouts] = useState(false);
   const [chartData, setChartData] = useState([]);
+  const [sharingWorkoutId, setSharingWorkoutId] = useState(null);
+  const shareOperationIdsRef = useRef(new Map());
 
   const isOwnProfile = !profileId || profileId === currentUser?._id;
   const user = isOwnProfile ? currentUser : publicProfile;
@@ -185,20 +188,30 @@ const Profile = () => {
   }, [visibleWorkouts, activeStatTab]);
 
   const shareWorkout = async (workout) => {
+    if (!workout?._id || sharingWorkoutId) return;
+    setSharingWorkoutId(workout._id);
     try {
       const token = await getToken();
-      const { data } = await api.post(
-        API_ROUTES.post.add,
-        {
-          post_type: "workout",
-          workout: workout._id,
-          content: t("feed.workout_post_content", { name: workout.name }) || `Just finished my ${workout.name} workout!`,
-        },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      let operationId = shareOperationIdsRef.current.get(workout._id);
+      if (!operationId) {
+        operationId = createOperationId("post");
+        shareOperationIdsRef.current.set(workout._id, operationId);
+      }
+      const data = await createPost({
+        operationId,
+        post_type: "workout",
+        workout: workout._id,
+        content:
+          t("feed.workout_post_content", { name: workout.name }) ||
+          `Just finished my ${workout.name} workout!`,
+      }, token);
       if (data.success) toast.success(t("feed.post_published", "Shared to feed!"));
-    } catch {
-      toast.error(t("feed.publish_failed", "Failed to share"));
+      if (data.success) shareOperationIdsRef.current.delete(workout._id);
+      else throw new Error(data.message || "Failed to share");
+    } catch (error) {
+      toast.error(error.message || t("feed.publish_failed", "Failed to share"));
+    } finally {
+      setSharingWorkoutId(null);
     }
   };
 
@@ -456,7 +469,11 @@ const Profile = () => {
                       {workout.name}
                     </Typography>
                     <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-                      <IconButton onClick={() => shareWorkout(workout)} title={t("feed.share", "Share to feed")}>
+                      <IconButton
+                        onClick={() => shareWorkout(workout)}
+                        disabled={sharingWorkoutId === workout._id}
+                        title={t("feed.share", "Share to feed")}
+                      >
                         <Share2 size={18} />
                       </IconButton>
                       <Stack sx={{ alignItems: "flex-end" }}>

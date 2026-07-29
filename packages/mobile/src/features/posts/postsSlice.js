@@ -7,6 +7,8 @@ const initialState = {
   loading: false,
   loadingMore: false,
   error: null,
+  mode: 'discover',
+  activeRequestId: null,
 };
 
 export const fetchPosts = createAsyncThunk(
@@ -71,6 +73,15 @@ const postsSlice = createSlice({
       state.posts = [];
       state.nextCursor = null;
     },
+    setAuthorFollowState: (state, action) => {
+      const { authorId, isFollowing } = action.payload;
+      state.posts.forEach((post) => {
+        const postAuthorId = post.user?._id || post.user;
+        if (postAuthorId === authorId) {
+          post.author_followed_by_me = isFollowing;
+        }
+      });
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -79,9 +90,24 @@ const postsSlice = createSlice({
         const isNextPage =
           typeof action.meta.arg === 'object' && Boolean(action.meta.arg?.cursor);
         if (isNextPage) state.loadingMore = true;
-        else state.loading = true;
+        else {
+          state.loading = true;
+          state.loadingMore = false;
+          state.mode =
+            typeof action.meta.arg === 'object'
+              ? action.meta.arg?.mode || 'discover'
+              : 'discover';
+          state.activeRequestId = action.meta.requestId;
+        }
       })
       .addCase(fetchPosts.fulfilled, (state, action) => {
+        if (action.payload.mode !== state.mode) return;
+        if (
+          !action.payload.append &&
+          state.activeRequestId !== action.meta.requestId
+        ) {
+          return;
+        }
         if (action.payload.append) {
           const knownIds = new Set(state.posts.map((post) => post._id));
           state.posts.push(
@@ -93,10 +119,23 @@ const postsSlice = createSlice({
         state.nextCursor = action.payload.nextCursor;
         state.loading = false;
         state.loadingMore = false;
+        if (!action.payload.append) state.activeRequestId = null;
       })
       .addCase(fetchPosts.rejected, (state, action) => {
+        const mode =
+          typeof action.meta.arg === 'object'
+            ? action.meta.arg?.mode || 'discover'
+            : 'discover';
+        if (mode !== state.mode) return;
+        if (
+          !(typeof action.meta.arg === 'object' && action.meta.arg?.cursor) &&
+          state.activeRequestId !== action.meta.requestId
+        ) {
+          return;
+        }
         state.loading = false;
         state.loadingMore = false;
+        state.activeRequestId = null;
         state.error = action.error.message;
       })
       // Create Post
@@ -126,5 +165,5 @@ const postsSlice = createSlice({
   },
 });
 
-export const { clearPosts } = postsSlice.actions;
+export const { clearPosts, setAuthorFollowState } = postsSlice.actions;
 export default postsSlice.reducer;

@@ -36,6 +36,8 @@ const ExercisePickerModal = ({ visible, onDismiss, onSelect, excludedIds = [] })
         const token = await getToken();
         const data = await getExercises({ search, limit: 100 }, token);
         if (active && data.success) setExercises(data.exercises || []);
+      } catch {
+        if (active) setExercises([]);
       } finally {
         if (active) setLoading(false);
       }

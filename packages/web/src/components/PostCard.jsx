@@ -22,7 +22,7 @@ import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router";
 import api from "~/api/axios";
-import { API_ROUTES } from "@motionmeet/shared";
+import { API_ROUTES, CONTENT_LIMITS } from "@motionmeet/shared";
 
 const PostCard = ({ post }) => {
   const { t, i18n } = useTranslation();
@@ -101,13 +101,14 @@ const PostCard = ({ post }) => {
   };
 
   const handleAddComment = async () => {
-    if (!commentText.trim()) return;
+    const content = commentText.trim();
+    if (!content) return;
 
     setCommentLoading(true);
     try {
       const { data } = await api.post(
         API_ROUTES.post.comment,
-        { postId: post._id, content: commentText },
+        { postId: post._id, content },
         { headers: { Authorization: `Bearer ${await getToken()}` } },
       );
       if (data.success) {
@@ -152,11 +153,17 @@ const PostCard = ({ post }) => {
 
   const handleShare = async () => {
     const text = [post.content, post.workout?.name].filter(Boolean).join("\n") || "MotionMeet";
-    if (navigator.share) {
-      await navigator.share({ title: "MotionMeet", text });
-    } else {
-      await navigator.clipboard.writeText(text);
-      toast.success(t("feed.copied", "Copied to clipboard"));
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "MotionMeet", text });
+      } else {
+        await navigator.clipboard.writeText(text);
+        toast.success(t("feed.copied", "Copied to clipboard"));
+      }
+    } catch (error) {
+      if (error?.name !== "AbortError") {
+        toast.error(t("feed.share_failed", "Could not share this post"));
+      }
     }
   };
 
@@ -267,9 +274,9 @@ const PostCard = ({ post }) => {
                 sx={{ width: "100%", flexShrink: 0, scrollSnapAlign: "center", position: "relative", aspectRatio: { xs: "4 / 4.6", sm: "4 / 3.9" }, maxHeight: 620, bgcolor: item.type === "workout" ? "action.hover" : "common.black", borderTop: 1, borderBottom: 1, borderColor: "divider" }}
               >
                 {item.type === "video" ? (
-                  <Box component="video" src={item.url} controls sx={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                  <Box component="video" src={item.url} controls preload="metadata" playsInline sx={{ width: "100%", height: "100%", objectFit: "contain" }} />
                 ) : item.type === "image" ? (
-                  <Box component="img" src={item.url} alt={`Slide ${index + 1}`} sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <Box component="img" src={item.url} alt={`Slide ${index + 1}`} loading="lazy" decoding="async" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 ) : (
                   <Stack spacing={2.5} sx={{ height: "100%", px: 3, justifyContent: "center" }}>
                     {item.data.exercises?.slice(0, 4).map((exercise, exerciseIndex) => (
@@ -372,7 +379,10 @@ const PostCard = ({ post }) => {
               placeholder={t("feed.write_comment")}
               value={commentText}
               onChange={(event) => setCommentText(event.target.value)}
-              slotProps={{ input: { disableUnderline: true } }}
+              slotProps={{
+                htmlInput: { maxLength: CONTENT_LIMITS.comment },
+                input: { disableUnderline: true },
+              }}
             />
             <IconButton color="primary" onClick={handleAddComment} disabled={commentLoading || !commentText.trim()} aria-label={t("feed.post_comment", "Post comment")}>
               {commentLoading ? <CircularProgress size={18} /> : <Send size={18} />}

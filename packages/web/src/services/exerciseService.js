@@ -1,13 +1,18 @@
 import api from "~/api/axios";
 import { API_ROUTES } from "@motionmeet/shared";
 
-export const getExercises = async (token, { search, muscleGroup, equipment }) => {
-  const params = new URLSearchParams();
-  if (search) params.append("search", search);
-  if (muscleGroup && muscleGroup !== "All Muscles") params.append("muscleGroup", muscleGroup);
-  if (equipment && equipment !== "All Equipment") params.append("equipment", equipment);
-  
-  const { data } = await api.get(`${API_ROUTES.exercise.base}?${params.toString()}`, {
+export const getExercises = async (
+  token,
+  { search, muscleGroup, equipment, cursor, limit = 50 },
+) => {
+  const params = { limit };
+  if (search) params.search = search;
+  if (muscleGroup && muscleGroup !== "All Muscles") params.muscleGroup = muscleGroup;
+  if (equipment && equipment !== "All Equipment") params.equipment = equipment;
+  if (cursor) params.cursor = cursor;
+
+  const { data } = await api.get(API_ROUTES.exercise.base, {
+    params,
     headers: { Authorization: `Bearer ${token}` },
   });
   return data;

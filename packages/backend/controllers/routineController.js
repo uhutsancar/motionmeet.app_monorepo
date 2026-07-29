@@ -1,8 +1,7 @@
 import { isExerciseList, isNonEmptyString, isObjectId, isOptionalString } from "../utils/validation.js";
 import * as routineService from "../services/routineService.js";
-import * as quotaService from "../services/quotaService.js";
 import { parsePagination } from "../utils/pagination.js";
-import { validateExerciseReferences } from "../services/exerciseService.js";
+import { addExerciseSnapshots, validateExerciseReferences } from "../services/exerciseService.js";
 
 // Get user routines
 export const getUserRoutines = async (req, res, next) => {
@@ -33,38 +32,33 @@ export const createRoutine = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Routine contains unavailable exercises" });
     }
 
-    let quotaReserved = false;
-    if (req.dbUser && req.dbUser.plan) {
-      if (req.dbUser.role !== "superadmin") {
-        const limit = req.dbUser.plan.features.max_routines;
-        if (limit !== -1) {
-          quotaReserved = await quotaService.reserveQuota({
-            userId,
-            bucket: quotaService.routineBucket,
-            limit,
-            getCurrentCount: () => routineService.countUserRoutines(userId),
-          });
-          if (!quotaReserved) {
-            return res.status(403).json({ success: false, message: `Routine limit reached for the current plan (${limit}).` });
-          }
-        }
-      }
+    const operationId = req.get("Idempotency-Key") || req.body?.operationId;
+    if (
+      typeof operationId !== "string" ||
+      operationId.length < 8 ||
+      operationId.length > 128
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "A valid Idempotency-Key header is required",
+      });
     }
 
-    let populated;
-    try {
-      populated = await routineService.createRoutine({
+    const exercisesWithSnapshots = await addExerciseSnapshots(exercises, userId);
+    const quotaLimit =
+      req.dbUser?.role === "superadmin"
+        ? -1
+        : req.dbUser?.plan?.features?.max_routines ?? -1;
+    const populated = await routineService.createRoutine(
+      {
         userId,
+        operationId,
         name: name.trim(),
         folder: folder || "My Routines",
-        exercises
-      });
-    } catch (error) {
-      if (quotaReserved) {
-        await quotaService.releaseQuota(userId, quotaService.routineBucket);
-      }
-      throw error;
-    }
+        exercises: exercisesWithSnapshots,
+      },
+      { quotaLimit }
+    );
 
     res.json({ success: true, routine: populated, message: "Routine created successfully" });
   } catch (error) {
@@ -98,7 +92,7 @@ export const updateRoutine = async (req, res, next) => {
       if (!(await validateExerciseReferences(exercises, userId))) {
         return res.status(400).json({ success: false, message: "Routine contains unavailable exercises" });
       }
-      updateData.exercises = exercises;
+      updateData.exercises = await addExerciseSnapshots(exercises, userId);
     }
 
     if (Object.keys(updateData).length === 0) {
@@ -133,7 +127,6 @@ export const deleteRoutine = async (req, res, next) => {
       return res.json({ success: false, message: "Routine not found or not authorized" });
     }
 
-    await quotaService.releaseQuota(userId, quotaService.routineBucket);
     res.json({ success: true, message: "Routine deleted successfully" });
   } catch (error) {
     next(error);

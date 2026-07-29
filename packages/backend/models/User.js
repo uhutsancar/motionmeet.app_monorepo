@@ -16,12 +16,12 @@ const userSchema = new mongoose.Schema(
       match: /^[a-z0-9._-]+$/,
     },
     password: { type: String, required: true, select: false },
-    bio: { type: String, default: "Athlete on MotionMeet" },
+    bio: { type: String, default: "Athlete on MotionMeet", maxlength: 500 },
     profile_picture: { type: String, default: "" },
     profile_picture_key: { type: String, default: "", select: false },
     cover_photo: { type: String, default: "" },
     cover_photo_key: { type: String, default: "", select: false },
-    location: { type: String, default: "" },
+    location: { type: String, default: "", maxlength: 100 },
     role: { type: String, enum: ["user", "admin", "superadmin"], default: "user" },
 
     // ── Plan & Subscription ─────────────────────────────────────
@@ -42,16 +42,13 @@ const userSchema = new mongoose.Schema(
     stripeSubscriptionId: { type: String, default: "", select: false },
 
     // ── Profil Ölçümleri ────────────────────────────────────────
-    weight: { type: Number, default: 0 },
-    height: { type: Number, default: 0 },
+    weight: { type: Number, default: 0, min: 0, max: 1000 },
+    height: { type: Number, default: 0, min: 0, max: 300 },
 
     // ── Sosyal Sayaçlar ─────────────────────────────────────────
-    followers_count:   { type: Number, default: 0 },
-    following_count:   { type: Number, default: 0 },
-    connections_count: { type: Number, default: 0 },
-
-    // Kabul edilmiş bağlantıların ID listesi (mesajlaşma erişim kontrolü için)
-    connections: { type: [String], default: [], select: false },
+    followers_count:   { type: Number, default: 0, min: 0 },
+    following_count:   { type: Number, default: 0, min: 0 },
+    connections_count: { type: Number, default: 0, min: 0 },
 
     // ── Gizlilik Ayarları ───────────────────────────────────────
     privacy: {
@@ -64,9 +61,9 @@ const userSchema = new mongoose.Schema(
 
     // ── İstatistikler ───────────────────────────────────────────
     statistics: {
-      totalWorkouts:       { type: Number, default: 0 },
-      totalDurationMinutes:{ type: Number, default: 0 },
-      totalVolumeKg:       { type: Number, default: 0 },
+      totalWorkouts:       { type: Number, default: 0, min: 0 },
+      totalDurationMinutes:{ type: Number, default: 0, min: 0 },
+      totalVolumeKg:       { type: Number, default: 0, min: 0 },
     },
   },
   { timestamps: true, minimize: false }
@@ -79,6 +76,7 @@ userSchema.index(
 
 // Plan durumu üzerinden sorgu yapılabilmesi için
 userSchema.index({ planStatus: 1, planEndDate: 1 });
+userSchema.index({ createdAt: -1, _id: -1 });
 
 const User = mongoose.model("User", userSchema);
 

@@ -20,6 +20,10 @@ export const normalizeCompletedExercises = (
   (Array.isArray(exercises) ? exercises : [])
     .map((exercise) => ({
       exerciseId: exercise.exerciseId?._id || exercise.exerciseId,
+      exerciseName: exercise.exerciseName || exercise.exerciseId?.name || "",
+      muscleGroup:
+        exercise.muscleGroup || exercise.exerciseId?.muscleGroup || "",
+      equipment: exercise.equipment || exercise.exerciseId?.equipment || "",
       sets: (Array.isArray(exercise.sets) ? exercise.sets : [])
         .filter((set) => treatAllAsCompleted || set.completed !== false)
         .map((set) => ({

@@ -107,6 +107,8 @@ const styles = StyleSheet.create({
   },
   sheet: {
     width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
     overflow: 'hidden',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,

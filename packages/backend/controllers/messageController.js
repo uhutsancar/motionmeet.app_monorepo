@@ -1,21 +1,41 @@
 import imagekit from "../configs/imageKit.js";
-import { extractS3Key, uploadToS3 } from "../utils/s3Utils.js";
 import { emitToUser } from "../realtime/socketRegistry.js";
 import { isObjectId, isOptionalString, isUserId } from "../utils/validation.js";
 import { hasValidMediaSignature } from "../utils/mediaValidation.js";
 import * as messageService from "../services/messageService.js";
-import { deleteMediaOrQueue } from "../services/mediaDeletionService.js";
 import { parsePagination } from "../utils/pagination.js";
 import {
-  commitReservedUploads,
   discardReservedUploads,
   resolveReservedUploads,
+  uploadAndReserve,
 } from "../services/mediaUploadService.js";
 
 export const sendMessage = async (req, res, next) => {
   try {
     const { to_user_id: recipientId, text } = req.body || {};
     const image = req.file;
+    const operationId = req.get("Idempotency-Key") || req.body?.operationId;
+    if (
+      typeof operationId !== "string" ||
+      operationId.length < 8 ||
+      operationId.length > 128
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "A valid Idempotency-Key header is required",
+      });
+    }
+    const existingMessage = await messageService.findMessageByOperation(
+      req.userId,
+      operationId
+    );
+    if (existingMessage) {
+      return res.json({
+        success: true,
+        message: existingMessage,
+        idempotentReplay: true,
+      });
+    }
 
     if (!(await messageService.canSendToUser(req.dbUser, recipientId))) {
       return res.status(403).json({ success: false, message: "You cannot message this user" });
@@ -42,7 +62,13 @@ export const sendMessage = async (req, res, next) => {
     let mediaUrl = reservedImage?.url || "";
     let mediaKey = reservedImage?.key || "";
     if (image) {
-      const { key } = await uploadToS3(image.buffer, image.originalname, "messages", image.mimetype);
+      const { key } = await uploadAndReserve({
+        file: image.buffer,
+        fileName: image.originalname,
+        userId: req.userId,
+        purpose: "messages",
+        contentType: image.mimetype,
+      });
       mediaKey = key;
       mediaUrl = imagekit.url({
         path: key,
@@ -53,21 +79,23 @@ export const sendMessage = async (req, res, next) => {
 
     let populated;
     try {
-      populated = await messageService.createMessage({
-        from_user_id: req.userId,
-        to_user_id: recipientId,
-        text: text?.trim() || "",
-        message_type: image || reservedImage ? "image" : "text",
-        media_url: mediaUrl,
-        media_key: mediaKey,
-        seen: false,
-      });
+      populated = await messageService.createMessage(
+        {
+          from_user_id: req.userId,
+          to_user_id: recipientId,
+          operationId,
+          text: text?.trim() || "",
+          message_type: image || reservedImage ? "image" : "text",
+          media_url: mediaUrl,
+          media_key: mediaKey,
+          seen: false,
+        },
+        { reservationKeys: mediaKey ? [mediaKey] : [] }
+      );
     } catch (error) {
       if (mediaKey) await discardReservedUploads([mediaKey]);
       throw error;
     }
-    await commitReservedUploads(reservedUploads.map(({ key }) => key));
-
     emitToUser(recipientId, "message_received", populated);
     emitToUser(req.userId, "message_sent", populated);
     return res.json({ success: true, message: populated });
@@ -86,6 +114,7 @@ export const getChatMessages = async (req, res, next) => {
     const pagination = parsePagination(req.query, { defaultLimit: 50, maxLimit: 100 });
     const { items: messages, nextCursor } =
       await messageService.getChatMessagesList(req.userId, recipientId, pagination);
+    emitToUser(recipientId, "messages_seen", { by_user_id: req.userId });
 
     return res.json({ success: true, messages, nextCursor });
   } catch (error) {
@@ -95,8 +124,13 @@ export const getChatMessages = async (req, res, next) => {
 
 export const getUserConversations = async (req, res, next) => {
   try {
-    const conversations = await messageService.getUserConversationsList(req.userId);
-    return res.json({ success: true, conversations });
+    const pagination = parsePagination(req.query, {
+      defaultLimit: 50,
+      maxLimit: 100,
+    });
+    const { items: conversations, nextCursor } =
+      await messageService.getUserConversationsList(req.userId, pagination);
+    return res.json({ success: true, conversations, nextCursor });
   } catch (error) {
     return next(error);
   }
@@ -119,6 +153,7 @@ export const markSeen = async (req, res, next) => {
     }
 
     await messageService.markMessagesSeen(req.userId, senderId);
+    emitToUser(senderId, "messages_seen", { by_user_id: req.userId });
     return res.json({ success: true });
   } catch (error) {
     return next(error);
@@ -138,9 +173,7 @@ export const deleteMessage = async (req, res, next) => {
       return res.status(403).json({ success: false, message: "Not authorized to delete this message" });
     }
 
-    const key = message.media_key || extractS3Key(message.media_url);
     await messageService.deleteMessageById(message);
-    if (key) await deleteMediaOrQueue([key]);
 
     emitToUser(message.to_user_id.toString(), "message_deleted", { messageId });
     emitToUser(req.userId, "message_deleted", { messageId });

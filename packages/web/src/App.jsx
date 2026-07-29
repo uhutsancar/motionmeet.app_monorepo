@@ -10,10 +10,10 @@ import { useDispatch } from "react-redux";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import Notification from "./components/Notification";
 import { SocketProvider } from "./context/SocketProvider";
-import { fetchConnections } from "./features/connections/connectionsSlice";
 import { addMessage } from "./features/messages/messagesSlice";
 import { fetchUser } from "./features/user/userSlice";
 import { useSocket } from "./hooks/useSocket";
+import { getConversations } from "./services/messageService";
 
 const Landing = lazy(() => import("./pages/Landing"));
 const Layout = lazy(() => import("./pages/Layout"));
@@ -80,7 +80,19 @@ const AppContent = () => {
       const token = await getToken();
       if (!token) return;
       dispatch(fetchUser(token));
-      dispatch(fetchConnections(token));
+      try {
+        const data = await getConversations(token);
+        if (data.success) {
+          setUnreadCount(
+            (data.conversations || []).reduce(
+              (total, conversation) => total + Number(conversation.unreadCount || 0),
+              0,
+            ),
+          );
+        }
+      } catch {
+        // The feed remains usable if the unread badge cannot be initialized.
+      }
     };
 
     fetchData();

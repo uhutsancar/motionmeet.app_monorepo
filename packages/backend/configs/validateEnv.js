@@ -50,8 +50,38 @@ export const validateEnvironment = () => {
   }
 
   if (process.env.NODE_ENV === "production") {
-    requireUrl("MONGODB_URL", ["mongodb:", "mongodb+srv:"]);
-    requireUrl("REDIS_URL", ["redis:", "rediss:"]);
+    const mongo = requireUrl("MONGODB_URL", ["mongodb:", "mongodb+srv:"]);
+    if (!mongo.username || !mongo.password) {
+      throw new Error("MONGODB_URL must include database credentials in production");
+    }
+    if (
+      mongo.protocol === "mongodb:" &&
+      !mongo.searchParams.get("replicaSet")
+    ) {
+      throw new Error("MONGODB_URL must target a replica set in production");
+    }
+    if (
+      mongo.protocol === "mongodb:" &&
+      mongo.searchParams.get("tls") !== "true" &&
+      process.env.ALLOW_INSECURE_MONGO_TLS !== "true"
+    ) {
+      throw new Error(
+        "MONGODB_URL must enable tls=true (or explicitly set ALLOW_INSECURE_MONGO_TLS=true)"
+      );
+    }
+
+    const redis = requireUrl("REDIS_URL", ["redis:", "rediss:"]);
+    if (!redis.password) {
+      throw new Error("REDIS_URL must include a password in production");
+    }
+    if (
+      redis.protocol !== "rediss:" &&
+      process.env.ALLOW_INSECURE_REDIS_TLS !== "true"
+    ) {
+      throw new Error(
+        "REDIS_URL must use rediss:// (or explicitly set ALLOW_INSECURE_REDIS_TLS=true)"
+      );
+    }
     const frontend = requireUrl("FRONTEND_URL", ["https:"]);
     if (frontend.origin !== process.env.FRONTEND_URL.trim().replace(/\/$/, "")) {
       throw new Error("FRONTEND_URL must contain only an HTTPS origin");

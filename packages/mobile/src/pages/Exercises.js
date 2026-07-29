@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FlatList,
   TouchableOpacity,
@@ -46,28 +46,64 @@ const Exercises = ({ navigation }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filterType, setFilterType] = useState(null);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const requestSequenceRef = useRef(0);
 
-  const fetchExercises = useCallback(async () => {
+  const fetchExercises = useCallback(async (cursor = null, requestId = null) => {
+    const activeRequestId = requestId ?? ++requestSequenceRef.current;
     try {
-      setLoading(true);
+      if (cursor) setLoadingMore(true);
+      else setLoading(true);
       const params = {};
       if (searchQuery) params.search = searchQuery;
       if (muscleFilter !== 'all') params.muscleGroup = muscleFilter;
       if (equipmentFilter !== 'all') params.equipment = equipmentFilter;
+      params.limit = 50;
+      if (cursor) params.cursor = cursor;
       const token = await getToken();
       const data = await getExercises(params, token);
-      if (data.success) setExercises(data.exercises || []);
+      if (requestSequenceRef.current !== activeRequestId) return;
+      if (data.success) {
+        if (cursor) {
+          setExercises((current) => {
+            const knownIds = new Set(current.map((exercise) => exercise._id));
+            return [
+              ...current,
+              ...(data.exercises || []).filter((exercise) => !knownIds.has(exercise._id)),
+            ];
+          });
+        } else {
+          setExercises(data.exercises || []);
+        }
+        setNextCursor(data.nextCursor || null);
+      }
     } catch (error) {
-      logHandledError('load-exercises', error);
+      if (requestSequenceRef.current === activeRequestId) {
+        logHandledError('load-exercises', error);
+      }
     } finally {
-      setLoading(false);
+      if (requestSequenceRef.current === activeRequestId) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
   }, [equipmentFilter, getToken, muscleFilter, searchQuery]);
 
   useEffect(() => {
-    const timer = setTimeout(fetchExercises, 400);
+    const requestId = ++requestSequenceRef.current;
+    setLoading(true);
+    setLoadingMore(false);
+    setNextCursor(null);
+    const timer = setTimeout(() => fetchExercises(null, requestId), 400);
     return () => clearTimeout(timer);
   }, [fetchExercises]);
+
+  const loadMoreExercises = useCallback(() => {
+    if (nextCursor && !loading && !loadingMore) {
+      void fetchExercises(nextCursor);
+    }
+  }, [fetchExercises, loading, loadingMore, nextCursor]);
 
   const openFilter = (type) => {
     setFilterType(type);
@@ -278,6 +314,17 @@ const Exercises = ({ navigation }) => {
           style={{ width: '100%', maxWidth: 720, alignSelf: 'center' }}
           contentContainerStyle={{ paddingBottom: 30 }}
           showsVerticalScrollIndicator={false}
+          onEndReached={loadMoreExercises}
+          onEndReachedThreshold={0.35}
+          ListFooterComponent={
+            loadingMore ? (
+              <ActivityIndicator
+                size="small"
+                color={theme.primary}
+                style={{ paddingVertical: 18 }}
+              />
+            ) : null
+          }
           ListEmptyComponent={
             <Surface
               elevation={0}

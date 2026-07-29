@@ -31,6 +31,10 @@ const Login = () => {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
+    if (!formData.email.trim() || !formData.password) {
+      setError("Enter your email address and password.");
+      return;
+    }
     setLoading(true);
 
     try {

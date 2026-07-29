@@ -256,10 +256,15 @@ const MonthlyReportScreen = ({ navigation }) => {
             >
                 <TouchableRipple onPress={() => navigation.navigate(card.screen, { statsData })} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1 }} borderless><View /></TouchableRipple>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <Text variant="bodyMedium" style={{ color: theme.text, fontWeight: '500' }}>{card.label}</Text>
+                    <Text numberOfLines={2} style={{ flex: 1, minWidth: 0, paddingRight: 8, color: theme.text, fontWeight: '500' }}>{card.label}</Text>
                     <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
                 </View>
-                <Text variant="titleLarge" style={{ fontWeight: 'bold', color: theme.text, marginBottom: 12 }}>
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.65}
+                  style={{ fontSize: 22, fontWeight: 'bold', color: theme.text, marginBottom: 12 }}
+                >
                     {card.value.toLocaleString()}
                     {card.unit ? <Text style={{ fontSize: 14, fontWeight: 'normal' }}>{' '}{card.unit}</Text> : null}
                 </Text>
@@ -283,7 +288,7 @@ const MonthlyReportScreen = ({ navigation }) => {
           }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 18 }}>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text variant="titleMedium" style={{ color: theme.text, fontWeight: '800' }}>
                 {t('monthly_report.workout_days_log', 'Antrenman Günleri Kaydı')}
               </Text>

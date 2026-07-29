@@ -1,8 +1,7 @@
 import { isExerciseList, isNonEmptyString, isOptionalString } from "../utils/validation.js";
 import * as workoutService from "../services/workoutService.js";
-import * as quotaService from "../services/quotaService.js";
 import { parsePagination } from "../utils/pagination.js";
-import { validateExerciseReferences } from "../services/exerciseService.js";
+import { addExerciseSnapshots, validateExerciseReferences } from "../services/exerciseService.js";
 import {
   buildCanonicalWorkout,
   normalizeCompletedExercises,
@@ -39,47 +38,38 @@ export const logWorkout = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Workout contains unavailable exercises" });
     }
 
-    let reservedBucket = null;
-    if (req.dbUser && req.dbUser.plan) {
-      if (req.dbUser.role !== "superadmin") {
-          const limit = req.dbUser.plan.features.max_workouts_per_month;
-          if (limit !== -1) {
-          const now = new Date();
-          const startOfMonth = new Date(
-            Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
-          );
-
-          reservedBucket = quotaService.workoutBucket();
-          const reserved = await quotaService.reserveQuota({
-            userId,
-            bucket: reservedBucket,
-            limit,
-            getCurrentCount: () =>
-              workoutService.countUserWorkoutsFromDate(userId, startOfMonth),
-          });
-
-          if (!reserved) {
-            return res.status(403).json({ success: false, message: `Monthly workout limit reached (${limit}). Please upgrade your plan.` });
-          }
-        }
-      }
-    }
-
-    let newWorkout;
-    try {
-      const canonicalWorkout = buildCanonicalWorkout({
-        userId,
-        name: name.trim(),
-        startTime: parsedStartTime,
-        endTime: parsedEndTime,
-        exercises: completedExercises,
+    const operationId = req.get("Idempotency-Key") || req.body?.operationId;
+    if (
+      typeof operationId !== "string" ||
+      operationId.length < 8 ||
+      operationId.length > 128
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "A valid Idempotency-Key header is required",
       });
-      newWorkout =
-        await workoutService.createWorkoutWithStatistics(canonicalWorkout);
-    } catch (error) {
-      if (reservedBucket) await quotaService.releaseQuota(userId, reservedBucket);
-      throw error;
     }
+
+    const exercisesWithSnapshots = await addExerciseSnapshots(
+      completedExercises,
+      userId
+    );
+    const canonicalWorkout = buildCanonicalWorkout({
+      userId,
+      operationId,
+      name: name.trim(),
+      startTime: parsedStartTime,
+      endTime: parsedEndTime,
+      exercises: exercisesWithSnapshots,
+    });
+    const quotaLimit =
+      req.dbUser?.role === "superadmin"
+        ? -1
+        : req.dbUser?.plan?.features?.max_workouts_per_month ?? -1;
+    const newWorkout = await workoutService.createWorkoutWithStatistics(
+      canonicalWorkout,
+      { quotaLimit }
+    );
 
     res.status(201).json({ success: true, workout: newWorkout, message: "Workout logged successfully" });
   } catch (error) {

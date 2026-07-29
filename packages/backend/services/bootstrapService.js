@@ -1,15 +1,6 @@
 import Equipment from "../models/Equipment.js";
 import MuscleGroup from "../models/MuscleGroup.js";
-import User from "../models/User.js";
 import { getOrCreateFreePlan, getOrCreateProPlan } from "../utils/plans.js";
-
-// ────────────────────────────────────────────────────────────────
-// SuperAdmin yapılandırması
-// Bu email'e sahip hesap her zaman "superadmin" rolünü alır.
-// Hesap henüz yoksa bu satır hiçbir şey yapmaz (güvenli).
-// Hesap oluşturulduğunda authService.createUser() zaten rolü ayarlar.
-// ────────────────────────────────────────────────────────────────
-const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL || "sancaruhut@gmail.com";
 
 export const MUSCLE_GROUP_DEFAULTS = [
   { code: "chest",     name: "Chest",     order: 1 },
@@ -43,27 +34,11 @@ const insertMissingDefaults = (Model, defaults) =>
     }))
   );
 
-/**
- * SuperAdmin hesabının rolünü güvence altına alır.
- * Uygulama her başladığında çalışır: veritabanında bu e-posta varsa
- * rolü "superadmin" olarak günceller. Yoksa sessizce geçer.
- */
-const ensureSuperAdmin = async () => {
-  const result = await User.updateOne(
-    { email: SUPER_ADMIN_EMAIL },
-    { $set: { role: "superadmin" } }
-  );
-  if (result.matchedCount > 0) {
-    console.log(`[Bootstrap] SuperAdmin role ensured for: ${SUPER_ADMIN_EMAIL}`);
-  }
-};
-
 export const ensureApplicationData = async () => {
   await Promise.all([
     getOrCreateFreePlan(),
     getOrCreateProPlan(),
     insertMissingDefaults(MuscleGroup, MUSCLE_GROUP_DEFAULTS),
     insertMissingDefaults(Equipment, EQUIPMENT_DEFAULTS),
-    ensureSuperAdmin(),
   ]);
 };

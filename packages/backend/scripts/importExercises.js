@@ -27,16 +27,18 @@ const importExercises = async () => {
     // S3 bağlantısı gerektiren adımlar buraya entegre edilecek.
     const CDN_BASE_URL = process.env.CDN_URL ? process.env.CDN_URL + "/exercises" : "https://motionmeet-assets.s3.eu-north-1.amazonaws.com/exercises";
 
-    for (const exercise of exercises) {
-      try {
-        const imageUrl = `${CDN_BASE_URL}/${exercise.image}`;
-        const gifUrl = `${CDN_BASE_URL}/${exercise.gif_url}`;
-
-        await Exercise.findOneAndUpdate(
-          { externalId: exercise.id },
-          {
+    const operations = exercises.map((exercise) => {
+      const imageUrl = `${CDN_BASE_URL}/${exercise.image}`;
+      const gifUrl = `${CDN_BASE_URL}/${exercise.gif_url}`;
+      return {
+        updateOne: {
+          filter: { externalId: exercise.id },
+          update: {
             $setOnInsert: {
               name: exercise.name,
+              nameNormalized: String(exercise.name || "")
+                .trim()
+                .toLocaleLowerCase("en-US"),
               muscleGroup: exercise.body_part || "other",
               equipment: exercise.equipment || "body weight",
               instructions: exercise.instructions || {},
@@ -47,21 +49,24 @@ const importExercises = async () => {
               externalId: exercise.id,
               isCustom: false,
             },
-            $set: {
-              imageUrl,
-              gifUrl,
-            }
+            $set: { imageUrl, gifUrl },
           },
-          { upsert: true, new: true }
+          upsert: true,
+        },
+      };
+    });
+
+    for (let offset = 0; offset < operations.length; offset += 500) {
+      try {
+        const batch = operations.slice(offset, offset + 500);
+        await Exercise.bulkWrite(batch, { ordered: false });
+        successCount += batch.length;
+        console.log(
+          `[İlerleme] ${successCount}/${exercises.length} eklendi/güncellendi...`
         );
-        successCount++;
-        
-        if (successCount % 100 === 0) {
-          console.log(`[İlerleme] ${successCount}/${exercises.length} eklendi/güncellendi...`);
-        }
       } catch (err) {
-        console.error(`Egzersiz eklenemedi (ID: ${exercise.id}): ${err.message}`);
-        errorCount++;
+        console.error(`Egzersiz grubu eklenemedi: ${err.message}`);
+        errorCount += Math.min(500, operations.length - offset);
       }
     }
 

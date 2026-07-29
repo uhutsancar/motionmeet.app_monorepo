@@ -7,14 +7,27 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useSocket } from '../hooks/useSocket';
-import { getMessages, sendMessage as sendMessageHTTP, deleteMessage } from '../api/endpoints';
+import {
+  deleteMessage,
+  getMessages,
+  getUserProfile,
+  markMessageSeen,
+  sendMessage as sendMessageHTTP,
+} from '../api/endpoints';
 import { uploadMedia } from '../api/mediaUpload';
-import { setMessages, addMessage, prependMessages, removeMessage } from '../features/messages/messagesSlice';
+import {
+  setMessages,
+  addMessage,
+  markMessagesSeenByUser,
+  prependMessages,
+  removeMessage,
+} from '../features/messages/messagesSlice';
 import moment from 'moment';
 import { Appbar, Avatar, Text, TextInput, IconButton, Surface, ActivityIndicator, Badge, useTheme as usePaperTheme, TouchableRipple } from 'react-native-paper';
 import { showError } from '../utils/feedback';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { KeyboardResponsiveView } from '../components/KeyboardAwareScrollView';
+import { CONTENT_LIMITS, createOperationId } from '@motionmeet/shared';
 
 const ChatBox = ({ route, navigation }) => {
   const { userId, user: routeUser } = route?.params || {};
@@ -42,10 +55,18 @@ const ChatBox = ({ route, navigation }) => {
   const [nextCursor, setNextCursor] = useState(null);
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [user, setUser] = useState(routeUser);
+  const [partnerLoadFailed, setPartnerLoadFailed] = useState(false);
+  const [sending, setSending] = useState(false);
 
   const flatListRef = useRef(null);
   const typingRef = useRef(null);
   const skipAutoScrollRef = useRef(false);
+  const typingActiveRef = useRef(false);
+  const scrollTimeoutRef = useRef(null);
+  const sendTimeoutRef = useRef(null);
+  const pendingDraftRef = useRef('');
+  const pendingOperationIdRef = useRef(null);
+  const uploadCacheRef = useRef(null);
 
   useEffect(() => {
     if (!user && connections.length > 0) {
@@ -54,11 +75,36 @@ const ChatBox = ({ route, navigation }) => {
   }, [connections, userId, user]);
 
   useEffect(() => {
+    if (user || !userId || partnerLoadFailed) return undefined;
+    let cancelled = false;
+    const loadPartner = async () => {
+      try {
+        const token = await getToken();
+        const data = await getUserProfile(userId, token);
+        if (!cancelled && data.success) setUser(data.profile);
+      } catch {
+        if (!cancelled) {
+          setPartnerLoadFailed(true);
+          showError(
+            t('common.error', 'Error'),
+            t('messages.user_load_failed', 'Conversation user could not be loaded'),
+          );
+        }
+      }
+    };
+    void loadPartner();
+    return () => {
+      cancelled = true;
+    };
+  }, [getToken, partnerLoadFailed, t, user, userId]);
+
+  useEffect(() => {
     if (!userId) {
       setInitialLoading(false);
       return undefined;
     }
 
+    setInitialLoading(true);
     dispatch(setMessages([]));
     setNextCursor(null);
     let cancelled = false;
@@ -90,16 +136,38 @@ const ChatBox = ({ route, navigation }) => {
       if (fromId === userId) {
         dispatch(addMessage(msg));
         setPartnerTyping(false);
+        getToken()
+          .then((token) => token && markMessageSeen(userId, token))
+          .catch(() => undefined);
       }
     };
 
-    const onSent = (msg) => { dispatch(addMessage(msg)); };
+    const onSent = (msg) => {
+      const recipientId = msg.to_user_id?._id || msg.to_user_id;
+      if (recipientId !== userId) return;
+      clearTimeout(sendTimeoutRef.current);
+      pendingDraftRef.current = '';
+      pendingOperationIdRef.current = null;
+      setSending(false);
+      dispatch(addMessage(msg));
+    };
 
     const onTypStart = ({ from_user_id }) => { if (from_user_id === userId) setPartnerTyping(true); };
     const onTypStop = ({ from_user_id }) => { if (from_user_id === userId) setPartnerTyping(false); };
     const onDeleted = ({ messageId }) => dispatch(removeMessage(messageId));
-    const onMessageError = ({ message } = {}) => {
+    const onMessageError = ({ message, operationId } = {}) => {
+      if (
+        operationId &&
+        operationId !== pendingOperationIdRef.current
+      ) return;
+      clearTimeout(sendTimeoutRef.current);
+      setText((current) => current || pendingDraftRef.current);
+      pendingDraftRef.current = '';
+      setSending(false);
       showError(t('common.error', 'Error'), message || t('messages.send_failed', 'Failed to send message'));
+    };
+    const onMessagesSeen = ({ by_user_id: byUserId } = {}) => {
+      if (byUserId === userId) dispatch(markMessagesSeenByUser(byUserId));
     };
 
     socket.on('message_received', onMsg);
@@ -108,6 +176,7 @@ const ChatBox = ({ route, navigation }) => {
     socket.on('typing_stop', onTypStop);
     socket.on('message_deleted', onDeleted);
     socket.on('message_error', onMessageError);
+    socket.on('messages_seen', onMessagesSeen);
 
     return () => {
       socket.off('message_received', onMsg);
@@ -116,11 +185,14 @@ const ChatBox = ({ route, navigation }) => {
       socket.off('typing_stop', onTypStop);
       socket.off('message_deleted', onDeleted);
       socket.off('message_error', onMessageError);
+      socket.off('messages_seen', onMessagesSeen);
     };
-  }, [dispatch, socket, t, userId]);
+  }, [dispatch, getToken, socket, t, userId]);
 
   useEffect(() => () => {
     clearTimeout(typingRef.current);
+    clearTimeout(scrollTimeoutRef.current);
+    clearTimeout(sendTimeoutRef.current);
     if (userId) emitTypingStop(userId);
   }, [emitTypingStop, userId]);
 
@@ -130,7 +202,11 @@ const ChatBox = ({ route, navigation }) => {
         skipAutoScrollRef.current = false;
         return;
       }
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+      clearTimeout(scrollTimeoutRef.current);
+      scrollTimeoutRef.current = setTimeout(
+        () => flatListRef.current?.scrollToEnd({ animated: true }),
+        100,
+      );
     }
   }, [messages, partnerTyping]);
 
@@ -154,9 +230,22 @@ const ChatBox = ({ route, navigation }) => {
 
   const handleTextChange = (val) => {
     setText(val);
-    emitTypingStart(userId);
+    pendingOperationIdRef.current = null;
+    if (val.trim() && !typingActiveRef.current) {
+      typingActiveRef.current = true;
+      emitTypingStart(userId);
+    }
+    if (!val.trim() && typingActiveRef.current) {
+      typingActiveRef.current = false;
+      emitTypingStop(userId);
+    }
     clearTimeout(typingRef.current);
-    typingRef.current = setTimeout(() => emitTypingStop(userId), 1500);
+    if (val.trim()) {
+      typingRef.current = setTimeout(() => {
+        typingActiveRef.current = false;
+        emitTypingStop(userId);
+      }, 1500);
+    }
   };
 
   const pickImage = async () => {
@@ -168,24 +257,56 @@ const ChatBox = ({ route, navigation }) => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'], allowsEditing: true, aspect: [4, 3], quality: 0.8,
     });
-    if (!result.canceled) setImage(result.assets[0]);
+    if (!result.canceled) {
+      setImage(result.assets[0]);
+      pendingOperationIdRef.current = null;
+      uploadCacheRef.current = null;
+    }
   };
 
   const handleSend = useCallback(async () => {
-    if (!text.trim() && !image) return;
+    if ((!text.trim() && !image) || sending) return;
     emitTypingStop(userId);
+    typingActiveRef.current = false;
+    pendingOperationIdRef.current ||= createOperationId('message');
 
-    if (!image && connected && socketSend(userId, text.trim())) {
+    if (
+      !image &&
+      connected &&
+      socketSend(userId, text.trim(), pendingOperationIdRef.current)
+    ) {
+      pendingDraftRef.current = text.trim();
+      setSending(true);
       setText('');
+      clearTimeout(sendTimeoutRef.current);
+      sendTimeoutRef.current = setTimeout(() => {
+        setText((current) => current || pendingDraftRef.current);
+        pendingDraftRef.current = '';
+        setSending(false);
+        showError(
+          t('common.error', 'Error'),
+          t('messages.send_failed', 'Failed to send message'),
+        );
+      }, 15_000);
       return;
     }
 
     try {
+      setSending(true);
       const token = await getToken();
-      const uploadedKey = image
-        ? await uploadMedia(image, 'messages', token)
+      if (!token) throw new Error('Authentication required');
+      const mediaSignature = image
+        ? `${image.assetId || image.uri}:${image.fileSize || 0}`
+        : '';
+      let uploadedKey = uploadCacheRef.current?.signature === mediaSignature
+        ? uploadCacheRef.current.key
         : undefined;
+      if (image && !uploadedKey) {
+        uploadedKey = await uploadMedia(image, 'messages', token);
+        uploadCacheRef.current = { signature: mediaSignature, key: uploadedKey };
+      }
       const data = await sendMessageHTTP({
+        operationId: pendingOperationIdRef.current,
         to_user_id: userId,
         text: text.trim(),
         uploadedKey,
@@ -194,11 +315,18 @@ const ChatBox = ({ route, navigation }) => {
         dispatch(addMessage(data.message));
         setText('');
         setImage(null);
+        pendingOperationIdRef.current = null;
+        uploadCacheRef.current = null;
+      } else {
+        throw new Error(data.message || 'Failed to send message');
       }
     } catch {
       showError(t('common.error', 'Error'), t('messages.send_failed', 'Failed to send message'));
     }
-  }, [connected, dispatch, emitTypingStop, getToken, image, socketSend, text, t, userId]);
+    finally {
+      setSending(false);
+    }
+  }, [connected, dispatch, emitTypingStop, getToken, image, sending, socketSend, text, t, userId]);
 
   const isMine = (msg) => {
     const fromId = msg.from_user_id?._id || msg.from_user_id;
@@ -304,7 +432,26 @@ const ChatBox = ({ route, navigation }) => {
     );
   }
 
-  if (!user) return <SafeAreaView style={s.container}><ActivityIndicator color={theme.primary} /></SafeAreaView>;
+  if (!user) {
+    return (
+      <SafeAreaView style={s.container}>
+        <Surface elevation={0} style={s.loader}>
+          {partnerLoadFailed ? (
+            <>
+              <Text style={{ color: theme.textMuted }}>
+                {t('messages.user_load_failed', 'Conversation user could not be loaded')}
+              </Text>
+              <TouchableRipple onPress={() => navigation.goBack()} style={{ marginTop: 16 }}>
+                <Text style={{ color: theme.primary }}>{t('common.back', 'Back')}</Text>
+              </TouchableRipple>
+            </>
+          ) : (
+            <ActivityIndicator color={theme.primary} />
+          )}
+        </Surface>
+      </SafeAreaView>
+    );
+  }
 
   const isOnline = onlineUsers.has(userId);
 
@@ -352,6 +499,7 @@ const ChatBox = ({ route, navigation }) => {
             data={messages}
             renderItem={renderMessage}
             keyExtractor={(item, i) => item._id || String(i)}
+            style={s.messageList}
             contentContainerStyle={s.msgList}
             showsVerticalScrollIndicator={false}
             ListHeaderComponent={
@@ -375,14 +523,21 @@ const ChatBox = ({ route, navigation }) => {
         <Surface style={{ backgroundColor: theme.surface }} elevation={2}>
           {image && (
             <Surface elevation={0} style={s.imagePreview}>
-              <Image source={{ uri: image.uri }} style={s.previewImg} />
-              <IconButton 
-                icon="close-circle" 
-                iconColor="#ef4444" 
-                size={24} 
-                onPress={() => setImage(null)} 
-                style={s.removeImg} 
-              />
+              <Surface elevation={0} style={s.previewMedia}>
+                <Image source={{ uri: image.uri }} style={s.previewImg} />
+                <IconButton
+                  icon="close-circle"
+                  iconColor="#ef4444"
+                  size={24}
+                  disabled={sending}
+                  onPress={() => {
+                    setImage(null);
+                    pendingOperationIdRef.current = null;
+                    uploadCacheRef.current = null;
+                  }}
+                  style={s.removeImg}
+                />
+              </Surface>
             </Surface>
           )}
           <Surface elevation={0} style={[s.inputBar, { paddingBottom: Math.max(insets.bottom || 0, 12) }]}>
@@ -391,6 +546,7 @@ const ChatBox = ({ route, navigation }) => {
               iconColor={theme.textMuted} 
               size={24} 
               onPress={pickImage} 
+              disabled={sending}
               style={s.attachBtn} 
             />
             <TextInput
@@ -400,8 +556,9 @@ const ChatBox = ({ route, navigation }) => {
               placeholderTextColor={theme.textMuted}
               value={text}
               onChangeText={handleTextChange}
+              editable={!sending}
               multiline
-              maxLength={1000}
+              maxLength={CONTENT_LIMITS.message}
               keyboardAppearance={isDark ? 'dark' : 'light'}
               outlineStyle={{ borderRadius: 24, borderColor: theme.border }}
               textColor={theme.text}
@@ -412,8 +569,8 @@ const ChatBox = ({ route, navigation }) => {
               iconColor="#fff"
               size={20}
               onPress={handleSend}
-              disabled={!text.trim() && !image}
-              style={[s.sendBtn, (!text.trim() && !image) && { opacity: 0.4 }]}
+              disabled={sending || (!text.trim() && !image)}
+              style={[s.sendBtn, (sending || (!text.trim() && !image)) && { opacity: 0.4 }]}
               containerColor={theme.primary}
             />
           </Surface>
@@ -445,7 +602,8 @@ const getStyles = (theme, paperTheme, insets) => ({
   connDot: { width: 7, height: 7, borderRadius: 3.5 },
   connText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  msgList: { paddingHorizontal: 16, paddingVertical: 20, flexGrow: 1 },
+  messageList: { width: '100%', maxWidth: 720, alignSelf: 'center' },
+  msgList: { width: '100%', paddingHorizontal: 16, paddingVertical: 20, flexGrow: 1 },
   msgRow: { marginBottom: 12, flexDirection: 'row', alignItems: 'flex-end' },
   msgRowRight: { justifyContent: 'flex-end' },
   msgRowLeft: { justifyContent: 'flex-start' },
@@ -469,12 +627,15 @@ const getStyles = (theme, paperTheme, insets) => ({
   msgImage: { borderRadius: 18, marginBottom: 6 },
   typingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.textMuted, marginHorizontal: 2 },
   imagePreview: {
+    width: '100%', maxWidth: 720, alignSelf: 'center',
     flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12,
     borderTopWidth: 1, borderTopColor: theme.border,
   },
+  previewMedia: { width: 60, height: 60, position: 'relative' },
   previewImg: { width: 60, height: 60, borderRadius: 12 },
-  removeImg: { position: 'absolute', top: -10, right: -10, backgroundColor: '#fff', borderRadius: 12 },
+  removeImg: { position: 'absolute', top: -14, right: -14, backgroundColor: theme.surface, borderRadius: 12 },
   inputBar: {
+    width: '100%', maxWidth: 720, alignSelf: 'center',
     flexDirection: 'row', alignItems: 'flex-end',
     paddingHorizontal: 16, paddingTop: 12,
     borderTopWidth: 1, borderTopColor: theme.border,

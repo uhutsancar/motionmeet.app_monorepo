@@ -7,13 +7,13 @@ const postRouter = express.Router()
 
 postRouter.post('/add', protect, attachDbUser, postMediaUpload.array('images', 4), addPost);
 postRouter.get('/feed', protect, getFeedPost);
-postRouter.post('/like', protect, attachDbUser, likePost); // deprecated toggle
-postRouter.put('/:postId/like', protect, attachDbUser, likePostIdempotent);
-postRouter.delete('/:postId/like', protect, attachDbUser, unlikePost);
-postRouter.post('/comment/add', protect, attachDbUser, addComment);
-postRouter.get('/:postId/comments', protect, attachDbUser, getComments);
-postRouter.post('/delete', protect, attachDbUser, deletePost);
-postRouter.delete('/:postId', protect, attachDbUser, deletePost);
-postRouter.delete('/delete/:postId', protect, attachDbUser, deletePost);
+postRouter.post('/like', protect, likePost); // deprecated toggle
+postRouter.put('/:postId/like', protect, likePostIdempotent);
+postRouter.delete('/:postId/like', protect, unlikePost);
+postRouter.post('/comment/add', protect, addComment);
+postRouter.get('/:postId/comments', protect, getComments);
+postRouter.post('/delete', protect, deletePost);
+postRouter.delete('/:postId', protect, deletePost);
+postRouter.delete('/delete/:postId', protect, deletePost);
 
 export default postRouter

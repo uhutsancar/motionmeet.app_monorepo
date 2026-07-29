@@ -1,19 +1,18 @@
 import cron from "node-cron";
+import mongoose from "mongoose";
 import Story from "../models/Story.js";
-import Post from "../models/Post.js";
-import User from "../models/User.js";
+import StoryView from "../models/StoryView.js";
 import { extractS3Key } from "../utils/s3Utils.js";
-import { runWithRedisLock, getAndClearBufferedIncrements } from "../configs/redis.js";
+import { runWithRedisLock } from "../configs/redis.js";
 import UploadReservation from "../models/UploadReservation.js";
 import {
-  deleteMediaOrQueue,
   processMediaDeletionJobs,
+  queueMediaDeletions,
 } from "../services/mediaDeletionService.js";
+import { processOutboxEvents } from "../services/outboxService.js";
 
 const deleteExpiredStories = async () => {
-  // NOT: MongoDB TTL index story'leri DB'den otomatik siler.
-  // Bu cron job ise S3 medya dosyalarını temizlemek için çalışır.
-  // expiresAt alanı kullanılır (TTL index ile tutarlı).
+  // Medya kuyruğu, StoryView ve Story silme işlemi aynı transaction'dadır.
   const now = new Date();
   let deleted = 0;
 
@@ -24,31 +23,59 @@ const deleteExpiredStories = async () => {
       .limit(200);
     if (!expiredStories.length) break;
 
-    for (const story of expiredStories) {
-      const key = story.media_key || extractS3Key(story.media_url);
-      await Story.deleteOne({ _id: story._id });
-      if (key) await deleteMediaOrQueue([key]);
-      deleted += 1;
+    const storyIds = expiredStories.map((story) => story._id);
+    const keys = expiredStories
+      .map((story) => story.media_key || extractS3Key(story.media_url))
+      .filter(Boolean);
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        await queueMediaDeletions(keys, { session });
+        await StoryView.deleteMany(
+          { storyId: { $in: storyIds } },
+          { session }
+        );
+        const result = await Story.deleteMany(
+          { _id: { $in: storyIds }, expiresAt: { $lte: now } },
+          { session }
+        );
+        deleted += result.deletedCount;
+      });
+    } finally {
+      await session.endSession();
     }
   }
 
-  if (deleted) console.log(`Deleted ${deleted} expired stories (+ S3 media queued).`);
+  if (deleted) console.log(`Deleted ${deleted} expired stories (media queued).`);
 };
 
 const deleteAbandonedUploads = async () => {
   while (true) {
-    const reservations = await UploadReservation.find({
-      expiresAt: { $lt: new Date() },
-    })
-      .sort({ expiresAt: 1 })
-      .limit(200);
-    if (!reservations.length) break;
-    await deleteMediaOrQueue(
-      reservations.map((reservation) => reservation.key)
-    );
-    await UploadReservation.deleteMany({
-      _id: { $in: reservations.map((reservation) => reservation._id) },
-    });
+    const session = await mongoose.startSession();
+    let claimed = 0;
+    try {
+      await session.withTransaction(async () => {
+        const reservations = await UploadReservation.find({
+          expiresAt: { $lt: new Date() },
+        })
+          .sort({ expiresAt: 1, _id: 1 })
+          .limit(200)
+          .session(session);
+        if (!reservations.length) return;
+        claimed = reservations.length;
+        await queueMediaDeletions(
+          reservations.map((reservation) => reservation.key),
+          { session }
+        );
+        await UploadReservation.deleteMany(
+          { _id: { $in: reservations.map((reservation) => reservation._id) } },
+          { session }
+        );
+      });
+    } finally {
+      await session.endSession();
+    }
+    if (!claimed) break;
   }
 };
 
@@ -58,28 +85,9 @@ const deleteQueuedMedia = async () => {
   }
 };
 
-const flushRedisBuffers = async () => {
-  const buffers = [
-    { type: "post_likes", model: Post, field: "like_count" },
-    { type: "post_comments", model: Post, field: "comment_count" },
-    { type: "post_shares", model: Post, field: "share_count" },
-    { type: "post_downloads", model: Post, field: "download_count" },
-    { type: "followers_count", model: User, field: "followers_count" },
-    { type: "following_count", model: User, field: "following_count" },
-    { type: "connections_count", model: User, field: "connections_count" },
-  ];
-
-  for (const { type, model, field } of buffers) {
-    const data = await getAndClearBufferedIncrements(type);
-    const operations = Object.entries(data).map(([id, value]) => ({
-      updateOne: {
-        filter: { _id: id },
-        update: { $inc: { [field]: parseInt(value, 10) } },
-      }
-    }));
-    if (operations.length) {
-      await (/** @type {any} */ (model)).bulkWrite(operations);
-    }
+const processOutbox = async () => {
+  while ((await processOutboxEvents()) === 200) {
+    // Continue in bounded batches while due work remains.
   }
 };
 
@@ -89,8 +97,8 @@ export const initCronJobs = () => {
     return [];
   }
 
-  const storyTask = cron.schedule("0 * * * *", () => {
-    void runWithRedisLock("expired-stories", 55 * 60, deleteExpiredStories)
+  const storyTask = cron.schedule("*/5 * * * *", () => {
+    void runWithRedisLock("expired-stories", 4 * 60, deleteExpiredStories)
       .catch((error) =>
         console.error("Error in story deletion cron:", error.message)
       );
@@ -107,22 +115,14 @@ export const initCronJobs = () => {
   });
 
   const mediaDeletionTask = cron.schedule("*/10 * * * *", () => {
-    void runWithRedisLock(
-      "queued-media-deletions",
-      9 * 60,
-      deleteQueuedMedia
-    ).catch((error) =>
+    void deleteQueuedMedia().catch((error) =>
       console.error("Error in queued media deletion:", error.message)
     );
   });
 
-  const flushBufferTask = cron.schedule("* * * * *", () => {
-    void runWithRedisLock(
-      "flush-redis-buffers",
-      50,
-      flushRedisBuffers
-    ).catch((error) =>
-      console.error("Error in flush buffer cron:", error.message)
+  const outboxTask = cron.schedule("* * * * *", () => {
+    void processOutbox().catch((error) =>
+      console.error("Error in outbox processor:", error.message)
     );
   });
 
@@ -131,6 +131,6 @@ export const initCronJobs = () => {
     storyTask,
     abandonedUploadTask,
     mediaDeletionTask,
-    flushBufferTask,
+    outboxTask,
   ];
 };

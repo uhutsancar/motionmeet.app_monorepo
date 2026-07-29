@@ -1,7 +1,7 @@
 import path from "path";
 import { fileURLToPath } from "url";
-import mongoose from "mongoose";
 import dotenv from "dotenv";
+import connectDB, { disconnectDB } from "../configs/db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
@@ -13,14 +13,14 @@ if (!MONGO_URI) {
 }
 
 async function seed() {
-  await mongoose.connect(MONGO_URI);
+  await connectDB();
   console.log("✅ Connected to MongoDB");
 
   const { ensureApplicationData } = await import("../services/bootstrapService.js");
   await ensureApplicationData();
 
   console.log("✅ Master data seeding completed.");
-  await mongoose.disconnect();
+  await disconnectDB();
 }
 
 seed().catch((err) => {

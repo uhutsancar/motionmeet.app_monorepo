@@ -1,5 +1,6 @@
 import { isNonEmptyString, isObjectId, isOptionalHttpUrl, isOptionalString } from "../utils/validation.js";
 import * as exerciseService from "../services/exerciseService.js";
+import mongoose from "mongoose";
 
 // Get all exercises with optional filtering
 export const getExercises = async (req, res, next) => {
@@ -11,18 +12,37 @@ export const getExercises = async (req, res, next) => {
     }
 
     const limitNum = Math.min(Math.max(parseInt(limit) || 50, 1), 200);
-    const skipNum = Math.max(parseInt(skip) || 0, 0);
+    const skipNum = Math.min(Math.max(parseInt(skip) || 0, 0), 5_000);
+    let cursor = null;
+    if (typeof req.query.cursor === "string" && req.query.cursor.length <= 512) {
+      try {
+        const decoded = JSON.parse(
+          Buffer.from(req.query.cursor, "base64url").toString("utf8")
+        );
+        if (
+          typeof decoded.name === "string" &&
+          decoded.name.length <= 200 &&
+          mongoose.isObjectIdOrHexString(decoded.id)
+        ) {
+          cursor = decoded;
+        }
+      } catch {
+        cursor = null;
+      }
+    }
 
-    const { exercises, total } = await exerciseService.getExercisesList({
+    const { exercises, total, nextCursor } = await exerciseService.getExercisesList({
       search,
       muscleGroup,
       equipment,
       limitNum,
       skipNum,
+      cursor,
+      includeTotal: req.query.includeTotal === "true",
       userId: req.userId,
     });
 
-    res.json({ success: true, exercises, total, limit: limitNum, skip: skipNum });
+    res.json({ success: true, exercises, total, nextCursor, limit: limitNum, skip: skipNum });
   } catch (error) {
     next(error);
   }

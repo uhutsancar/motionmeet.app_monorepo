@@ -12,11 +12,12 @@ import {
   TextField,
 } from "@mui/material";
 import { Sparkle, TextIcon, Upload, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import api from "~/api/axios";
 import { uploadMedia } from "~/api/mediaUpload";
+import { API_ROUTES, CONTENT_LIMITS, createOperationId } from "@motionmeet/shared";
 
 const BACKGROUND_COLORS = ["#0f172a", "#1e1b4b", "#312e81", "#4c1d95", "#581c87", "#701a75", "#831843"];
 const MAX_VIDEO_DURATION = 60;
@@ -31,6 +32,12 @@ const StoryModal = ({ setShowModal, fetchStories }) => {
   const [media, setMedia] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [loading, setLoading] = useState(false);
+  const operationIdRef = useRef(createOperationId("story"));
+  const uploadedMediaRef = useRef(null);
+
+  const resetPendingSubmission = () => {
+    operationIdRef.current = createOperationId("story");
+  };
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -41,6 +48,8 @@ const StoryModal = ({ setShowModal, fetchStories }) => {
     setPreviewUrl(URL.createObjectURL(file));
     setText("");
     setMode("media");
+    uploadedMediaRef.current = null;
+    resetPendingSubmission();
   };
 
   const handleMediaUpload = (event) => {
@@ -81,16 +90,28 @@ const StoryModal = ({ setShowModal, fetchStories }) => {
     setLoading(true);
     try {
       const token = await getToken();
-      const uploadedKey = media
-        ? await uploadMedia(media, "stories", token)
+      const mediaSignature = media
+        ? `${media.name}:${media.size}:${media.lastModified}`
+        : "";
+      let uploadedKey = uploadedMediaRef.current?.signature === mediaSignature
+        ? uploadedMediaRef.current.key
         : undefined;
-      const { data } = await api.post("/api/story/create", {
+      if (media && !uploadedKey) {
+        uploadedKey = await uploadMedia(media, "stories", token);
+        uploadedMediaRef.current = { signature: mediaSignature, key: uploadedKey };
+      }
+      const operationId = operationIdRef.current;
+      const { data } = await api.post(API_ROUTES.story.create, {
+        operationId,
         content: text,
         media_type: mediaType,
         background_color: background,
         uploadedKey,
       }, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Idempotency-Key": operationId,
+        },
       });
 
       if (data.success) {
@@ -111,13 +132,15 @@ const StoryModal = ({ setShowModal, fetchStories }) => {
     setMode("text");
     setMedia(null);
     setPreviewUrl(null);
+    uploadedMediaRef.current = null;
+    resetPendingSubmission();
   };
 
   return (
-    <Dialog open onClose={() => setShowModal(false)} fullWidth maxWidth="xs">
+    <Dialog open onClose={() => !loading && setShowModal(false)} fullWidth maxWidth="xs">
       <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontWeight: 800 }}>
         {t("feed.create_story")}
-        <IconButton onClick={() => setShowModal(false)} aria-label="Close">
+        <IconButton onClick={() => setShowModal(false)} disabled={loading} aria-label="Close">
           <X size={20} />
         </IconButton>
       </DialogTitle>
@@ -143,8 +166,15 @@ const StoryModal = ({ setShowModal, fetchStories }) => {
                 fullWidth
                 placeholder={t("feed.whats_on_mind")}
                 value={text}
-                onChange={(event) => setText(event.target.value)}
-                slotProps={{ input: { disableUnderline: true } }}
+                disabled={loading}
+                onChange={(event) => {
+                  setText(event.target.value);
+                  resetPendingSubmission();
+                }}
+                slotProps={{
+                  htmlInput: { maxLength: CONTENT_LIMITS.story },
+                  input: { disableUnderline: true },
+                }}
                 variant="standard"
                 sx={{ height: "100%", "& .MuiInputBase-root": { height: "100%", alignItems: "center", color: "common.white", px: 3, fontSize: 20, fontWeight: 800, textAlign: "center" }, "& textarea": { textAlign: "center" } }}
               />
@@ -166,7 +196,11 @@ const StoryModal = ({ setShowModal, fetchStories }) => {
               {BACKGROUND_COLORS.map((color) => (
                 <IconButton
                   key={color}
-                  onClick={() => setBackground(color)}
+                  disabled={loading}
+                  onClick={() => {
+                    setBackground(color);
+                    resetPendingSubmission();
+                  }}
                   aria-label={`Background ${color}`}
                   sx={{ width: 32, height: 32, borderRadius: 1.25, bgcolor: color, border: 2, borderColor: background === color ? "common.white" : "transparent", outline: background === color ? "2px solid rgba(255,255,255,.28)" : "none", "&:hover": { bgcolor: color, opacity: 0.85 } }}
                 />
@@ -175,10 +209,10 @@ const StoryModal = ({ setShowModal, fetchStories }) => {
           )}
 
           <Stack direction="row" spacing={1.5}>
-            <Button fullWidth variant={mode === "text" ? "contained" : "outlined"} startIcon={<TextIcon size={18} />} onClick={switchToText}>
+            <Button fullWidth variant={mode === "text" ? "contained" : "outlined"} startIcon={<TextIcon size={18} />} onClick={switchToText} disabled={loading}>
               {t("feed.text")}
             </Button>
-            <Button fullWidth component="label" variant={mode === "media" ? "contained" : "outlined"} startIcon={<Upload size={18} />}>
+            <Button fullWidth component="label" variant={mode === "media" ? "contained" : "outlined"} startIcon={<Upload size={18} />} disabled={loading}>
               {t("feed.photo_video")}
               <Box component="input" type="file" accept="image/*,video/*" onChange={handleMediaUpload} sx={{ display: "none" }} />
             </Button>
