@@ -38,7 +38,8 @@ corepack pnpm audit --prod
 corepack pnpm lint
 corepack pnpm typecheck
 corepack pnpm test
-docker compose -f docker-compose.test.yml up -d --wait
+docker compose -f docker-compose.test.yml up -d --wait mongo-test
+docker compose -f docker-compose.test.yml run --rm mongo-test-init
 MONGODB_TEST_URL='mongodb://127.0.0.1:27018/?replicaSet=rsTest' corepack pnpm --filter @motionmeet/backend test:integration
 docker compose -f docker-compose.test.yml down
 corepack pnpm build
