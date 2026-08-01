@@ -89,6 +89,66 @@ if (requestedService === "ip") {
   process.exit(0);
 }
 
+const findAdb = () => {
+  const candidates = [
+    process.env.ADB,
+    process.env.ANDROID_HOME ? path.join(process.env.ANDROID_HOME, "platform-tools", "adb.exe") : null,
+    process.env.ANDROID_SDK_ROOT ? path.join(process.env.ANDROID_SDK_ROOT, "platform-tools", "adb.exe") : null,
+    process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, "Android", "Sdk", "platform-tools", "adb.exe") : null,
+    "adb",
+  ].filter(Boolean);
+
+  return candidates.find((candidate) => {
+    const result = spawnSync(candidate, ["version"], { encoding: "utf8", windowsHide: true });
+    return !result.error && result.status === 0;
+  }) || null;
+};
+
+const listConnectedAndroidDevices = (adb) => {
+  if (!adb) return [];
+  const result = spawnSync(adb, ["devices"], { encoding: "utf8", windowsHide: true });
+  if (result.error || result.status !== 0) return [];
+  return result.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim().match(/^(\S+)\s+device$/)?.[1])
+    .filter(Boolean);
+};
+
+const mobileTransport = (process.env.MOTIONMEET_MOBILE_TRANSPORT || "auto").trim().toLowerCase();
+if (!["auto", "lan", "usb"].includes(mobileTransport)) {
+  throw new Error("MOTIONMEET_MOBILE_TRANSPORT must be auto, lan or usb.");
+}
+
+const adb = findAdb();
+const androidDevices = listConnectedAndroidDevices(adb);
+const useUsbTransport = mobileTransport === "usb"
+  || (mobileTransport === "auto" && androidDevices.length > 0);
+
+if (mobileTransport === "usb" && androidDevices.length === 0) {
+  throw new Error("USB mode requires at least one authorized Android device.");
+}
+
+const mobileHost = useUsbTransport ? "127.0.0.1" : lan.address;
+const mobileBackendUrl = `http://${mobileHost}:${backendPort}`;
+const mobileWebUrl = `http://${mobileHost}:${webPort}`;
+const mobileExpoUrl = `http://${mobileHost}:${expoPort}`;
+
+if (useUsbTransport) {
+  for (const serial of androidDevices) {
+    for (const port of [backendPort, webPort, expoPort]) {
+      const result = spawnSync(adb, ["-s", serial, "reverse", `tcp:${port}`, `tcp:${port}`], {
+        encoding: "utf8",
+        windowsHide: true,
+      });
+      if (result.error || result.status !== 0) {
+        throw new Error(
+          `Unable to configure adb reverse for ${serial} on port ${port}: ${result.stderr || result.error?.message}`,
+        );
+      }
+    }
+  }
+}
+
 const serviceDefinitions = {
   backend: {
     port: backendPort,
@@ -116,11 +176,11 @@ const serviceDefinitions = {
   },
   mobile: {
     port: expoPort,
-    args: ["--filter", "@motionmeet/mobile", "exec", "expo", "start", "--lan", "--port", String(expoPort)],
+    args: ["--filter", "@motionmeet/mobile", "exec", "expo", "start", useUsbTransport ? "--localhost" : "--lan", "--port", String(expoPort)],
     environment: {
-      EXPO_PUBLIC_API_URL: backendUrl,
-      EXPO_PUBLIC_WEB_URL: webUrl,
-      REACT_NATIVE_PACKAGER_HOSTNAME: lan.address,
+      EXPO_PUBLIC_API_URL: mobileBackendUrl,
+      EXPO_PUBLIC_WEB_URL: mobileWebUrl,
+      REACT_NATIVE_PACKAGER_HOSTNAME: mobileHost,
       EXPO_NO_TELEMETRY: "1",
       EXPO_NO_DEPENDENCY_VALIDATION: "1",
     },
@@ -152,7 +212,8 @@ console.log(`LAN interface : ${lan.interfaceName}`);
 console.log(`LAN address   : ${lan.address}`);
 console.log(`Backend       : ${backendUrl}`);
 console.log(`Web           : ${webUrl}`);
-console.log(`Expo          : ${expoUrl}`);
+console.log(`Expo          : ${useUsbTransport ? mobileExpoUrl : expoUrl}`);
+console.log(`Mobile link   : ${useUsbTransport ? `USB (${androidDevices.join(", ")})` : "LAN"}`);
 console.log("Override automatic detection with MOTIONMEET_LAN_IP when needed.\n");
 
 const children = [];
