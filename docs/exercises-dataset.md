@@ -6,8 +6,8 @@ been removed.
 
 ## Current import behavior
 
-`packages/backend/scripts/seedExercises.js` can import normalized metadata into
-MongoDB. It does not grant or validate media redistribution rights. Any relative
+`packages/backend/scripts/seedExercises.ts` can import normalized metadata into
+PostgreSQL. It does not grant or validate media redistribution rights. Any relative
 `gifUrl` copied from the snapshot is intentionally unusable by production
 clients, which accept only public HTTP(S) media URLs.
 

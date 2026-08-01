@@ -5,6 +5,7 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@11.10.0 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.json ./
+COPY patches ./patches
 COPY packages/backend/package.json ./packages/backend/package.json
 COPY packages/web/package.json ./packages/web/package.json
 COPY packages/mobile/package.json ./packages/mobile/package.json
@@ -16,4 +17,4 @@ COPY packages/shared ./packages/shared
 
 WORKDIR /app/packages/mobile
 EXPOSE 8081
-CMD ["pnpm", "start", "--port", "8081", "--lan"]
+CMD ["sh", "-c", "pnpm --filter @motionmeet/shared build && pnpm start --port 8081 --lan"]

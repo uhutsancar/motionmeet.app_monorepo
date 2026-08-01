@@ -1,0 +1,406 @@
+import type { ColumnType, Generated, Insertable, Selectable, Updateable } from "kysely";
+
+export type Timestamp = ColumnType<Date, Date | string, Date | string>;
+export type GeneratedTimestamp = ColumnType<Date, Date | string | undefined, Date | string>;
+export type NullableTimestamp = ColumnType<Date | null, Date | string | null, Date | string | null>;
+export type Numeric = ColumnType<number, number | string, number | string>;
+export type GeneratedNumeric = ColumnType<number, number | string | undefined, number | string>;
+
+interface BaseTable {
+  id: Generated<string>;
+  legacy_mongo_id: string | null;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+}
+
+export interface PlanTable extends BaseTable {
+  name: string;
+  slug: string;
+  description: Generated<string>;
+  display_order: Generated<number>;
+  trial_days: Generated<number>;
+  price: GeneratedNumeric;
+  currency: Generated<string>;
+  max_workouts_per_month: Generated<number>;
+  max_routines: Generated<number>;
+  max_posts_per_day: Generated<number>;
+  max_stories_per_day: Generated<number>;
+  max_media_upload_mb: Generated<number>;
+  can_message_anyone: Generated<boolean>;
+  premium_content_access: Generated<boolean>;
+  ad_free: Generated<boolean>;
+  priority_support: Generated<boolean>;
+  can_access_analytics: Generated<boolean>;
+  can_create_custom_exercises: Generated<boolean>;
+  is_active: Generated<boolean>;
+}
+
+export interface PlanBillingCycleTable {
+  plan_id: string;
+  interval: "monthly" | "yearly";
+  price: Numeric;
+  currency: Generated<string>;
+  stripe_price_id: Generated<string>;
+}
+
+export interface UserTable extends BaseTable {
+  email: string;
+  full_name: string;
+  username: string;
+  password_hash: string;
+  bio: Generated<string>;
+  profile_picture_url: Generated<string>;
+  profile_picture_key: Generated<string>;
+  cover_photo_url: Generated<string>;
+  cover_photo_key: Generated<string>;
+  location: Generated<string>;
+  role: Generated<"user" | "admin" | "superadmin">;
+  plan_id: string | null;
+  plan_status: Generated<"free" | "active" | "trialing" | "cancelled" | "expired">;
+  plan_start_date: NullableTimestamp;
+  plan_end_date: NullableTimestamp;
+  plan_cancelled_at: NullableTimestamp;
+  stripe_customer_id: Generated<string>;
+  stripe_subscription_id: Generated<string>;
+  weight: GeneratedNumeric;
+  height: GeneratedNumeric;
+  followers_count: Generated<number>;
+  following_count: Generated<number>;
+  connections_count: Generated<number>;
+  privacy_public_profile: Generated<boolean>;
+  privacy_show_workouts_on_feed: Generated<boolean>;
+  privacy_allow_followers: Generated<boolean>;
+  privacy_show_in_search: Generated<boolean>;
+  privacy_allow_messages: Generated<boolean>;
+  total_workouts: Generated<number>;
+  total_duration_minutes: Generated<number>;
+  total_volume_kg: GeneratedNumeric;
+}
+
+export interface LookupTable extends BaseTable {
+  code: string;
+  name: string;
+  is_active: Generated<boolean>;
+  display_order: Generated<number>;
+}
+
+export interface ExerciseTable extends BaseTable {
+  external_id: string | null;
+  name: string;
+  name_normalized: string;
+  muscle_group: string;
+  target: Generated<string>;
+  category: Generated<string>;
+  equipment: string;
+  image_url: Generated<string>;
+  image_key: Generated<string>;
+  gif_url: Generated<string>;
+  gif_key: Generated<string>;
+  is_custom: Generated<boolean>;
+  created_by: string | null;
+}
+
+export interface ExerciseSecondaryMuscleTable {
+  exercise_id: string;
+  muscle: string;
+  position: number;
+}
+
+export interface ExerciseInstructionTable {
+  exercise_id: string;
+  language: string;
+  summary: Generated<string>;
+  steps: Generated<string[]>;
+}
+
+export interface RoutineTable extends BaseTable {
+  user_id: string;
+  operation_id: string | null;
+  name: string;
+  folder: Generated<string>;
+}
+
+export interface RoutineExerciseTable extends BaseTable {
+  routine_id: string;
+  exercise_id: string | null;
+  position: number;
+  exercise_name: Generated<string>;
+  muscle_group: Generated<string>;
+  equipment: Generated<string>;
+}
+
+export interface RoutineSetTable extends BaseTable {
+  routine_exercise_id: string;
+  position: number;
+  set_type: Generated<"normal" | "warmup" | "drop" | "failure">;
+  reps: Generated<number>;
+  weight: GeneratedNumeric;
+  completed: Generated<boolean>;
+}
+
+export interface WorkoutTable extends BaseTable {
+  user_id: string;
+  operation_id: string | null;
+  name: string;
+  start_time: Timestamp;
+  end_time: NullableTimestamp;
+  duration_minutes: Generated<number>;
+  volume_kg: GeneratedNumeric;
+  total_sets: Generated<number>;
+  total_reps: GeneratedNumeric;
+  metrics_version: Generated<number>;
+}
+
+export interface WorkoutExerciseTable extends BaseTable {
+  workout_id: string;
+  exercise_id: string | null;
+  position: number;
+  exercise_name: Generated<string>;
+  muscle_group: Generated<string>;
+  equipment: Generated<string>;
+}
+
+export interface WorkoutSetTable extends BaseTable {
+  workout_exercise_id: string;
+  position: number;
+  set_type: Generated<"normal" | "warmup" | "drop" | "failure">;
+  reps: Generated<number>;
+  weight: GeneratedNumeric;
+  completed: Generated<boolean>;
+}
+
+export interface PostTable extends BaseTable {
+  user_id: string;
+  operation_id: string | null;
+  author_full_name: Generated<string>;
+  author_username: Generated<string>;
+  author_profile_picture: Generated<string>;
+  content: Generated<string>;
+  post_type: Generated<"text" | "image" | "text_with_image" | "video" | "workout">;
+  visibility: Generated<"public" | "followers" | "private">;
+  like_count: Generated<number>;
+  comment_count: Generated<number>;
+  share_count: Generated<number>;
+  download_count: Generated<number>;
+  workout_id: string | null;
+}
+
+export interface PostMediaTable extends BaseTable {
+  post_id: string;
+  position: number;
+  url: string;
+  object_key: Generated<string>;
+  media_type: Generated<"image" | "video">;
+  mime_type: Generated<string>;
+  file_size: number | null;
+  width: number | null;
+  height: number | null;
+  duration_seconds: Numeric | null;
+}
+
+export interface PostLikeTable {
+  post_id: string;
+  user_id: string;
+  created_at: GeneratedTimestamp;
+}
+
+export interface PostCommentTable extends BaseTable {
+  post_id: string;
+  user_id: string;
+  content: string;
+}
+
+export interface StoryTable extends BaseTable {
+  user_id: string;
+  operation_id: string | null;
+  content: Generated<string>;
+  media_url: Generated<string>;
+  media_key: Generated<string>;
+  media_type: "text" | "image" | "video";
+  background_color: Generated<string>;
+  expires_at: Timestamp;
+}
+
+export interface StoryViewTable {
+  story_id: string;
+  user_id: string;
+  created_at: GeneratedTimestamp;
+}
+
+export interface UserFollowTable {
+  follower_id: string;
+  followee_id: string;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+}
+
+export interface ConnectionTable extends BaseTable {
+  from_user_id: string;
+  to_user_id: string;
+  pair_key: string;
+  status: Generated<"pending" | "accepted">;
+}
+
+export interface ConversationTable extends BaseTable {
+  pair_key: string;
+  last_message_id: string | null;
+  last_message_at: NullableTimestamp;
+}
+
+export interface ConversationParticipantTable {
+  conversation_id: string;
+  user_id: string;
+  unread_count: Generated<number>;
+  joined_at: GeneratedTimestamp;
+}
+
+export interface MessageTable extends BaseTable {
+  conversation_id: string;
+  operation_id: string | null;
+  from_user_id: string;
+  to_user_id: string;
+  text: Generated<string>;
+  message_type: "text" | "image";
+  media_url: Generated<string>;
+  media_key: Generated<string>;
+  seen: Generated<boolean>;
+}
+
+export interface SessionTable extends BaseTable {
+  user_id: string;
+  token_hash: string;
+  expires_at: Timestamp;
+  revoked_at: NullableTimestamp;
+  last_used_at: GeneratedTimestamp;
+  user_agent: Generated<string>;
+  ip_address: Generated<string>;
+}
+
+export interface PasswordResetTokenTable extends BaseTable {
+  user_id: string;
+  token_hash: string;
+  expires_at: Timestamp;
+  consumed_at: NullableTimestamp;
+}
+
+export interface UploadReservationTable extends BaseTable {
+  object_key: string;
+  user_id: string;
+  purpose: "profiles" | "covers" | "posts" | "stories" | "messages";
+  content_type: string;
+  max_bytes: number;
+  expires_at: Timestamp;
+}
+
+export interface MediaDeletionJobTable extends BaseTable {
+  object_key: string;
+  attempts: Generated<number>;
+  next_attempt_at: GeneratedTimestamp;
+  last_error: Generated<string>;
+  claim_token: string | null;
+  claim_until: NullableTimestamp;
+}
+
+export interface UsageCounterTable extends BaseTable {
+  user_id: string;
+  bucket: string;
+  count: Generated<number>;
+  expires_at: NullableTimestamp;
+}
+
+export type OutboxPayload = Record<string, string | number | boolean | null>;
+
+export interface OutboxEventTable extends BaseTable {
+  type: "user.profile.updated" | "connection.requested";
+  aggregate_id: string;
+  payload: OutboxPayload;
+  status: Generated<"pending" | "processing">;
+  attempts: Generated<number>;
+  next_attempt_at: GeneratedTimestamp;
+  claim_token: string | null;
+  claim_until: NullableTimestamp;
+  last_error: Generated<string>;
+}
+
+export interface PersonalRecordTable extends BaseTable {
+  user_id: string;
+  exercise_id: string;
+  exercise_name: string;
+  value: Numeric;
+  reps: number;
+  recorded_at: Timestamp;
+  workout_id: string;
+}
+
+export interface UserDailyWorkoutStatTable extends BaseTable {
+  user_id: string;
+  date_key: string;
+  date: Timestamp;
+  total_workouts: Generated<number>;
+  total_duration_minutes: Generated<number>;
+  total_volume_kg: GeneratedNumeric;
+  total_sets: Generated<number>;
+  total_reps: GeneratedNumeric;
+}
+
+export interface UserDailyMuscleStatTable {
+  daily_stat_id: string;
+  muscle: string;
+  set_count: Generated<number>;
+}
+
+export interface UserExerciseDailyStatTable extends BaseTable {
+  user_id: string;
+  date_key: string;
+  date: Timestamp;
+  exercise_id: string;
+  exercise_name: string;
+  muscle_group: Generated<string>;
+  total_volume_kg: GeneratedNumeric;
+  total_reps: GeneratedNumeric;
+  total_sets: Generated<number>;
+  total_sessions: Generated<number>;
+  max_weight: GeneratedNumeric;
+}
+
+export interface Database {
+  plans: PlanTable;
+  plan_billing_cycles: PlanBillingCycleTable;
+  users: UserTable;
+  equipment: LookupTable;
+  muscle_groups: LookupTable;
+  exercises: ExerciseTable;
+  exercise_secondary_muscles: ExerciseSecondaryMuscleTable;
+  exercise_instructions: ExerciseInstructionTable;
+  routines: RoutineTable;
+  routine_exercises: RoutineExerciseTable;
+  routine_sets: RoutineSetTable;
+  workouts: WorkoutTable;
+  workout_exercises: WorkoutExerciseTable;
+  workout_sets: WorkoutSetTable;
+  posts: PostTable;
+  post_media: PostMediaTable;
+  post_likes: PostLikeTable;
+  post_comments: PostCommentTable;
+  stories: StoryTable;
+  story_views: StoryViewTable;
+  user_follows: UserFollowTable;
+  connections: ConnectionTable;
+  conversations: ConversationTable;
+  conversation_participants: ConversationParticipantTable;
+  messages: MessageTable;
+  sessions: SessionTable;
+  password_reset_tokens: PasswordResetTokenTable;
+  upload_reservations: UploadReservationTable;
+  media_deletion_jobs: MediaDeletionJobTable;
+  usage_counters: UsageCounterTable;
+  outbox_events: OutboxEventTable;
+  personal_records: PersonalRecordTable;
+  user_daily_workout_stats: UserDailyWorkoutStatTable;
+  user_daily_muscle_stats: UserDailyMuscleStatTable;
+  user_exercise_daily_stats: UserExerciseDailyStatTable;
+}
+
+export type Row<TableName extends keyof Database> = Selectable<Database[TableName]>;
+export type NewRow<TableName extends keyof Database> = Insertable<Database[TableName]>;
+export type RowUpdate<TableName extends keyof Database> = Updateable<Database[TableName]>;

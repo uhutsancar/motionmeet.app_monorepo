@@ -1,17 +1,18 @@
 # MotionMeet
 
-MotionMeet is a social fitness monorepo:
+MotionMeet is a TypeScript social-fitness monorepo:
 
-- `packages/backend`: Express 5, MongoDB/Mongoose, Redis, Socket.IO
-- `packages/web`: React, Vite, MUI
+- `packages/backend`: Express 5, PostgreSQL/Kysely, Redis, S3 and Socket.IO
+- `packages/web`: React 19, Vite and MUI
 - `packages/mobile`: React Native and Expo
-- `packages/shared`: shared API routes and media URL helpers
+- `packages/shared`: shared API contracts, domain types and utilities
+- `tools/database-migration`: isolated, offline legacy-data import and verification utility
 
-## Local prerequisites
+## Prerequisites
 
 - Node.js 22.22 or newer
-- Corepack/pnpm 11.10
-- Docker Desktop for the container workflow
+- Corepack and pnpm 11.10
+- PostgreSQL 18 and Redis, or Docker Desktop
 
 ## Install and validate
 
@@ -24,10 +25,8 @@ corepack pnpm test
 corepack pnpm build
 ```
 
-The test task currently runs the backend's validation, token, pagination,
-media-signature and workout-metric suites. Web and mobile are additionally
-checked by ESLint, TypeScript, and production export/build. Run the visual
-browser smoke matrix in CI or from a session with an attached browser.
+Every application package is strict TypeScript. Backend and shared tests run
+through `tsx`; web uses a Vite production build; mobile uses Expo export.
 
 ## Development without Docker
 
@@ -39,7 +38,9 @@ packages/web/.env.example     -> packages/web/.env
 packages/mobile/.env.example  -> packages/mobile/.env
 ```
 
-Then run all packages or one package:
+The backend requires `DATABASE_URL`, `REDIS_URL` and `JWT_SECRET`. Media and
+email capabilities remain disabled unless their explicit enable flags and
+credentials are supplied.
 
 ```bash
 corepack pnpm dev
@@ -48,35 +49,67 @@ corepack pnpm dev:web
 corepack pnpm dev:mobile
 ```
 
-Defaults are API `4000`, web `5173`, and Expo/Metro `8081`.
+Defaults are API `4000`, web `5173`, PostgreSQL `5432`, Redis `6379`, and
+Expo/Metro `8081`.
+
+For LAN development with Expo Go on a physical device, use the local-network
+commands. They detect the active physical IPv4 adapter at startup, ignore common
+WSL/Hyper-V/VirtualBox/VPN adapters, and inject matching API, web, Metro and CORS
+origins without hard-coding the current Wi-Fi address:
+
+```bash
+corepack pnpm local:ip
+corepack pnpm dev:local
+
+# Or run each service in a separate terminal:
+corepack pnpm dev:local:backend
+corepack pnpm dev:local:web
+corepack pnpm dev:local:mobile
+```
+
+The defaults remain API `4000`, web `5173` and Expo `8081`. Set
+`MOTIONMEET_LAN_IP` only when automatic adapter selection needs an explicit
+override.
 
 ## Docker development
 
-The development Compose stack contains a MongoDB single-node replica set
-(required by workout transactions), Redis, the API, and Vite with bind-mounted
-source and hot reload:
+The development stack starts PostgreSQL 18, Redis, the API and Vite. Database
+and cache health checks gate backend startup; the API applies idempotent Kysely
+migrations before accepting traffic.
 
 ```bash
-docker compose up --build
+docker compose up --build --wait
 ```
 
-Optional Expo/Metro container:
+Expo is optional in Compose:
 
 ```bash
 docker compose --profile mobile up --build
 ```
 
-Copy `.env.development.example` to `.env` only when host-port or Expo origin
-overrides are needed. A physical device must use LAN-accessible
-`EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_WEB_URL` values.
+A physical device needs LAN-accessible `EXPO_PUBLIC_API_URL` and
+`EXPO_PUBLIC_WEB_URL` values.
+
+## Database migrations
+
+Apply the PostgreSQL schema directly with:
+
+```bash
+corepack pnpm --filter @motionmeet/backend migrate:postgres
+```
+
+Application startup also runs the same idempotent migration set unless
+`RUN_MIGRATIONS=false`. Existing installations use the isolated migration tool
+under `tools/database-migration`; it is not imported by or shipped with the
+production API. See [database operations](docs/database.md).
 
 ## Docker production
 
 1. Copy `.env.production.example` to `.env.production`.
-2. Set authenticated `MONGODB_URL`, `REDIS_URL`, `JWT_SECRET`,
-   `FRONTEND_URL`, and `CORS_ORIGINS`.
+2. Set managed `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `FRONTEND_URL` and
+   `CORS_ORIGINS`.
 3. Enable media/email only after their credentials are supplied.
-4. Validate and start:
+4. Validate, build and start:
 
 ```bash
 docker compose -f docker-compose.prod.yml config
@@ -85,54 +118,15 @@ docker compose -f docker-compose.prod.yml up -d
 docker compose -f docker-compose.prod.yml ps
 ```
 
-The production stack serves the SPA and reverse-proxies `/api`, `/health`, and
-Socket.IO from one origin. The API and web containers are read-only and drop
-Linux capabilities. Production intentionally requires external authenticated,
-TLS-enabled MongoDB replica-set and Redis services; it does not bundle
-single-node data stores. Put the web container behind an HTTPS reverse proxy or
-load balancer; `FRONTEND_URL` and `CORS_ORIGINS` must use that exact HTTPS
-origin.
+Production intentionally uses external, authenticated, TLS-enabled PostgreSQL
+and Redis services. The backend image runs compiled JavaScript only; the web
+image serves static Vite output through unprivileged Nginx. Both containers are
+read-only and drop Linux capabilities.
 
-Native iOS/Android binaries are not server containers. Build them with the Expo
-native/EAS workflow using production HTTPS values.
-
-See [docs/production.md](docs/production.md) for the deployment checklist and
-[docs/openapi.yaml](docs/openapi.yaml) for the API contract.
-
-## Data migrations
-
-Migration commands are dry-run by default:
-
-```bash
-corepack pnpm --filter @motionmeet/backend migrate:database-namespace
-corepack pnpm --filter @motionmeet/backend migrate:integrity
-corepack pnpm --filter @motionmeet/backend migrate:workout-metrics
-```
-
-After reviewing the output and taking a database backup:
-
-```bash
-corepack pnpm --filter @motionmeet/backend migrate:database-namespace:apply
-corepack pnpm --filter @motionmeet/backend migrate:integrity:apply
-corepack pnpm --filter @motionmeet/backend migrate:workout-metrics:apply
-```
-
-The namespace migration safely merges legacy data from the implicit `test`
-database into `MONGODB_DB_NAME` and leaves the source database intact. Run it
-before changing an existing deployment from an unnamed MongoDB database.
-
-Production startup requires the integrity migration and verified index
-contract. Run namespace, integrity and workout-metrics migrations in that order
-after a tested backup. See [docs/database.md](docs/database.md) for the data
-model, reconciliation and high-traffic operating rules.
-
-Public registration always creates a normal user. Promote the first
-administrator only through the explicit confirmed command documented in
-[docs/production.md](docs/production.md).
+Native iOS/Android binaries are built separately with the Expo/EAS workflow.
+See [production.md](docs/production.md) and [the API contract](docs/openapi.yaml).
 
 ## Exercise media
 
-The local `exercises-dataset-main` snapshot is excluded from Git and Docker.
-It must never be exposed through a filesystem route. Production clients accept
-only public HTTP(S) media URLs; licensed media must be migrated to object storage
-or a CDN. See [docs/exercises-dataset.md](docs/exercises-dataset.md).
+Large media remains in S3/CDN storage. PostgreSQL stores only object keys,
+public URLs and metadata. See [exercises-dataset.md](docs/exercises-dataset.md).

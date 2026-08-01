@@ -14,4 +14,4 @@ COPY packages/mobile ./packages/mobile
 
 WORKDIR /app/packages/mobile
 EXPOSE 8081 19000 19001 19002
-CMD ["pnpm", "dev", "--lan"]
+CMD ["sh", "-c", "pnpm --filter @motionmeet/shared build && pnpm dev --lan"]

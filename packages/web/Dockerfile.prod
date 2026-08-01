@@ -19,7 +19,7 @@ ENV VITE_BASEURL=$VITE_BASEURL
 ENV VITE_SOCKET_URL=$VITE_SOCKET_URL
 ENV VITE_BUILD_SOURCEMAP=$VITE_BUILD_SOURCEMAP
 
-RUN pnpm --filter @motionmeet/web build
+RUN pnpm --filter @motionmeet/shared build && pnpm --filter @motionmeet/web build
 
 FROM nginxinc/nginx-unprivileged:stable-alpine AS runtime
 

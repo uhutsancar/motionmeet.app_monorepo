@@ -7,14 +7,15 @@
     },
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".expo/**"]
+      "outputs": ["dist/**", ".expo/**"],
+      "env": ["VITE_BASEURL", "VITE_SOCKET_URL", "VITE_BUILD_SOURCEMAP", "EXPO_PUBLIC_API_URL"]
     },
     "@motionmeet/backend#build": {
       "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": ["dist/**"]
     },
     "@motionmeet/shared#build": {
-      "outputs": []
+      "outputs": ["dist/**"]
     },
     "lint": {
       "dependsOn": ["^lint"],

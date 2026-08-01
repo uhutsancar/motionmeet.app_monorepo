@@ -6,6 +6,11 @@
   "packageManager": "pnpm@11.10.0",
   "scripts": {
     "dev": "turbo run dev --parallel",
+    "local:ip": "node scripts/local-network.mjs ip",
+    "dev:local": "node scripts/local-network.mjs all",
+    "dev:local:backend": "node scripts/local-network.mjs backend",
+    "dev:local:web": "node scripts/local-network.mjs web",
+    "dev:local:mobile": "node scripts/local-network.mjs mobile",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",

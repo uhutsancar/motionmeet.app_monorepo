@@ -1,6 +1,6 @@
 name: motionmeet_prod
 
-# Production intentionally does not bundle single-node MongoDB or Redis.
+# Production intentionally does not bundle PostgreSQL or Redis.
 # .env.production must point at authenticated, backed-up, highly available
 # managed services.
 services:

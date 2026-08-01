@@ -3,10 +3,28 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "exports": "./src/index.js",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
   "scripts": {
-    "build": "node --check src/index.js",
-    "test": "node --test tests/*.test.js",
-    "typecheck": "tsc --noEmit --allowJs --checkJs --moduleResolution Bundler --module ESNext --target ES2022 src/index.js"
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.36.0",
+    "@types/node": "^24.0.0",
+    "eslint": "^9.36.0",
+    "globals": "^16.4.0",
+    "jiti": "^2.7.0",
+    "tsx": "^4.23.1",
+    "typescript-eslint": "^8.65.0"
   }
 }

@@ -1,36 +1,21 @@
 name: motionmeet_dev
 
 services:
-  mongo:
-    image: mongo:8.0
-    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+  postgres:
+    image: postgres:18-alpine
     ports:
-      - "${MONGO_PORT:-27017}:27017"
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-motionmeetdb}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-motionmeet-development}
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 20
     volumes:
-      - mongo_dev_data:/data/db
-    networks:
-      - data
-
-  mongo-init:
-    image: mongo:8.0
-    depends_on:
-      mongo:
-        condition: service_healthy
-    restart: "no"
-    command:
-      - mongosh
-      - mongodb://mongo:27017/admin
-      - --quiet
-      - --eval
-      - >-
-        try { rs.status() } catch (error) {
-          rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]})
-        }
+      - postgres_dev_data:/var/lib/postgresql
     networks:
       - data
 
@@ -56,8 +41,9 @@ services:
     environment:
       NODE_ENV: development
       PORT: 4000
-      MONGODB_URL: mongodb://mongo:27017/motionmeet?replicaSet=rs0
-      MONGODB_DB_NAME: motionmeet
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-motionmeet-development}@postgres:5432/${POSTGRES_DB:-motionmeetdb}
+      DATABASE_POOL_MIN: 0
+      DATABASE_POOL_MAX: 10
       REDIS_URL: redis://redis:6379
       JWT_SECRET: development-only-change-before-deployment
       FRONTEND_URL: http://localhost:${WEB_PORT:-5173}
@@ -65,11 +51,12 @@ services:
       MEDIA_UPLOADS_ENABLED: "false"
       EMAIL_ENABLED: "false"
       RUN_SCHEDULED_JOBS: "false"
+      RUN_MIGRATIONS: "true"
     ports:
       - "${BACKEND_PORT:-4000}:4000"
     depends_on:
-      mongo-init:
-        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
@@ -81,7 +68,7 @@ services:
     volumes:
       - ./packages/backend:/app/packages/backend
       - ./packages/shared:/app/packages/shared
-      - backend_dev_node_modules:/app/packages/backend/node_modules
+      - backend_ts_node_modules:/app/packages/backend/node_modules
     networks:
       - edge
       - data
@@ -101,7 +88,7 @@ services:
     volumes:
       - ./packages/web:/app/packages/web
       - ./packages/shared:/app/packages/shared
-      - web_dev_node_modules:/app/packages/web/node_modules
+      - web_ts_node_modules:/app/packages/web/node_modules
     networks:
       - edge
 
@@ -125,7 +112,7 @@ services:
     volumes:
       - ./packages/mobile:/app/packages/mobile
       - ./packages/shared:/app/packages/shared
-      - mobile_dev_node_modules:/app/packages/mobile/node_modules
+      - mobile_ts_node_modules:/app/packages/mobile/node_modules
     networks:
       - edge
 
@@ -134,8 +121,8 @@ networks:
   data:
 
 volumes:
-  mongo_dev_data:
+  postgres_dev_data:
   redis_dev_data:
-  backend_dev_node_modules:
-  web_dev_node_modules:
-  mobile_dev_node_modules:
+  backend_ts_node_modules:
+  web_ts_node_modules:
+  mobile_ts_node_modules:

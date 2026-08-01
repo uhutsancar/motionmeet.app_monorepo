@@ -1,7 +1,7 @@
 {
   "name": "@motionmeet/mobile",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "index.ts",
   "scripts": {
     "dev": "cross-env NODE_OPTIONS=--dns-result-order=ipv4first EXPO_NO_TELEMETRY=1 EXPO_NO_DEPENDENCY_VALIDATION=1 expo start",
     "start": "cross-env NODE_OPTIONS=--dns-result-order=ipv4first EXPO_NO_TELEMETRY=1 EXPO_NO_DEPENDENCY_VALIDATION=1 expo start",
@@ -74,7 +74,9 @@
     "cross-env": "^10.1.0",
     "eslint": "^9.36.0",
     "eslint-plugin-react-hooks": "^5.2.0",
-    "globals": "^16.4.0"
+    "globals": "^16.4.0",
+    "jiti": "^2.7.0",
+    "typescript-eslint": "^8.65.0"
   },
   "private": true
 }

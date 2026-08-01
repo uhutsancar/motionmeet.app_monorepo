@@ -14,4 +14,4 @@ COPY packages/backend ./packages/backend
 
 WORKDIR /app/packages/backend
 EXPOSE 4000
-CMD ["pnpm", "dev"]
+CMD ["sh", "-c", "pnpm --filter @motionmeet/shared build && pnpm dev"]
