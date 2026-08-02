@@ -11,6 +11,7 @@ import {
 } from "../controllers/authController.js";
 import { protect } from "../middlewares/auth.js";
 import { createRateLimitStore } from "../configs/redis.js";
+import { verifyBrowserAuthRequest } from "../middlewares/browserSecurity.js";
 
 const router = express.Router();
 
@@ -58,8 +59,8 @@ const passwordResetLimiter = rateLimit({
 
 router.post("/register", registerLimiter, registerUser);
 router.post("/login", loginLimiter, loginUser);
-router.post("/refresh", refreshLimiter, refreshSession);
-router.post("/logout", logoutUser);
+router.post("/refresh", verifyBrowserAuthRequest, refreshLimiter, refreshSession);
+router.post("/logout", verifyBrowserAuthRequest, logoutUser);
 router.post("/forgot-password", passwordResetLimiter, requestPasswordReset);
 router.post("/reset-password", passwordResetLimiter, resetPassword);
 router.get("/me", protect, getMe);

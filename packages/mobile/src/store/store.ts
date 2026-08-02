@@ -1,18 +1,27 @@
-import { configureStore } from "@reduxjs/toolkit";
+import { combineReducers, configureStore, createAction, type UnknownAction } from "@reduxjs/toolkit";
 import userReducer from "../features/user/userSlice";
 import postsReducer from "../features/posts/postsSlice";
 import storiesReducer from "../features/stories/storiesSlice";
 import connectionsReducer from "../features/connections/connectionsSlice";
 import messagesReducer from "../features/messages/messagesSlice";
 
+export const clearSessionState = createAction("session/clear-sensitive-state");
+
+const appReducer = combineReducers({
+  user: userReducer,
+  posts: postsReducer,
+  stories: storiesReducer,
+  connections: connectionsReducer,
+  messages: messagesReducer,
+});
+
+const rootReducer = (
+  state: ReturnType<typeof appReducer> | undefined,
+  action: UnknownAction,
+) => appReducer(clearSessionState.match(action) ? undefined : state, action);
+
 export const store = configureStore({
-  reducer: {
-    user: userReducer,
-    posts: postsReducer,
-    stories: storiesReducer,
-    connections: connectionsReducer,
-    messages: messagesReducer,
-  },
+  reducer: rootReducer,
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: false,

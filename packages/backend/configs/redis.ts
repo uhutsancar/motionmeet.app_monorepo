@@ -1,6 +1,8 @@
 import { createClient, type RedisClientType } from "redis";
 import { RedisStore } from "rate-limit-redis";
+import { MemoryStore, type Options as RateLimitOptions, type Store } from "express-rate-limit";
 import { loadEnvironment } from "./environment.js";
+import { logger, safeErrorMetadata } from "../utils/logger.js";
 
 type Client = RedisClientType;
 interface LocalLimit { count: number; expiresAt: number }
@@ -14,7 +16,7 @@ const localLimits = new Map<string, LocalLimit>();
 const configure = (client: Client, label: string): void => {
   client.on("error", (error: Error) => {
     if (/ECONNREFUSED|timeout|closed/i.test(error.message)) return;
-    console.error(`${label} error:`, error.message);
+    logger.error("redis_client_error", { client: label, ...safeErrorMetadata(error) });
   });
 };
 
@@ -43,8 +45,7 @@ export const initializeRedis = async (): Promise<{ client: Client; publisher: Cl
         await Promise.all([redisPublisher.connect(), redisSubscriber.connect()]);
         return { client, publisher: redisPublisher, subscriber: redisSubscriber };
       } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : "unknown Redis error";
-        console.warn(`Redis unavailable; PostgreSQL fallback remains active: ${message}`);
+        logger.warn("redis_unavailable_postgresql_fallback", safeErrorMetadata(error));
         return null;
       }
     })().finally(() => { redisInitialization = null; });
@@ -53,10 +54,82 @@ export const initializeRedis = async (): Promise<{ client: Client; publisher: Cl
 };
 
 export const getRedisClient = (): Client | null => redisClient?.isReady ? redisClient : null;
-export const createRateLimitStore = (prefix: string): RedisStore | undefined => {
-  const client = getRedisClient();
-  return client ? new RedisStore({ prefix: `motionmeet:rate-limit:${prefix}:`, sendCommand: (...args: string[]) => client.sendCommand(args) }) : undefined;
-};
+
+/**
+ * Route modules are evaluated before Redis connects. A store selected at import
+ * time would therefore remain process-local forever. This adapter selects the
+ * shared Redis store at request time and keeps an isolated memory fallback for
+ * development or short Redis outages.
+ */
+class AdaptiveRateLimitStore implements Store {
+  readonly localKeys = false;
+  readonly prefix: string;
+  private readonly memoryStore = new MemoryStore();
+  private options: RateLimitOptions | null = null;
+  private redisStorePromise: Promise<RedisStore | null> | null = null;
+
+  constructor(name: string) {
+    this.prefix = `motionmeet:rate-limit:${name}:`;
+  }
+
+  init(options: RateLimitOptions): void {
+    this.options = options;
+    this.memoryStore.init(options);
+  }
+
+  private async sharedStore(): Promise<RedisStore | null> {
+    if (!this.options || !getRedisClient()) return null;
+    if (!this.redisStorePromise) {
+      const options = this.options;
+      this.redisStorePromise = (async () => {
+        const store = new RedisStore({
+          prefix: this.prefix,
+          sendCommand: (...args: string[]) => {
+            const client = getRedisClient();
+            if (!client) throw new Error("Redis rate-limit store is unavailable");
+            return client.sendCommand(args);
+          },
+        });
+        await store.init(options);
+        return store;
+      })().catch(() => {
+        logger.warn("rate_limit_redis_fallback", { store: this.prefix });
+        this.redisStorePromise = null;
+        return null;
+      });
+    }
+    return this.redisStorePromise;
+  }
+
+  async increment(key: string) {
+    const shared = await this.sharedStore();
+    if (shared) {
+      try { return await shared.increment(key); }
+      catch { this.redisStorePromise = null; logger.warn("rate_limit_redis_fallback", { store: this.prefix }); }
+    }
+    return this.memoryStore.increment(key);
+  }
+
+  async decrement(key: string): Promise<void> {
+    const shared = await this.sharedStore();
+    await Promise.allSettled([this.memoryStore.decrement(key), shared?.decrement(key)]);
+  }
+
+  async resetKey(key: string): Promise<void> {
+    const shared = await this.sharedStore();
+    await Promise.allSettled([this.memoryStore.resetKey(key), shared?.resetKey(key)]);
+  }
+
+  async resetAll(): Promise<void> {
+    await this.memoryStore.resetAll();
+  }
+
+  shutdown(): void {
+    this.memoryStore.shutdown();
+  }
+}
+
+export const createRateLimitStore = (prefix: string): Store => new AdaptiveRateLimitStore(prefix);
 
 export const getCachedJson = async <T>(key: string): Promise<T | null> => {
   const client = getRedisClient();

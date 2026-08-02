@@ -21,7 +21,7 @@ const languageDetector: LanguageDetectorAsyncModule = {
           return;
         }
       } catch (error) {
-        console.log('Error reading language', error);
+        if (__DEV__) console.log('Error reading language', error instanceof Error ? error.name : 'UnknownError');
       }
       const bestLng = Localization.getLocales()[0]?.languageCode;
       callback(bestLng === 'tr' ? 'tr' : 'en');
@@ -32,7 +32,7 @@ const languageDetector: LanguageDetectorAsyncModule = {
     try {
       await AsyncStorage.setItem(LANGUAGE_KEY, lng);
     } catch (error) {
-      console.log('Error saving language', error);
+      if (__DEV__) console.log('Error saving language', error instanceof Error ? error.name : 'UnknownError');
     }
   },
 };

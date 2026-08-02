@@ -9,6 +9,7 @@ import endpoints from '../api/endpoints';
 import { Appbar, Surface, Text, ActivityIndicator } from 'react-native-paper';
 import type { WorkoutStats } from '@motionmeet/shared';
 import type { NavigationOnlyProps } from '../navigation/types';
+import { logHandledError } from '../utils/feedback';
 
 type ExerciseBreakdown = WorkoutStats['exerciseBreakdown'][number];
 
@@ -29,7 +30,7 @@ const MainExercisesScreen = ({ navigation }: NavigationOnlyProps) => {
         setExercises(data.exerciseBreakdown);
       }
     } catch (error) {
-      console.log('Error fetching main exercises stats', error);
+      logHandledError('main-exercises-stats', error);
     } finally {
       setLoading(false);
     }

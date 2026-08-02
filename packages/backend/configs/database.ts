@@ -2,6 +2,7 @@ import { Kysely, PostgresDialect, sql, type Transaction } from "kysely";
 import { Pool } from "pg";
 import { loadEnvironment } from "./environment.js";
 import type { Database } from "../db/types.js";
+import { logger, safeErrorMetadata } from "../utils/logger.js";
 
 const environment = loadEnvironment();
 const pool = new Pool({
@@ -15,13 +16,13 @@ const pool = new Pool({
 });
 
 pool.on("error", (error: Error) => {
-  console.error("PostgreSQL pool error:", error.message);
+  logger.error("database_pool_error", safeErrorMetadata(error));
 });
 
 export const database = new Kysely<Database>({
   dialect: new PostgresDialect({ pool }),
   log(event) {
-    if (event.level === "error") console.error("PostgreSQL query error:", event.error);
+    if (event.level === "error") logger.error("database_query_failed", safeErrorMetadata(event.error));
   },
 });
 

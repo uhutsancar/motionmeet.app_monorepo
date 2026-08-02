@@ -209,9 +209,9 @@ PostgreSQL hazır olduğu sürece 200 dönebilir.
 ```text
 İstemci
   -> Helmet güvenlik başlıkları
-  -> requestContext (X-Request-Id ve süre ölçümü)
+  -> requestContext (sunucu üretimli X-Request-Id ve süre ölçümü)
   -> CORS allowlist
-  -> 500 KB JSON/urlencoded body sınırı
+  -> API content-type allowlist (JSON/multipart) ve 500 KB JSON sınırı
   -> /api global rate limit
   -> route bazlı limiter
   -> protect (Bearer access token)
@@ -266,6 +266,8 @@ davranışıdır, ardından OpenAPI güncellenmelidir.
 - Web refresh token'ı `HttpOnly`, `SameSite=Lax`, `/api/auth` path'li cookie'de
   taşır; production'da `Secure` bayrağı zorunludur. Access token bellekte kalır,
   localStorage'daki eski token temizlenir.
+- Cookie kullanan web refresh/logout istekleri exact Origin/Referer allowlist'i
+  ve `X-CSRF-Protection: 1` header'ı ile CSRF'e karşı doğrulanır.
 - Native mobile access/refresh token ve expiry değerlerini Expo SecureStore'da
   saklar; isteklerde `X-Client-Platform: mobile` ile refresh token'ın response
   body'de verilmesini ister.
@@ -594,7 +596,7 @@ kullanılmaz.
 Redis opsiyoneldir. Bağlantı yoksa:
 
 - cache doğrudan PostgreSQL'e düşer;
-- Express limiter default process-local store kullanır;
+- Express limiter adaptive store içindeki process-local memory fallback'i kullanır;
 - socket limitleri process-local Map'e düşer;
 - cron lock görevi doğrudan çalıştırır;
 - Socket.IO yalnız aynı instance içinde realtime yayın yapar;
@@ -749,7 +751,8 @@ React context'tedir; access token yalnız bellekte tutulur, refresh cookie
 `withCredentials: true` Axios instance ile kullanılır. Uygulama ilk açılışta
 refresh çağrısı yapar. SocketProvider access token ile bağlanır; yeni mesaj Redux
 store'a eklenir, kullanıcı messages route'unda değilse unread badge ve toast
-üretilir.
+üretilir. Logout veya session kaybında kullanıcıya ait Redux state'i de tamamen
+başlangıç durumuna döndürülür.
 
 `VITE_BASEURL` REST origin'ini, `VITE_SOCKET_URL` Socket origin'ini belirler.
 Development'ta sayfa `127.0.0.1`, API `localhost` gibi farklı loopback hostlarıyla
@@ -764,8 +767,10 @@ Vite production build:
 - target `esnext`;
 - Terser minification;
 - sourcemap yalnız `VITE_BUILD_SOURCEMAP=true` ise;
-- React/MUI, chart, state ve network bağımlılıklarını ayrı manual chunk'lara
-  ayırır.
+- React/MUI, state ve network bağımlılıklarını ayrı manual chunk'lara ayırır;
+- chart bağımlılıklarını yalnız onları kullanan lazy route'ların import zincirinde
+  tutar;
+- production artefaktında source map/secret ve gzip başlangıç bütçesini test eder.
 
 Production Nginx:
 
@@ -792,7 +797,8 @@ Vercel dağıtımında API/Socket origin'i external HTTPS/WSS olmalıdır.
 - Android `versionCode: 1`, iOS `buildNumber: 1`, uygulama sürümü `1.0.0`.
 - Portrait orientation, automatic light/dark UI, custom icon/splash.
 - iOS tablet desteği açık.
-- Android keyboard layout mode `resize`.
+- Android keyboard layout mode `resize`; uygulama backup'ı kapalı, legacy harici
+  depolama izinleri engelli ve ImagePicker mikrofon izni kapalıdır.
 
 ### 12.2 Provider ve state ağacı
 
@@ -811,8 +817,9 @@ Redux Provider
 
 Mobile Redux store user, posts, stories, connections ve messages slice'larını
 taşır. API token provider her istekte güncel access token'ı alır. Auth ile domain
-state ayrıdır; logout tokenları temizler, ilgili ekran/slice'lar yeniden yükleme
-akışını yönetir.
+state ayrıdır; logout/session kaybı SecureStore tokenlarını ve kullanıcıya ait
+bütün Redux state'ini birlikte temizler. Native tokenlar iOS'ta
+`WHEN_UNLOCKED_THIS_DEVICE_ONLY` erişilebilirlik sınıfıyla saklanır.
 
 ### 12.3 Navigasyon
 
@@ -1218,11 +1225,13 @@ korunmalıdır.
 - PostgreSQL concurrency integration: retry idempotency, sayaç yarışları, quota,
   conversation uniqueness, analytics ve durable media deletion davranışı.
 - Shared contract testleri.
-- Web: lint, strict typecheck ve production Vite build.
-- Mobile: lint, strict typecheck ve Expo export/build.
+- Web: lint, strict typecheck, production Vite build, public artefakt güvenlik
+  taraması ve gzip başlangıç/chunk bütçesi.
+- Mobile: lint, strict typecheck, Expo export/build ve backup/permission config
+  güvenlik testi; export bundle/source-map/secret ve büyüme bütçesi.
 - Kök: Turbo üzerinden bütün paketlerde lint/typecheck/test/build.
 - CI: production dependency audit (`high` seviyesi), frozen install ve production
-  Compose config kontrolü.
+  Compose config kontrolü; izole PostgreSQL başlatma, migration ve test.
 - OpenAPI: `redocly.yaml` mevcut; lint komutu kök script'e henüz bağlanmamıştır.
 - Responsive native davranış için `docs/mobile-responsive-audit.md` içinde cihaz,
   dp, font scale, keyboard, safe-area ve modal regresyon matrisi bulunur.
@@ -1240,13 +1249,16 @@ job tamamlanması birlikte kontrol edilmelidir.
 - Strict environment validation ve production HTTPS zorunluluğu.
 - Helmet, explicit CORS allowlist ve trust-proxy ayarı.
 - Nginx/Vercel CSP, HSTS, frame deny, nosniff, referrer ve permissions policy.
-- 500 KB JSON body; endpoint bazlı Multer dosya/adet/alan limitleri.
+- Cookie refresh/logout için exact-origin + custom-header CSRF doğrulaması.
+- JSON/multipart content-type allowlist'i, 500 KB JSON body ve endpoint bazlı
+  Multer dosya/adet/alan limitleri.
 - Global, auth, account, media ve custom exercise rate limitleri.
 - Password hash, hash'li refresh/reset secret; kısa access token; refresh rotation.
 - Role, ownership, privacy ve plan-feature kontrolleri.
 - SQL identifier/legacy import doğrulaması ve Kysely parameter binding.
 - S3 key sanitization, MIME allowlist, HEAD ve magic-byte doğrulaması.
-- Public error response'ta stack/secret yok; request ID ile correlation.
+- Public error response'ta stack/DB detail/secret yok; sunucu üretimli request ID
+  ile correlation.
 - Production container non-root, read-only ve capability'siz.
 - `.env`, key/certificate, dataset ve build artifact'leri source control dışında.
 
@@ -1273,10 +1285,9 @@ dayanmalı, varsayımla yapılmamalıdır.
 
 Bu bölüm mevcut kaynak durumunu dürüstçe kaydeder:
 
-1. `.github/workflows/ci.yml` içindeki integration adımı hâlâ `mongo-test`,
-   `mongo-test-init` ve `MONGODB_TEST_URL` isimlerini kullanıyor. Mevcut
-   `docker-compose.test.yml` yalnız `postgres-test` içerdiği için workflow'un bu
-   bölümü PostgreSQL komutlarıyla güncellenmeden güvenilir değildir.
+1. `.github/workflows/ci.yml` PostgreSQL test servisi, migration ve test akışına
+   güncellenmiştir; değişikliğin GitHub-hosted runner üzerindeki ilk gerçek koşusu
+   bu yerel incelemenin kapsamı dışındadır.
 2. Kök `.env.development.example` içinde eski `MONGO_PORT` satırı vardır; güncel
    development Compose bu değeri kullanmaz.
 3. `packages/backend/Dockerfile` düz dosyası `server.js` başlatmaya çalışır ve

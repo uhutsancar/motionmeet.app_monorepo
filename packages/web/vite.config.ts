@@ -3,6 +3,18 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath } from 'node:url'
 
+const dependencyName = (id: string): string | null => {
+  const normalized = id.replace(/\\/g, '/')
+  const marker = '/node_modules/'
+  const index = normalized.lastIndexOf(marker)
+  if (index < 0) return null
+  const dependencyPath = normalized.slice(index + marker.length)
+  const segments = dependencyPath.split('/')
+  return dependencyPath.startsWith('@')
+    ? segments.slice(0, 2).join('/')
+    : segments[0] || null
+}
+
 export default defineConfig(({ mode }) => {
   const rootDirectory = fileURLToPath(new URL('.', import.meta.url))
   const env = loadEnv(mode, rootDirectory, '')
@@ -36,16 +48,15 @@ export default defineConfig(({ mode }) => {
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (!id.includes('node_modules')) return undefined
+          const dependency = dependencyName(id)
+          if (!dependency) return undefined
           if (
-            /[\\/]react(?:-dom|-router)?[\\/]/.test(id)
-            || id.includes('scheduler')
-            || id.includes('@mui')
-            || id.includes('@emotion')
+            ['react', 'react-dom', 'react-is', 'react-router', 'scheduler'].includes(dependency)
+            || dependency.startsWith('@mui/')
+            || dependency.startsWith('@emotion/')
           ) return 'vendor-core'
-          if (id.includes('recharts') || id.includes('d3-')) return 'vendor-charts'
-          if (id.includes('@reduxjs') || id.includes('react-redux') || id.includes('redux')) return 'vendor-state'
-          if (id.includes('axios') || id.includes('socket.io') || id.includes('engine.io')) return 'vendor-network'
+          if (dependency.startsWith('@reduxjs/') || ['react-redux', 'redux', 'redux-thunk', 'reselect', 'immer'].includes(dependency)) return 'vendor-state'
+          if (dependency === 'axios' || dependency.includes('socket.io') || dependency.includes('engine.io') || dependency === '@socket.io/component-emitter') return 'vendor-network'
           return undefined
         },
       },

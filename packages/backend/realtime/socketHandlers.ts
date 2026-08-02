@@ -2,6 +2,7 @@ import { consumeDistributedLimit } from "../configs/redis.js";
 import * as messageService from "../services/messageService.js";
 import * as userService from "../services/userService.js";
 import { isUserId } from "../utils/validation.js";
+import { logger, safeErrorMetadata } from "../utils/logger.js";
 import { emitToUser, emitToUsers, getOnlineUserIds, isUserOnline, joinUserRoom, leaveLocalUser, type MotionSocket } from "./socketRegistry.js";
 
 export const emitPresenceToConnections = async (userId: string, eventName: "user_online" | "user_offline", payload: { userId: string }): Promise<void> => {
@@ -26,7 +27,7 @@ export const handleSocketConnection = async (socket: MotionSocket): Promise<void
       const sender = await userService.getUserById(userId); if (!sender || !(await messageService.canSendToUser(sender, recipientId))) return fail("You cannot message this user");
       const message = await messageService.createMessage({ from_user_id: userId, to_user_id: recipientId, operationId, text, message_type: "text", media_url: "", media_key: "", seen: false });
       emitToUser(recipientId, "message_received", message); emitToUser(userId, "message_sent", message);
-    } catch (error: unknown) { console.error("Socket message error:", error); fail("Message could not be sent"); }
+    } catch (error: unknown) { logger.error("socket_message_failed", safeErrorMetadata(error)); fail("Message could not be sent"); }
   });
 
   const emitTyping = async (eventName: "typing_start" | "typing_stop", payload: { to_user_id: string }): Promise<void> => {
@@ -37,7 +38,7 @@ export const handleSocketConnection = async (socket: MotionSocket): Promise<void
       const cached = cache.get(recipientId); let allowed = cached && cached.expiresAt > Date.now() ? cached.allowed : null;
       if (allowed === null) { allowed = await messageService.canSendToUser(socket.data.user, recipientId); cache.set(recipientId, { allowed, expiresAt: Date.now() + 30_000 }); }
       if (allowed) emitToUser(recipientId, eventName, { from_user_id: userId });
-    } catch (error: unknown) { console.error("Socket typing event error:", error instanceof Error ? error.message : error); }
+    } catch (error: unknown) { logger.error("socket_typing_failed", safeErrorMetadata(error)); }
   };
   socket.on("typing_start", (payload) => { void emitTyping("typing_start", payload); }); socket.on("typing_stop", (payload) => { void emitTyping("typing_stop", payload); });
   socket.on("disconnect", async () => { leaveLocalUser(socket, userId); if (!(await isUserOnline(userId))) await emitPresenceToConnections(userId, "user_offline", { userId }); });

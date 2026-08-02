@@ -21,6 +21,7 @@ import {
 } from "../utils/authValidation.js";
 import sendEmail from "../configs/nodeMailer.js";
 import { escapeHtml } from "../utils/html.js";
+import { logger, safeErrorMetadata } from "../utils/logger.js";
 
 const publicUser = (user: InternalUser) => ({
   id: user._id,
@@ -198,7 +199,7 @@ export const requestPasswordReset: RequestHandler = async (req, res, next) => {
         `,
       });
     } catch (error) {
-      console.error("Password reset delivery failed:", error instanceof Error ? error.message : error);
+      logger.error("password_reset_delivery_failed", safeErrorMetadata(error));
     }
 
     return res.status(202).json(genericResponse);

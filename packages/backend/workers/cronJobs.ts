@@ -4,6 +4,7 @@ import { runWithRedisLock } from "../configs/redis.js";
 import { extractS3Key } from "../utils/s3Utils.js";
 import { processMediaDeletionJobs, queueMediaDeletions } from "../services/mediaDeletionService.js";
 import { processOutboxEvents } from "../services/outboxService.js";
+import { logger, safeErrorMetadata } from "../utils/logger.js";
 
 const deleteExpiredStories = async (): Promise<void> => {
   let deleted = 0;
@@ -36,7 +37,7 @@ const deleteAbandonedUploads = async (): Promise<void> => {
 const deleteExpiredUsage = async (): Promise<void> => { await database.deleteFrom("usage_counters").where("expires_at", "<", new Date()).execute(); };
 const deleteQueuedMedia = async (): Promise<void> => { while (await processMediaDeletionJobs() === 200) { /* bounded batches */ } };
 const processOutbox = async (): Promise<void> => { while (await processOutboxEvents() === 200) { /* bounded batches */ } };
-const report = (label: string) => (error: unknown): void => console.error(label, error instanceof Error ? error.message : error);
+const report = (label: string) => (error: unknown): void => logger.error(label, safeErrorMetadata(error));
 
 export const initCronJobs = (): ScheduledTask[] => {
   if (process.env.RUN_SCHEDULED_JOBS === "false") return [];

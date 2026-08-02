@@ -8,8 +8,9 @@
     "android": "cross-env NODE_OPTIONS=--dns-result-order=ipv4first EXPO_NO_TELEMETRY=1 EXPO_NO_DEPENDENCY_VALIDATION=1 expo start --android",
     "ios": "cross-env NODE_OPTIONS=--dns-result-order=ipv4first EXPO_NO_TELEMETRY=1 EXPO_NO_DEPENDENCY_VALIDATION=1 expo start --ios",
     "web": "cross-env NODE_OPTIONS=--dns-result-order=ipv4first EXPO_NO_TELEMETRY=1 EXPO_NO_DEPENDENCY_VALIDATION=1 expo start --web",
-    "build": "cross-env CI=1 EXPO_NO_TELEMETRY=1 EXPO_NO_DEPENDENCY_VALIDATION=1 expo export --platform all",
+    "build": "cross-env CI=1 EXPO_NO_TELEMETRY=1 EXPO_NO_DEPENDENCY_VALIDATION=1 expo export --platform all && node ../../scripts/check-mobile-artifact.mjs",
     "lint": "eslint .",
+    "test": "node ../../scripts/check-mobile-config.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

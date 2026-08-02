@@ -19,6 +19,7 @@ import {
   type AuthUser,
   type RegistrationInput,
 } from '@motionmeet/shared';
+import { clearSessionState, store } from '../store/store';
 
 const ACCESS_TOKEN_KEY = 'motionmeet_access_token';
 const REFRESH_TOKEN_KEY = 'motionmeet_refresh_token';
@@ -26,6 +27,9 @@ const ACCESS_EXPIRY_KEY = 'motionmeet_access_expiry';
 const LEGACY_TOKEN_KEY = 'token';
 const REFRESH_EARLY_MS = 60 * 1000;
 const isWeb = Platform.OS === 'web';
+const secureStoreOptions: SecureStore.SecureStoreOptions = {
+  keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+};
 
 const isCompleteSession = (data: unknown): data is AuthenticationResponse => {
   if (!data || typeof data !== 'object') return false;
@@ -38,15 +42,15 @@ const isCompleteSession = (data: unknown): data is AuthenticationResponse => {
 const tokenStorage = {
   getItemAsync: async (key: string): Promise<string | null> => {
     if (isWeb) return null;
-    return SecureStore.getItemAsync(key);
+    return SecureStore.getItemAsync(key, secureStoreOptions);
   },
   setItemAsync: async (key: string, value: string): Promise<void> => {
     if (isWeb) return;
-    await SecureStore.setItemAsync(key, value);
+    await SecureStore.setItemAsync(key, value, secureStoreOptions);
   },
   deleteItemAsync: async (key: string): Promise<void> => {
     if (isWeb) return;
-    await SecureStore.deleteItemAsync(key);
+    await SecureStore.deleteItemAsync(key, secureStoreOptions);
   },
 };
 
@@ -58,6 +62,15 @@ const authApi = axios.create({
     'Content-Type': 'application/json',
     'X-Client-Platform': isWeb ? 'web' : 'mobile',
   },
+});
+
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+authApi.interceptors.request.use((request) => {
+  const method = request.method?.toUpperCase();
+  if (isWeb && method && !SAFE_METHODS.has(method)) {
+    request.headers.set('X-CSRF-Protection', '1');
+  }
+  return request;
 });
 
 interface AuthActionResult { success: boolean; message?: string }
@@ -88,6 +101,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
     accessExpiryRef.current = 0;
     setToken(null);
     setUser(null);
+    store.dispatch(clearSessionState());
     await Promise.all([
       tokenStorage.deleteItemAsync(ACCESS_TOKEN_KEY),
       tokenStorage.deleteItemAsync(REFRESH_TOKEN_KEY),

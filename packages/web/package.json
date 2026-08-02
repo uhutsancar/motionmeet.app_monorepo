@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "check:artifact": "node ../../scripts/check-web-artifact.mjs",
+    "check:performance": "node ../../scripts/check-web-performance.mjs",
     "lint": "eslint .",
+    "test": "pnpm run build && pnpm run check:artifact && pnpm run check:performance",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },

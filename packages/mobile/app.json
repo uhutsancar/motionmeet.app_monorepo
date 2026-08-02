@@ -20,6 +20,11 @@
     "android": {
       "package": "app.motionmeet.mobile",
       "versionCode": 1,
+      "allowBackup": false,
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/motionmeet-icon-v2.png",
@@ -34,7 +39,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "MotionMeet uses your selected photo only to update your profile or cover image."
+          "photosPermission": "MotionMeet uses your selected photo only when you choose media to share or update your profile.",
+          "cameraPermission": "MotionMeet uses your camera only when you choose to capture a workout photo.",
+          "microphonePermission": false
         }
       ]
     ]

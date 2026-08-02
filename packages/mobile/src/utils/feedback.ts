@@ -1,6 +1,7 @@
 import Toast, { type ToastShowParams } from 'react-native-toast-message';
 
 interface FeedbackError {
+  name?: string;
   message?: string;
   code?: string;
   userCode?: string;
@@ -98,9 +99,9 @@ export const logHandledError = (scope: string, error: unknown): void => {
   if (!__DEV__) return;
   const details = errorDetails(error);
   console.log(`[Handled:${scope}]`, {
+    name: details.name,
     status: details.response?.status,
     code: getErrorCode(error),
     requestId: details.response?.data?.requestId,
-    message: details.message,
   });
 };

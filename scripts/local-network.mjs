@@ -114,7 +114,7 @@ const listConnectedAndroidDevices = (adb) => {
     .filter(Boolean);
 };
 
-const mobileTransport = (process.env.MOTIONMEET_MOBILE_TRANSPORT || "auto").trim().toLowerCase();
+const mobileTransport = (process.env.MOTIONMEET_MOBILE_TRANSPORT || "lan").trim().toLowerCase();
 if (!["auto", "lan", "usb"].includes(mobileTransport)) {
   throw new Error("MOTIONMEET_MOBILE_TRANSPORT must be auto, lan or usb.");
 }

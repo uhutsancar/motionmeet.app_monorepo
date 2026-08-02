@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import axios from "axios";
 import api from "~/api/axios";
 import { API_ROUTES, type ApiFailure, type AuthenticationResponse, type LoginInput, type RegistrationInput } from "@motionmeet/shared";
+import { clearSessionState, store } from "~/app/store";
 
 interface AuthActionResult { success: boolean; message?: string; fields?: Record<string, string> }
 interface AuthContextValue {
@@ -39,6 +40,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
     expiresAtRef.current = 0;
     setToken(null);
     setUser(null);
+    store.dispatch(clearSessionState());
     localStorage.removeItem("token");
   }, []);
 

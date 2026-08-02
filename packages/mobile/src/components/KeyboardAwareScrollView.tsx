@@ -11,6 +11,7 @@ import {
   type StyleProp,
   type TargetedEvent,
   type ViewStyle,
+  findNodeHandle,
 } from 'react-native';
 
 interface KeyboardResponsiveViewProps extends React.PropsWithChildren {
@@ -72,7 +73,11 @@ const KeyboardAwareScrollView = React.forwardRef<ScrollView, KeyboardAwareScroll
   }, [forwardedRef]);
 
   const scrollFocusedInputIntoView = useCallback((target?: number | null) => {
-    const nodeHandle = target || TextInput.State.currentlyFocusedField?.();
+    let nodeHandle = target;
+    if (!nodeHandle) {
+      const inputRef = TextInput.State.currentlyFocusedInput ? TextInput.State.currentlyFocusedInput() : null;
+      nodeHandle = inputRef ? findNodeHandle(inputRef as any) : null;
+    }
     if (!nodeHandle) return;
 
     const scrollResponder = localRef.current?.getScrollResponder();

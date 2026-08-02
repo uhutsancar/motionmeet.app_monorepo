@@ -12,6 +12,15 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:motionmeet-test@127.0.0.1:5433/motionmeet_test
+      JWT_SECRET: ci-test-secret-that-is-at-least-32-bytes
+      FRONTEND_URL: http://localhost:5173
+      CORS_ORIGINS: http://localhost:5173
+      MEDIA_UPLOADS_ENABLED: "false"
+      EMAIL_ENABLED: "false"
+      RUN_SCHEDULED_JOBS: "false"
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -25,18 +34,19 @@ jobs:
       - run: pnpm audit --prod --audit-level=high
       - run: pnpm lint
       - run: pnpm typecheck
+      - name: Start PostgreSQL test service
+        run: docker compose -f docker-compose.test.yml up -d --wait postgres-test
+      - name: Migrate PostgreSQL test schema
+        run: pnpm --filter @motionmeet/backend migrate:postgres
       - run: pnpm test
-      - name: Run MongoDB concurrency integration tests
-        run: |
-          set -euo pipefail
-          trap 'docker compose -f docker-compose.test.yml down --remove-orphans' EXIT
-          docker compose -f docker-compose.test.yml up -d --wait mongo-test
-          docker compose -f docker-compose.test.yml run --rm mongo-test-init
-          MONGODB_TEST_URL='mongodb://127.0.0.1:27018/?replicaSet=rsTest' \
-            pnpm --filter @motionmeet/backend test:integration
+      - name: Stop PostgreSQL test service
+        if: always()
+        run: docker compose -f docker-compose.test.yml down --remove-orphans
       - run: pnpm build
         env:
+          NODE_ENV: production
           EXPO_PUBLIC_API_URL: https://api.example.invalid
+          EXPO_PUBLIC_WEB_URL: https://app.example.invalid
       - run: docker compose -f docker-compose.prod.yml config
         env:
           MOTIONMEET_ENV_FILE: .env.production.example
