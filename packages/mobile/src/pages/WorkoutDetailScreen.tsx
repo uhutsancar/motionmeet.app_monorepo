@@ -3,7 +3,8 @@ import { ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
-import moment from 'moment';
+import dayjs from '../utils/dayjs';
+
 import { useTheme, type MotionTheme } from '../context/ThemeContext';
 import { Appbar, Surface, Text } from 'react-native-paper';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
@@ -51,7 +52,7 @@ const WorkoutDetailScreen = ({ navigation, route }: BaseNavigationScreenProps) =
       >
         <Text variant="headlineMedium" style={styles.title}>{workout.name || t('workout.my_workout', 'Workout')}</Text>
         <Text variant="bodyMedium" style={styles.date}>
-          {moment(workout.startTime || workout.createdAt).format('D MMM YYYY, HH:mm')}
+          {dayjs(workout.startTime || workout.createdAt).format('D MMM YYYY, HH:mm')}
         </Text>
 
         <Surface elevation={0} style={[styles.statsRow, isNarrow && styles.statsRowNarrow]}>

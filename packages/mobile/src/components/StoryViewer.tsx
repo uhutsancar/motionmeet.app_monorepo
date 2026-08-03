@@ -5,8 +5,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import moment from 'moment';
-import 'moment/locale/tr';
+import dayjs from '../utils/dayjs';
+
 import type { PublicUser, Story } from '@motionmeet/shared';
 
 const STORY_DURATION = 5000; // 5 seconds per story
@@ -262,7 +262,7 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }: StoryVi
             )}
             <View style={styles.userText}>
               <Text numberOfLines={1} style={styles.userName}>{displayName}</Text>
-              <Text style={styles.timeAgo}>{moment(currentStory.createdAt).fromNow()}</Text>
+              <Text style={styles.timeAgo}>{dayjs(currentStory.createdAt).fromNow()}</Text>
             </View>
           </View>
           <Pressable

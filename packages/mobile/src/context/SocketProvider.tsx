@@ -29,7 +29,7 @@ interface SocketContextValue {
 export const SocketContext = createContext<SocketContextValue | null>(null);
 
 export const SocketProvider = ({ children }: PropsWithChildren) => {
-  const { getToken, isLoaded, isSignedIn, userId } = useAuthContext();
+  const { getToken, isLoaded, isSignedIn } = useAuthContext();
   const getTokenRef = useRef(getToken);
   const socketRef = useRef<MotionSocket | null>(null);
   const [socket, setSocket] = useState<MotionSocket | null>(null);
@@ -41,7 +41,7 @@ export const SocketProvider = ({ children }: PropsWithChildren) => {
   }, [getToken]);
 
   useEffect(() => {
-    if (!isLoaded || !isSignedIn || !userId) return undefined;
+    if (!isLoaded || !isSignedIn) return undefined;
 
     const client = io(SOCKET_URL, {
       autoConnect: false,
@@ -54,7 +54,7 @@ export const SocketProvider = ({ children }: PropsWithChildren) => {
           callback({ token: '' });
         }
       },
-      transports: ['polling', 'websocket'],
+      transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 15,
       reconnectionDelay: 2000,
@@ -112,7 +112,7 @@ export const SocketProvider = ({ children }: PropsWithChildren) => {
       setConnected(false);
       setOnlineUsers(new Set());
     };
-  }, [isLoaded, isSignedIn, userId]);
+  }, [isLoaded, isSignedIn]);
 
   const sendMessage = useCallback((toUserId: string, text: string, operationId?: string) => {
     const normalizedText = typeof text === 'string' ? text.trim() : '';

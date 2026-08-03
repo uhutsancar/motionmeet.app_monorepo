@@ -21,7 +21,8 @@ import {
   prependMessages,
   removeMessage,
 } from '../features/messages/messagesSlice';
-import moment from 'moment';
+import dayjs from '../utils/dayjs';
+
 import { Appbar, Avatar, Text, TextInput, IconButton, Surface, ActivityIndicator, Badge, useTheme as usePaperTheme, TouchableRipple } from 'react-native-paper';
 import { showError } from '../utils/feedback';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
@@ -45,7 +46,7 @@ const entityId = (value: Message['from_user_id']): string =>
 const ChatBox = ({ route, navigation }: ChatBoxProps) => {
   const { userId, user: routeUser } = route?.params || {};
   const { getToken } = useAuthContext();
-  const { user: authUser } = useAuthContext();
+
   const dispatch = useAppDispatch();
   const { theme, isDark } = useTheme();
   const paperTheme = usePaperTheme();
@@ -348,7 +349,7 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
 
   const isMine = (msg: Message): boolean => {
     const fromId = entityId(msg.from_user_id);
-    return fromId === (currentUser?._id || authUser?.id);
+    return fromId === currentUser?._id;
   };
 
   const handleDeleteMessage = (msgId: string) => {
@@ -415,7 +416,7 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
             </TouchableRipple>
           ) : null}
           <Text variant="labelSmall" style={[s.msgTime, { textAlign: mine ? 'right' : 'left' }]}>
-            {moment(msg.createdAt).format('HH:mm')}
+            {dayjs(msg.createdAt).format('HH:mm')}
             {mine && (msg.seen ? '  ✓✓' : '  ✓')}
           </Text>
         </Surface>

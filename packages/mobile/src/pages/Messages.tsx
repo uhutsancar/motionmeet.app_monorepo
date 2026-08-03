@@ -7,8 +7,8 @@ import { useTheme, type MotionTheme } from '../context/ThemeContext';
 import { useSocket } from '../hooks/useSocket';
 import { setConnections } from '../features/connections/connectionsSlice';
 import { getUserConnections, getUserConversations } from '../api/endpoints';
-import moment from 'moment';
-import 'moment/locale/tr';
+import dayjs, { setDayjsLocale } from '../utils/dayjs';
+
 import { Appbar, Avatar, Text, Searchbar, TouchableRipple, Badge, Surface } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { logHandledError } from '../utils/feedback';
@@ -48,8 +48,9 @@ const Messages = ({ navigation }: NavigationOnlyProps) => {
   const connectionsRef = useRef(connections);
 
   useEffect(() => {
-    moment.locale(i18n.language.startsWith('tr') ? 'tr' : 'en');
+    setDayjsLocale(i18n.language);
   }, [i18n.language]);
+
 
   useEffect(() => { connectionsRef.current = connections; }, [connections]);
 
@@ -262,7 +263,7 @@ const Messages = ({ navigation }: NavigationOnlyProps) => {
     const isOnline = onlineUsers.has(conv.user?._id);
     const hasUnread = (conv.unread || 0) > 0;
     const msgText = conv.lastMessage?.text || (conv.lastMessage?.message_type === 'image' ? '📷 Fotoğraf' : '');
-    const timeLabel = conv.lastMessage?.createdAt ? moment(conv.lastMessage.createdAt).fromNow() : '';
+    const timeLabel = conv.lastMessage?.createdAt ? dayjs(conv.lastMessage.createdAt).fromNow() : '';
 
     return (
       <TouchableRipple style={s.convRow} onPress={() => handleOpen(conv)}>

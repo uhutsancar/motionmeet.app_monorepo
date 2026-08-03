@@ -12,6 +12,9 @@ RUN pnpm install --frozen-lockfile
 COPY packages/shared ./packages/shared
 COPY packages/backend ./packages/backend
 
+# Build shared once at image build time instead of every container restart.
+RUN pnpm --filter @motionmeet/shared build
+
 WORKDIR /app/packages/backend
 EXPOSE 4000
-CMD ["sh", "-c", "pnpm --filter @motionmeet/shared build && pnpm dev"]
+CMD ["pnpm", "dev"]

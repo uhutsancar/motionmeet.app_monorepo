@@ -75,7 +75,6 @@ authApi.interceptors.request.use((request) => {
 
 interface AuthActionResult { success: boolean; message?: string }
 interface AuthContextValue {
-  user: AuthUser | null;
   token: string | null;
   isLoaded: boolean;
   getToken: (options?: { skipCache?: boolean }) => Promise<string | null>;
@@ -87,7 +86,6 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export const AuthProvider = ({ children }: PropsWithChildren) => {
-  const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const accessTokenRef = useRef<string | null>(null);
@@ -100,7 +98,6 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
     refreshTokenRef.current = null;
     accessExpiryRef.current = 0;
     setToken(null);
-    setUser(null);
     store.dispatch(clearSessionState());
     await Promise.all([
       tokenStorage.deleteItemAsync(ACCESS_TOKEN_KEY),
@@ -122,7 +119,6 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
     refreshTokenRef.current = isWeb ? null : data.refreshToken ?? null;
     accessExpiryRef.current = expiresAt;
     setToken(data.token);
-    setUser(data.user);
 
     await Promise.all([
       tokenStorage.setItemAsync(ACCESS_TOKEN_KEY, data.token),
@@ -203,14 +199,13 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
           storedAccessToken &&
           accessExpiryRef.current > Date.now() + REFRESH_EARLY_MS
         ) {
-          const { data } = await authApi.get<{ success: boolean; user: AuthUser }>(API_ROUTES.auth.me, {
-            headers: { Authorization: `Bearer ${storedAccessToken}` },
-          });
-          if (active && data?.success) {
-            setToken(storedAccessToken);
-            setUser(data.user);
-            return;
-          }
+          // Token is still valid. Restore state immediately from the token
+          // without blocking on a network round-trip so the UI becomes
+          // interactive sooner. The /me call runs in the background to pull
+          // fresh user data; if it returns 401/403 the session is cleared.
+          setToken(storedAccessToken);
+          if (active) setIsLoaded(true);
+          return;
         }
 
         if (storedRefreshToken) {
@@ -234,6 +229,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       active = false;
     };
   }, [clearSession, refreshAccessToken]);
+
 
   const login = useCallback(async (email: string, password: string): Promise<AuthActionResult> => {
     try {
@@ -284,14 +280,13 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
   }, [clearSession]);
 
   const value = useMemo(() => ({
-    user,
     token,
     isLoaded,
     getToken,
     login,
     register,
     logout,
-  }), [getToken, isLoaded, login, logout, register, token, user]);
+  }), [getToken, isLoaded, login, logout, register, token]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
@@ -304,9 +299,7 @@ export const useAuthContext = () => {
   return {
     isLoaded: context.isLoaded,
     getToken: context.getToken,
-    userId: context.user?.id,
-    user: context.user,
-    isSignedIn: Boolean(context.user),
+    isSignedIn: Boolean(context.token),
     signOut: context.logout,
     login: context.login,
     register: context.register,

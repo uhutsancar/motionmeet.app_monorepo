@@ -19,8 +19,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { likePostIdempotent, unlikePostIdempotent, followUser, unfollowUser, addComment, getPostComments } from '../api/endpoints';
 import { fetchUser } from '../features/user/userSlice';
 import { setAuthorFollowState } from '../features/posts/postsSlice';
-import moment from 'moment';
-import 'moment/locale/tr';
+import dayjs, { setDayjsLocale } from '../utils/dayjs';
+
 import { useTranslation } from 'react-i18next';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useTheme } from '../context/ThemeContext';
@@ -467,7 +467,8 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
     },
   }), [carouselWidth, isNarrow, mediaSlideHeight, theme, workoutSlideHeight]);
 
-  moment.locale(i18n.language.startsWith('tr') ? 'tr' : 'en');
+  setDayjsLocale(i18n.language);
+
 
   if (!postUser) return null;
 
@@ -678,7 +679,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
                 <Text numberOfLines={1} style={s.username}>{postUser.full_name}</Text>
               </Surface>
               <Surface elevation={0} style={{ minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'transparent' }}>
-                <Text numberOfLines={1} style={s.timestamp}>@{postUser.username} • {moment(post.createdAt).fromNow()}</Text>
+                <Text numberOfLines={1} style={s.timestamp}>@{postUser.username} • {dayjs(post.createdAt).fromNow()}</Text>
                 {post.visibility === 'private' && (
                   <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'transparent' }}>
                     <Ionicons name="lock-closed" size={10} color={theme.textMuted} />
@@ -852,7 +853,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
                   <Text style={s.commentUser}>{comment.user?.full_name}</Text>
                   <Text style={s.commentText}>{comment.content}</Text>
                 </Surface>
-                <Text style={s.commentTime}>{moment(comment.createdAt).fromNow()}</Text>
+                <Text style={s.commentTime}>{dayjs(comment.createdAt).fromNow()}</Text>
               </Surface>
             </Surface>
           ))}

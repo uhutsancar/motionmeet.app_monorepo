@@ -10,7 +10,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { setAuthToken } from '../api/client';
 import { createWorkout, createPost } from '../api/endpoints';
 import { uploadMedia } from '../api/mediaUpload';
-import moment from 'moment';
+import dayjs from '../utils/dayjs';
+
 import { Appbar, Button, Surface, Text, TextInput, Divider, List, IconButton, ActivityIndicator } from 'react-native-paper';
 import KeyboardAwareScrollView from '../components/KeyboardAwareScrollView';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
@@ -312,7 +313,7 @@ const WorkoutSummaryScreen = ({ navigation, route }: WorkoutSummaryProps) => {
               {t('workout.when', 'Ne Zaman')}
             </Text>
             <Text variant="titleMedium" style={styles.dateValue}>
-              {moment(stats.date).format('D MMM YYYY, HH:mm')}
+              {dayjs(stats.date).format('D MMM YYYY, HH:mm')}
             </Text>
           </View>
 

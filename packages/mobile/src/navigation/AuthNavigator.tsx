@@ -13,7 +13,7 @@ import { useAppDispatch } from '../store/hooks';
 import loadingLogo from '../../assets/icon.png';
 
 const AuthNavigator = () => {
-  const { isLoaded, isSignedIn, getToken } = useAuthContext();
+  const { isLoaded, isSignedIn, getToken, signOut } = useAuthContext();
   const dispatch = useAppDispatch();
   const { theme } = useTheme();
 
@@ -27,7 +27,13 @@ const AuthNavigator = () => {
             // Set token in API client for all future requests
             setAuthToken(token);
             // Fetch user data from backend
-            dispatch(fetchUser(token));
+            try {
+              await dispatch(fetchUser(token)).unwrap();
+            } catch (err: any) {
+              if (err?.message?.includes('401') || err?.message?.includes('403')) {
+                await signOut();
+              }
+            }
           }
         } catch (error) {
           logHandledError('load-current-user', error);
@@ -42,7 +48,7 @@ const AuthNavigator = () => {
     if (isLoaded) {
       loadUserData();
     }
-  }, [isSignedIn, isLoaded, dispatch, getToken]);
+  }, [isSignedIn, isLoaded, dispatch, getToken, signOut]);
 
   if (!isLoaded) {
     return (

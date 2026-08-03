@@ -1,3 +1,4 @@
+import { sql } from "kysely";
 import { database } from "../configs/database.js";
 import { ensureDefaultPlans } from "../utils/plans.js";
 
@@ -15,13 +16,39 @@ export const EQUIPMENT_DEFAULTS = [
   { code: "other", name: "Other", order: 7 },
 ] as const;
 
+/**
+ * Single-statement batch INSERT … ON CONFLICT DO NOTHING.
+ * Replaces the previous sequential per-row loop (N round-trips → 1 round-trip).
+ */
 const insertLookups = async (table: "equipment" | "muscle_groups", entries: readonly { code: string; name: string; order: number }[]): Promise<void> => {
-  for (const entry of entries) {
-    await database.insertInto(table).values({ legacy_mongo_id: null, code: entry.code, name: entry.name, display_order: entry.order, is_active: true })
-      .onConflict((conflict) => conflict.column("code").doNothing()).execute();
-  }
+  if (!entries.length) return;
+  await database
+    .insertInto(table)
+    .values(entries.map((entry) => ({ legacy_mongo_id: null, code: entry.code, name: entry.name, display_order: entry.order, is_active: true })))
+    .onConflict((conflict) => conflict.column("code").doNothing())
+    .execute();
 };
 
+/**
+ * Fast-path: if all lookup tables already have the expected number of rows,
+ * skip the upsert entirely to avoid unnecessary round-trips on every restart.
+ */
 export const ensureApplicationData = async (): Promise<void> => {
-  await Promise.all([ensureDefaultPlans(), insertLookups("muscle_groups", MUSCLE_GROUP_DEFAULTS), insertLookups("equipment", EQUIPMENT_DEFAULTS)]);
+  const [planRow, mgRow, eqRow] = await Promise.all([
+    sql<{ count: string }>`select count(*)::text as count from plans where slug in ('free','pro','premium')`.execute(database),
+    sql<{ count: string }>`select count(*)::text as count from muscle_groups`.execute(database),
+    sql<{ count: string }>`select count(*)::text as count from equipment`.execute(database),
+  ]);
+
+  const plansOk = Number(planRow.rows[0]?.count ?? 0) >= 3;
+  const mgOk = Number(mgRow.rows[0]?.count ?? 0) >= MUSCLE_GROUP_DEFAULTS.length;
+  const eqOk = Number(eqRow.rows[0]?.count ?? 0) >= EQUIPMENT_DEFAULTS.length;
+
+  if (plansOk && mgOk && eqOk) return; // fast-path: nothing to do
+
+  await Promise.all([
+    plansOk ? Promise.resolve() : ensureDefaultPlans(),
+    mgOk ? Promise.resolve() : insertLookups("muscle_groups", MUSCLE_GROUP_DEFAULTS),
+    eqOk ? Promise.resolve() : insertLookups("equipment", EQUIPMENT_DEFAULTS),
+  ]);
 };

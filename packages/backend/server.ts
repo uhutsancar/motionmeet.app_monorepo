@@ -53,14 +53,22 @@ let redis: Awaited<ReturnType<typeof initializeRedis>>;
 try {
   await connectDatabase();
   if (process.env.RUN_MIGRATIONS !== "false") await migrateToLatest();
-  await assertDatabaseContract();
+  // assertDatabaseContract and initializeRedis are independent of each other;
+  // run them concurrently to reduce startup latency.
+  const [, redisResult] = await Promise.all([
+    assertDatabaseContract(),
+    initializeRedis(),
+  ]);
+  redis = redisResult;
+  // ensureApplicationData requires the DB contract to pass first,
+  // but does not depend on Redis.
   await ensureApplicationData();
-  redis = await initializeRedis();
 } catch (error: unknown) {
   logger.error("server_startup_failed", safeErrorMetadata(error));
   if (isDatabaseReady()) await disconnectDatabase().catch(() => undefined);
   process.exit(1);
 }
+
 
 const app = express();
 app.disable("x-powered-by");

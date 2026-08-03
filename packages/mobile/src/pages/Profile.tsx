@@ -12,8 +12,8 @@ import {
   Text,
 } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
-import moment from 'moment';
-import 'moment/locale/tr';
+import dayjs, { setDayjsLocale } from '../utils/dayjs';
+
 import { useAuthContext } from '../context/AuthProvider';
 import { useTheme } from '../context/ThemeContext';
 import { setAuthToken } from '../api/client';
@@ -56,8 +56,9 @@ const Profile = ({ route, navigation }: ProfileProps) => {
   const user = isOwnProfile ? currentUser : publicProfile;
 
   useEffect(() => {
-    moment.locale(i18n.language.startsWith('tr') ? 'tr' : 'en');
+    setDayjsLocale(i18n.language);
   }, [i18n.language]);
+
 
   useEffect(() => {
     if (isOwnProfile) return;
@@ -107,7 +108,7 @@ const Profile = ({ route, navigation }: ProfileProps) => {
     }
     const grouped: Record<string, ProfileMetric> = {};
     workouts.forEach((workout) => {
-      const week = moment(workout.createdAt || workout.startTime).format('MMM DD');
+      const week = dayjs(workout.createdAt || workout.startTime).format('MMM DD');
       if (!grouped[week]) grouped[week] = { duration: 0, volume: 0, reps: 0 };
       grouped[week].duration += workout.durationMinutes || 0;
       grouped[week].volume += workout.volumeKg || 0;
@@ -529,7 +530,7 @@ const Profile = ({ route, navigation }: ProfileProps) => {
                     {workout.name || t('workout.my_workout', 'Workout')}
                   </Text>
                   <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: 3 }}>
-                    {moment(workout.createdAt || workout.startTime).fromNow()} · {workout.exercises?.length || 0} {t('workout.exercises', 'exercises')}
+                    {dayjs(workout.createdAt || workout.startTime).fromNow()} · {workout.exercises?.length || 0} {t('workout.exercises', 'exercises')}
                   </Text>
                 </View>
                 <Text
