@@ -10,7 +10,7 @@ const sharedPkg = path.resolve(monorepoRoot, 'packages/shared');
 // Only watch the packages relevant to the mobile app.
 // By default Metro would watch the entire monorepo root which increases
 // file-map creation time significantly (10 MB+ on this workspace).
-config.watchFolders = [sharedPkg];
+config.watchFolders = [sharedPkg, path.resolve(monorepoRoot, 'node_modules')];
 
 // Keep Metro's resolver aware of the workspace root so it can find
 // hoisted node_modules, without watching the entire tree.
@@ -34,5 +34,8 @@ config.resolver.blockList = [
 // Expo SDK 54 resolves the workspace root and the app-relative entry point for
 // monorepos. Overriding unstable_serverRoot makes `expo export` prepend
 // packages/mobile twice and prevents the release bundle from resolving index.ts.
+
+config.resolver.unstable_enableSymlinks = true;
+config.resolver.unstable_enablePackageExports = true;
 
 module.exports = config;

@@ -20,7 +20,7 @@
     "docker:prod": "docker compose -f docker-compose.prod.yml up -d --build",
     "dev:backend": "turbo run dev --filter=@motionmeet/backend",
     "dev:web": "turbo run dev --filter=@motionmeet/web",
-    "dev:mobile": "turbo run dev --filter=@motionmeet/mobile"
+    "dev:mobile": "cd packages/mobile && pnpm run dev -c"
   },
   "devDependencies": {
     "turbo": "^2.5.0",
