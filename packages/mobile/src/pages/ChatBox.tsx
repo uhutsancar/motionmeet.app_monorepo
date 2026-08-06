@@ -395,7 +395,13 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
             }
           </Surface>
         )}
-        <Surface elevation={0} style={{ maxWidth: '75%' }}>
+        {/* Each child sizes to its own content. Left to stretch, the bubble was
+            pinned to the width of the timestamp under it, which squeezed short
+            messages until they broke mid-word ("Nabe / rsin"). */}
+        <Surface
+          elevation={0}
+          style={{ maxWidth: '75%', alignItems: mine ? 'flex-end' : 'flex-start' }}
+        >
           {msg.message_type === 'image' && msg.media_url && (
             <Image
               source={{ uri: msg.media_url }}

@@ -248,7 +248,8 @@ const Connections = ({ navigation, route }: ConnectionsProps) => {
         />
       </Appbar.Header>
 
-      {/* Stats row */}
+      {/* Stats row. It must keep its natural height: squeezed by the list below
+          it, the counter cards collapse into an empty grey strip. */}
       <View
         style={{
           width: '100%',
@@ -256,6 +257,7 @@ const Connections = ({ navigation, route }: ConnectionsProps) => {
           alignSelf: 'center',
           flexDirection: 'row',
           flexWrap: 'wrap',
+          flexShrink: 0,
           paddingHorizontal: horizontalPadding,
           paddingVertical: 10,
           gap: 8,

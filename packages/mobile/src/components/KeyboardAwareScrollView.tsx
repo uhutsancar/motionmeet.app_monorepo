@@ -44,10 +44,18 @@ export const KeyboardResponsiveView = ({
   </KeyboardAvoidingView>
 );
 
+const isIOS = Platform.OS === 'ios';
+
 /**
- * A ScrollView that follows the platform's resized viewport and scrolls the
- * active input above the keyboard. Only the requested focus clearance is added
- * so iOS keyboard insets and Android adjustResize are never counted twice.
+ * A ScrollView that keeps the focused input above the keyboard.
+ *
+ * iOS does this natively through automaticallyAdjustKeyboardInsets, so that is
+ * all it gets. Wrapping it in a KeyboardAvoidingView on top used to pad by the
+ * full keyboard height measured from the bottom of the screen, while the view
+ * itself starts below the navigation header - the header height was counted
+ * twice and threw the content far past the keyboard, hiding the very field the
+ * user had tapped. Android has no such native handling, so it keeps the manual
+ * scroll and padding on top of adjustResize.
  */
 const KeyboardAwareScrollView = React.forwardRef<ScrollView, KeyboardAwareScrollViewProps>(({
   avoidKeyboard = true,
@@ -95,6 +103,8 @@ const KeyboardAwareScrollView = React.forwardRef<ScrollView, KeyboardAwareScroll
   }, [scrollFocusedInputIntoView]);
 
   useEffect(() => {
+    // iOS adjusts its own insets and scrolls the focused field into view.
+    if (isIOS) return;
     const showSubscription = Keyboard.addListener(keyboardShowEvent, (event) => {
       setKeyboardHeight(event.endCoordinates?.height || 0);
       scheduleFocusedInputScroll();
@@ -114,28 +124,30 @@ const KeyboardAwareScrollView = React.forwardRef<ScrollView, KeyboardAwareScroll
         {...props}
         ref={setRefs}
         keyboardShouldPersistTaps={props.keyboardShouldPersistTaps || 'handled'}
-        keyboardDismissMode={props.keyboardDismissMode || (Platform.OS === 'ios' ? 'interactive' : 'on-drag')}
-        automaticallyAdjustKeyboardInsets={false}
+        keyboardDismissMode={props.keyboardDismissMode || (isIOS ? 'interactive' : 'on-drag')}
+        automaticallyAdjustKeyboardInsets={isIOS}
         contentContainerStyle={[
           contentContainerStyle,
           {
             paddingBottom:
               basePaddingBottom +
-              (keyboardHeight > 0 ? extraScrollHeight : 0),
+              (!isIOS && keyboardHeight > 0 ? extraScrollHeight : 0),
           },
         ]}
         onFocus={(event) => {
           onFocus?.(event);
-          scheduleFocusedInputScroll();
+          if (!isIOS) scheduleFocusedInputScroll();
         }}
         onContentSizeChange={(contentWidth, contentHeight) => {
           onContentSizeChange?.(contentWidth, contentHeight);
-          if (keyboardHeight > 0) scheduleFocusedInputScroll();
+          if (!isIOS && keyboardHeight > 0) scheduleFocusedInputScroll();
         }}
     />
   );
 
-  if (!avoidKeyboard) return scrollView;
+  // On iOS the native insets above already do the avoiding; adding a
+  // KeyboardAvoidingView here is what double-counted the header height.
+  if (!avoidKeyboard || isIOS) return scrollView;
 
   return (
     <KeyboardResponsiveView

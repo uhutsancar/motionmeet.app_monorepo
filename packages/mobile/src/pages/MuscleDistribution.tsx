@@ -215,7 +215,7 @@ const MuscleDistribution = ({ navigation }: NavigationOnlyProps) => {
         </Surface>
 
         {/* Stats Grid — dynamic */}
-        <Surface elevation={0} style={[styles.statsGrid, { gap: columnGap }]}>
+        <Surface elevation={0} style={[styles.statsGrid, { columnGap }]}>
           <Surface elevation={0} style={[styles.statSquare, { width: statCardWidth }]}>
             <Text style={styles.statLabel}>{t('statistics.workouts', 'Antrenman')}</Text>
             <Text style={styles.statLargeVal}>{stats?.totalWorkouts ?? 0}</Text>
@@ -284,7 +284,9 @@ const getStyles = (theme: MotionTheme, chartAccent: string) => StyleSheet.create
   },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendText: { fontSize: 12, color: theme.textMuted },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  // The grid used to start flush against the chart card, so the four tiles read
+  // as part of it. A little clearance separates the two blocks.
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 18, rowGap: 12 },
   statSquare: {
     backgroundColor: theme.surface, borderRadius: 16,
     paddingHorizontal: 16, paddingVertical: 20, borderWidth: 1, borderColor: theme.border

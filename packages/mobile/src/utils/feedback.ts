@@ -100,6 +100,9 @@ export const logHandledError = (scope: string, error: unknown): void => {
   const details = errorDetails(error);
   console.log(`[Handled:${scope}]`, {
     name: details.name,
+    // Without the message a network failure logs as an empty Error and there is
+    // nothing left to diagnose from.
+    message: details.message,
     status: details.response?.status,
     code: getErrorCode(error),
     requestId: details.response?.data?.requestId,

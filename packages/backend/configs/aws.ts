@@ -12,9 +12,29 @@ import type { S3Client } from "@aws-sdk/client-s3";
 
 let clientPromise: Promise<S3Client> | null = null;
 
+/**
+ * forcePathStyle keeps the bucket in the path (s3.<region>.amazonaws.com/
+ * <bucket>/key) instead of the subdomain. Virtual-hosted URLs put the bucket
+ * name in the hostname, and resolvers that fail on it cannot reach the bucket at
+ * all - a presigned upload then hangs until the socket gives up rather than
+ * failing fast, which reads as a spinner that never stops. Path-style only needs
+ * the plain regional endpoint to resolve, and it matches the URLs stored for
+ * exercise media.
+ */
+/**
+ * requestChecksumCalculation stays at WHEN_REQUIRED because the SDK otherwise
+ * adds a CRC32 of the request body to every PutObject. Presigning passes no
+ * body, so the checksum baked into the signed URL is the one for zero bytes -
+ * and the client that later uploads the real file cannot satisfy it.
+ */
 export const getS3Client = async (): Promise<S3Client> => {
   clientPromise ??= import("@aws-sdk/client-s3").then(
-    ({ S3Client: Client }) => new Client({ region: process.env.AWS_REGION || "eu-north-1" }),
+    ({ S3Client: Client }) =>
+      new Client({
+        region: process.env.AWS_REGION || "eu-north-1",
+        forcePathStyle: true,
+        requestChecksumCalculation: "WHEN_REQUIRED",
+      }),
   );
   return clientPromise;
 };

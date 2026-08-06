@@ -1,6 +1,7 @@
 import api from './client';
 import { API_ROUTES, type UploadPurpose, type UploadResponse } from '@motionmeet/shared';
 import { isAxiosError } from 'axios';
+import * as FileSystem from 'expo-file-system/legacy';
 
 export interface MediaAsset {
   uri: string;
@@ -87,12 +88,34 @@ const mediaError = (message: string, userCode = 'UNSUPPORTED_MEDIA_TYPE'): UserF
   return error;
 };
 
+/** Uploads go straight to object storage, where an unreachable name or a stalled
+ *  socket can leave the request hanging. Without a deadline the publish button
+ *  spins forever and the user is never told anything, so the wait is cut short
+ *  and reported as an ordinary failure instead. */
+const UPLOAD_TIMEOUT_MS = 60_000;
+
+const withDeadline = async <T>(work: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(mediaError(message, 'MEDIA_UPLOAD_TIMEOUT')), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
+
 export const uploadMedia = async (
   asset: MediaAsset,
   purpose: UploadPurpose,
   token: string,
 ): Promise<string> => {
   if (!asset?.uri) throw mediaError('A valid media file is required');
+  // The file is read once to sniff its real type and measure it. The upload
+  // itself streams from disk, so this blob never leaves the JS side.
   const localResponse = await fetch(asset.uri);
   if (!localResponse.ok) throw mediaError('Selected media could not be read');
   const body = await localResponse.blob();
@@ -112,19 +135,31 @@ export const uploadMedia = async (
     const suppliedName = asset.fileName || asset.name;
     const suppliedBaseName = suppliedName?.replace(/\.[^.]+$/, '');
     const fileName = `${suppliedBaseName || `${purpose}-${Date.now()}`}.${MIME_EXTENSIONS[contentType]}`;
-    const size = asset.fileSize || body.size;
+    // The presigned URL signs content-length, so it has to describe the bytes
+    // actually being sent. The picker reports the size of the original asset,
+    // which differs once it hands back a converted copy (an iOS HEIC arriving as
+    // JPEG, for one) - signing that number makes S3 reject the upload with 403.
+    const size = body.size || asset.fileSize || 0;
 
     const { data } = await api.post<UploadResponse>(
       API_ROUTES.media.presign,
       { purpose, fileName, contentType, size },
       { headers: { Authorization: `Bearer ${token}` } }
     );
-    const uploadResponse = await fetch(data.uploadUrl, {
-      method: 'PUT',
-      headers: data.headers,
-      body,
-    });
-    if (!uploadResponse.ok) {
+    // The file is streamed from disk by the native side rather than sent as a
+    // JS Blob. Handing a Blob to fetch fails on Android with a bare "Network
+    // request failed" - no status, no response - which is what made publishing
+    // a photo spin forever with nothing to show the user.
+    const uploadResponse = await withDeadline(
+      FileSystem.uploadAsync(data.uploadUrl, asset.uri, {
+        httpMethod: 'PUT',
+        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+        headers: data.headers,
+      }),
+      UPLOAD_TIMEOUT_MS,
+      'Media upload timed out. Check your connection and try again.',
+    );
+    if (uploadResponse.status < 200 || uploadResponse.status >= 300) {
       throw new Error(`Media upload failed (${uploadResponse.status})`);
     }
     return data.key;
