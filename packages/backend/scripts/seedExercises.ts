@@ -11,7 +11,7 @@ const objectEntries = (value: unknown): Array<[string, unknown]> => Object.entri
 const datasetPath = path.resolve(process.cwd(), "../../exercises-dataset-main/data/exercises.json");
 try {
   await connectDatabase(); const parsed: unknown = JSON.parse(await readFile(datasetPath, "utf8")); if (!Array.isArray(parsed)) throw new Error("Exercise dataset must be an array");
-  const cdn = `${process.env.CDN_URL?.replace(/\/$/, "") || "https://motionmeet-assets.s3.eu-north-1.amazonaws.com"}/exercises`;
+  const cdn = `${process.env.CDN_URL?.replace(/\/$/, "") || "https://s3.eu-north-1.amazonaws.com/motionmeet-assets"}/exercises`;
   let processed = 0;
   for (let offset = 0; offset < parsed.length; offset += 200) {
     const batch = parsed.slice(offset, offset + 200);
