@@ -1,5 +1,8 @@
+// React Native's Image is used on purpose: Expo Go ships its own native
+// expo-image build, and when it disagrees with the version installed here the
+// view renders blank instead of erroring, so exercise photos and GIFs vanish.
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Alert } from 'react-native';
+import { Image, View, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, Surface, TextInput, Button, IconButton, TouchableRipple } from 'react-native-paper';
 const formatTime = (seconds: number): string => {
@@ -23,7 +26,6 @@ import type { Exercise, ExerciseSessionEntry, ExerciseSet } from '@motionmeet/sh
 import { resolvePublicMediaUrl } from '@motionmeet/shared';
 import type { ActiveWorkoutExercise, WorkoutSummaryData } from '../types/workoutDraft';
 import { API_URL } from '../config/environment';
-import { Image } from 'expo-image';
 import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation/native';
 
 interface IncomingRoutineExercise {
@@ -306,7 +308,7 @@ const ActiveWorkoutScreen = ({ navigation, route }: ActiveWorkoutProps) => {
                   <Image
                     source={{ uri: ex.imageUrl }}
                     style={{ ...exerciseThumbStyle(EXERCISE_THUMB.medium), marginRight: 10, backgroundColor: '#FFFFFF' }}
-                    contentFit="cover"
+                    resizeMode="cover"
                   />
                 ) : (
                   <View style={{ ...exerciseThumbStyle(EXERCISE_THUMB.medium), marginRight: 10, backgroundColor: theme.surfaceLight, alignItems: 'center', justifyContent: 'center' }}>

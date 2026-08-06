@@ -1,5 +1,8 @@
+// React Native's Image is used on purpose: Expo Go ships its own native
+// expo-image build, and when it disagrees with the version installed here the
+// view renders blank instead of erroring, so exercise photos and GIFs vanish.
 import React, { useEffect, useMemo, useState } from 'react';
-import { FlatList, View } from 'react-native';
+import { Image, FlatList, View } from 'react-native';
 import {
   ActivityIndicator,
   Button,
@@ -16,7 +19,6 @@ import { BottomSheetModal } from './ResponsiveModal';
 import { resolvePublicMediaUrl, type Exercise } from '@motionmeet/shared';
 import { API_URL } from '../config/environment';
 import { EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
-import { Image } from 'expo-image';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 interface ExercisePickerModalProps {
@@ -108,7 +110,7 @@ const ExercisePickerModal = ({ visible, onDismiss, onSelect, excludedIds = [] }:
                   <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: theme.border, backgroundColor: 'transparent' }}>
                     <Surface elevation={0} style={{ ...exerciseThumbStyle(EXERCISE_THUMB.medium), overflow: 'hidden', backgroundColor: mediaUrl ? '#FFFFFF' : theme.surfaceLight, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
                       {mediaUrl ? (
-                        <Image source={{ uri: mediaUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                        <Image source={{ uri: mediaUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                       ) : (
                         <Ionicons name="barbell" size={20} color={theme.textMuted} />
                       )}

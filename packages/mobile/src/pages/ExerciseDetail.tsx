@@ -1,7 +1,9 @@
+// React Native's Image is used on purpose: Expo Go ships its own native
+// expo-image build, and when it disagrees with the version installed here the
+// view renders blank instead of erroring, so exercise photos and GIFs vanish.
 import React, { useState, useEffect, useCallback } from 'react';
-import { ScrollView, ActivityIndicator, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Image, ScrollView, ActivityIndicator, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Image } from 'expo-image';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { API_URL } from '../config/environment';
 import { resolvePublicMediaUrl } from '@motionmeet/shared';
@@ -148,7 +150,7 @@ const ExerciseDetail = ({ route, navigation }: BaseNavigationScreenProps) => {
         {activeTab !== 'history' && (
           <Surface elevation={0} style={styles.mediaContainer}>
             {mediaUrl ? (
-              <Image source={{ uri: mediaUrl }} style={styles.media} contentFit="contain" accessibilityLabel={exercise.name} />
+              <Image source={{ uri: mediaUrl }} style={styles.media} resizeMode="contain" accessibilityLabel={exercise.name} />
             ) : (
               <Surface style={[styles.placeholderMedia, { backgroundColor: theme.surface }]} elevation={0}>
                 <Ionicons name="barbell" size={44} color={theme.textMuted} />

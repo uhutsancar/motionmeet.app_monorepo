@@ -1,5 +1,8 @@
+// React Native's Image is used on purpose: Expo Go ships its own native
+// expo-image build, and when it disagrees with the version installed here the
+// view renders blank instead of erroring, so exercise photos and GIFs vanish.
 import React, { useEffect, useRef, useState } from 'react';
-import { TextInput, ActivityIndicator, View, StyleSheet } from 'react-native';
+import { Image, TextInput, ActivityIndicator, View, StyleSheet } from 'react-native';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme, type MotionTheme } from '../context/ThemeContext';
@@ -19,7 +22,6 @@ import {
 } from '@motionmeet/shared';
 import { API_URL } from '../config/environment';
 import { EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
-import { Image } from 'expo-image';
 import {
   getUserFacingError,
   logHandledError,
@@ -269,7 +271,7 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }: RoutineBuil
                         <Surface elevation={0} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'transparent' }}>
                           <Surface elevation={0} style={{ ...exerciseThumbStyle(EXERCISE_THUMB.small), overflow: 'hidden', backgroundColor: mediaUrl ? '#FFFFFF' : theme.surfaceLight, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
                             {mediaUrl ? (
-                              <Image source={{ uri: mediaUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                              <Image source={{ uri: mediaUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                             ) : (
                               <Ionicons name="barbell" size={20} color={theme.textMuted} />
                             )}
@@ -296,7 +298,7 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }: RoutineBuil
                   <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}>
                     <Surface elevation={0} style={{ ...exerciseThumbStyle(EXERCISE_THUMB.small), overflow: 'hidden', backgroundColor: selectedMediaUrl ? '#FFFFFF' : theme.surfaceLight, marginRight: 10, alignItems: 'center', justifyContent: 'center' }}>
                       {selectedMediaUrl ? (
-                        <Image source={{ uri: selectedMediaUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                        <Image source={{ uri: selectedMediaUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                       ) : (
                         <Ionicons name="barbell" size={18} color={theme.textMuted} />
                       )}
