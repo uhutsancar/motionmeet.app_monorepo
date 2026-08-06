@@ -4,8 +4,11 @@ import {
   createOperationId,
   type Comment,
   type ApiFailure,
+  type BodyMeasurement,
+  type BodyMeasurementValues,
   type Conversation,
   type Exercise,
+  type ExerciseSessionEntry,
   type ExerciseStats,
   type Message,
   type PersonalRecord,
@@ -14,6 +17,7 @@ import {
   type PublicUser,
   type Routine,
   type Story,
+  type StoryViewer,
   type User,
   type UserProfile,
   type Workout,
@@ -25,6 +29,8 @@ type Cursor = string | null | undefined;
 type OperationPayload = FormData | (Record<string, unknown> & { operationId?: string });
 interface BasicResponse { success: boolean; message?: string }
 interface UserResponse extends BasicResponse { user: User }
+interface MeasurementsResponse extends BasicResponse { measurements: BodyMeasurement[] }
+interface MeasurementResponse extends BasicResponse { measurement: BodyMeasurement }
 interface ProfileResponse extends BasicResponse { profile: UserProfile; posts: Post[]; nextCursor: string | null }
 interface UsersResponse extends BasicResponse { users: PublicUser[] }
 interface ConnectionsResponse extends BasicResponse { connections: PublicUser[]; pendingConnections: PublicUser[]; followers: PublicUser[]; following: PublicUser[]; items?: PublicUser[]; nextCursor?: string | null }
@@ -43,6 +49,8 @@ interface RoutineResponse extends BasicResponse { routine: Routine }
 interface ExercisesResponse extends BasicResponse { exercises: Exercise[]; total: number | null; nextCursor: string | null; limit: number; skip: number }
 interface ExerciseResponse extends BasicResponse { exercise: Exercise }
 interface ExerciseStatsResponse extends BasicResponse, ExerciseStats {}
+interface ExerciseHistoryResponse extends BasicResponse { history: ExerciseSessionEntry[] }
+interface StoryViewersResponse extends BasicResponse { viewers: StoryViewer[] }
 interface RecordsResponse extends BasicResponse { records: PersonalRecord[] }
 interface PlansResponse extends BasicResponse { plans: Plan[] }
 interface LikeResponse extends BasicResponse { liked: boolean; like_count: number }
@@ -255,6 +263,49 @@ export const deleteStory = async (storyId: string, token: Token): Promise<BasicR
   return data;
 };
 
+export const markStoryViewed = async (storyId: string, token: Token): Promise<BasicResponse> => {
+  const { data } = await api.post(API_ROUTES.story.view(storyId), {}, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const getStoryViewers = async (storyId: string, token: Token): Promise<StoryViewersResponse> => {
+  const { data } = await api.get(API_ROUTES.story.viewers(storyId), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+// ============= MEASUREMENT APIs =============
+export interface SaveMeasurementPayload extends BodyMeasurementValues {
+  /** Calendar day as YYYY-MM-DD; the backend upserts on this day. */
+  measuredOn: string;
+  note?: string;
+}
+
+export const getMeasurements = async (token: Token, limit?: number): Promise<MeasurementsResponse> => {
+  const { data } = await api.get(API_ROUTES.measurement.base, {
+    headers: { Authorization: `Bearer ${token}` },
+    params: limit ? { limit } : undefined,
+  });
+  return data;
+};
+
+export const saveMeasurement = async (payload: SaveMeasurementPayload, token: Token): Promise<MeasurementResponse> => {
+  const { data } = await api.post(API_ROUTES.measurement.base, payload, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const deleteMeasurement = async (measurementId: string, token: Token): Promise<BasicResponse> => {
+  const { data } = await api.delete(API_ROUTES.measurement.byId(measurementId), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
 // ============= WORKOUT APIs =============
 export const getWorkoutStats = async (period: 'week' | 'month' | 'calendar_month' | 'year', token: Token): Promise<WorkoutStats & BasicResponse> => {
   const { data } = await api.get(API_ROUTES.workout.stats, {
@@ -322,6 +373,14 @@ export const createExercise = async (exerciseData: Record<string, unknown>, toke
 export const getExerciseStats = async (exerciseId: string, token: Token): Promise<ExerciseStatsResponse> => {
   const { data } = await api.get(API_ROUTES.exercise.stats(exerciseId), {
     headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const getExerciseHistory = async (exerciseId: string, token: Token, limit?: number): Promise<ExerciseHistoryResponse> => {
+  const { data } = await api.get(API_ROUTES.exercise.history(exerciseId), {
+    headers: { Authorization: `Bearer ${token}` },
+    params: limit ? { limit } : undefined,
   });
   return data;
 };
@@ -403,6 +462,13 @@ export default {
   getStories,
   createStory,
   deleteStory,
+  markStoryViewed,
+  getStoryViewers,
+
+  // Measurement
+  getMeasurements,
+  saveMeasurement,
+  deleteMeasurement,
 
   // Workout
   getWorkoutStats,
@@ -417,6 +483,7 @@ export default {
   getExercises,
   createExercise,
   getExerciseStats,
+  getExerciseHistory,
   getPersonalRecords,
 
   // Plan

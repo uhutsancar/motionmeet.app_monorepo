@@ -1,18 +1,23 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, FlatList, Image, RefreshControl, ScrollView, StatusBar, View } from 'react-native';
+import { Alert, FlatList, Image, RefreshControl, ScrollView, StatusBar, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActivityIndicator, Appbar, Button, Chip, Divider, Surface, Text } from 'react-native-paper';
+import { ActivityIndicator, Appbar, Button, Chip, Divider, Surface, Text, TouchableRipple } from 'react-native-paper';
 import { useAuthContext } from "../context/AuthProvider";
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { fetchConnections } from '../features/connections/connectionsSlice';
 import { acceptConnectionRequest, getUserConnections, unfollowUser } from '../api/endpoints';
 import { useTheme } from '../context/ThemeContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { AVATAR } from '../config/layout';
 import { useAppDispatch } from '../store/hooks';
 import type { PublicUser } from '@motionmeet/shared';
-import type { NavigationOnlyProps } from '../navigation/types';
+import type { NavigationOnlyProps, RouteLike } from '../navigation/types';
 
 type ConnectionTabKey = typeof TABS[number]['key'];
+interface ConnectionsProps extends NavigationOnlyProps {
+  route?: RouteLike<{ section?: string }>;
+}
 interface ConnectionPage { items: PublicUser[]; nextCursor: string | null; loaded: boolean; loading: boolean }
 type ConnectionPages = Record<ConnectionTabKey, ConnectionPage>;
 
@@ -30,13 +35,18 @@ const createEmptyPages = (): ConnectionPages => Object.fromEntries(
   ]),
 ) as ConnectionPages;
 
-const Connections = ({ navigation }: NavigationOnlyProps) => {
+const Connections = ({ navigation, route }: ConnectionsProps) => {
   const dispatch = useAppDispatch();
   const { getToken } = useAuthContext();
   const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const { horizontalPadding, isNarrow } = useResponsiveLayout();
-  const [currentTab, setCurrentTab] = useState(TABS[0].key);
+  // Opened straight on the followers/following list when the profile counters
+  // are tapped, otherwise on the first tab.
+  const requestedSection = route?.params?.section;
+  const [currentTab, setCurrentTab] = useState<ConnectionTabKey>(
+    TABS.some((tab) => tab.key === requestedSection) ? (requestedSection as ConnectionTabKey) : TABS[0].key,
+  );
   const [pages, setPages] = useState(createEmptyPages);
   const [actionLoading, setActionLoading] = useState(false);
   const inFlightSectionsRef = useRef<Set<string>>(new Set());
@@ -133,28 +143,31 @@ const Connections = ({ navigation }: NavigationOnlyProps) => {
   const currentPage = pages[currentTab];
   const currentData = currentPage.items;
 
+  // One tappable row per person, full bleed, with the actions inline.
   const renderUser = ({ item: user }: { item: PublicUser }) => (
-    <Surface
+    <TouchableRipple
+      onPress={() => navigation.navigate('Profile', { userId: user._id })}
+      accessibilityRole="button"
+      accessibilityLabel={user.full_name || user.username}
       style={{
-        marginHorizontal: horizontalPadding,
-        marginVertical: 4,
-        borderRadius: 14,
-        padding: 12,
-        backgroundColor: theme.surface,
+        paddingHorizontal: horizontalPadding,
+        paddingVertical: 8,
+        backgroundColor: theme.background,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: theme.border,
       }}
-      elevation={1}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         {user.profile_picture ? (
           <Image
             source={{ uri: user.profile_picture }}
-            style={{ width: 48, height: 48, borderRadius: 24 }}
+            style={{ width: AVATAR.medium, height: AVATAR.medium, borderRadius: AVATAR.medium / 2 }}
             accessibilityLabel={user.full_name}
           />
         ) : (
           <Surface
             elevation={0}
-            style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.primarySoft }}
+            style={{ width: AVATAR.medium, height: AVATAR.medium, borderRadius: AVATAR.medium / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.primarySoft }}
           >
             <Text style={{ color: theme.primary, fontWeight: '900' }}>
               {(user.full_name || user.username || '?').charAt(0).toUpperCase()}
@@ -173,55 +186,54 @@ const Connections = ({ navigation }: NavigationOnlyProps) => {
             @{user.username}
           </Text>
         </View>
-      </View>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-        <Button
-          mode="outlined"
-          compact
-          onPress={() => navigation.navigate('Profile', { userId: user._id })}
-          style={{ flexGrow: 1, borderRadius: 20 }}
-          labelStyle={{ fontSize: 11, fontWeight: '700' }}
-        >
-          {t('common.view', 'Görüntüle')}
-        </Button>
+        {/* Actions live on the same row as the person: a single icon for
+            messaging keeps the row compact instead of a labelled button. */}
+        {(currentTab === 'Following' || currentTab === 'Connections') && (
+          <TouchableRipple
+            onPress={() => navigation.navigate('ChatBox', { userId: user._id, user })}
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 17,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: theme.primarySoft,
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`${t('common.message_action', 'Send message')}: ${user.username}`}
+            borderless
+          >
+            <Ionicons name="chatbubble-outline" size={16} color={theme.primary} />
+          </TouchableRipple>
+        )}
         {currentTab === 'Pending' && (
           <Button
             mode="contained"
             compact
             onPress={() => handleAcceptConnection(user._id)}
             disabled={actionLoading}
-            style={{ flexGrow: 1, borderRadius: 20 }}
+            style={{ borderRadius: 16 }}
             labelStyle={{ fontSize: 11, fontWeight: '700' }}
           >
-            {t('connections.accept', 'Kabul Et')}
-          </Button>
-        )}
-        {(currentTab === 'Following' || currentTab === 'Connections') && (
-          <Button
-            mode="contained"
-            compact
-            onPress={() => navigation.navigate('ChatBox', { userId: user._id, user })}
-            style={{ flexGrow: 1, borderRadius: 20 }}
-            labelStyle={{ fontSize: 11, fontWeight: '700' }}
-            icon="chat-outline"
-          >
-            {t('common.message', 'Mesaj')}
+            {t('connections.accept', 'Kabul et')}
           </Button>
         )}
         {currentTab === 'Following' && (
-          <Button
-            mode="text"
-            compact
+          <TouchableRipple
             onPress={() => handleUnfollow(user._id)}
             disabled={actionLoading}
-            style={{ flexGrow: 1 }}
-            labelStyle={{ fontSize: 11, fontWeight: '700' }}
+            style={{ paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel={t('connections.unfollow', 'Takibi bırak')}
+            borderless
           >
-            {t('connections.unfollow', 'Unfollow')}
-          </Button>
+            <Text style={{ color: theme.textMuted, fontSize: 11, fontWeight: '700' }}>
+              {t('connections.unfollow', 'Takibi bırak')}
+            </Text>
+          </TouchableRipple>
         )}
       </View>
-    </Surface>
+    </TouchableRipple>
   );
 
   return (
@@ -286,20 +298,26 @@ const Connections = ({ navigation }: NavigationOnlyProps) => {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        // The row must not stretch or shrink: without both flags the chips get
+        // clipped at the bottom on short screens.
         style={{
           width: '100%',
           maxWidth: 720,
           alignSelf: 'center',
-          paddingHorizontal: horizontalPadding,
-          paddingBottom: 8,
           flexGrow: 0,
+          flexShrink: 0,
+        }}
+        contentContainerStyle={{
+          alignItems: 'center',
+          paddingHorizontal: horizontalPadding,
+          paddingVertical: 8,
         }}
       >
         <View
           style={{
             flexDirection: 'row',
+            alignItems: 'center',
             gap: 8,
-            paddingVertical: 4,
             paddingRight: horizontalPadding,
           }}
         >

@@ -159,3 +159,40 @@ export const deleteStory: RequestHandler = async (req, res, next) => {
     return next(error);
   }
 };
+
+export const viewStory: RequestHandler = async (req, res, next) => {
+  try {
+    const { storyId } = req.params;
+    if (!isUuid(storyId)) {
+      return res.status(400).json({ success: false, message: "Invalid story id" });
+    }
+
+    await storyService.recordStoryView(storyId, req.userId);
+
+    return res.json({ success: true });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getStoryViewers: RequestHandler = async (req, res, next) => {
+  try {
+    const { storyId } = req.params;
+    if (!isUuid(storyId)) {
+      return res.status(400).json({ success: false, message: "Invalid story id" });
+    }
+
+    const story = await storyService.getStoryById(storyId);
+    if (!story) return res.status(404).json({ success: false, message: "Story not found" });
+    // Viewer lists are private to the author.
+    if (story.user !== req.userId) {
+      return res.status(403).json({ success: false, message: "Unauthorized to view this story audience" });
+    }
+
+    const viewers = await storyService.getStoryViewers(storyId);
+
+    return res.json({ success: true, viewers });
+  } catch (error) {
+    return next(error);
+  }
+};

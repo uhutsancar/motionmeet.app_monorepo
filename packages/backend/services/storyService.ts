@@ -1,4 +1,4 @@
-import type { Story } from "@motionmeet/shared";
+import type { Story, StoryViewer } from "@motionmeet/shared";
 import { sql } from "kysely";
 import { database, withTransaction } from "../configs/database.js";
 import { publicUser } from "../repositories/postRepository.js";
@@ -54,7 +54,52 @@ export const getStoriesForUser = async (userId: string, pagination: Pagination):
   if (pagination.cursor) query = query.where((expression) => expression.or([expression("created_at", "<", pagination.cursor!.date), expression.and([expression("created_at", "=", pagination.cursor!.date), expression("id", "<", pagination.cursor!.id)])]));
   const rows = await query.orderBy("created_at", "desc").orderBy("id", "desc").limit(pagination.limit + 1).execute();
   const hasMore = rows.length > pagination.limit; const selected = hasMore ? rows.slice(0, pagination.limit) : rows; const last = selected.at(-1);
-  return { items: await hydrate(selected), nextCursor: hasMore && last ? Buffer.from(JSON.stringify({ date: new Date(last.created_at).toISOString(), id: last.id })).toString("base64url") : null };
+  const items = await hydrate(selected);
+
+  // Authors see how many people opened their own stories; other people's
+  // stories carry no counter, so nothing leaks between accounts.
+  const ownIds = selected.filter((row) => row.user_id === userId).map((row) => row.id);
+  if (ownIds.length) {
+    const counts = await database
+      .selectFrom("story_views")
+      .select((expression) => ["story_id", expression.fn.countAll<number>().as("total")])
+      .where("story_id", "in", ownIds)
+      .groupBy("story_id")
+      .execute();
+    const byStory = new Map(counts.map((row) => [row.story_id, Number(row.total)]));
+    for (const item of items) {
+      if (ownIds.includes(item.id)) item.view_count = byStory.get(item.id) ?? 0;
+    }
+  }
+
+  return { items, nextCursor: hasMore && last ? Buffer.from(JSON.stringify({ date: new Date(last.created_at).toISOString(), id: last.id })).toString("base64url") : null };
+};
+
+/**
+ * Records that a user opened a story. Authors are not counted as viewers of
+ * their own stories, and repeat opens keep the first view timestamp.
+ */
+export const recordStoryView = async (storyId: string, viewerId: string): Promise<void> => {
+  const story = await database.selectFrom("stories").select(["id", "user_id"]).where("id", "=", storyId).executeTakeFirst();
+  if (!story || story.user_id === viewerId) return;
+  await database.insertInto("story_views").values({ story_id: storyId, user_id: viewerId })
+    .onConflict((conflict) => conflict.columns(["story_id", "user_id"]).doNothing()).execute();
+};
+
+/** Viewers of a story, newest first. Callers must verify the requester owns it. */
+export const getStoryViewers = async (storyId: string, limit = 100): Promise<StoryViewer[]> => {
+  const rows = await database
+    .selectFrom("story_views")
+    .innerJoin("users", "users.id", "story_views.user_id")
+    .select(["users.id as id", "users.full_name as full_name", "users.username as username", "users.profile_picture_url as profile_picture_url", "story_views.created_at as viewed_at"])
+    .where("story_views.story_id", "=", storyId)
+    .orderBy("story_views.created_at", "desc")
+    .limit(Math.min(Math.max(limit, 1), 200))
+    .execute();
+  return rows.map((row) => ({
+    user: publicUser(row.id, row.full_name, row.username, row.profile_picture_url),
+    viewedAt: toIsoString(row.viewed_at) ?? new Date(0).toISOString(),
+  }));
 };
 
 export const getStoryById = async (storyId: string): Promise<StoryAccess | null> => {

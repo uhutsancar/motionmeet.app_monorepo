@@ -5,6 +5,7 @@ export type GeneratedTimestamp = ColumnType<Date, Date | string | undefined, Dat
 export type NullableTimestamp = ColumnType<Date | null, Date | string | null, Date | string | null>;
 export type Numeric = ColumnType<number, number | string, number | string>;
 export type GeneratedNumeric = ColumnType<number, number | string | undefined, number | string>;
+export type NullableNumeric = ColumnType<number | null, number | string | null | undefined, number | string | null>;
 
 interface BaseTable {
   id: Generated<string>;
@@ -221,6 +222,26 @@ export interface StoryTable extends BaseTable {
   expires_at: Timestamp;
 }
 
+export interface BodyMeasurementTable {
+  id: Generated<string>;
+  user_id: string;
+  measured_on: string;
+  weight_kg: NullableNumeric;
+  body_fat_percentage: NullableNumeric;
+  waist_cm: NullableNumeric;
+  chest_cm: NullableNumeric;
+  hips_cm: NullableNumeric;
+  neck_cm: NullableNumeric;
+  shoulders_cm: NullableNumeric;
+  left_arm_cm: NullableNumeric;
+  right_arm_cm: NullableNumeric;
+  left_thigh_cm: NullableNumeric;
+  right_thigh_cm: NullableNumeric;
+  note: Generated<string>;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+}
+
 export interface StoryViewTable {
   story_id: string;
   user_id: string;
@@ -384,6 +405,7 @@ export interface Database {
   post_comments: PostCommentTable;
   stories: StoryTable;
   story_views: StoryViewTable;
+  body_measurements: BodyMeasurementTable;
   user_follows: UserFollowTable;
   connections: ConnectionTable;
   conversations: ConversationTable;

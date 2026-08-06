@@ -116,6 +116,21 @@ export const getExerciseStats: RequestHandler = async (req, res, next) => {
   }
 };
 
+export const getExerciseHistory: RequestHandler = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!isUuid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid exercise id" });
+    }
+
+    const history = await exerciseService.getExerciseSessions(id, req.userId, req.query?.limit);
+
+    return res.json({ success: true, history });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getPersonalRecords: RequestHandler = async (req, res, next) => {
   try {
     const records = await exerciseService.getPersonalRecords(

@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { FullScreenModal } from './ResponsiveModal';
 import KeyboardAwareScrollView from './KeyboardAwareScrollView';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { CONTENT_LIMITS, createOperationId, type PostType } from '@motionmeet/shared';
+import { CONTENT_LIMITS, createOperationId, type PostType, type PostVisibility } from '@motionmeet/shared';
 import {
   getUserFacingError,
   logHandledError,
@@ -52,6 +52,9 @@ const CreatePostModal = ({ visible, onClose, onSuccess }: CreatePostModalProps) 
       : '';
   const [content, setContent] = useState('');
   const [images, setImages] = useState<ImagePickerAsset[]>([]);
+  // The backend already scopes the discover feed to public posts and the
+  // following feed to public + followers, so the author picks the reach here.
+  const [visibility, setVisibility] = useState<PostVisibility>('public');
   const [loading, setLoading] = useState(false);
   const operationIdRef = useRef<string | null>(null);
   const uploadCacheRef = useRef<UploadCache | null>(null);
@@ -152,6 +155,7 @@ const CreatePostModal = ({ visible, onClose, onSuccess }: CreatePostModalProps) 
           operationId: operationIdRef.current,
           content,
           post_type: postType,
+          visibility,
           uploadedKeys,
         },
         token,
@@ -230,6 +234,40 @@ const CreatePostModal = ({ visible, onClose, onSuccess }: CreatePostModalProps) 
               <Text numberOfLines={1} style={styles.username}>@{user.username}</Text>
             </Surface>
           </Surface>
+
+          <View style={styles.visibilityRow}>
+            {([
+              { key: 'public', icon: 'earth', label: t('feed.visibility_public', 'Herkese açık') },
+              { key: 'followers', icon: 'people', label: t('feed.visibility_followers', 'Takipçiler') },
+              { key: 'private', icon: 'lock-closed', label: t('feed.visibility_private', 'Sadece ben') },
+            ] as const).map((option) => {
+              const active = visibility === option.key;
+              return (
+                <TouchableRipple
+                  key={option.key}
+                  onPress={() => setVisibility(option.key)}
+                  disabled={loading}
+                  style={[styles.visibilityChip, active && { backgroundColor: theme.primarySoft, borderColor: theme.primary }]}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={`${t('feed.visibility_label', 'Who can see this')}: ${option.label}`}
+                  borderless
+                >
+                  <View style={styles.visibilityChipInner}>
+                    <Ionicons name={option.icon} size={13} color={active ? theme.primary : theme.textMuted} />
+                    <Text
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.75}
+                      style={{ color: active ? theme.primary : theme.textMuted, fontSize: 12, fontWeight: '700' }}
+                    >
+                      {option.label}
+                    </Text>
+                  </View>
+                </TouchableRipple>
+              );
+            })}
+          </View>
 
           <TextInput
             style={styles.textInput}
@@ -352,6 +390,28 @@ const getStyles = (theme: MotionTheme, contentPadding: number, imageSize: number
   username: {
     fontSize: 14,
     color: theme.textMuted,
+  },
+  visibilityRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  visibilityChip: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 34,
+    justifyContent: 'center',
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.surfaceLight,
+  },
+  visibilityChipInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: 6,
   },
   textInput: {
     fontSize: 16,

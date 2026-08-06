@@ -5,12 +5,13 @@ import {
   DefaultTheme as NavigationLightTheme,
   NavigationContainer,
 } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import type { BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
+import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
+import type { MaterialTopTabBarProps } from '@react-navigation/material-top-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { Text, View, useWindowDimensions } from 'react-native';
+import { TouchableRipple } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useSocket } from '../hooks/useSocket';
@@ -30,6 +31,8 @@ const loadProfileEdit = () => require('../pages/ProfileEditScreen').default;
 const loadChatBox = () => require('../pages/ChatBox').default;
 const loadStatistics = () => require('../pages/Statistics').default;
 const loadConnections = () => require('../pages/Connections').default;
+const loadMeasurements = () => require('../pages/MeasurementsScreen').default;
+const loadMeasurementEntry = () => require('../pages/MeasurementEntryScreen').default;
 const loadExerciseDetail = () => require('../pages/ExerciseDetail').default;
 const loadMuscleDistribution = () => require('../pages/MuscleDistribution').default;
 const loadWorkoutSummary = () => require('../pages/WorkoutSummaryScreen').default;
@@ -49,7 +52,7 @@ const loadMuscleDistributionBody = () => require('../pages/MuscleDistributionBod
 const loadMainExercises = () => require('../pages/MainExercisesScreen').default;
 const loadLeaderboard = () => require('../pages/LeaderboardScreen').default;
 
-const Tab = createBottomTabNavigator();
+const Tab = createMaterialTopTabNavigator();
 const Stack = createNativeStackNavigator();
 
 /* ─── Messages Stack ─────────────────────────────────────────────────────────── */
@@ -77,6 +80,8 @@ const ProfileStack = () => (
     <Stack.Screen name="VolumeDetailScreen" getComponent={loadVolumeDetail} />
     <Stack.Screen name="SetsDetailScreen" getComponent={loadSetsDetail} />
     <Stack.Screen name="Connections" getComponent={loadConnections} />
+    <Stack.Screen name="MeasurementsScreen" getComponent={loadMeasurements} />
+    <Stack.Screen name="MeasurementEntryScreen" getComponent={loadMeasurementEntry} />
   </Stack.Navigator>
 );
 
@@ -90,6 +95,8 @@ const MainStack = () => (
     <Stack.Screen name="Statistics" getComponent={loadStatistics} />
     <Stack.Screen name="ChatBox" getComponent={loadChatBox} />
     <Stack.Screen name="Connections" getComponent={loadConnections} />
+    <Stack.Screen name="MeasurementsScreen" getComponent={loadMeasurements} />
+    <Stack.Screen name="MeasurementEntryScreen" getComponent={loadMeasurementEntry} />
     <Stack.Screen name="ExerciseDetail" getComponent={loadExerciseDetail} />
     <Stack.Screen name="MuscleDistribution" getComponent={loadMuscleDistribution} />
     <Stack.Screen name="WorkoutSummaryScreen" getComponent={loadWorkoutSummary} />
@@ -180,7 +187,9 @@ const TabNavigator = () => {
     const map: Record<string, React.ComponentProps<typeof Ionicons>['name']> = {
       Home:        focused ? 'home'              : 'home-outline',
       Routines:    focused ? 'fitness'           : 'fitness-outline',
-      Exercises:   focused ? 'barbell'           : 'barbell-outline',
+      // The dumbbell reads as the app's training mark, so it stays filled in
+      // both states instead of thinning out to an outline.
+      Exercises:   'barbell',
       MessagesTab: focused ? 'chatbubbles'       : 'chatbubbles-outline',
       ProfileTab:  focused ? 'person-circle'     : 'person-circle-outline',
       SettingsTab: focused ? 'settings'          : 'settings-outline',
@@ -188,75 +197,102 @@ const TabNavigator = () => {
     return map[name] || 'ellipse-outline';
   }, []);
 
-  const screenOptions = useCallback(({ route }: { route: { name: string } }): BottomTabNavigationOptions => ({
-    tabBarIcon: ({ focused, color }) => {
-      const iconName = iconForRoute(route.name, focused);
-      const iconSize = 22;
-      const showBadge = route.name === 'MessagesTab' && unreadMessages > 0;
+  // The pager owns the swipe, so the bar is rendered by hand to keep the exact
+  // five-tab look the app already had instead of the material tab strip.
+  const renderTabBar = useCallback((props: MaterialTopTabBarProps) => {
+    const { state, descriptors, navigation } = props;
+    return (
+      <View
+        style={{
+          flexDirection: 'row',
+          backgroundColor: theme.surface,
+          borderTopWidth: 1,
+          borderTopColor: theme.border,
+          height: tabBarBaseHeight + insets.bottom,
+          paddingTop: 5,
+          paddingBottom: Math.max(insets.bottom, 5),
+        }}
+      >
+        {state.routes.map((route, index) => {
+          const focused = state.index === index;
+          const { options } = descriptors[route.key];
+          const label = typeof options.tabBarLabel === 'string' ? options.tabBarLabel : route.name;
+          const iconName = iconForRoute(route.name, focused);
+          const iconSize = iconName === 'barbell' ? 26 : 22;
+          const color = focused ? theme.primary : theme.textMuted;
+          const showBadge = route.name === 'MessagesTab' && unreadMessages > 0;
 
-      return (
-        <View style={{
-          width: 42,
-          height: 30,
-          justifyContent: 'center',
-          alignItems: 'center',
-          borderTopWidth: focused ? 2 : 0,
-          borderTopColor: focused ? theme.primary : 'transparent',
-        }}>
-          <Ionicons name={iconName} size={iconSize} color={color} />
-          {showBadge && (
-            <View style={{
-              position: 'absolute',
-              top: 0,
-              right: 2,
-              backgroundColor: theme.danger,
-              borderRadius: 7,
-              minWidth: 15,
-              height: 15,
-              paddingHorizontal: 3,
-              justifyContent: 'center',
-              alignItems: 'center',
-              borderWidth: 1.5,
-              borderColor: theme.surface,
-            }}>
-              <Text style={{ color: '#FFFFFF', fontSize: 8, fontWeight: '900' }}>
-                {unreadMessages > 9 ? '9+' : unreadMessages}
-              </Text>
-            </View>
-          )}
-        </View>
-      );
-    },
-    tabBarActiveTintColor: theme.primary,
-    tabBarInactiveTintColor: theme.textMuted,
-    tabBarShowLabel: true,
-    tabBarHideOnKeyboard: true,
-    tabBarLabelStyle: {
-      fontSize: 10,
-      fontWeight: '700',
-      marginTop: 2,
-      marginBottom: 0,
-    },
-    tabBarStyle: {
-      backgroundColor: theme.surface,
-      borderColor: theme.border,
-      borderTopWidth: 1,
-      height: tabBarBaseHeight + insets.bottom,
-      paddingTop: 5,
-      paddingBottom: Math.max(insets.bottom, 5),
-      elevation: 0,
-    },
-    tabBarItemStyle: {
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    headerShown: false,
-    lazy: true,
-    freezeOnBlur: true,
-  }), [theme, unreadMessages, iconForRoute, insets.bottom, tabBarBaseHeight]);
+          return (
+            <TouchableRipple
+              key={route.key}
+              onPress={() => {
+                if (route.name === 'MessagesTab') setUnreadMessages(0);
+                const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+                if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
+              }}
+              accessibilityRole="button"
+              accessibilityState={{ selected: focused }}
+              accessibilityLabel={label}
+              style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+              borderless
+            >
+              <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                <View
+                  style={{
+                    width: 42,
+                    height: 30,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    borderTopWidth: focused ? 2 : 0,
+                    borderTopColor: focused ? theme.primary : 'transparent',
+                  }}
+                >
+                  <Ionicons name={iconName} size={iconSize} color={color} />
+                  {showBadge && (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        right: 2,
+                        backgroundColor: theme.danger,
+                        borderRadius: 7,
+                        minWidth: 15,
+                        height: 15,
+                        paddingHorizontal: 3,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        borderWidth: 1.5,
+                        borderColor: theme.surface,
+                      }}
+                    >
+                      <Text style={{ color: '#FFFFFF', fontSize: 8, fontWeight: '900' }}>
+                        {unreadMessages > 9 ? '9+' : unreadMessages}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <Text
+                  numberOfLines={1}
+                  style={{ color, fontSize: 10, fontWeight: '700', marginTop: 2 }}
+                >
+                  {label}
+                </Text>
+              </View>
+            </TouchableRipple>
+          );
+        })}
+      </View>
+    );
+  }, [iconForRoute, insets.bottom, tabBarBaseHeight, theme, unreadMessages]);
 
   return (
-    <Tab.Navigator screenOptions={screenOptions}>
+    <Tab.Navigator
+      tabBar={renderTabBar}
+      tabBarPosition="bottom"
+      // Screens are kept mounted while swiping so the pager stays smooth, but
+      // only the ones that have been visited are built.
+      screenOptions={{ lazy: true, swipeEnabled: true }}
+    >
       <Tab.Screen name="Home" component={Feed} options={{ tabBarLabel: t('tabs.feed', 'Keşfet') }} />
       <Tab.Screen name="Routines" component={Routines} options={{ tabBarLabel: t('tabs.routines', 'Rutinler') }} />
       <Tab.Screen name="Exercises" component={Exercises} options={{ tabBarLabel: t('tabs.exercises', 'Egzersiz') }} />

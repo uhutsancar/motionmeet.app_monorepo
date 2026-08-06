@@ -1,3 +1,6 @@
+// Must be the first import: the gesture system installs its native handlers
+// before any navigator or screen mounts.
+import 'react-native-gesture-handler';
 import { registerRootComponent } from 'expo';
 
 import App from './App';

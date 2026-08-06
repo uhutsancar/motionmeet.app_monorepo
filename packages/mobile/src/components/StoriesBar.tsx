@@ -1,10 +1,14 @@
 import React, { useState, memo, useMemo } from 'react';
+// expo-image's native view fails to instantiate on some Android devices
+// ("Couldn't create view of type ExpoImageViewWrapper"), which leaves avatars
+// blank, so the story bubbles stay on React Native's Image.
 import { Image, ScrollView, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import StoryViewer from './StoryViewer';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useAppSelector } from '../store/hooks';
 import type { PublicUser, Story } from '@motionmeet/shared';
 
@@ -16,48 +20,54 @@ const StoriesBar = ({ onAddStory }: StoriesBarProps) => {
   const user = useAppSelector((state) => state.user.value);
   const { t } = useTranslation();
   const { theme } = useTheme();
+  const { isNarrow } = useResponsiveLayout();
+  // Small phones keep the bubbles from touching; wide phones avoid huge gaps.
+  const ringSize = isNarrow ? 58 : 66;
+  const avatarSize = ringSize - 8;
 
   const styles = useMemo(() => StyleSheet.create({
     container: {
       backgroundColor: theme.background,
       paddingVertical: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.border,
     },
     scrollContent: {
-      paddingHorizontal: 16,
-      gap: 10,
-      alignItems: 'center',
+      paddingHorizontal: 14,
+      gap: 14,
+      alignItems: 'flex-start',
     },
     storyContainer: {
       alignItems: 'center',
-      width: 66,
+      width: ringSize + 8,
       borderRadius: 12,
     },
     createStoryRing: {
-      width: 62,
-      height: 62,
-      borderRadius: 31,
+      width: ringSize,
+      height: ringSize,
+      borderRadius: ringSize / 2,
       justifyContent: 'center',
       alignItems: 'center',
       position: 'relative',
-      marginBottom: 5,
+      marginBottom: 6,
       backgroundColor: 'transparent'
     },
     storyRing: {
-      width: 62,
-      height: 62,
-      borderRadius: 31,
+      width: ringSize,
+      height: ringSize,
+      borderRadius: ringSize / 2,
       borderWidth: 2,
       justifyContent: 'center',
       alignItems: 'center',
-      marginBottom: 5,
+      marginBottom: 6,
       padding: 2,
       position: 'relative',
       backgroundColor: 'transparent'
     },
     avatar: {
-      width: 54,
-      height: 54,
-      borderRadius: 27,
+      width: avatarSize,
+      height: avatarSize,
+      borderRadius: avatarSize / 2,
       borderWidth: 2,
       borderColor: theme.background,
     },
@@ -104,12 +114,14 @@ const StoriesBar = ({ onAddStory }: StoriesBarProps) => {
       fontWeight: 'bold',
     },
     usernameText: {
-      fontSize: 10.5,
+      fontSize: 11,
+      lineHeight: 14,
       color: theme.textMuted,
       textAlign: 'center',
-      maxWidth: 64,
+      width: '100%',
+      paddingHorizontal: 2,
     },
-  }), [theme]);
+  }), [avatarSize, ringSize, theme]);
 
   // viewerStories: all stories of selected user, in chronological order
   const [viewerStories, setViewerStories] = useState<Story[]>([]);

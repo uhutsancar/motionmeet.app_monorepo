@@ -155,17 +155,29 @@ const Messages = ({ navigation }: NavigationOnlyProps) => {
   const loadConnectionPage = useCallback(async (token: string, cursor: string | null = null) => {
     try {
       if (cursor) setLoadingMoreConnections(true);
-      const data = await getUserConnections(token, 'connections', cursor);
-      if (!data.success) return;
+      // Search has to reach everyone the app lets you message. Mutual
+      // connections alone miss the people you only follow, which left the
+      // results empty for accounts with no accepted connection requests.
+      const [connectionsPage, followingPage] = await Promise.all([
+        getUserConnections(token, 'connections', cursor),
+        cursor ? Promise.resolve(null) : getUserConnections(token, 'following', null),
+      ]);
+      if (!connectionsPage.success && !followingPage?.success) return;
       const previous = cursor ? connectionsRef.current : [];
       const knownIds = new Set(previous.map((connection) => connection._id));
-      const nextConnections = [
-        ...previous,
-        ...(data.items || []).filter((connection) => !knownIds.has(connection._id)),
+      const incoming = [
+        ...(connectionsPage.success ? connectionsPage.items || [] : []),
+        ...(followingPage?.success ? followingPage.items || [] : []),
       ];
+      const nextConnections = [...previous];
+      for (const connection of incoming) {
+        if (!connection?._id || knownIds.has(connection._id)) continue;
+        knownIds.add(connection._id);
+        nextConnections.push(connection);
+      }
       connectionsRef.current = nextConnections;
       dispatch(setConnections(nextConnections));
-      setConnectionCursor(data.nextCursor || null);
+      setConnectionCursor(connectionsPage.success ? connectionsPage.nextCursor || null : null);
     } catch (error) {
       logHandledError('load-message-connections', error);
     } finally {

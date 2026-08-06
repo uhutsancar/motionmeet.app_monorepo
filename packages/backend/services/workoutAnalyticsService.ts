@@ -1,4 +1,4 @@
-import type { Exercise, ExerciseStats, Workout, WorkoutStats } from "@motionmeet/shared";
+import type { Exercise, ExerciseSessionEntry, ExerciseStats, Workout, WorkoutStats } from "@motionmeet/shared";
 import { database, type DatabaseTransaction } from "../configs/database.js";
 import { numberValue, toIsoString } from "../repositories/entities.js";
 import { calculateCurrentStreak } from "../utils/workoutMetrics.js";
@@ -122,6 +122,63 @@ export const getComputedExerciseStats = async (exerciseId: string, userId: strin
     database.selectFrom("user_exercise_daily_stats").select((expression) => expression.fn.sum<number>("total_sessions").as("count")).where("user_id", "=", userId).where("exercise_id", "=", exerciseId).executeTakeFirst(),
   ]);
   return { personalRecord: numberValue(record?.value), totalSessions: numberValue(sessions?.count), history: history.map((row) => ({ date: toIsoString(row.date) ?? new Date(0).toISOString(), maxWeight: numberValue(row.max_weight), volume: numberValue(row.total_volume_kg) })) };
+};
+
+/**
+ * Past performances of one exercise, newest first. The daily aggregate tables
+ * only keep totals, so the individual sets are read from the workout rows.
+ * Feeds both the exercise history tab and the "previous" column shown while a
+ * workout is being logged.
+ */
+export const getComputedExerciseSessions = async (
+  exerciseId: string,
+  userId: string,
+  requestedLimit: unknown = 20,
+): Promise<ExerciseSessionEntry[]> => {
+  const limit = Math.min(Math.max(Number(requestedLimit) || 20, 1), 50);
+  const sessions = await database
+    .selectFrom("workout_exercises")
+    .innerJoin("workouts", "workouts.id", "workout_exercises.workout_id")
+    .select([
+      "workout_exercises.id as workout_exercise_id",
+      "workouts.id as workout_id",
+      "workouts.name as workout_name",
+      "workouts.start_time as start_time",
+    ])
+    .where("workouts.user_id", "=", userId)
+    .where("workout_exercises.exercise_id", "=", exerciseId)
+    .orderBy("workouts.start_time", "desc")
+    .limit(limit)
+    .execute();
+
+  if (sessions.length === 0) return [];
+
+  const sets = await database
+    .selectFrom("workout_sets")
+    .select(["workout_exercise_id", "position", "weight", "reps", "set_type", "completed"])
+    .where("workout_exercise_id", "in", sessions.map((session) => session.workout_exercise_id))
+    .orderBy("position", "asc")
+    .execute();
+
+  const setsByExercise = new Map<string, ExerciseSessionEntry["sets"]>();
+  for (const set of sets) {
+    const bucket = setsByExercise.get(set.workout_exercise_id) ?? [];
+    bucket.push({
+      position: set.position,
+      weight: numberValue(set.weight),
+      reps: set.reps,
+      setType: set.set_type,
+      completed: set.completed,
+    });
+    setsByExercise.set(set.workout_exercise_id, bucket);
+  }
+
+  return sessions.map((session) => ({
+    workoutId: session.workout_id,
+    workoutName: session.workout_name,
+    performedAt: toIsoString(session.start_time) ?? new Date(0).toISOString(),
+    sets: setsByExercise.get(session.workout_exercise_id) ?? [],
+  }));
 };
 
 export const getComputedPersonalRecords = async (userId: string, requestedLimit: unknown = 50): Promise<Array<{ exerciseId: string; name: string; value: number; reps: number; recordedAt: string }>> => {

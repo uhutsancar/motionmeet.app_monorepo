@@ -1,13 +1,28 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Modal, Image, Pressable, View, StyleSheet } from 'react-native';
-import { Surface, Text } from 'react-native-paper';
+// React Native's Image is used on purpose: expo-image's native view fails to
+// instantiate on some Android devices and would leave stories blank.
+import {
+  Modal,
+  Image,
+  PanResponder,
+  Pressable,
+  ScrollView,
+  View,
+  StyleSheet,
+} from 'react-native';
+import { ActivityIndicator, Surface, Text } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import dayjs from '../utils/dayjs';
+import { useAuthContext } from '../context/AuthProvider';
+import { getStoryViewers, markStoryViewed } from '../api/endpoints';
+import { logHandledError } from '../utils/feedback';
+import { AVATAR } from '../config/layout';
+import { useAppSelector } from '../store/hooks';
 
-import type { PublicUser, Story } from '@motionmeet/shared';
+import type { PublicUser, Story, StoryViewer as StoryViewerEntry } from '@motionmeet/shared';
 
 const STORY_DURATION = 5000; // 5 seconds per story
 
@@ -59,8 +74,65 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }: StoryVi
   const nextFrameRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentIndexRef = useRef(startIndex);
   const closingRef = useRef(false);
+  const { getToken } = useAuthContext();
+  const currentUser = useAppSelector((state) => state.user.value);
 
   const currentStory = stories[currentIndex];
+  const storyOwnerId = typeof currentStory?.user === 'object' ? currentStory.user._id : currentStory?.user;
+  const isOwnStory = Boolean(currentUser?._id && storyOwnerId === currentUser._id);
+
+  // Swipe-up audience sheet, shown to the author of the story only.
+  const [viewersOpen, setViewersOpen] = useState(false);
+  const [viewers, setViewers] = useState<StoryViewerEntry[]>([]);
+  const [viewersLoading, setViewersLoading] = useState(false);
+  const recordedViewsRef = useRef<Set<string>>(new Set());
+
+  // Opening someone else's story counts as a view exactly once per session.
+  useEffect(() => {
+    const storyId = currentStory?._id;
+    if (!visible || !storyId || isOwnStory || recordedViewsRef.current.has(storyId)) return;
+    recordedViewsRef.current.add(storyId);
+    void (async () => {
+      try {
+        const token = await getToken();
+        if (token) await markStoryViewed(storyId, token);
+      } catch (error) {
+        logHandledError('mark-story-viewed', error);
+      }
+    })();
+  }, [currentStory?._id, getToken, isOwnStory, visible]);
+
+  const openViewers = useCallback(async () => {
+    const storyId = currentStory?._id;
+    if (!storyId || !isOwnStory) return;
+    setViewersOpen(true);
+    setViewers([]);
+    setViewersLoading(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const data = await getStoryViewers(storyId, token);
+      if (data.success) setViewers(data.viewers || []);
+    } catch (error) {
+      logHandledError('load-story-viewers', error);
+    } finally {
+      setViewersLoading(false);
+    }
+  }, [currentStory?._id, getToken, isOwnStory]);
+
+  // The responder is created once, so it reads the latest handler from a ref.
+  const openViewersRef = useRef(openViewers);
+  openViewersRef.current = openViewers;
+  const swipeResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (_event, gesture) =>
+        gesture.dy < -12 && Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.2,
+      onPanResponderRelease: (_event, gesture) => {
+        if (gesture.dy < -28 || gesture.vy < -0.5) void openViewersRef.current();
+      },
+      onPanResponderTerminationRequest: () => false,
+    }),
+  ).current;
 
   const clearPlaybackTimers = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -122,9 +194,10 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }: StoryVi
     }
   }, [clearPlaybackTimers, visible]);
 
-  // Progress timer per story
+  // Progress timer per story. Reading the audience pauses playback so the
+  // story does not advance out from under the list.
   useEffect(() => {
-    if (!visible || !currentStory || currentStory.media_type === 'video') return;
+    if (!visible || viewersOpen || !currentStory || currentStory.media_type === 'video') return;
 
     setProgress(0);
     clearPlaybackTimers();
@@ -135,7 +208,7 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }: StoryVi
     }, 50);
 
     return clearPlaybackTimers;
-  }, [clearPlaybackTimers, currentIndex, currentStory, visible]);
+  }, [clearPlaybackTimers, currentIndex, currentStory, viewersOpen, visible]);
 
   useEffect(() => {
     if (!visible || progress < 100 || currentStory?.media_type === 'video') return;
@@ -182,7 +255,10 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }: StoryVi
             <Image
               source={{ uri: mediaUrl }}
               style={styles.mediaImage}
-              resizeMode="cover"
+              // Matches the video behaviour: the whole frame stays visible on
+              // every aspect ratio instead of being cropped or stretched.
+              resizeMode="contain"
+              accessibilityLabel={displayName}
             />
           )}
           {currentStory.media_type === 'video' && mediaUrl && (
@@ -194,7 +270,11 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }: StoryVi
           )}
           {(currentStory.media_type === 'text' || !mediaUrl) && currentStory.content && (
             <Text
-              style={styles.storyText}
+              style={[
+                styles.storyText,
+                // Keeps text clear of the header row and the home indicator.
+                { marginTop: insets.top + 44, marginBottom: insets.bottom + 16 },
+              ]}
               numberOfLines={10}
               adjustsFontSizeToFit
               minimumFontScale={0.55}
@@ -229,7 +309,7 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }: StoryVi
         </Surface>
 
         {/* Tap Areas: left = previous/restart, right = next */}
-        <View style={styles.tapAreas} pointerEvents="box-none">
+        <View style={styles.tapAreas} pointerEvents="box-none" {...swipeResponder.panHandlers}>
           <Pressable
             style={styles.tapLeft}
             onPress={goPrev}
@@ -243,6 +323,76 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }: StoryVi
             accessibilityLabel="Next story"
           />
         </View>
+
+        {/* Author-only: swipe-up handle showing how many people opened it */}
+        {isOwnStory && !viewersOpen && (
+          <Pressable
+            onPress={openViewers}
+            style={[styles.viewersHandle, { paddingBottom: Math.max(insets.bottom, 12) }]}
+            accessibilityRole="button"
+            accessibilityLabel={t('feed.story_viewers', 'Viewed by')}
+          >
+            <Ionicons name="chevron-up" size={18} color="#fff" />
+            <Text style={styles.viewersHandleText}>
+              {typeof currentStory.view_count === 'number'
+                ? `${currentStory.view_count} ${t('feed.story_views_count', 'views')}`
+                : t('feed.swipe_up_viewers', 'Swipe up for viewers')}
+            </Text>
+          </Pressable>
+        )}
+
+        {viewersOpen && (
+          <View style={styles.viewersSheet}>
+            <Pressable
+              style={styles.viewersBackdrop}
+              onPress={() => setViewersOpen(false)}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.close', 'Close')}
+            />
+            <Surface elevation={0} style={[styles.viewersPanel, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+              <View style={styles.viewersGrabber} />
+              <Text style={styles.viewersTitle}>
+                {t('feed.story_viewers', 'Viewed by')}
+                {viewers.length ? ` · ${viewers.length}` : ''}
+              </Text>
+
+              {viewersLoading ? (
+                <ActivityIndicator color="#fff" style={{ marginVertical: 24 }} />
+              ) : viewers.length === 0 ? (
+                <Text style={styles.viewersEmpty}>
+                  {t('feed.story_no_viewers', 'No one has viewed this yet')}
+                </Text>
+              ) : (
+                <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+                  {viewers.map((entry) => {
+                    const picture = typeof entry.user.profile_picture === 'string' ? entry.user.profile_picture.trim() : '';
+                    return (
+                      <View key={`${entry.user._id}-${entry.viewedAt}`} style={styles.viewerRow}>
+                        {picture ? (
+                          <Image source={{ uri: picture }} style={styles.viewerAvatar} />
+                        ) : (
+                          <View style={[styles.viewerAvatar, styles.avatarPlaceholder]}>
+                            <Text style={styles.avatarPlaceholderText}>
+                              {(entry.user.full_name || entry.user.username || '?').charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text numberOfLines={1} style={styles.viewerName}>
+                            {entry.user.full_name || entry.user.username}
+                          </Text>
+                          <Text numberOfLines={1} style={styles.viewerHandle}>
+                            @{entry.user.username} · {dayjs(entry.viewedAt).fromNow()}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+              )}
+            </Surface>
+          </View>
+        )}
 
         {/* Header */}
         <View
@@ -408,6 +558,81 @@ const styles = StyleSheet.create({
   tapRight: {
     flex: 1,
     height: '100%',
+  },
+  // Audience sheet
+  viewersHandle: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingTop: 10,
+    alignItems: 'center',
+    gap: 2,
+    zIndex: 25,
+    elevation: 25,
+  },
+  viewersHandleText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  viewersSheet: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+    zIndex: 50,
+    elevation: 50,
+  },
+  viewersBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  viewersPanel: {
+    backgroundColor: '#14171B',
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  viewersGrabber: {
+    alignSelf: 'center',
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    marginBottom: 10,
+  },
+  viewersTitle: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 10,
+  },
+  viewersEmpty: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 13,
+    textAlign: 'center',
+    paddingVertical: 26,
+  },
+  viewerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+  },
+  viewerAvatar: {
+    width: AVATAR.medium,
+    height: AVATAR.medium,
+    borderRadius: AVATAR.medium / 2,
+  },
+  viewerName: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  viewerHandle: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
+    marginTop: 1,
   },
 });
 

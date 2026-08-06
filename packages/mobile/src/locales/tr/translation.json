@@ -24,7 +24,12 @@
         "no": "Hayır",
         "yes": "Evet",
         "close": "Kapat",
-        "retry": "Tekrar dene"
+        "retry": "Tekrar dene",
+        "hours_short": "sa",
+        "message_action": "Mesaj gönder",
+        "info": "Bilgi",
+        "leave": "Çık",
+        "edit": "Düzenle"
     },
     "auth": {
         "session_expired": "Oturumunuzun süresi doldu.",
@@ -70,7 +75,8 @@
         "ready_subtitle": "Boş bir antrenman başlat veya planlarından biriyle devam et.",
         "empty_subtitle": "Antrenman sırasında egzersiz ekle.",
         "quick_workout": "Hızlı antrenman",
-        "no_routines_hint": "Sonraki antrenmanın için tekrar kullanılabilir bir plan oluştur."
+        "no_routines_hint": "Sonraki antrenmanın için tekrar kullanılabilir bir plan oluştur.",
+        "create_failed": "Rutin oluşturulamadı."
     },
     "feed": {
         "discover": "Keşfet",
@@ -123,7 +129,25 @@
         "next_session": "Sıradaki antrenmanın",
         "next_session_hint": "Bir rutin seç ve kaydetmeye başla.",
         "share_progress": "Topluluğunla bir güncelleme paylaş",
-        "no_posts_hint": "Sporcuları takip et veya ilk gönderiyi paylaş."
+        "no_posts_hint": "Sporcuları takip et veya ilk gönderiyi paylaş.",
+        "add_text": "Yazı ekle",
+        "remove_media": "Medyayı kaldır",
+        "select_media": "Galeriden seç",
+        "story_media_hint": "Galeriden bir fotoğraf veya video seç",
+        "visibility_public": "Herkese açık",
+        "visibility_followers": "Takipçiler",
+        "visibility_private": "Sadece ben",
+        "visibility_label": "Kimler görebilir",
+        "home_following": "Ana Sayfa (Takip edilenler)",
+        "home_discover": "Keşfet",
+        "home_title": "Ana Sayfa",
+        "story_viewers": "Bu hikayeyi görüntüleyenler",
+        "story_no_viewers": "Henüz kimse görüntülemedi",
+        "story_views_count": "görüntülenme",
+        "swipe_up_viewers": "Görüntüleyenler için yukarı kaydır",
+        "media_limit": "Bir gönderide en fazla 4 görsel olabilir.",
+        "share_failed": "Gönderi paylaşılamadı",
+        "story_create_failed": "Hikaye oluşturulamadı."
     },
     "exercises": {
         "search": "Egzersiz Ara",
@@ -155,7 +179,14 @@
         "library_title": "Hareket kütüphanesi",
         "library_subtitle": "İsim, kas grubu veya ekipmana göre ara.",
         "all_exercises": "Tüm egzersizler",
-        "try_filters": "Başka bir arama yap veya filtreyi temizle."
+        "try_filters": "Başka bir arama yap veya filtreyi temizle.",
+        "tab_summary": "Özet",
+        "tab_history": "Geçmiş",
+        "tab_instructions": "Talimatlar",
+        "primary_muscle": "Birincil",
+        "no_history": "Bu egzersiz için henüz kayıt yok",
+        "weight_and_reps": "AĞIRLIK VE TEKRAR",
+        "set_label": "SET"
     },
     "muscle_groups": {
         "chest": "Göğüs",
@@ -249,7 +280,8 @@
         "plans_sub": "Deneyimini yükselt",
         "preferences": "TERCİHLER",
         "notifications_sub": "Hatırlatıcılar ve etkinlik",
-        "visibility": "Görünürlük"
+        "visibility": "Görünürlük",
+        "save_failed": "Ayar kaydedilemedi"
     },
     "messages": {
         "title": "Mesajlar",
@@ -268,12 +300,15 @@
         "delete_failed": "Mesaj silinemedi",
         "load_failed": "Mesajlar yüklenemedi",
         "invalid_conversation": "Geçersiz konuşma",
-        "start_new_chat": "Yeni sohbet başlat"
+        "start_new_chat": "Yeni sohbet başlat",
+        "user_load_failed": "Sohbet kullanıcısı yüklenemedi"
     },
     "connections": {
         "accept": "Kabul et",
         "unfollow": "Takibi bırak",
-        "empty": "Henüz kimse yok"
+        "empty": "Henüz kimse yok",
+        "title": "Bağlantılar",
+        "pending": "Bekleyen"
     },
     "statistics": {
         "title": "İstatistikler",
@@ -390,7 +425,16 @@
         "complete_set": "{{set}}. seti tamamla",
         "add_set": "Set ekle",
         "details": "Antrenman detayları",
-        "not_available": "Antrenman detayları kullanılamıyor"
+        "not_available": "Antrenman detayları kullanılamıyor",
+        "set_column": "SET",
+        "previous_column": "ÖNCEKİ",
+        "reps_column": "TEKRAR",
+        "saved_title": "Antrenman kaydedildi",
+        "save_failed": "Antrenman kaydedilemedi.",
+        "post_share_failed": "Antrenman kaydedildi ancak gönderi paylaşılamadı. Daha sonra tekrar deneyebilirsiniz.",
+        "leave_summary_title": "Paylaşmadan çık",
+        "leave_summary_saved": "Antrenman kaydedildi ancak gönderi paylaşılmadı. Bu ekrandan çıkmak istiyor musun?",
+        "leave_without_sharing": "Paylaşmadan çık"
     },
     "workout_summary": {
         "save_workout": "Antrenmanı Kaydet",
@@ -536,5 +580,39 @@
         "faq4_a": "MotionMeet iOS, Android ve Web üzerinde kullanılabilir.",
         "faq5_q": "Bildirimler gelmiyor, ne yapmalıyım?",
         "faq5_a": "Ayarlar > Bildirimler bölümünden bildirimlerin açık olduğunu kontrol edin."
+    },
+    "measurements": {
+        "title": "Ölçümler",
+        "add": "Ölçüm ekle",
+        "edit": "Ölçümü düzenle",
+        "latest": "Son değerler",
+        "history": "Geçmiş",
+        "note": "Not",
+        "today": "Bugün",
+        "past_entry": "Geçmiş kayıt",
+        "previous_day": "Önceki gün",
+        "next_day": "Sonraki gün",
+        "not_logged": "Kayıt yok",
+        "saved": "Ölçüm kaydedildi",
+        "save_error": "Ölçüm kaydedilemedi. Lütfen tekrar deneyin.",
+        "empty_error": "Kaydetmeden önce en az bir değer girin.",
+        "range_error": "Değer {{min}} ile {{max}} arasında olmalı.",
+        "empty_title": "Henüz ölçüm yok",
+        "empty_text": "Kilonu ve vücut ölçülerini kaydet, zaman içindeki gelişimini takip et.",
+        "chart_hint": "Grafiği görmek için en az iki kayıt girin.",
+        "upsert_hint": "Aynı gün için tekrar kaydedersen o kayıt güncellenir.",
+        "delete_title": "Ölçümü sil",
+        "delete_message": "Bu kayıt kalıcı olarak silinecek.",
+        "weight": "Kilo",
+        "body_fat": "Vücut yağı",
+        "chest": "Göğüs",
+        "shoulders": "Omuz",
+        "waist": "Bel",
+        "hips": "Kalça",
+        "neck": "Boyun",
+        "left_arm": "Sol kol",
+        "right_arm": "Sağ kol",
+        "left_thigh": "Sol bacak",
+        "right_thigh": "Sağ bacak"
     }
 }

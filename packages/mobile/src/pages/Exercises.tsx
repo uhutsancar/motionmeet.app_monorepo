@@ -28,6 +28,7 @@ import { API_URL } from '../config/environment';
 import { BottomSheetModal } from '../components/ResponsiveModal';
 import { logHandledError } from '../utils/feedback';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
 import type { NavigationOnlyProps } from '../navigation/types';
 
 type FilterType = 'muscle' | 'equipment';
@@ -185,19 +186,17 @@ const Exercises = ({ navigation }: NavigationOnlyProps) => {
       >
         <View
           style={{
-            width: 54,
-            height: 54,
-            borderRadius: 10,
+            ...exerciseThumbStyle(EXERCISE_THUMB.large),
             overflow: 'hidden',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: theme.surfaceLight,
+            backgroundColor: imageUrl ? '#FFFFFF' : theme.surfaceLight,
           }}
         >
           {imageUrl ? (
             <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
           ) : (
-            <Ionicons name="barbell-outline" size={24} color={theme.textMuted} />
+            <Ionicons name="barbell" size={24} color={theme.textMuted} />
           )}
         </View>
         <View style={{ flex: 1, paddingHorizontal: 12 }}>

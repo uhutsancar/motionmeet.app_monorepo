@@ -24,7 +24,12 @@
         "no": "No",
         "yes": "Yes",
         "close": "Close",
-        "retry": "Retry"
+        "retry": "Retry",
+        "hours_short": "h",
+        "message_action": "Send message",
+        "info": "Info",
+        "leave": "Leave",
+        "edit": "Edit"
     },
     "auth": {
         "session_expired": "Your session has expired.",
@@ -70,7 +75,8 @@
         "ready_subtitle": "Start a blank workout or continue with one of your plans.",
         "empty_subtitle": "Add exercises as you train.",
         "quick_workout": "Quick workout",
-        "no_routines_hint": "Create a repeatable plan for your next session."
+        "no_routines_hint": "Create a repeatable plan for your next session.",
+        "create_failed": "Routine could not be created."
     },
     "feed": {
         "discover": "Discover",
@@ -123,7 +129,25 @@
         "next_session": "Your next session",
         "next_session_hint": "Choose a routine and start logging.",
         "share_progress": "Share an update with your community",
-        "no_posts_hint": "Follow athletes or share the first update."
+        "no_posts_hint": "Follow athletes or share the first update.",
+        "add_text": "Add text",
+        "remove_media": "Remove media",
+        "select_media": "Choose from gallery",
+        "story_media_hint": "Pick a photo or video from your gallery",
+        "visibility_public": "Public",
+        "visibility_followers": "Followers",
+        "visibility_private": "Only me",
+        "visibility_label": "Who can see this",
+        "home_following": "Home (Following)",
+        "home_discover": "Discover",
+        "home_title": "Home",
+        "story_viewers": "Viewed by",
+        "story_no_viewers": "No one has viewed this yet",
+        "story_views_count": "views",
+        "swipe_up_viewers": "Swipe up for viewers",
+        "media_limit": "A post can contain at most 4 images.",
+        "share_failed": "Could not share this post",
+        "story_create_failed": "Story could not be created."
     },
     "exercises": {
         "search": "Search Exercises",
@@ -155,7 +179,14 @@
         "library_title": "Movement library",
         "library_subtitle": "Search by name, muscle group or equipment.",
         "all_exercises": "All exercises",
-        "try_filters": "Try another search or clear a filter."
+        "try_filters": "Try another search or clear a filter.",
+        "tab_summary": "Summary",
+        "tab_history": "History",
+        "tab_instructions": "Instructions",
+        "primary_muscle": "Primary",
+        "no_history": "No sessions logged for this exercise yet",
+        "weight_and_reps": "WEIGHT AND REPS",
+        "set_label": "SET"
     },
     "muscle_groups": {
         "chest": "Chest",
@@ -249,7 +280,8 @@
         "plans_sub": "Upgrade your experience",
         "preferences": "PREFERENCES",
         "notifications_sub": "Reminders and activity",
-        "visibility": "Visibility"
+        "visibility": "Visibility",
+        "save_failed": "Setting could not be saved"
     },
     "messages": {
         "title": "Messages",
@@ -268,12 +300,15 @@
         "delete_failed": "Message could not be deleted",
         "load_failed": "Messages could not be loaded",
         "invalid_conversation": "Invalid conversation",
-        "start_new_chat": "Start a new chat"
+        "start_new_chat": "Start a new chat",
+        "user_load_failed": "Conversation user could not be loaded"
     },
     "connections": {
         "accept": "Accept",
         "unfollow": "Unfollow",
-        "empty": "No one here yet"
+        "empty": "No one here yet",
+        "title": "Connections",
+        "pending": "Pending"
     },
     "statistics": {
         "title": "Statistics",
@@ -390,7 +425,16 @@
         "complete_set": "Complete set {{set}}",
         "add_set": "Add set",
         "details": "Workout details",
-        "not_available": "Workout details are not available"
+        "not_available": "Workout details are not available",
+        "set_column": "SET",
+        "previous_column": "PREVIOUS",
+        "reps_column": "REPS",
+        "saved_title": "Workout saved",
+        "save_failed": "Workout could not be saved.",
+        "post_share_failed": "The workout was saved but the post could not be shared. You can try again later.",
+        "leave_summary_title": "Leave without sharing",
+        "leave_summary_saved": "The workout was saved but not shared. Do you want to leave this screen?",
+        "leave_without_sharing": "Leave without sharing"
     },
     "workout_summary": {
         "save_workout": "Save Workout",
@@ -536,5 +580,39 @@
         "faq4_a": "MotionMeet is available on iOS, Android, and Web.",
         "faq5_q": "I'm not receiving notifications, what should I do?",
         "faq5_a": "Make sure notifications are enabled in Settings > Notifications and check your device permission settings."
+    },
+    "measurements": {
+        "title": "Measurements",
+        "add": "Add measurement",
+        "edit": "Edit measurement",
+        "latest": "Latest values",
+        "history": "History",
+        "note": "Note",
+        "today": "Today",
+        "past_entry": "Past entry",
+        "previous_day": "Previous day",
+        "next_day": "Next day",
+        "not_logged": "Not logged",
+        "saved": "Measurement saved",
+        "save_error": "Could not save the measurement. Please try again.",
+        "empty_error": "Enter at least one value before saving.",
+        "range_error": "Value must be between {{min}} and {{max}}.",
+        "empty_title": "No measurements yet",
+        "empty_text": "Log your weight and body measurements to follow your progress over time.",
+        "chart_hint": "Log at least two entries to see the trend.",
+        "upsert_hint": "Saving again for the same day updates that entry.",
+        "delete_title": "Delete measurement",
+        "delete_message": "This entry will be removed permanently.",
+        "weight": "Weight",
+        "body_fat": "Body fat",
+        "chest": "Chest",
+        "shoulders": "Shoulders",
+        "waist": "Waist",
+        "hips": "Hips",
+        "neck": "Neck",
+        "left_arm": "Left arm",
+        "right_arm": "Right arm",
+        "left_thigh": "Left thigh",
+        "right_thigh": "Right thigh"
     }
 }

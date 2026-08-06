@@ -42,7 +42,10 @@ export const useResponsiveLayout = ({
       usableWidth,
       horizontalPadding,
       contentWidth,
-      isNarrow: contentWidth < 340 || fontScale > 1.25,
+      // 360dp phones (the most common Android width) still fit side-by-side
+      // rows, so only genuinely small screens or large text get the stacked
+      // layout.
+      isNarrow: contentWidth < 300 || fontScale > 1.25,
       isPhone: width < 600,
       isCompactHeight: height - insetTop - insetBottom < 640,
       columns: prefersSingleColumn ? 1 : 2,

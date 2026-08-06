@@ -18,6 +18,7 @@ import {
   type Routine,
 } from '@motionmeet/shared';
 import { API_URL } from '../config/environment';
+import { EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
 import { Image } from 'expo-image';
 import {
   getUserFacingError,
@@ -266,11 +267,11 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }: RoutineBuil
                         style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'transparent' }}
                       >
                         <Surface elevation={0} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'transparent' }}>
-                          <Surface elevation={0} style={{ width: 40, height: 40, borderRadius: 8, overflow: 'hidden', backgroundColor: theme.surfaceLight, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
+                          <Surface elevation={0} style={{ ...exerciseThumbStyle(EXERCISE_THUMB.small), overflow: 'hidden', backgroundColor: mediaUrl ? '#FFFFFF' : theme.surfaceLight, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
                             {mediaUrl ? (
                               <Image source={{ uri: mediaUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
                             ) : (
-                              <Ionicons name="barbell-outline" size={20} color={theme.textMuted} />
+                              <Ionicons name="barbell" size={20} color={theme.textMuted} />
                             )}
                           </Surface>
                           <View style={{ flex: 1, minWidth: 0 }}>
@@ -293,11 +294,11 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }: RoutineBuil
               <Surface elevation={0} key={exIndex} style={styles.exCard}>
                 <Surface elevation={0} style={styles.exCardHeader}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}>
-                    <Surface elevation={0} style={{ width: 32, height: 32, borderRadius: 6, overflow: 'hidden', backgroundColor: theme.surfaceLight, marginRight: 10, alignItems: 'center', justifyContent: 'center' }}>
+                    <Surface elevation={0} style={{ ...exerciseThumbStyle(EXERCISE_THUMB.small), overflow: 'hidden', backgroundColor: selectedMediaUrl ? '#FFFFFF' : theme.surfaceLight, marginRight: 10, alignItems: 'center', justifyContent: 'center' }}>
                       {selectedMediaUrl ? (
                         <Image source={{ uri: selectedMediaUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
                       ) : (
-                        <Ionicons name="barbell-outline" size={16} color={theme.textMuted} />
+                        <Ionicons name="barbell" size={18} color={theme.textMuted} />
                       )}
                     </Surface>
                     <Text numberOfLines={2} style={styles.exName}>{se.exerciseId.name}</Text>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Image, ScrollView, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import {
@@ -20,6 +20,7 @@ import { setAuthToken } from '../api/client';
 import { logHandledError } from '../utils/feedback';
 import { getUserProfile, getWorkouts } from '../api/endpoints';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { AVATAR, CARD } from '../config/layout';
 import { useAppSelector } from '../store/hooks';
 import type { UserProfile, Workout } from '@motionmeet/shared';
 import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation/native';
@@ -37,6 +38,12 @@ interface ProfileShortcut {
   route: string;
   color?: string;
 }
+interface ProfileStat {
+  label: string;
+  value: number;
+  /** Connections tab opened when the counter is tapped. */
+  section?: string;
+}
 
 const Profile = ({ route, navigation }: ProfileProps) => {
   const { signOut, getToken } = useAuthContext();
@@ -44,7 +51,7 @@ const Profile = ({ route, navigation }: ProfileProps) => {
   const loading = useAppSelector((state) => state.user.loading);
   const { theme } = useTheme();
   const { t, i18n } = useTranslation();
-  const { horizontalPadding, isNarrow } = useResponsiveLayout();
+  const { isNarrow } = useResponsiveLayout();
   const profileParams = route.params as { userId?: string } | undefined;
   const profileId = profileParams?.userId;
   const isOwnProfile = !profileId || profileId === currentUser?._id;
@@ -180,22 +187,18 @@ const Profile = ({ route, navigation }: ProfileProps) => {
           width: '100%',
           maxWidth: 720,
           alignSelf: 'center',
-          paddingHorizontal: horizontalPadding,
-          paddingTop: 16,
-          paddingBottom: 32,
+          paddingTop: 0,
+          paddingBottom: 28,
         }}
       >
         <Surface
           elevation={0}
           style={{
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: theme.border,
-            backgroundColor: theme.surface,
+            backgroundColor: theme.background,
             overflow: 'hidden',
           }}
         >
-          <View style={{ height: 126, backgroundColor: theme.primarySoft }}>
+          <View style={{ height: 92, backgroundColor: theme.primarySoft }}>
             {user?.cover_photo ? (
               <Image source={{ uri: user.cover_photo }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
             ) : (
@@ -204,22 +207,22 @@ const Profile = ({ route, navigation }: ProfileProps) => {
             <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(8,10,14,.12)' }} />
           </View>
 
-          <View style={{ padding: 16, paddingTop: 0 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: -34 }}>
+          <View style={{ padding: CARD.padding, paddingTop: 0 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: -30 }}>
             {user?.profile_picture ? (
               <Avatar.Image
                 source={{ uri: user.profile_picture }}
-                size={76}
-                style={{ borderWidth: 4, borderColor: theme.surface, backgroundColor: theme.surface }}
+                size={AVATAR.large}
+                style={{ borderWidth: 3, borderColor: theme.surface, backgroundColor: theme.surface }}
               />
             ) : (
               <Avatar.Text
                 label={user?.full_name?.charAt(0).toUpperCase() || 'U'}
-                size={76}
-                style={{ backgroundColor: theme.primary, borderWidth: 4, borderColor: theme.surface }}
+                size={AVATAR.large}
+                style={{ backgroundColor: theme.primary, borderWidth: 3, borderColor: theme.surface }}
               />
             )}
-            <View style={{ flex: 1, minWidth: 0, marginLeft: 14, paddingTop: 34 }}>
+            <View style={{ flex: 1, minWidth: 0, marginLeft: 12, paddingTop: 30 }}>
               <Text style={{ color: theme.text, fontSize: 20, fontWeight: '800' }} numberOfLines={1}>
                 {user?.full_name || user?.username}
               </Text>
@@ -236,29 +239,48 @@ const Profile = ({ route, navigation }: ProfileProps) => {
 
           <Divider style={{ marginVertical: 16, backgroundColor: theme.border }} />
           <View style={{ flexDirection: 'row' }}>
-            {[
+            {([
               {
                 label: isOwnProfile ? t('profile.workouts', 'Workouts') : t('feed.post', 'Posts'),
                 value: user?.statistics?.totalWorkouts ?? workouts.length,
               },
-              { label: t('profile.followers', 'Followers'), value: followersCount },
-              { label: t('profile.following', 'Following'), value: followingCount },
-            ].map((stat, index) => (
+              // The connections API only serves the signed-in user, so the
+              // lists stay tappable on the own profile only.
+              { label: t('profile.followers', 'Followers'), value: followersCount, section: 'Followers' },
+              { label: t('profile.following', 'Following'), value: followingCount, section: 'Following' },
+            ] satisfies ProfileStat[]).map((stat, index) => {
+              const openable = isOwnProfile && Boolean(stat.section);
+              return (
               <React.Fragment key={stat.label}>
                 {index > 0 && <Divider style={{ width: 1, height: 38, backgroundColor: theme.border }} />}
-                <View style={{ flex: 1, alignItems: 'center' }}>
+                <TouchableOpacity
+                  activeOpacity={openable ? 0.72 : 1}
+                  disabled={!openable}
+                  accessibilityRole={openable ? 'button' : undefined}
+                  accessibilityLabel={openable ? `${stat.label}: ${stat.value}` : undefined}
+                  onPress={() => {
+                    if (openable) navigation.navigate('Connections', { section: stat.section });
+                  }}
+                  style={{ flex: 1, minWidth: 0, alignItems: 'center', paddingVertical: 4 }}
+                >
                   <Text style={{ color: theme.text, fontSize: 17, fontWeight: '800' }}>{stat.value}</Text>
                   <Text
                     numberOfLines={2}
                     adjustsFontSizeToFit
                     minimumFontScale={0.8}
-                    style={{ color: theme.textMuted, fontSize: 11, marginTop: 3, textAlign: 'center' }}
+                    style={{
+                      color: openable ? theme.textSecondary : theme.textMuted,
+                      fontSize: 11,
+                      marginTop: 3,
+                      textAlign: 'center',
+                    }}
                   >
                     {stat.label}
                   </Text>
-                </View>
+                </TouchableOpacity>
               </React.Fragment>
-            ))}
+              );
+            })}
           </View>
 
           {isOwnProfile && (
@@ -280,12 +302,13 @@ const Profile = ({ route, navigation }: ProfileProps) => {
           <Surface
             elevation={0}
             style={{
-              marginTop: 16,
-              padding: 16,
-              borderRadius: 12,
-              borderWidth: 1,
+              marginTop: 10,
+              paddingHorizontal: CARD.padding,
+              paddingVertical: CARD.padding,
+              borderTopWidth: StyleSheet.hairlineWidth,
+              borderBottomWidth: StyleSheet.hairlineWidth,
               borderColor: theme.border,
-              backgroundColor: theme.surface,
+              backgroundColor: theme.background,
             }}
           >
             <TouchableOpacity
@@ -318,7 +341,9 @@ const Profile = ({ route, navigation }: ProfileProps) => {
 
             <Divider style={{ marginVertical: 14, backgroundColor: theme.border }} />
 
-            <View style={{ flexDirection: 'row', gap: 8 }}>
+            {/* Four shortcuts share the row, so the gap and inner padding stay
+                tight enough for the longest label to still fit on two lines. */}
+            <View style={{ flexDirection: 'row', gap: 6 }}>
               {([
                 {
                   icon: 'calendar-outline',
@@ -338,6 +363,12 @@ const Profile = ({ route, navigation }: ProfileProps) => {
                   route: 'AdvancedStatisticsScreen',
                   color: '#22A06B',
                 },
+                {
+                  icon: 'resize-outline',
+                  label: t('measurements.title', 'Measurements'),
+                  route: 'MeasurementsScreen',
+                  color: '#D98A12',
+                },
               ] satisfies ProfileShortcut[]).map(item => (
                 <TouchableOpacity
                   key={item.route}
@@ -348,7 +379,7 @@ const Profile = ({ route, navigation }: ProfileProps) => {
                   style={{
                     flex: 1,
                     minHeight: isNarrow ? 90 : 78,
-                    paddingHorizontal: 6,
+                    paddingHorizontal: 4,
                     paddingVertical: 10,
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -384,12 +415,13 @@ const Profile = ({ route, navigation }: ProfileProps) => {
           <Surface
             elevation={0}
             style={{
-              marginTop: 16,
-              padding: 16,
-              borderRadius: 12,
-              borderWidth: 1,
+              marginTop: 10,
+              paddingHorizontal: CARD.padding,
+              paddingVertical: CARD.padding,
+              borderTopWidth: StyleSheet.hairlineWidth,
+              borderBottomWidth: StyleSheet.hairlineWidth,
               borderColor: theme.border,
-              backgroundColor: theme.surface,
+              backgroundColor: theme.background,
             }}
           >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -492,10 +524,10 @@ const Profile = ({ route, navigation }: ProfileProps) => {
           elevation={0}
           style={{
             overflow: 'hidden',
-            borderRadius: 12,
-            borderWidth: 1,
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderBottomWidth: StyleSheet.hairlineWidth,
             borderColor: theme.border,
-            backgroundColor: theme.surface,
+            backgroundColor: theme.background,
           }}
         >
           {workouts.length ? (

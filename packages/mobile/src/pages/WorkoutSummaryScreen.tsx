@@ -455,7 +455,7 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
   listItemTitle: { color: theme.text, fontWeight: '500' },
   listItemTitleBold: { color: theme.text, fontWeight: 'bold' },
   listItemDescription: { color: theme.textMuted },
-  textInputStyle: { backgroundColor: theme.surfaceLight },
+  textInputStyle: { backgroundColor: theme.surfaceLight, width: '100%', minWidth: 0, fontSize: 14 },
   exercisesContainer: { marginBottom: 20 },
   cardInner: { overflow: 'hidden', borderRadius: 16 },
   exerciseItem: { borderBottomWidth: 1 },

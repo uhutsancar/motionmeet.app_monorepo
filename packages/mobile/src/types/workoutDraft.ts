@@ -12,6 +12,7 @@ export interface ActiveWorkoutExercise {
   name: string;
   muscleGroup: string;
   equipment: string;
+  imageUrl?: string;
   sets: ActiveWorkoutSet[];
 }
 
@@ -20,6 +21,7 @@ export interface CompletedWorkoutExercise {
   name: string;
   muscleGroup: string;
   equipment: string;
+  imageUrl?: string;
   sets: ExerciseSet[];
 }
 

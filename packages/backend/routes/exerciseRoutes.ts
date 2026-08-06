@@ -1,5 +1,5 @@
 import express from "express";
-import { getExercises, getExerciseById, createExercise, getExerciseStats, getPersonalRecords } from "../controllers/exerciseController.js";
+import { getExercises, getExerciseById, createExercise, getExerciseStats, getExerciseHistory, getPersonalRecords } from "../controllers/exerciseController.js";
 import { attachDbUser, protect } from "../middlewares/auth.js";
 import rateLimit from "express-rate-limit";
 import { createRateLimitStore } from "../configs/redis.js";
@@ -18,6 +18,7 @@ exerciseRouter.get("/", protect, getExercises);
 exerciseRouter.get("/records", protect, getPersonalRecords);
 exerciseRouter.get("/:id", protect, getExerciseById);
 exerciseRouter.get("/:id/stats", protect, getExerciseStats);
+exerciseRouter.get("/:id/history", protect, getExerciseHistory);
 exerciseRouter.post("/", protect, createExerciseLimiter, attachDbUser, createExercise);
 
 export default exerciseRouter;

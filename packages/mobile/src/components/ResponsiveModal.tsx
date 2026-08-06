@@ -90,7 +90,12 @@ export const BottomSheetModal = ({
           onPress={onRequestClose}
           style={StyleSheet.absoluteFill}
         />
-        <View pointerEvents="box-none" style={styles.sheetPositioner}>
+        <KeyboardAvoidingView
+          pointerEvents="box-none"
+          style={styles.sheetPositioner}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          enabled={Platform.OS === 'ios'}
+        >
           <SafeAreaView
             edges={['right', 'bottom', 'left']}
             style={[
@@ -104,7 +109,7 @@ export const BottomSheetModal = ({
           >
             {children}
           </SafeAreaView>
-        </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );

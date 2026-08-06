@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import {
   TextInput,
   Image,
+  ScrollView,
   View,
   useWindowDimensions,
   StyleSheet,
@@ -16,9 +17,8 @@ import { uploadMedia } from '../api/mediaUpload';
 
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
-import { Surface, TouchableRipple, Text } from 'react-native-paper';
+import { TouchableRipple, Text } from 'react-native-paper';
 import { FullScreenModal } from './ResponsiveModal';
-import KeyboardAwareScrollView from './KeyboardAwareScrollView';
 import {
   getUserFacingError,
   logHandledError,
@@ -29,7 +29,7 @@ import { createOperationId, type Story } from '@motionmeet/shared';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import type { ImagePickerAsset } from 'expo-image-picker';
 
-type StoryMode = 'text' | 'media';
+
 interface StoryModalProps { visible: boolean; onClose: () => void; onSuccess?: () => void }
 interface StoryVideoPreviewProps { uri: string; style: StyleProp<ViewStyle> }
 interface UploadedMedia { signature: string; key: string }
@@ -58,7 +58,7 @@ const StoryModal = ({ visible, onClose, onSuccess }: StoryModalProps) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
   const { getToken } = useAuthContext();
-  const [mode, setMode] = useState<StoryMode>('text');
+
   const [text, setText] = useState('');
   const [media, setMedia] = useState<ImagePickerAsset | null>(null);
   const [background, setBackground] = useState('#000000');
@@ -68,14 +68,9 @@ const StoryModal = ({ visible, onClose, onSuccess }: StoryModalProps) => {
   const isNarrow = width < 360;
   const contentPadding = isNarrow ? 12 : 16;
   const headerSideWidth = Math.max(64, Math.min(82, width * 0.23));
-  const previewHeight = Math.max(220, Math.min(
-    (width - contentPadding * 2) * 1.12,
-    height * 0.46,
-    420,
-  ));
-  const canPublish = !loading && (
-    mode === 'text' ? text.trim().length > 0 : Boolean(media)
-  );
+  const swatchSize = isNarrow ? 30 : 34;
+  const overlayFontSize = Math.round(Math.max(20, Math.min(28, height * 0.03)));
+  const canPublish = !loading && (Boolean(media) || text.trim().length > 0);
 
   const bgColors = [
     '#000000',
@@ -133,102 +128,97 @@ const StoryModal = ({ visible, onClose, onSuccess }: StoryModalProps) => {
       textTransform: 'uppercase',
       letterSpacing: 0.5,
     },
-    content: {
+    // The canvas fills every pixel left between the header and the tool bar,
+    // so the story is composed at the size it will be published at. The
+    // wrapper owns the spacing so the canvas can never overflow sideways.
+    canvasWrapper: {
       flex: 1,
+      alignItems: 'center',
+      paddingHorizontal: contentPadding,
+      paddingVertical: contentPadding,
     },
-    contentContainer: {
+    canvas: {
+      flex: 1,
       width: '100%',
       maxWidth: 620,
-      alignSelf: 'center',
-      padding: contentPadding,
-      paddingBottom: 36,
-    },
-    modeSelector: {
-      flexDirection: 'row',
-      gap: 10,
-      marginBottom: 16,
-      backgroundColor: 'transparent'
-    },
-    modeButton: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 8,
-      minHeight: 48,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    modeText: {
-      fontSize: 14,
-      fontWeight: 'bold',
-    },
-    preview: {
-      height: previewHeight,
       borderRadius: 20,
+      overflow: 'hidden',
       justifyContent: 'center',
       alignItems: 'center',
-      marginBottom: 16,
-      overflow: 'hidden',
-      borderWidth: 1,
-      borderColor: theme.border,
+      backgroundColor: '#000',
     },
     mediaPreview: {
-      width: '100%',
-      height: '100%',
-      resizeMode: 'cover',
+      ...StyleSheet.absoluteFillObject,
     },
-    previewText: {
-      fontSize: 22,
-      lineHeight: 29,
+    // Text is typed straight onto the canvas instead of a separate form field.
+    canvasText: {
+      ...StyleSheet.absoluteFillObject,
+      paddingHorizontal: 24,
+      paddingVertical: 32,
+      fontSize: overlayFontSize,
+      lineHeight: Math.round(overlayFontSize * 1.3),
       fontWeight: '800',
       color: '#fff',
       textAlign: 'center',
-      paddingHorizontal: 20,
+      textAlignVertical: 'center',
+      backgroundColor: 'transparent',
+      textShadowColor: 'rgba(0,0,0,0.55)',
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 6,
     },
-    emptyMedia: {
+    mediaHint: {
+      position: 'absolute',
+      left: 24,
+      right: 24,
+      bottom: 20,
+      color: 'rgba(255,255,255,0.72)',
+      fontSize: 12,
+      fontWeight: '700',
+      textAlign: 'center',
+    },
+    removeMediaButton: {
+      position: 'absolute',
+      top: 12,
+      right: 12,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 10,
-      paddingHorizontal: 24,
+      backgroundColor: 'rgba(0,0,0,0.5)',
     },
-    emptyMediaText: {
-      color: theme.textMuted,
-      textAlign: 'center',
-      fontSize: 14,
-      fontWeight: '700',
-    },
-    textInput: {
-      borderWidth: 1,
-      borderColor: theme.border,
-      borderRadius: 16,
-      padding: 16,
-      fontSize: 16,
-      color: theme.text,
-      minHeight: 96,
-      textAlignVertical: 'top',
-      marginBottom: 18,
-      backgroundColor: theme.surface,
-    },
-    sectionTitle: {
-      fontSize: 14,
-      fontWeight: 'bold',
-      color: theme.text,
-      marginBottom: 10,
-      textTransform: 'uppercase',
-      letterSpacing: 1,
-    },
-    colorPicker: {
+    toolBar: {
+      width: '100%',
+      maxWidth: 620,
+      alignSelf: 'center',
       flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 11,
-      backgroundColor: 'transparent'
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: contentPadding,
+      paddingVertical: 12,
+      borderTopWidth: 1,
+      borderTopColor: theme.border,
+      backgroundColor: theme.background,
     },
-    colorButton: {
+    toolButton: {
       width: 44,
       height: 44,
       borderRadius: 22,
+      backgroundColor: theme.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+    },
+    colorPicker: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingRight: 4,
+    },
+    colorButton: {
+      width: swatchSize,
+      height: swatchSize,
+      borderRadius: swatchSize / 2,
       borderWidth: 3,
       borderColor: 'transparent',
     },
@@ -239,12 +229,12 @@ const StoryModal = ({ visible, onClose, onSuccess }: StoryModalProps) => {
     contentPadding,
     headerSideWidth,
     isNarrow,
-    previewHeight,
+    overlayFontSize,
+    swatchSize,
     theme,
   ]);
 
   const resetDraft = () => {
-    setMode('text');
     setText('');
     setMedia(null);
     setBackground('#000000');
@@ -278,16 +268,14 @@ const StoryModal = ({ visible, onClose, onSuccess }: StoryModalProps) => {
       const selectedAsset = result.assets[0];
       if (!selectedAsset) return;
       setMedia(selectedAsset);
-      setMode('media');
-      setText('');
       operationIdRef.current = createOperationId('story');
       uploadedMediaRef.current = null;
     }
   };
 
   const handleCreateStory = async () => {
-    const mediaType: Story['media_type'] = mode === 'media'
-      ? media?.type?.includes('video') ? 'video' : 'image'
+    const mediaType: Story['media_type'] = media
+      ? (media.type?.includes('video') ? 'video' : 'image')
       : 'text';
 
     if (mediaType === 'text' && !text) {
@@ -300,13 +288,13 @@ const StoryModal = ({ visible, onClose, onSuccess }: StoryModalProps) => {
       const token = await getToken();
       if (!token) throw new Error('Authentication required');
       const mediaSignature =
-        media && mode === 'media'
+        media
           ? `${media.assetId || media.uri}:${media.fileSize || 0}`
           : '';
       let uploadedKey = uploadedMediaRef.current?.signature === mediaSignature
         ? uploadedMediaRef.current.key
         : undefined;
-      if (media && mode === 'media' && !uploadedKey) {
+      if (media && !uploadedKey) {
         uploadedKey = await uploadMedia(media, 'stories', token);
         uploadedMediaRef.current = { signature: mediaSignature, key: uploadedKey };
       }
@@ -384,116 +372,97 @@ const StoryModal = ({ visible, onClose, onSuccess }: StoryModalProps) => {
           </View>
         </View>
 
-        <KeyboardAwareScrollView
-          avoidKeyboard={false}
-          style={styles.content}
-          contentContainerStyle={styles.contentContainer}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <Surface elevation={0} style={styles.modeSelector}>
-            <TouchableRipple
-              style={[styles.modeButton, { backgroundColor: mode === 'text' ? theme.surface + '80' : theme.surface }]}
-              disabled={loading}
-              onPress={() => {
-                setMode('text');
-                setMedia(null);
-                operationIdRef.current = createOperationId('story');
-                uploadedMediaRef.current = null;
-              }}
-              borderless
-            >
-              <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'transparent' }}>
-                <Ionicons name="text" size={20} color={mode === 'text' ? theme.primary : theme.textMuted} />
-                <Text
-                  numberOfLines={1}
-                  style={[styles.modeText, { color: mode === 'text' ? theme.primary : theme.textMuted }]}
-                >
-                  {t('feed.text')}
-                </Text>
-              </Surface>
-            </TouchableRipple>
-            <TouchableRipple
-              style={[styles.modeButton, { backgroundColor: mode === 'media' ? theme.surface + '80' : theme.surface }]}
-              onPress={pickMedia}
-              disabled={loading}
-              borderless
-            >
-              <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'transparent' }}>
-                <Ionicons name="image" size={20} color={mode === 'media' ? theme.primary : theme.textMuted} />
-                <Text
-                  numberOfLines={1}
-                  style={[styles.modeText, { color: mode === 'media' ? theme.primary : theme.textMuted }]}
-                >
-                  {t('feed.media')}
-                </Text>
-              </Surface>
-            </TouchableRipple>
-          </Surface>
-
-          <Surface elevation={0} style={[styles.preview, { backgroundColor: mode === 'text' ? background : '#000' }]}>
-            {mode === 'media' ? (
-              media ? (
-                media.type?.includes('video') ? (
-                  <StoryVideoPreview uri={media.uri} style={styles.mediaPreview} />
-                ) : (
-                  <Image source={{ uri: media.uri }} style={styles.mediaPreview} />
-                )
-              ) : (
-                <View style={styles.emptyMedia}>
-                  <Ionicons name="images-outline" size={38} color={theme.textMuted} />
-                  <Text style={styles.emptyMediaText}>
-                    {t('workout_summary.add_media', 'Add photo or video')}
-                  </Text>
-                </View>
-              )
+        <View style={styles.canvasWrapper}>
+        <View style={[styles.canvas, { backgroundColor: media ? '#000' : background }]}>
+          {media ? (
+            media.type?.includes('video') ? (
+              <StoryVideoPreview uri={media.uri} style={styles.mediaPreview} />
             ) : (
-              <Text style={styles.previewText}>{text || t('feed.story_text_placeholder')}</Text>
-            )}
-          </Surface>
-
-          {mode === 'text' && (
-            <>
-              <TextInput
-                style={styles.textInput}
-                placeholder={t('feed.whats_on_mind')}
-                placeholderTextColor={theme.textMuted}
-                value={text}
-                editable={!loading}
-                onChangeText={(value) => {
-                  setText(value);
-                  operationIdRef.current = createOperationId('story');
-                }}
-                multiline
-                maxLength={200}
+              <Image
+                source={{ uri: media.uri }}
+                style={styles.mediaPreview}
+                resizeMode="cover"
+                accessibilityLabel={t('feed.media', 'Media')}
               />
+            )
+          ) : null}
 
-              <Text style={styles.sectionTitle}>{t('feed.background_color')}</Text>
-              <Surface elevation={0} style={styles.colorPicker}>
-                {bgColors.map((color) => (
-                  <TouchableRipple
-                    key={color}
-                    style={[
-                      styles.colorButton,
-                      { backgroundColor: color },
-                      background === color && styles.selectedColor,
-                    ]}
-                    disabled={loading}
-                    onPress={() => {
-                      setBackground(color);
-                      operationIdRef.current = createOperationId('story');
-                    }}
-                    borderless
-                    accessibilityRole="button"
-                    accessibilityLabel={color}
-                  >
-                    <View style={{ width: '100%', height: '100%', backgroundColor: 'transparent' }} />
-                  </TouchableRipple>
-                ))}
-              </Surface>
-            </>
+          <TextInput
+            style={styles.canvasText}
+            // No prompt text on the canvas: tapping it is enough, and an empty
+            // canvas reads as the story it will actually publish.
+            placeholder=""
+            value={text}
+            editable={!loading}
+            onChangeText={(value) => {
+              setText(value);
+              operationIdRef.current = createOperationId('story');
+            }}
+            multiline
+            maxLength={200}
+            accessibilityLabel={t('feed.add_text', 'Add text')}
+          />
+
+          {media ? (
+            <TouchableRipple
+              style={styles.removeMediaButton}
+              onPress={() => {
+                setMedia(null);
+                uploadedMediaRef.current = null;
+                operationIdRef.current = createOperationId('story');
+              }}
+              disabled={loading}
+              borderless
+              accessibilityLabel={t('feed.remove_media', 'Remove media')}
+            >
+              <Ionicons name="close" size={20} color="#fff" />
+            </TouchableRipple>
+          ) : null}
+        </View>
+        </View>
+
+        <View style={styles.toolBar}>
+          <TouchableRipple
+            style={styles.toolButton}
+            onPress={pickMedia}
+            disabled={loading}
+            borderless
+            accessibilityLabel={t('feed.select_media', 'Choose from gallery')}
+          >
+            <Ionicons name="images" size={20} color={theme.text} />
+          </TouchableRipple>
+
+          {!media && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.colorPicker}
+              style={{ flex: 1 }}
+            >
+              {bgColors.map((color) => (
+                <TouchableRipple
+                  key={color}
+                  style={[
+                    styles.colorButton,
+                    { backgroundColor: color },
+                    background === color && styles.selectedColor,
+                  ]}
+                  disabled={loading}
+                  onPress={() => {
+                    setBackground(color);
+                    operationIdRef.current = createOperationId('story');
+                  }}
+                  borderless
+                  accessibilityRole="button"
+                  accessibilityLabel={color}
+                >
+                  <View style={{ width: '100%', height: '100%', backgroundColor: 'transparent' }} />
+                </TouchableRipple>
+              ))}
+            </ScrollView>
           )}
-        </KeyboardAwareScrollView>
+        </View>
       </View>
     </FullScreenModal>
   );

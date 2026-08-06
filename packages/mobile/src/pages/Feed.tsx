@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Avatar,
   IconButton,
+  Menu,
   Surface,
   Text,
 } from 'react-native-paper';
@@ -30,6 +31,7 @@ import SuggestedAthletes from '../components/SuggestedAthletes';
 import MotionMark from '../components/MotionMark';
 import { logHandledError } from '../utils/feedback';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { AVATAR, CARD } from '../config/layout';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import type { Post, PublicUser } from '@motionmeet/shared';
 import type { NavigationOnlyProps } from '../navigation/types';
@@ -54,6 +56,7 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
   const [showStoryModal, setShowStoryModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<FeedMode>('discover');
+  const [feedMenuVisible, setFeedMenuVisible] = useState(false);
 
   const loadStaticData = useCallback(async () => {
     try {
@@ -143,38 +146,45 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
           backgroundColor: theme.surface,
         }}
       >
-        <MotionMark size={30} />
-        <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignSelf: 'stretch', marginLeft: isNarrow ? 8 : 14, gap: isNarrow ? 9 : 18 }}>
-          {[
-            { key: 'discover', label: t('feed.discover', 'Discover') },
-            { key: 'following', label: t('feed.following', 'Following') },
-          ].map((tab) => {
-            const active = activeTab === tab.key;
-            return (
+        <MotionMark size={28} />
+        {/* One title that opens the feed picker, instead of two competing tabs. */}
+        <View style={{ flex: 1, minWidth: 0, marginLeft: isNarrow ? 8 : 12 }}>
+          <Menu
+            visible={feedMenuVisible}
+            onDismiss={() => setFeedMenuVisible(false)}
+            anchorPosition="bottom"
+            anchor={
               <TouchableOpacity
-                key={tab.key}
-                onPress={() => setActiveTab(tab.key as FeedMode)}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: active }}
-                accessibilityLabel={tab.label}
-                style={{
-                  flexShrink: 1,
-                  justifyContent: 'center',
-                  borderBottomWidth: active ? 2 : 0,
-                  borderBottomColor: theme.primary,
-                }}
+                onPress={() => setFeedMenuVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel={t('feed.home_title', 'Home')}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 6 }}
               >
                 <Text
                   numberOfLines={1}
                   adjustsFontSizeToFit
-                  minimumFontScale={0.72}
-                  style={{ color: active ? theme.text : theme.textMuted, fontSize: 15, fontWeight: '800' }}
+                  minimumFontScale={0.7}
+                  style={{ flexShrink: 1, color: theme.text, fontSize: 17, fontWeight: '800' }}
                 >
-                  {tab.label}
+                  {activeTab === 'following' ? t('feed.home_title', 'Ana Sayfa') : t('feed.home_discover', 'Keşfet')}
                 </Text>
+                <Ionicons name="chevron-down" size={15} color={theme.text} />
               </TouchableOpacity>
-            );
-          })}
+            }
+          >
+            <Menu.Item
+              onPress={() => { setActiveTab('following'); setFeedMenuVisible(false); }}
+              title={t('feed.home_following', 'Ana Sayfa (Takip edilenler)')}
+              leadingIcon="home-outline"
+              trailingIcon={activeTab === 'following' ? 'check' : undefined}
+            />
+            <Menu.Item
+              onPress={() => { setActiveTab('discover'); setFeedMenuVisible(false); }}
+              title={t('feed.home_discover', 'Keşfet')}
+              leadingIcon="earth"
+              trailingIcon={activeTab === 'discover' ? 'check' : undefined}
+            />
+          </Menu>
         </View>
         <IconButton
           icon="bell-outline"
@@ -201,13 +211,13 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
         initialNumToRender={3}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
         ListHeaderComponent={
-          <View style={{ paddingTop: 12, paddingBottom: 4 }}>
+          <View style={{ paddingTop: 8, paddingBottom: 2 }}>
             <Surface
               elevation={0}
               style={{
-                marginHorizontal: 16,
-                padding: 14,
-                borderRadius: 12,
+                marginHorizontal: 12,
+                padding: CARD.padding,
+                borderRadius: CARD.radius,
                 borderWidth: 1,
                 borderColor: theme.border,
                 backgroundColor: theme.surface,
@@ -216,15 +226,15 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' }}>
                 <View
                   style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 10,
+                    width: 36,
+                    height: 36,
+                    borderRadius: 9,
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: theme.energySoft,
                   }}
                 >
-                  <Ionicons name="barbell-outline" size={21} color={theme.text} />
+                  <Ionicons name="barbell" size={20} color={theme.text} />
                 </View>
                 <View style={{ flex: 1, minWidth: 0, paddingHorizontal: 11 }}>
                   <Text numberOfLines={2} style={{ color: theme.text, fontSize: 15, fontWeight: '800' }}>
@@ -265,24 +275,24 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
               accessibilityRole="button"
               accessibilityLabel={t('feed.create_post', 'Create post')}
               style={{
-                minHeight: 58,
-                marginHorizontal: 16,
-                marginBottom: 10,
-                paddingHorizontal: 12,
+                minHeight: 50,
+                marginHorizontal: 12,
+                marginBottom: 8,
+                paddingHorizontal: 10,
                 flexDirection: 'row',
                 alignItems: 'center',
-                borderRadius: 12,
+                borderRadius: CARD.radius,
                 borderWidth: 1,
                 borderColor: theme.border,
                 backgroundColor: theme.surface,
               }}
             >
               {user?.profile_picture ? (
-                <Avatar.Image source={{ uri: user.profile_picture }} size={36} />
+                <Avatar.Image source={{ uri: user.profile_picture }} size={AVATAR.small} />
               ) : (
                 <Avatar.Text
                   label={user?.full_name?.charAt(0)?.toUpperCase() || 'U'}
-                  size={36}
+                  size={AVATAR.small}
                   style={{ backgroundColor: theme.primary }}
                 />
               )}

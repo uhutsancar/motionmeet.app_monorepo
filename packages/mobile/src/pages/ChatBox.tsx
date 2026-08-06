@@ -571,7 +571,9 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
             />
             <TextInput
               mode="outlined"
+              dense
               style={s.input}
+              contentStyle={{ paddingHorizontal: 12 }}
               placeholder={t('messages.type_message', 'Message...')}
               placeholderTextColor={theme.textMuted}
               value={text}
@@ -668,9 +670,14 @@ const getStyles = (theme: MotionTheme, _paperTheme: MD3Theme, _insets: EdgeInset
     margin: 0, marginBottom: 4,
   },
   input: {
-    flex: 1, fontSize: 16,
+    // minWidth:0 lets the field shrink inside the row instead of pushing its
+    // placeholder past the rounded outline on narrow screens.
+    flex: 1,
+    minWidth: 0,
+    fontSize: 15,
     maxHeight: 120,
-    minHeight: 44,
+    minHeight: 42,
+    paddingHorizontal: 4,
   },
   sendBtn: {
     width: 44, height: 44, borderRadius: 22,

@@ -23,6 +23,7 @@ import dayjs, { setDayjsLocale } from '../utils/dayjs';
 
 import { useTranslation } from 'react-i18next';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { AVATAR, EXERCISE_THUMB, POST_MEDIA_ASPECT, exerciseThumbStyle } from '../config/layout';
 import { useTheme } from '../context/ThemeContext';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { logHandledError } from '../utils/feedback';
@@ -79,8 +80,9 @@ const PostVideo = ({ source, style }: PostVideoProps) => {
 const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigation, onDelete: _onDelete, showDelete: _showDelete = false }: PostCardProps) => {
   const { t, i18n } = useTranslation();
   const { theme, isDark } = useTheme();
-  const { usableWidth, isNarrow } = useResponsiveLayout();
-  const carouselWidth = Math.max(1, Math.min(usableWidth - 32, 688));
+  const { usableWidth, isNarrow, height: screenHeight } = useResponsiveLayout();
+  // The feed list is capped at 720, so the media fills the same usable width.
+  const carouselWidth = Math.max(1, Math.min(usableWidth, 720));
   const workout = post.workout && typeof post.workout === 'object' ? post.workout : null;
   const postUser = typeof post.user === 'object' ? post.user : null;
   const hasWorkout = post.post_type === 'workout' && workout !== null;
@@ -89,12 +91,25 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
     .map(normalizeUri)
     .filter(Boolean);
   const postProfilePicture = normalizeUri(postUser?.profile_picture);
-  const mediaSlideHeight = Math.min(carouselWidth * 1.04, 620);
-  const workoutOnly = Boolean(hasWorkout && imageUrls.length === 0);
+  // Media keeps an Instagram-like portrait ratio but never grows past the
+  // screen so a post always fits without the actions bar being pushed away.
+  // Every photo is rendered in the same box regardless of its own dimensions,
+  // so a feed of mixed portrait/landscape uploads scrolls at one rhythm.
+  const mediaSlideHeight = Math.round(
+    Math.min(carouselWidth * POST_MEDIA_ASPECT, screenHeight * 0.62, 620),
+  );
   const workoutExerciseCount = Math.min(workout?.exercises.length || 0, 4);
-  const workoutSlideHeight = workoutOnly
-    ? Math.max(160, Math.min(306, 58 + workoutExerciseCount * 58))
-    : mediaSlideHeight;
+  // Every post occupies the same box whether it carries a photo, a video or
+  // only a workout, so the feed scrolls at one rhythm and no post is short
+  // while the next one is tall.
+  const workoutSlideHeight = mediaSlideHeight;
+  // Few rows are centred in that box instead of being pinned to the top.
+  const centerWorkoutRows = workoutExerciseCount <= 2;
+  const durationMinutes = Math.max(0, Math.round(workout?.durationMinutes ?? 0));
+  const durationHours = Math.floor(durationMinutes / 60);
+  const durationLabel = durationHours > 0
+    ? `${durationHours}${t('common.hours_short', 'h')} ${durationMinutes % 60}${t('common.min', 'min')}`
+    : `${durationMinutes} ${t('common.min', 'min')}`;
   const currentUser = useAppSelector((state) => state.user.value);
   const dispatch = useAppDispatch();
   const { getToken } = useAuthContext();
@@ -124,14 +139,12 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
   // Memoize styles
   const s = useMemo(() => StyleSheet.create({
     card: {
-      backgroundColor: theme.surface,
-      borderWidth: 1,
-      borderColor: theme.border,
-      borderRadius: 12,
-      marginHorizontal: 16,
-      marginBottom: 12,
-      paddingTop: 14,
-      paddingBottom: 8,
+      backgroundColor: theme.background,
+      marginBottom: 8,
+      paddingTop: 12,
+      paddingBottom: 4,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.border,
       overflow: 'hidden',
     },
     userSection: {
@@ -151,9 +164,9 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
       minWidth: 0,
     },
     avatar: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
+      width: AVATAR.medium,
+      height: AVATAR.medium,
+      borderRadius: AVATAR.medium / 2,
       borderWidth: 1,
       borderColor: theme.border,
     },
@@ -270,6 +283,8 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
     carouselSlide: {
       width: carouselWidth,
       height: mediaSlideHeight,
+      // Keeps an unloaded photo on the theme colour instead of flashing white.
+      backgroundColor: theme.surfaceLight,
     },
     videoContainer: {
       width: carouselWidth,
@@ -288,7 +303,10 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
       height: workoutSlideHeight,
       backgroundColor: theme.surfaceLight,
       paddingHorizontal: POST_PADDING,
-      justifyContent: 'center',
+      paddingVertical: 16,
+      // A workout slide next to media has to match the media height, so the
+      // exercise rows start at the top instead of floating in empty space.
+      justifyContent: centerWorkoutRows ? 'center' : 'flex-start',
       gap: 12,
     },
     workoutSlideItem: {
@@ -298,14 +316,12 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
       backgroundColor: 'transparent'
     },
     workoutSlideIcon: {
-      width: 48,
-      height: 48,
-      borderRadius: 10,
-      backgroundColor: theme.surfaceLight,
+      // Same round artwork size the workout screens use.
+      ...exerciseThumbStyle(EXERCISE_THUMB.small),
+      backgroundColor: '#FFFFFF',
       justifyContent: 'center',
       alignItems: 'center',
-      borderWidth: 1,
-      borderColor: theme.border,
+      overflow: 'hidden',
     },
     workoutSlideTextContainer: {
       flex: 1,
@@ -326,14 +342,16 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
     },
     dotsContainer: {
       flexDirection: 'row',
-      justifyContent: 'center',
       alignItems: 'center',
       position: 'absolute',
       bottom: 12,
-      left: 0,
-      right: 0,
+      alignSelf: 'center',
       gap: 6,
-      backgroundColor: 'transparent'
+      paddingHorizontal: 8,
+      paddingVertical: 5,
+      borderRadius: 12,
+      // Keeps the indicator readable on both bright photos and light surfaces.
+      backgroundColor: 'rgba(0,0,0,0.38)',
     },
     dot: {
       height: 6,
@@ -341,11 +359,11 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
     },
     dotActive: {
       width: 14,
-      backgroundColor: theme.primary, 
+      backgroundColor: '#FFFFFF',
     },
     dotInactive: {
       width: 6,
-      backgroundColor: 'rgba(255,255,255,0.4)',
+      backgroundColor: 'rgba(255,255,255,0.45)',
     },
     actionsBar: {
       flexDirection: 'row',
@@ -400,9 +418,9 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
       backgroundColor: 'transparent'
     },
     commentAvatar: {
-      width: 32,
-      height: 32,
-      borderRadius: 10,
+      width: AVATAR.small,
+      height: AVATAR.small,
+      borderRadius: AVATAR.small / 2,
       borderWidth: 1,
       borderColor: theme.border,
     },
@@ -465,7 +483,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
       justifyContent: 'center',
       alignItems: 'center',
     },
-  }), [carouselWidth, isNarrow, mediaSlideHeight, theme, workoutSlideHeight]);
+  }), [carouselWidth, centerWorkoutRows, isNarrow, mediaSlideHeight, theme, workoutSlideHeight]);
 
   setDayjsLocale(i18n.language);
 
@@ -618,7 +636,12 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
     } else if (item.type === 'image') {
       if (!item.url) return null;
       return (
-        <Image source={{ uri: item.url }} style={s.carouselSlide} resizeMode="cover" />
+        <Image
+          source={{ uri: item.url }}
+          style={s.carouselSlide}
+          resizeMode="cover"
+          accessibilityLabel={post.content || t('feed.post', 'Post')}
+        />
       );
     } else if (item.type === 'workout') {
       const exercises = item.data.exercises || [];
@@ -638,7 +661,11 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
                return (
                <Surface elevation={0} key={idx} style={s.workoutSlideItem}>
                  <Surface elevation={0} style={s.workoutSlideIcon}>
-                   <Ionicons name="barbell" size={24} color={theme.text} />
+                   {typeof ex.exerciseId === 'object' && ((ex.exerciseId as Exercise).imageUrl || (ex.exerciseId as Exercise).gifUrl) ? (
+                     <Image source={{ uri: (ex.exerciseId as Exercise).imageUrl || (ex.exerciseId as Exercise).gifUrl }} style={{ width: '100%', height: '100%', borderRadius: 10 }} resizeMode="cover" />
+                   ) : (
+                     <Ionicons name="barbell" size={24} color={theme.text} />
+                   )}
                  </Surface>
                  <Surface elevation={0} style={s.workoutSlideTextContainer}>
                    <Text style={s.workoutSlideText} numberOfLines={2}>
@@ -735,12 +762,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
         <Surface elevation={0} style={s.statsHeaderRow}>
           <Surface elevation={0} style={s.statBox}>
              <Text style={s.statLabel}>{t('feed.duration', 'Süre')}</Text>
-             <Text style={s.statValue}>
-               {(workout?.durationMinutes ?? 0) > 0
-                 ? `${Math.floor((workout?.durationMinutes ?? 0) / 60) > 0 ? `${Math.floor((workout?.durationMinutes ?? 0) / 60)}s ` : ''}${(workout?.durationMinutes ?? 0) % 60}dk`
-                 : '0min'
-               }
-             </Text>
+             <Text style={s.statValue}>{durationLabel}</Text>
           </Surface>
           <Surface elevation={0} style={s.statBox}>
              <Text style={s.statLabel}>{t('feed.volume', 'Hacim')}</Text>
@@ -803,7 +825,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
             borderless
           >
             <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'transparent' }}>
-              <Ionicons name="arrow-redo-outline" size={24} color={theme.text} style={{ transform: [{rotateY: '180deg'}] }} />
+              <Ionicons name="paper-plane-outline" size={24} color={theme.text} />
             </Surface>
           </TouchableRipple>
         </Surface>

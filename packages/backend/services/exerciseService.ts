@@ -2,7 +2,7 @@ import { database, withTransaction } from "../configs/database.js";
 import { getCachedJson, invalidateCachePrefix, setCachedJson } from "../configs/redis.js";
 import type { Row } from "../db/types.js";
 import { serializeExercise, type InternalExercise } from "../repositories/entities.js";
-import { getComputedExerciseStats, getComputedPersonalRecords } from "./workoutAnalyticsService.js";
+import { getComputedExerciseSessions, getComputedExerciseStats, getComputedPersonalRecords } from "./workoutAnalyticsService.js";
 
 interface ExerciseCursor { name: string; id: string }
 export interface ExerciseListOptions {
@@ -115,3 +115,4 @@ export const getExerciseStatsLegacy = getComputedExerciseStats;
 export const getPersonalRecordsLegacy = getComputedPersonalRecords;
 export const getExerciseStats = getComputedExerciseStats;
 export const getPersonalRecords = getComputedPersonalRecords;
+export const getExerciseSessions = getComputedExerciseSessions;

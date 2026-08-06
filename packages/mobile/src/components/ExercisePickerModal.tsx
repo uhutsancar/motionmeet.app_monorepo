@@ -15,6 +15,7 @@ import { getExercises } from '../api/endpoints';
 import { BottomSheetModal } from './ResponsiveModal';
 import { resolvePublicMediaUrl, type Exercise } from '@motionmeet/shared';
 import { API_URL } from '../config/environment';
+import { EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
 import { Image } from 'expo-image';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
@@ -105,11 +106,11 @@ const ExercisePickerModal = ({ visible, onDismiss, onSelect, excludedIds = [] }:
                   accessibilityLabel={`${t('active_workout.add_exercise', 'Add exercise')}: ${item.name}`}
                 >
                   <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: theme.border, backgroundColor: 'transparent' }}>
-                    <Surface elevation={0} style={{ width: 44, height: 44, borderRadius: 8, overflow: 'hidden', backgroundColor: theme.surfaceLight, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
+                    <Surface elevation={0} style={{ ...exerciseThumbStyle(EXERCISE_THUMB.medium), overflow: 'hidden', backgroundColor: mediaUrl ? '#FFFFFF' : theme.surfaceLight, marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
                       {mediaUrl ? (
                         <Image source={{ uri: mediaUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
                       ) : (
-                        <Ionicons name="barbell-outline" size={20} color={theme.textMuted} />
+                        <Ionicons name="barbell" size={20} color={theme.textMuted} />
                       )}
                     </Surface>
                     <View style={{ flex: 1 }}>

@@ -1,6 +1,7 @@
 export * from "./types/auth.js";
 export * from "./types/common.js";
 export * from "./types/exercise.js";
+export * from "./types/measurement.js";
 export * from "./types/media.js";
 export * from "./types/message.js";
 export * from "./types/post.js";
@@ -14,12 +15,13 @@ export const API_ROUTES = Object.freeze({
   media: Object.freeze({ presign: "/api/media/presign" }),
   post: Object.freeze({ add: "/api/post/add", comment: "/api/post/comment/add", comments: (postId: string) => `/api/post/${postId}/comments`, delete: (postId: string) => `/api/post/${postId}`, feed: "/api/post/feed", like: "/api/post/like", likeIdempotent: (postId: string) => `/api/post/${postId}/like`, unlike: (postId: string) => `/api/post/${postId}/like` }),
   message: Object.freeze({ get: "/api/message/get", send: "/api/message/send", seen: "/api/message/seen", recent: "/api/message/recent", delete: (messageId: string) => `/api/message/delete/${messageId}`, conversations: "/api/message/conversations" }),
-  story: Object.freeze({ get: "/api/story/get", create: "/api/story/create", delete: (storyId: string) => `/api/story/delete/${storyId}` }),
+  story: Object.freeze({ get: "/api/story/get", create: "/api/story/create", delete: (storyId: string) => `/api/story/delete/${storyId}`, view: (storyId: string) => `/api/story/${storyId}/view`, viewers: (storyId: string) => `/api/story/${storyId}/viewers` }),
   workout: Object.freeze({ base: "/api/workout", stats: "/api/workout/stats" }),
   routine: Object.freeze({ base: "/api/routine" }),
-  exercise: Object.freeze({ base: "/api/exercise", byId: (exerciseId: string) => `/api/exercise/${exerciseId}`, records: "/api/exercise/records", stats: (exerciseId: string) => `/api/exercise/${exerciseId}/stats` }),
+  exercise: Object.freeze({ base: "/api/exercise", byId: (exerciseId: string) => `/api/exercise/${exerciseId}`, records: "/api/exercise/records", stats: (exerciseId: string) => `/api/exercise/${exerciseId}/stats`, history: (exerciseId: string) => `/api/exercise/${exerciseId}/history` }),
   plan: Object.freeze({ base: "/api/plans", update: "/api/plans/update" }),
   user_extras: Object.freeze({ update: "/api/user/update", profiles: "/api/user/profiles", discover: "/api/user/discover", follow: "/api/user/follow", unfollow: "/api/user/unfollow", connect: "/api/user/connect", accept: "/api/user/accept", remove_connection: "/api/user/connection", connections: "/api/user/connections", recent_messages: "/api/user/recent-messages", suggested: "/api/user/suggested" }),
+  measurement: Object.freeze({ base: "/api/measurements", byId: (measurementId: string) => `/api/measurements/${measurementId}` }),
   metadata: Object.freeze({ muscleGroups: "/api/muscle-groups", equipment: "/api/equipment" }),
 });
 

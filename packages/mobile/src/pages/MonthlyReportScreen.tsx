@@ -8,9 +8,10 @@ import { BarChart } from 'react-native-chart-kit';
 import Svg, { Circle, Polygon, Line, Text as SvgText } from 'react-native-svg';
 import { getWorkoutStats } from '../api/endpoints';
 import { useAuthContext } from '../context/AuthProvider';
-import { Appbar, Text, Surface, TouchableRipple, ActivityIndicator, Divider, Chip, Button } from 'react-native-paper';
+import { Appbar, Text, Surface, TouchableRipple, ActivityIndicator, Divider, Chip } from 'react-native-paper';
 import { useMuscleGroups } from '../hooks/useMuscleGroups';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { CARD, gridItemWidth } from '../config/layout';
 import { logHandledError } from '../utils/feedback';
 import type { WorkoutStats } from '@motionmeet/shared';
 import type { NavigationOnlyProps } from '../navigation/types';
@@ -20,13 +21,12 @@ type ReportTab = 'workouts' | 'duration' | 'volume' | 'sets';
 const MonthlyReportScreen = ({ navigation }: NavigationOnlyProps) => {
   const insets = useSafeAreaInsets();
   const {
-    columns,
     columnGap,
     contentWidth,
     horizontalPadding,
   } = useResponsiveLayout();
-  const statCardWidth =
-    columns === 2 ? (contentWidth - columnGap) / 2 : contentWidth;
+  // Summary tiles are small enough to sit two per row on every phone.
+  const statCardWidth = gridItemWidth(contentWidth, columnGap, 2);
   const chartWidth = Math.max(1, Math.min(contentWidth, 688));
   const RADAR_SIZE = Math.max(1, Math.min(contentWidth, 420));
   const CENTER = RADAR_SIZE / 2;
@@ -179,6 +179,12 @@ const MonthlyReportScreen = ({ navigation }: NavigationOnlyProps) => {
       <Appbar.Header statusBarHeight={0} style={{ backgroundColor: theme.background, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.border }}>
         <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
         <Appbar.Content title={monthName} titleStyle={{ fontWeight: '700', fontSize: 18, color: theme.text }} />
+        <Appbar.Action
+          icon="share-variant"
+          color={theme.text}
+          onPress={shareReport}
+          accessibilityLabel={t('monthly_report.share', 'Paylaş')}
+        />
       </Appbar.Header>
 
       <ScrollView contentContainerStyle={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
@@ -259,10 +265,10 @@ const MonthlyReportScreen = ({ navigation }: NavigationOnlyProps) => {
             <Surface
               key={card.key}
               elevation={0}
-              style={{ width: statCardWidth, backgroundColor: theme.surface, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 18, borderWidth: 1, borderColor: theme.border, overflow: 'hidden', position: 'relative' }}
+              style={{ width: statCardWidth, backgroundColor: theme.surface, borderRadius: CARD.radius, paddingHorizontal: CARD.padding, paddingVertical: CARD.padding, borderWidth: 1, borderColor: theme.border, overflow: 'hidden', position: 'relative' }}
             >
                 <TouchableRipple onPress={() => navigation.navigate(card.screen, { statsData })} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1 }} borderless><View /></TouchableRipple>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                     <Text numberOfLines={2} style={{ flex: 1, minWidth: 0, paddingRight: 8, color: theme.text, fontWeight: '500' }}>{card.label}</Text>
                     <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
                 </View>
@@ -270,12 +276,12 @@ const MonthlyReportScreen = ({ navigation }: NavigationOnlyProps) => {
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.65}
-                  style={{ fontSize: 22, fontWeight: 'bold', color: theme.text, marginBottom: 12 }}
+                  style={{ fontSize: 19, fontWeight: 'bold', color: theme.text, marginBottom: 8 }}
                 >
                     {card.value.toLocaleString()}
                     {card.unit ? <Text style={{ fontSize: 14, fontWeight: 'normal' }}>{' '}{card.unit}</Text> : null}
                 </Text>
-                <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, borderBottomLeftRadius: 16, borderBottomRightRadius: 16, backgroundColor: card.accentColor }} />
+                <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, borderBottomLeftRadius: CARD.radius, borderBottomRightRadius: CARD.radius, backgroundColor: card.accentColor }} />
             </Surface>
           ))}
         </View>
@@ -425,14 +431,8 @@ const MonthlyReportScreen = ({ navigation }: NavigationOnlyProps) => {
           </View>
         </View>
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: Math.max(insets.bottom, 16) + 8 }} />
       </ScrollView>
-
-      <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingTop: 14, paddingBottom: Math.max(insets.bottom, 14), backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border }}>
-        <Button mode="contained" onPress={shareReport} buttonColor={theme.primary} textColor="#FFFFFF" icon="share-variant" style={{ borderRadius: 14 }} contentStyle={{ minHeight: 50 }} labelStyle={{ fontSize: 15, fontWeight: '900' }}>
-            {t('monthly_report.share', 'Paylaş')}
-        </Button>
-      </View>
     </SafeAreaView>
   );
 };

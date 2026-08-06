@@ -10,6 +10,7 @@ import { getWorkoutStats } from '../api/endpoints';
 import { useAuthContext } from '../context/AuthProvider';
 import { useMuscleGroups } from '../hooks/useMuscleGroups';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { gridItemWidth } from '../config/layout';
 import { logHandledError } from '../utils/feedback';
 import type { WorkoutStats } from '@motionmeet/shared';
 import type { NavigationOnlyProps } from '../navigation/types';
@@ -19,13 +20,12 @@ interface MuscleGroupOption { code: string; name: string }
 
 const MuscleDistribution = ({ navigation }: NavigationOnlyProps) => {
   const {
-    columns,
     columnGap,
     contentWidth,
     horizontalPadding,
   } = useResponsiveLayout();
-  const statCardWidth =
-    columns === 2 ? (contentWidth - columnGap) / 2 : contentWidth;
+  // Compact tiles sit two per row on phones instead of stretching full width.
+  const statCardWidth = gridItemWidth(contentWidth, columnGap, 2);
   const SIZE = Math.max(1, Math.min(contentWidth, 420));
   const CENTER = SIZE / 2;
   const labelGutter = SIZE < 300 ? 36 : 44;

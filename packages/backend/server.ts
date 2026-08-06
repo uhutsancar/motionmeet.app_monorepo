@@ -11,6 +11,7 @@ import authRoutes from "./routes/authRoutes.js";
 import equipmentRouter from "./routes/equipmentRoutes.js";
 import exerciseRouter from "./routes/exerciseRoutes.js";
 import mediaRouter from "./routes/mediaRoutes.js";
+import measurementRouter from "./routes/measurementRoutes.js";
 import messageRouter from "./routes/messageRoutes.js";
 import muscleGroupRouter from "./routes/muscleGroupRoutes.js";
 import planRouter from "./routes/planRoutes.js";
@@ -22,7 +23,7 @@ import userRouter from "./routes/userRoutes.js";
 import workoutRouter from "./routes/workoutRoutes.js";
 import { checkDatabaseHealth, connectDatabase, disconnectDatabase, isDatabaseReady } from "./configs/database.js";
 import { isDevelopmentOrigin, loadEnvironment } from "./configs/environment.js";
-import { createRateLimitStore, disconnectRedis, getRedisStatus, initializeRedis } from "./configs/redis.js";
+import { createRateLimitStore, disconnectRedis, getRedisStatus, initializeRedis, onRedisReady } from "./configs/redis.js";
 import { migrateToLatest } from "./db/migrator.js";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler.js";
 import { requestContext } from "./middlewares/requestContext.js";
@@ -50,19 +51,30 @@ const corsOptions: CorsOptions = {
 };
 
 let redis: Awaited<ReturnType<typeof initializeRedis>>;
+const startupBegan = Date.now();
+// Startup phases are timed so a slow boot can be attributed to a single step
+// instead of guessing which dependency is stalling.
+const timedPhase = async <T>(name: string, run: () => Promise<T>): Promise<T> => {
+  const began = Date.now();
+  try {
+    return await run();
+  } finally {
+    logger.info("startup_phase", { phase: name, ms: Date.now() - began });
+  }
+};
 try {
-  await connectDatabase();
-  if (process.env.RUN_MIGRATIONS !== "false") await migrateToLatest();
+  await timedPhase("database", connectDatabase);
+  if (process.env.RUN_MIGRATIONS !== "false") await timedPhase("migrations", migrateToLatest);
   // assertDatabaseContract and initializeRedis are independent of each other;
   // run them concurrently to reduce startup latency.
   const [, redisResult] = await Promise.all([
-    assertDatabaseContract(),
-    initializeRedis(),
+    timedPhase("database_contract", assertDatabaseContract),
+    timedPhase("redis", initializeRedis),
   ]);
   redis = redisResult;
   // ensureApplicationData requires the DB contract to pass first,
   // but does not depend on Redis.
-  await ensureApplicationData();
+  await timedPhase("application_data", ensureApplicationData);
 } catch (error: unknown) {
   logger.error("server_startup_failed", safeErrorMetadata(error));
   if (isDatabaseReady()) await disconnectDatabase().catch(() => undefined);
@@ -76,6 +88,9 @@ const httpServer = createServer(app);
 const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>(httpServer, { cors: corsOptions });
 setSocketServer(io);
 if (redis) io.adapter(createAdapter(redis.publisher, redis.subscriber));
+// Booting no longer waits for Redis, so a connection established later still
+// has to replace the in-memory adapter for multi-instance fan-out.
+else onRedisReady((clients) => io.adapter(createAdapter(clients.publisher, clients.subscriber)));
 
 app.set("trust proxy", 1);
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
@@ -95,7 +110,7 @@ app.get("/health/ready", async (_request, response) => {
 
 app.use("/api/auth", authRoutes); app.use("/api/user", userRouter); app.use("/api/post", postRouter); app.use("/api/story", storyRouter);
 app.use("/api/message", messageRouter); app.use("/api/exercise", exerciseRouter); app.use("/api/routine", routineRouter); app.use("/api/workout", workoutRouter);
-app.use("/api/plans", planRouter); app.use("/api/admin", rbacRouter); app.use("/api/muscle-groups", muscleGroupRouter); app.use("/api/equipment", equipmentRouter); app.use("/api/media", mediaRouter);
+app.use("/api/plans", planRouter); app.use("/api/admin", rbacRouter); app.use("/api/muscle-groups", muscleGroupRouter); app.use("/api/equipment", equipmentRouter); app.use("/api/media", mediaRouter); app.use("/api/measurements", measurementRouter);
 app.use(notFoundHandler); app.use(errorHandler);
 
 io.use(async (socket, next) => {
@@ -126,7 +141,7 @@ process.once("uncaughtException", (error) => { logger.error("uncaught_exception"
 process.once("unhandledRejection", (error) => { logger.error("unhandled_rejection", safeErrorMetadata(error)); void shutdown("unhandledRejection", 1); });
 
 try {
-  httpServer.listen(environment.port, "0.0.0.0", () => { console.log(`Server + Socket.io running on port ${environment.port}`); });
+  httpServer.listen(environment.port, "0.0.0.0", () => { console.log(`Server + Socket.io running on port ${environment.port} (startup ${Date.now() - startupBegan}ms)`); });
   httpServer.on("error", (error: NodeJS.ErrnoException) => { logger.error(error.code === "EADDRINUSE" ? "http_port_in_use" : "http_server_error", { port: environment.port, ...safeErrorMetadata(error) }); void shutdown("httpServerError", 1); });
 } catch (error: unknown) {
   logger.error("server_startup_failed", safeErrorMetadata(error));

@@ -15,6 +15,7 @@ import { useTheme, type MotionTheme } from '../context/ThemeContext';
 import { useAuthContext } from '../context/AuthProvider';
 import { getWorkoutStats } from '../api/endpoints';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { gridItemWidth } from '../config/layout';
 import type { WorkoutStats } from '@motionmeet/shared';
 import type { NavigationOnlyProps } from '../navigation/types';
 
@@ -101,13 +102,12 @@ const AdvancedStatisticsScreen = ({ navigation }: NavigationOnlyProps) => {
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const {
-    columns,
     columnGap,
     contentWidth,
     horizontalPadding,
   } = useResponsiveLayout({ minTwoColumnWidth: 460 });
   const metricWidth =
-    columns === 2 ? (contentWidth - columnGap) / 2 : contentWidth;
+    gridItemWidth(contentWidth, columnGap, 2);
 
   const chartWidth = Math.max(1, Math.min(contentWidth - 2, 670));
   const blue = theme.dark ? '#60A5FA' : '#2563EB';

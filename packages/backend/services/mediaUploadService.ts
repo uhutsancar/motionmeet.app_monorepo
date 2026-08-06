@@ -1,9 +1,7 @@
-import { GetObjectCommand, HeadObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { database, withTransaction, type DatabaseTransaction } from "../configs/database.js";
-import s3Client from "../configs/aws.js";
+import { getS3Client, loadS3Commands, loadS3Presigner } from "../configs/aws.js";
 import imagekit from "../configs/imageKit.js";
 import { hasValidMediaSignature } from "../utils/mediaValidation.js";
 import { createS3Key, uploadToS3 } from "../utils/s3Utils.js";
@@ -42,6 +40,7 @@ export const createUploadReservation = async ({ userId, purpose, fileName, conte
   if (!process.env.AWS_BUCKET_NAME || !imagekit) throw Object.assign(new Error("Media service is not configured"), { status: 503 });
   const safeName = path.basename(fileName).replace(/[^A-Za-z0-9._-]/g, "-").slice(-120);
   const key = `${purpose}/${userId}/${Date.now()}-${randomUUID()}-${safeName}`; const expiresIn = 300;
+  const [{ PutObjectCommand }, { getSignedUrl }, s3Client] = await Promise.all([loadS3Commands(), loadS3Presigner(), getS3Client()]);
   const uploadUrl = await getSignedUrl(s3Client, new PutObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: key, Body: undefined, ContentLength: numericSize, ContentType: contentType }), { expiresIn });
   await database.insertInto("upload_reservations").values({ legacy_mongo_id: null, object_key: key, user_id: userId, purpose, content_type: contentType, max_bytes: effectiveMaxBytes, expires_at: new Date(Date.now() + 3_600_000) }).execute();
   return { key, uploadUrl, expiresIn, headers: { "Content-Type": contentType } };
@@ -63,6 +62,7 @@ export const resolveReservedUploads = async (userId: string, purposeValue: unkno
   const reservations = await database.selectFrom("upload_reservations").selectAll().where("object_key", "in", stringKeys).where("user_id", "=", userId).where("purpose", "=", purpose).where("expires_at", ">", new Date()).execute();
   if (reservations.length !== stringKeys.length) throw Object.assign(new Error("Uploaded media reference expired"), { status: 400 });
   const byKey = new Map(reservations.map((row) => [row.object_key, row]));
+  const [{ GetObjectCommand, HeadObjectCommand }, s3Client] = await Promise.all([loadS3Commands(), getS3Client()]);
   return Promise.all(stringKeys.map(async (key) => {
     const reservation = byKey.get(key);
     const head = await s3Client.send(new HeadObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: key }));

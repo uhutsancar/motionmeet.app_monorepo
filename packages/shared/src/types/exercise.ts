@@ -51,6 +51,20 @@ export interface ExerciseStats {
   history: Array<{ date: string; maxWeight: number; volume: number }>;
 }
 
+/** One past performance of an exercise, newest first. */
+export interface ExerciseSessionEntry {
+  workoutId: EntityId;
+  workoutName: string;
+  performedAt: string;
+  sets: Array<{
+    position: number;
+    weight: number;
+    reps: number;
+    setType: ExerciseSet["setType"];
+    completed: boolean;
+  }>;
+}
+
 export interface PersonalRecord {
   exerciseId: EntityId;
   name: string;

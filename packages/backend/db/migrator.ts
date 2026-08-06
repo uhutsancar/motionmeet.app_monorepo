@@ -3,6 +3,7 @@ import { database } from "../configs/database.js";
 import * as initialPostgresqlMigration from "./migrations/001_initial_postgresql.js";
 import * as partialIdempotencyIndexes from "./migrations/002_partial_idempotency_indexes.js";
 import * as detachedExerciseSnapshots from "./migrations/003_detached_exercise_snapshots.js";
+import * as bodyMeasurements from "./migrations/004_body_measurements.js";
 
 const migrationProvider: MigrationProvider = {
   async getMigrations() {
@@ -10,6 +11,7 @@ const migrationProvider: MigrationProvider = {
       "001_initial_postgresql": initialPostgresqlMigration,
       "002_partial_idempotency_indexes": partialIdempotencyIndexes,
       "003_detached_exercise_snapshots": detachedExerciseSnapshots,
+      "004_body_measurements": bodyMeasurements,
     };
   },
 };

@@ -248,19 +248,10 @@ const ProfileEditScreen = ({ navigation }: NavigationOnlyProps) => {
                   />
                 )}
               </TouchableRipple>
+              {/* The accepted formats and size limit are enforced on upload and
+                  surfaced as an error there, so the form stays uncluttered. */}
               <Text style={{ marginTop: 8, color: theme.primary, fontSize: 12, fontWeight: '800' }}>
                 {t('profile.change_photo', 'Change profile photo')}
-              </Text>
-              <Text
-                style={{
-                  marginTop: 3,
-                  paddingHorizontal: 12,
-                  color: theme.textMuted,
-                  fontSize: 10.5,
-                  textAlign: 'center',
-                }}
-              >
-                {t('profile.photo_requirements', 'JPG, PNG, WebP, GIF, HEIC · max 5 MB')}
               </Text>
             </View>
           </Surface>

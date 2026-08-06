@@ -11,12 +11,32 @@ let redisClient: Client | null = null;
 let redisPublisher: Client | null = null;
 let redisSubscriber: Client | null = null;
 let redisInitialization: Promise<{ client: Client; publisher: Client; subscriber: Client } | null> | null = null;
+let redisReachedReady = false;
 const localLimits = new Map<string, LocalLimit>();
+
+/**
+ * Startup waits for the first connection attempt, so an unreachable Redis must
+ * fail fast instead of retrying while the HTTP server is still not listening.
+ * Once a connection has succeeded the client keeps retrying indefinitely, which
+ * is what a running deployment needs to survive a Redis restart.
+ */
+const INITIAL_CONNECT_ATTEMPTS = 2;
+const CONNECT_TIMEOUT_MS = 2_000;
+
+const reconnectStrategy = (retries: number): number | Error => {
+  if (!redisReachedReady && retries >= INITIAL_CONNECT_ATTEMPTS) {
+    return new Error("Redis is unreachable; continuing without it");
+  }
+  return Math.min((retries + 1) * 250, 5_000);
+};
 
 const configure = (client: Client, label: string): void => {
   client.on("error", (error: Error) => {
-    if (/ECONNREFUSED|timeout|closed/i.test(error.message)) return;
+    if (/ECONNREFUSED|ENOTFOUND|ETIMEDOUT|timeout|closed|unreachable/i.test(error.message)) return;
     logger.error("redis_client_error", { client: label, ...safeErrorMetadata(error) });
+  });
+  client.on("ready", () => {
+    redisReachedReady = true;
   });
 };
 
@@ -24,7 +44,10 @@ const baseClient = (): Client | null => {
   const url = loadEnvironment().redisUrl;
   if (!url) return null;
   if (!redisClient) {
-    redisClient = createClient({ url, socket: { reconnectStrategy: (retries: number) => Math.min(retries * 250, 5_000) } });
+    redisClient = createClient({
+      url,
+      socket: { connectTimeout: CONNECT_TIMEOUT_MS, reconnectStrategy },
+    });
     configure(redisClient, "Redis client");
   }
   return redisClient;
@@ -46,11 +69,44 @@ export const initializeRedis = async (): Promise<{ client: Client; publisher: Cl
         return { client, publisher: redisPublisher, subscriber: redisSubscriber };
       } catch (error: unknown) {
         logger.warn("redis_unavailable_postgresql_fallback", safeErrorMetadata(error));
+        redisClient = null;
+        redisPublisher = null;
+        redisSubscriber = null;
+        scheduleBackgroundRetry();
         return null;
       }
     })().finally(() => { redisInitialization = null; });
   }
   return redisInitialization;
+};
+
+/**
+ * Startup no longer blocks on Redis, so a deployment that boots while Redis is
+ * restarting has to pick it up afterwards instead of staying degraded until the
+ * process is restarted.
+ */
+const RETRY_INTERVAL_MS = 30_000;
+let retryTimer: ReturnType<typeof setInterval> | null = null;
+const readyListeners = new Set<(clients: { client: Client; publisher: Client; subscriber: Client }) => void>();
+
+const scheduleBackgroundRetry = (): void => {
+  if (retryTimer || !loadEnvironment().redisUrl) return;
+  retryTimer = setInterval(() => {
+    void initializeRedis().then((clients) => {
+      if (!clients) return;
+      if (retryTimer) { clearInterval(retryTimer); retryTimer = null; }
+      logger.info("redis_reconnected");
+      for (const listener of readyListeners) listener(clients);
+    });
+  }, RETRY_INTERVAL_MS);
+  retryTimer.unref();
+};
+
+/** Runs once when a late Redis connection succeeds. */
+export const onRedisReady = (
+  listener: (clients: { client: Client; publisher: Client; subscriber: Client }) => void,
+): void => {
+  readyListeners.add(listener);
 };
 
 export const getRedisClient = (): Client | null => redisClient?.isReady ? redisClient : null;

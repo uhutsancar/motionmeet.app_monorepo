@@ -10,4 +10,12 @@ export interface Story extends Timestamped, IdempotentRequest {
   media_type: "text" | "image" | "video";
   background_color: string;
   expiresAt: string;
+  /** Only populated for the author's own stories. */
+  view_count?: number;
+}
+
+/** One viewer of a story, newest first. Author-only data. */
+export interface StoryViewer {
+  user: PublicUser;
+  viewedAt: string;
 }
