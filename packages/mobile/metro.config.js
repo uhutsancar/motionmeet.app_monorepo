@@ -22,13 +22,48 @@ config.resolver = {
   ],
 };
 
-// Exclude heavy directories that Metro does not need to watch.
-// Metro accepts a RegExp or an array of RegExps as blockList.
+/**
+ * Turns an absolute directory into a separator-agnostic anchored pattern.
+ *
+ * The excludes below have to be anchored to a known root. An unanchored
+ * `/[\\/]dist[\\/]/` would also block the `dist` folder that most packages in
+ * node_modules publish their code from, and the app would stop resolving.
+ */
+const anchor = (absoluteDirectory) => absoluteDirectory
+  .split(/[\\/]/)
+  .map((segment) => segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  .join('[\\\\/]');
+
+const projectRoot = anchor(__dirname);
+const workspaceRoot = anchor(monorepoRoot);
+
+// getDefaultConfig ships its own entries (.expo/types, __tests__). Assigning
+// over the whole property used to drop them.
+const expoDefaults = [config.resolver.blockList].flat().filter(Boolean);
+
+/**
+ * Metro crawls the project root on top of `watchFolders`, and this package is
+ * also where the native build tree lands. Left in the file map, a cold start
+ * spent minutes stat-ing and hashing well over a gigabyte of gradle and CMake
+ * output before the first bundle could even start - on Expo Go that looks like
+ * the app simply never loading.
+ *
+ * Everything excluded here is gitignored build output or another workspace
+ * package; nothing the app imports lives in any of it.
+ */
 config.resolver.blockList = [
-  // Ignore all other packages to avoid duplicate module resolution.
-  /packages[/\\](?!mobile|shared)[/\\].*/,
-  // Ignore CI, documentation, and build artifacts at the repo root.
-  /[/\\](\.git|\.github|scripts|docker|\.turbo)[/\\]/,
+  ...expoDefaults,
+  // Native build tree: android/build, app/build, .gradle, .cxx and friends.
+  new RegExp(`^${projectRoot}[\\\\/]android([\\\\/]|$)`),
+  // Output of previous `expo export` runs: dist/, dist-android/, dist-ios/...
+  new RegExp(`^${projectRoot}[\\\\/]dist(-[\\w-]+)?[\\\\/]`),
+  // Other workspace packages. The app never imports them, and leaving them
+  // resolvable produces a second copy of anything they share with it.
+  /[\\/]packages[\\/](?!mobile[\\/]|shared[\\/])[^\\/]+[\\/]/,
+  // Repo-level caches and tooling.
+  new RegExp(
+    `^${workspaceRoot}[\\\\/](\\.git|\\.github|\\.turbo|\\.pnpm-store|scripts|docs|tools)([\\\\/]|$)`,
+  ),
 ];
 
 // Expo SDK 54 resolves the workspace root and the app-relative entry point for

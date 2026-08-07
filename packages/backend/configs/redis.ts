@@ -1,11 +1,26 @@
-import { createClient, type RedisClientType } from "redis";
+import type { RedisClientType } from "redis";
 import { RedisStore } from "rate-limit-redis";
 import { MemoryStore, type Options as RateLimitOptions, type Store } from "express-rate-limit";
 import { loadEnvironment } from "./environment.js";
 import { logger, safeErrorMetadata } from "../utils/logger.js";
 
 type Client = RedisClientType;
+interface Clients { client: Client; publisher: Client; subscriber: Client }
 interface LocalLimit { count: number; expiresAt: number }
+
+/**
+ * `redis` is the heaviest import in the process: it pulls the bloom, json,
+ * search and time-series command sets in on top of the client, none of which
+ * this application uses. Boot no longer waits for a connection, so paying that
+ * cost at import time would delay the port opening for a dependency every
+ * caller already treats as optional. It is loaded on the first connection
+ * attempt instead, off the critical path.
+ */
+let createClientFn: typeof import("redis").createClient | null = null;
+const loadCreateClient = async (): Promise<typeof import("redis").createClient> => {
+  if (!createClientFn) ({ createClient: createClientFn } = await import("redis"));
+  return createClientFn;
+};
 
 let redisClient: Client | null = null;
 let redisPublisher: Client | null = null;
@@ -40,21 +55,22 @@ const configure = (client: Client, label: string): void => {
   });
 };
 
-const baseClient = (): Client | null => {
+const baseClient = async (): Promise<Client | null> => {
   const url = loadEnvironment().redisUrl;
   if (!url) return null;
   if (!redisClient) {
+    const createClient = await loadCreateClient();
     redisClient = createClient({
       url,
       socket: { connectTimeout: CONNECT_TIMEOUT_MS, reconnectStrategy },
-    });
+    }) as Client;
     configure(redisClient, "Redis client");
   }
   return redisClient;
 };
 
-export const initializeRedis = async (): Promise<{ client: Client; publisher: Client; subscriber: Client } | null> => {
-  const client = baseClient();
+export const initializeRedis = async (): Promise<Clients | null> => {
+  const client = await baseClient();
   if (!client) return null;
   if (redisPublisher?.isReady && redisSubscriber?.isReady && client.isReady) return { client, publisher: redisPublisher, subscriber: redisSubscriber };
   if (!redisInitialization) {
@@ -66,7 +82,9 @@ export const initializeRedis = async (): Promise<{ client: Client; publisher: Cl
         configure(redisPublisher, "Redis publisher");
         configure(redisSubscriber, "Redis subscriber");
         await Promise.all([redisPublisher.connect(), redisSubscriber.connect()]);
-        return { client, publisher: redisPublisher, subscriber: redisSubscriber };
+        const clients: Clients = { client, publisher: redisPublisher, subscriber: redisSubscriber };
+        announceReady(clients);
+        return clients;
       } catch (error: unknown) {
         logger.warn("redis_unavailable_postgresql_fallback", safeErrorMetadata(error));
         redisClient = null;
@@ -87,25 +105,41 @@ export const initializeRedis = async (): Promise<{ client: Client; publisher: Cl
  */
 const RETRY_INTERVAL_MS = 30_000;
 let retryTimer: ReturnType<typeof setInterval> | null = null;
-const readyListeners = new Set<(clients: { client: Client; publisher: Client; subscriber: Client }) => void>();
+let readyClients: Clients | null = null;
+const readyListeners = new Set<(clients: Clients) => void>();
+
+/**
+ * Fires for the first successful connection as well as for a later retry.
+ * Announcing only on retry was survivable while boot awaited Redis, because a
+ * first-attempt success was already in hand by the time anything subscribed.
+ * Now that boot does not wait, the first attempt is the usual winner, and a
+ * silent one would leave the socket adapter in memory for the whole process.
+ */
+const announceReady = (clients: Clients): void => {
+  readyClients = clients;
+  if (retryTimer) { clearInterval(retryTimer); retryTimer = null; }
+  const listeners = [...readyListeners];
+  readyListeners.clear();
+  for (const listener of listeners) listener(clients);
+};
 
 const scheduleBackgroundRetry = (): void => {
   if (retryTimer || !loadEnvironment().redisUrl) return;
   retryTimer = setInterval(() => {
     void initializeRedis().then((clients) => {
-      if (!clients) return;
-      if (retryTimer) { clearInterval(retryTimer); retryTimer = null; }
-      logger.info("redis_reconnected");
-      for (const listener of readyListeners) listener(clients);
+      if (clients) logger.info("redis_reconnected");
     });
   }, RETRY_INTERVAL_MS);
   retryTimer.unref();
 };
 
-/** Runs once when a late Redis connection succeeds. */
-export const onRedisReady = (
-  listener: (clients: { client: Client; publisher: Client; subscriber: Client }) => void,
-): void => {
+/**
+ * Runs once when Redis becomes usable. The connection can win the race against
+ * the caller subscribing, so a listener registered after the fact still has to
+ * run rather than wait for an event that already happened.
+ */
+export const onRedisReady = (listener: (clients: Clients) => void): void => {
+  if (readyClients) { listener(readyClients); return; }
   readyListeners.add(listener);
 };
 
@@ -248,4 +282,7 @@ export const disconnectRedis = async (): Promise<void> => {
   const clients = [redisSubscriber, redisPublisher, redisClient].filter((client): client is Client => Boolean(client?.isOpen));
   await Promise.allSettled(clients.map((client) => client.quit()));
   redisSubscriber = null; redisPublisher = null; redisClient = null;
+  // Otherwise a subscriber registered after shutdown would be handed clients
+  // that have already been quit.
+  readyClients = null;
 };

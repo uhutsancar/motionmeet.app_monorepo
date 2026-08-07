@@ -53,7 +53,6 @@ const corsOptions: CorsOptions = {
   origin(origin, callback) { if (isAllowedOrigin(origin)) callback(null, true); else callback(Object.assign(new Error("Origin is not allowed by CORS"), { status: 403 })); },
 };
 
-let redis: Awaited<ReturnType<typeof initializeRedis>>;
 const startupBegan = Date.now();
 // Startup phases are timed so a slow boot can be attributed to a single step
 // instead of guessing which dependency is stalling.
@@ -68,18 +67,14 @@ const timedPhase = async <T>(name: string, run: () => Promise<T>): Promise<T> =>
 try {
   await timedPhase("database", connectDatabase);
   if (process.env.RUN_MIGRATIONS !== "false") await timedPhase("migrations", migrateToLatest);
-  // assertDatabaseContract and initializeRedis are independent of each other;
-  // run them concurrently to reduce startup latency.
-  const [, , redisResult] = await Promise.all([
+  // Independent of each other, so they overlap.
+  await Promise.all([
     timedPhase("database_contract", assertDatabaseContract),
     // Decides whether proximity queries use PostGIS or the portable
     // bounding-box path; both read the same columns, so this only picks SQL.
     timedPhase("location_geometry", detectGeometrySupport),
-    timedPhase("redis", initializeRedis),
   ]);
-  redis = redisResult;
-  // ensureApplicationData requires the DB contract to pass first,
-  // but does not depend on Redis.
+  // Requires the DB contract to pass first.
   await timedPhase("application_data", ensureApplicationData);
 } catch (error: unknown) {
   logger.error("server_startup_failed", safeErrorMetadata(error));
@@ -93,10 +88,9 @@ app.disable("x-powered-by");
 const httpServer = createServer(app);
 const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>(httpServer, { cors: corsOptions });
 setSocketServer(io);
-if (redis) io.adapter(createAdapter(redis.publisher, redis.subscriber));
-// Booting no longer waits for Redis, so a connection established later still
-// has to replace the in-memory adapter for multi-instance fan-out.
-else onRedisReady((clients) => io.adapter(createAdapter(clients.publisher, clients.subscriber)));
+// Fires immediately if the connection already won the race, otherwise when it
+// lands - either way the in-memory adapter is replaced for multi-instance fan-out.
+onRedisReady((clients) => io.adapter(createAdapter(clients.publisher, clients.subscriber)));
 
 app.set("trust proxy", 1);
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
@@ -147,8 +141,28 @@ process.once("SIGTERM", () => { void shutdown("SIGTERM"); }); process.once("SIGI
 process.once("uncaughtException", (error) => { logger.error("uncaught_exception", safeErrorMetadata(error)); void shutdown("uncaughtException", 1); });
 process.once("unhandledRejection", (error) => { logger.error("unhandled_rejection", safeErrorMetadata(error)); void shutdown("unhandledRejection", 1); });
 
+/**
+ * Redis is optional at every call site: the rate-limit store falls back to an
+ * in-process one, the cache helpers no-op, and the socket adapter is swapped in
+ * by onRedisReady whenever the connection lands.
+ *
+ * It is started only once the port is open. `redis` is by far the heaviest
+ * import in the process - it pulls the bloom, json, search and time-series
+ * command sets in on top of the client - and evaluating that module graph
+ * blocks the event loop. Kicked off any earlier, even without awaiting it, that
+ * block lands between listen() and its callback and delays the port by seconds.
+ */
+const connectRedisInBackground = (): void => {
+  void initializeRedis().catch((error: unknown) => {
+    logger.warn("redis_initialization_failed", safeErrorMetadata(error));
+  });
+};
+
 try {
-  httpServer.listen(environment.port, "0.0.0.0", () => { console.log(`Server + Socket.io running on port ${environment.port} (startup ${Date.now() - startupBegan}ms)`); });
+  httpServer.listen(environment.port, "0.0.0.0", () => {
+    console.log(`Server + Socket.io running on port ${environment.port} (startup ${Date.now() - startupBegan}ms)`);
+    connectRedisInBackground();
+  });
   httpServer.on("error", (error: NodeJS.ErrnoException) => { logger.error(error.code === "EADDRINUSE" ? "http_port_in_use" : "http_server_error", { port: environment.port, ...safeErrorMetadata(error) }); void shutdown("httpServerError", 1); });
 } catch (error: unknown) {
   logger.error("server_startup_failed", safeErrorMetadata(error));
