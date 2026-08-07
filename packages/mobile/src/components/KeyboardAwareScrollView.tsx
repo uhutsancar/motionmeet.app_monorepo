@@ -17,6 +17,20 @@ import {
 interface KeyboardResponsiveViewProps extends React.PropsWithChildren {
   style?: StyleProp<ViewStyle>;
   keyboardVerticalOffset?: number;
+  /**
+   * Also avoid the keyboard on Android.
+   *
+   * Android normally resizes the window itself through adjustResize, which is
+   * why this is off by default - screens that already scroll would otherwise be
+   * adjusted twice. But a screen pinning something to the bottom of the window,
+   * like the chat composer, has nothing to fall back on when the resize does not
+   * happen: verified on a device, the composer sat behind the keyboard in both
+   * Expo Go and the standalone build.
+   *
+   * `height` is inert when the window did resize, because the view's bottom edge
+   * is already above the keyboard and the computed overlap is zero.
+   */
+  avoidOnAndroid?: boolean;
 }
 
 interface KeyboardAwareScrollViewProps extends ScrollViewProps {
@@ -33,11 +47,12 @@ export const KeyboardResponsiveView = ({
   children,
   style,
   keyboardVerticalOffset = 0,
+  avoidOnAndroid = false,
 }: KeyboardResponsiveViewProps) => (
   <KeyboardAvoidingView
     style={style}
-    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    enabled={Platform.OS === 'ios'}
+    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    enabled={Platform.OS === 'ios' || avoidOnAndroid}
     keyboardVerticalOffset={keyboardVerticalOffset}
   >
     {children}
@@ -84,7 +99,12 @@ const KeyboardAwareScrollView = React.forwardRef<ScrollView, KeyboardAwareScroll
     let nodeHandle = target;
     if (!nodeHandle) {
       const inputRef = TextInput.State.currentlyFocusedInput ? TextInput.State.currentlyFocusedInput() : null;
-      nodeHandle = inputRef ? findNodeHandle(inputRef as any) : null;
+      // The focused input and findNodeHandle's parameter are the same host
+      // instance at runtime; React Native types them as unrelated shapes, so the
+      // hop through unknown is what the compiler needs to accept it.
+      nodeHandle = inputRef
+        ? findNodeHandle(inputRef as unknown as Parameters<typeof findNodeHandle>[0])
+        : null;
     }
     if (!nodeHandle) return;
 

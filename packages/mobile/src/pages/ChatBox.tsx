@@ -1,5 +1,15 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { FlatList, Image, Alert, StatusBar, StyleSheet, View, type ListRenderItem } from 'react-native';
+import {
+  FlatList,
+  Image,
+  Alert,
+  Platform,
+  StatusBar,
+  StyleSheet,
+  TextInput,
+  View,
+  type ListRenderItem,
+} from 'react-native';
 import { SafeAreaView, useSafeAreaInsets, type EdgeInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthContext } from "../context/AuthProvider";
@@ -23,7 +33,7 @@ import {
 } from '../features/messages/messagesSlice';
 import dayjs from '../utils/dayjs';
 
-import { Appbar, Avatar, Text, TextInput, IconButton, Surface, ActivityIndicator, Badge, useTheme as usePaperTheme, TouchableRipple } from 'react-native-paper';
+import { Appbar, Avatar, Text, IconButton, Surface, ActivityIndicator, Badge, useTheme as usePaperTheme, TouchableRipple } from 'react-native-paper';
 import { showError } from '../utils/feedback';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { KeyboardResponsiveView } from '../components/KeyboardAwareScrollView';
@@ -40,6 +50,24 @@ interface ChatBoxProps {
 }
 interface UploadCache { signature: string; key: string }
 
+/**
+ * Bubble geometry is measured in points, not percentages.
+ *
+ * A percentage `maxWidth` resolves against whichever box the parent happened to
+ * measure the row with, and inside the nested auto-width rows of a chat list
+ * that box is not the visible row - short messages were handed a few dozen
+ * points and broke mid-word ("Nabe / rsin"). These constants mirror the list
+ * styles below so the same numbers drive layout and maths on every screen.
+ */
+const MESSAGE_LIST_MAX_WIDTH = 720;
+const MESSAGE_LIST_PADDING = 12;
+/** Avatar column reserved on the partner's side, including its gutter. */
+const AVATAR_SLOT_WIDTH = 34;
+const MEDIA_BUBBLE_PADDING = 4;
+/** The composer grows to roughly five lines, then scrolls inside its pill. */
+const COMPOSER_MIN_HEIGHT = 42;
+const COMPOSER_MAX_HEIGHT = 124;
+
 const entityId = (value: Message['from_user_id']): string =>
   typeof value === 'string' ? value : value._id;
 
@@ -52,8 +80,13 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
   const paperTheme = usePaperTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { contentWidth } = useResponsiveLayout();
-  const messageMediaWidth = Math.max(80, Math.min(220, contentWidth * 0.72));
+  const { usableWidth } = useResponsiveLayout();
+  const rowWidth = Math.max(
+    220,
+    Math.min(usableWidth, MESSAGE_LIST_MAX_WIDTH) - MESSAGE_LIST_PADDING * 2,
+  );
+  const bubbleMaxWidth = Math.round((rowWidth - AVATAR_SLOT_WIDTH) * 0.92);
+  const messageMediaWidth = Math.min(264, bubbleMaxWidth - MEDIA_BUBBLE_PADDING * 2);
   const s = getStyles(theme, paperTheme, insets);
 
   const currentUser = useAppSelector((state) => state.user.value);
@@ -385,64 +418,90 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
     const prevMsg = messages[index - 1];
     const showAvatar = !mine && (!prevMsg || isMine(prevMsg));
 
+    const hasMedia = msg.message_type === 'image' && Boolean(msg.media_url);
+
     return (
-      <Surface elevation={0} style={[s.msgRow, mine ? s.msgRowRight : s.msgRowLeft]}>
+      // Plain views on purpose: Paper's Surface splits a style across two nested
+      // layers on iOS, so `maxWidth` and `alignItems` land on different boxes and
+      // the bubble ends up measured against the wrong parent.
+      <View style={[s.msgRow, mine ? s.msgRowRight : s.msgRowLeft]}>
         {!mine && (
-          <Surface elevation={0} style={{ width: 28, marginRight: 6 }}>
+          <View style={s.avatarSlot}>
             {showAvatar && user?.profile_picture
               ? <Avatar.Image source={{ uri: user.profile_picture }} size={28} />
-              : <View style={{ width: 28 }} />
-            }
-          </Surface>
+              : null}
+          </View>
         )}
-        {/* Each child sizes to its own content. Left to stretch, the bubble was
-            pinned to the width of the timestamp under it, which squeezed short
-            messages until they broke mid-word ("Nabe / rsin"). */}
-        <Surface
-          elevation={0}
-          style={{ maxWidth: '75%', alignItems: mine ? 'flex-end' : 'flex-start' }}
+        <TouchableRipple
+          style={[
+            s.bubble,
+            { maxWidth: bubbleMaxWidth },
+            hasMedia ? s.bubbleMedia : s.bubblePlain,
+            mine ? s.bubbleMine : s.bubbleTheirs,
+          ]}
+          onLongPress={mine ? () => handleDeleteMessage(msg._id) : undefined}
+          rippleColor="rgba(0, 0, 0, .1)"
         >
-          {msg.message_type === 'image' && msg.media_url && (
-            <Image
-              source={{ uri: msg.media_url }}
-              style={[
-                s.msgImage,
-                { width: messageMediaWidth, height: messageMediaWidth * 0.9 },
-              ]}
-              resizeMode="cover"
-            />
-          )}
-          {msg.text ? (
-            <TouchableRipple 
-              style={[s.bubble, mine ? s.bubbleMine : s.bubbleTheirs]}
-              onLongPress={() => mine && handleDeleteMessage(msg._id)}
-              rippleColor="rgba(0, 0, 0, .1)"
-            >
-              <Text style={[s.bubbleText, { color: mine ? '#fff' : theme.text }]}>{msg.text}</Text>
-            </TouchableRipple>
-          ) : null}
-          <Text variant="labelSmall" style={[s.msgTime, { textAlign: mine ? 'right' : 'left' }]}>
-            {dayjs(msg.createdAt).format('HH:mm')}
-            {mine && (msg.seen ? '  ✓✓' : '  ✓')}
-          </Text>
-        </Surface>
-      </Surface>
+          <View>
+            {hasMedia && msg.media_url ? (
+              <Image
+                source={{ uri: msg.media_url }}
+                style={[
+                  s.msgImage,
+                  { width: messageMediaWidth, height: Math.round(messageMediaWidth * 0.82) },
+                ]}
+                resizeMode="cover"
+              />
+            ) : null}
+            {/* Text and stamp share one wrapping row. A short message keeps the
+                stamp beside it on a single line; a long one pushes the stamp to
+                its own line, which is how the chat apps people know behave. */}
+            <View style={[s.bubbleBody, hasMedia && s.bubbleBodyWithMedia]}>
+              {msg.text ? (
+                <Text
+                  style={[
+                    s.bubbleText,
+                    // With an image above, the bubble is already as wide as the
+                    // photo, so the caption fills the line and keeps the stamp
+                    // pinned right instead of both floating over there together.
+                    hasMedia && s.bubbleTextWithMedia,
+                    { color: mine ? '#FFFFFF' : theme.text },
+                  ]}
+                >
+                  {msg.text}
+                </Text>
+              ) : null}
+              <Text
+                style={[
+                  s.bubbleMeta,
+                  { color: mine ? 'rgba(255,255,255,0.72)' : theme.textMuted },
+                ]}
+              >
+                {dayjs(msg.createdAt).format('HH:mm')}
+                {mine ? (msg.seen ? ' ✓✓' : ' ✓') : ''}
+              </Text>
+            </View>
+          </View>
+        </TouchableRipple>
+      </View>
     );
   };
 
   const renderTyping = () => (
-    <Surface elevation={0} style={[s.msgRow, s.msgRowLeft]}>
-      <Surface elevation={0} style={{ width: 28, marginRight: 6 }}>
-        {user?.profile_picture && <Avatar.Image source={{ uri: user.profile_picture }} size={28} />}
-      </Surface>
-      <Surface style={[s.bubble, s.bubbleTheirs, { paddingVertical: 10 }]} elevation={0}>
-        <Surface elevation={0} style={{ flexDirection: 'row', gap: 4 }}>
+    <View style={[s.msgRow, s.msgRowLeft]}>
+      <View style={s.avatarSlot}>
+        {user?.profile_picture
+          ? <Avatar.Image source={{ uri: user.profile_picture }} size={28} />
+          : null}
+      </View>
+      <View style={[s.bubble, s.bubblePlain, s.bubbleTheirs, { paddingVertical: 12 }]}>
+        <View style={{ flexDirection: 'row', gap: 4 }}>
           {[0, 1, 2].map(i => (
             <View key={i} style={[s.typingDot, { opacity: 0.5 + i * 0.2 }]} />
           ))}
-        </Surface>
-      </Surface>
-    </Surface>
+        </View>
+      </View>
+    </View>
   );
 
   if (!userId) {
@@ -516,6 +575,7 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
 
       <KeyboardResponsiveView
         style={{ flex: 1 }}
+        avoidOnAndroid
       >
         {initialLoading ? (
           <Surface elevation={0} style={s.loader}><ActivityIndicator color={theme.primary} /></Surface>
@@ -548,8 +608,8 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
 
         <Surface style={{ backgroundColor: theme.surface }} elevation={2}>
           {image && (
-            <Surface elevation={0} style={s.imagePreview}>
-              <Surface elevation={0} style={s.previewMedia}>
+            <View style={s.imagePreview}>
+              <View style={s.previewMedia}>
                 <Image source={{ uri: image.uri }} style={s.previewImg} />
                 <IconButton
                   icon="close-circle"
@@ -563,35 +623,38 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
                   }}
                   style={s.removeImg}
                 />
-              </Surface>
-            </Surface>
+              </View>
+            </View>
           )}
-          <Surface elevation={0} style={[s.inputBar, { paddingBottom: Math.max(insets.bottom || 0, 12) }]}>
-            <IconButton 
-              icon="image-outline" 
-              iconColor={theme.textMuted} 
-              size={24} 
-              onPress={pickImage} 
-              disabled={sending}
-              style={s.attachBtn} 
-            />
-            <TextInput
-              mode="outlined"
-              dense
-              style={s.input}
-              contentStyle={{ paddingHorizontal: 12 }}
-              placeholder={t('messages.type_message', 'Message...')}
-              placeholderTextColor={theme.textMuted}
-              value={text}
-              onChangeText={handleTextChange}
-              editable={!sending}
-              multiline
-              maxLength={CONTENT_LIMITS.message}
-              keyboardAppearance={isDark ? 'dark' : 'light'}
-              outlineStyle={{ borderRadius: 24, borderColor: theme.border }}
-              textColor={theme.text}
-              theme={{ colors: { background: theme.background } }}
-            />
+          <View style={[s.inputBar, { paddingBottom: Math.max(insets.bottom || 0, 10) }]}>
+            {/* A plain RN input inside our own pill. Paper's outlined field
+                manages its own height and ignored maxHeight once multiline, so
+                a long draft grew the field instead of scrolling inside it. */}
+            <View style={s.inputPill}>
+              <IconButton
+                icon="image-outline"
+                iconColor={theme.textMuted}
+                size={22}
+                onPress={pickImage}
+                disabled={sending}
+                style={s.attachBtn}
+                accessibilityLabel={t('feed.select_media', 'Select media')}
+              />
+              <TextInput
+                style={s.input}
+                placeholder={t('messages.type_message', 'Message...')}
+                placeholderTextColor={theme.textMuted}
+                value={text}
+                onChangeText={handleTextChange}
+                editable={!sending}
+                multiline
+                scrollEnabled
+                maxLength={CONTENT_LIMITS.message}
+                keyboardAppearance={isDark ? 'dark' : 'light'}
+                underlineColorAndroid="transparent"
+                accessibilityLabel={t('messages.type_message', 'Message...')}
+              />
+            </View>
             <IconButton
               icon="send"
               iconColor="#fff"
@@ -601,7 +664,7 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
               style={[s.sendBtn, (sending || (!text.trim() && !image)) && { opacity: 0.4 }]}
               containerColor={theme.primary}
             />
-          </Surface>
+          </View>
         </Surface>
       </KeyboardResponsiveView>
     </SafeAreaView>
@@ -630,32 +693,50 @@ const getStyles = (theme: MotionTheme, _paperTheme: MD3Theme, _insets: EdgeInset
   connDot: { width: 7, height: 7, borderRadius: 3.5 },
   connText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  messageList: { width: '100%', maxWidth: 720, alignSelf: 'center' },
-  msgList: { width: '100%', paddingHorizontal: 16, paddingVertical: 20, flexGrow: 1 },
-  msgRow: { marginBottom: 12, flexDirection: 'row', alignItems: 'flex-end' },
+  messageList: { width: '100%', maxWidth: MESSAGE_LIST_MAX_WIDTH, alignSelf: 'center' },
+  msgList: {
+    width: '100%',
+    paddingHorizontal: MESSAGE_LIST_PADDING,
+    paddingVertical: 16,
+    flexGrow: 1,
+  },
+  msgRow: { marginBottom: 8, flexDirection: 'row', alignItems: 'flex-end' },
   msgRowRight: { justifyContent: 'flex-end' },
   msgRowLeft: { justifyContent: 'flex-start' },
+  avatarSlot: { width: 28, marginRight: AVATAR_SLOT_WIDTH - 28 },
   bubble: {
-    paddingHorizontal: 16, paddingVertical: 12,
-    borderRadius: 22, maxWidth: '100%',
+    flexShrink: 1,
+    borderRadius: 18,
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05, shadowRadius: 2, elevation: 1,
   },
+  bubblePlain: { paddingHorizontal: 12, paddingVertical: 7 },
+  bubbleMedia: { padding: MEDIA_BUBBLE_PADDING },
   bubbleMine: {
     backgroundColor: theme.primary,
-    borderBottomRightRadius: 4,
+    borderBottomRightRadius: 5,
   },
   bubbleTheirs: {
     backgroundColor: theme.surface,
     borderWidth: 1, borderColor: theme.border,
-    borderBottomLeftRadius: 4,
+    borderBottomLeftRadius: 5,
   },
-  bubbleText: { fontSize: 16, lineHeight: 22, fontWeight: '500' },
-  msgTime: { color: theme.textMuted, marginTop: 4, fontWeight: '600', paddingHorizontal: 8 },
-  msgImage: { borderRadius: 18, marginBottom: 6 },
+  // flexWrap keeps the stamp beside a short message and drops it below a long
+  // one; flexShrink on the text is what lets the line break instead of the row.
+  bubbleBody: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
+  },
+  bubbleBodyWithMedia: { paddingHorizontal: 6, paddingTop: 3, paddingBottom: 2 },
+  bubbleText: { flexShrink: 1, fontSize: 15.5, lineHeight: 21, fontWeight: '500' },
+  bubbleTextWithMedia: { flexGrow: 1 },
+  bubbleMeta: { fontSize: 10.5, lineHeight: 18, marginLeft: 8, fontWeight: '600' },
+  msgImage: { borderRadius: 14 },
   typingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.textMuted, marginHorizontal: 2 },
   imagePreview: {
-    width: '100%', maxWidth: 720, alignSelf: 'center',
+    width: '100%', maxWidth: MESSAGE_LIST_MAX_WIDTH, alignSelf: 'center',
     flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12,
     borderTopWidth: 1, borderTopColor: theme.border,
   },
@@ -663,33 +744,39 @@ const getStyles = (theme: MotionTheme, _paperTheme: MD3Theme, _insets: EdgeInset
   previewImg: { width: 60, height: 60, borderRadius: 12 },
   removeImg: { position: 'absolute', top: -14, right: -14, backgroundColor: theme.surface, borderRadius: 12 },
   inputBar: {
-    width: '100%', maxWidth: 720, alignSelf: 'center',
+    width: '100%', maxWidth: MESSAGE_LIST_MAX_WIDTH, alignSelf: 'center',
     flexDirection: 'row', alignItems: 'flex-end',
-    paddingHorizontal: 16, paddingTop: 12,
-    borderTopWidth: 1, borderTopColor: theme.border,
-    gap: 12,
+    paddingHorizontal: MESSAGE_LIST_PADDING, paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border,
+    gap: 8,
   },
-  attachBtn: { 
-    width: 44, height: 44, borderRadius: 22, 
-    backgroundColor: theme.background, 
+  inputPill: {
+    // minWidth:0 lets the pill shrink inside the row instead of pushing the
+    // send button off narrow screens.
+    flex: 1, minWidth: 0,
+    flexDirection: 'row', alignItems: 'flex-end',
+    minHeight: COMPOSER_MIN_HEIGHT + 4,
+    paddingLeft: 2, paddingRight: 8,
+    borderRadius: (COMPOSER_MIN_HEIGHT + 4) / 2,
     borderWidth: 1, borderColor: theme.border,
-    margin: 0, marginBottom: 4,
+    backgroundColor: theme.background,
   },
+  attachBtn: { width: 34, height: 34, margin: 0, marginBottom: 4, marginLeft: 2 },
   input: {
-    // minWidth:0 lets the field shrink inside the row instead of pushing its
-    // placeholder past the rounded outline on narrow screens.
-    flex: 1,
-    minWidth: 0,
-    fontSize: 15,
-    maxHeight: 120,
-    minHeight: 42,
-    paddingHorizontal: 4,
+    flex: 1, minWidth: 0,
+    color: theme.text,
+    fontSize: 15.5,
+    minHeight: COMPOSER_MIN_HEIGHT,
+    maxHeight: COMPOSER_MAX_HEIGHT,
+    paddingTop: 11, paddingBottom: 11, paddingHorizontal: 4,
+    ...Platform.select({ android: { textAlignVertical: 'top' as const } }),
   },
   sendBtn: {
-    width: 44, height: 44, borderRadius: 22,
+    width: COMPOSER_MIN_HEIGHT + 4, height: COMPOSER_MIN_HEIGHT + 4,
+    borderRadius: (COMPOSER_MIN_HEIGHT + 4) / 2,
     shadowColor: theme.primary, shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3, shadowRadius: 6, elevation: 4,
-    margin: 0, marginBottom: 4,
+    margin: 0,
   },
 });
 
