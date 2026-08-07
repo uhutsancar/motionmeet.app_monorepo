@@ -29,8 +29,9 @@ const AuthNavigator = () => {
             // Fetch user data from backend
             try {
               await dispatch(fetchUser(token)).unwrap();
-            } catch (err: any) {
-              if (err?.message?.includes('401') || err?.message?.includes('403')) {
+            } catch (err: unknown) {
+              const message = err instanceof Error ? err.message : String(err);
+              if (message.includes('401') || message.includes('403')) {
                 await signOut();
               }
             }

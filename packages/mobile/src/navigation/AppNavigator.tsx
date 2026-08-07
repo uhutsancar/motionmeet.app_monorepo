@@ -26,6 +26,13 @@ import Routines from '../pages/Routines';
 import Exercises from '../pages/Exercises';
 import Profile from '../pages/Profile';
 import Messages from '../pages/Messages';
+/*
+ * React Navigation's `getComponent` wants a screen resolved synchronously on
+ * first navigation, which is what keeps these off the initial bundle evaluation.
+ * `import()` returns a promise and cannot be used here, so the rule is off for
+ * this block rather than for the file.
+ */
+/* eslint-disable @typescript-eslint/no-require-imports */
 const loadSettings = () => require('../pages/Settings').default;
 const loadProfileEdit = () => require('../pages/ProfileEditScreen').default;
 const loadChatBox = () => require('../pages/ChatBox').default;
@@ -55,6 +62,7 @@ const loadLocationPicker = () => require('../pages/LocationPickerScreen').defaul
 const loadLocationSettings = () => require('../pages/LocationSettingsScreen').default;
 const loadNearby = () => require('../pages/NearbyScreen').default;
 const loadLicenses = () => require('../pages/LicensesScreen').default;
+/* eslint-enable @typescript-eslint/no-require-imports */
 
 const Tab = createMaterialTopTabNavigator();
 const Stack = createNativeStackNavigator();

@@ -16,7 +16,6 @@ import {
   API_ROUTES,
   type ApiFailure,
   type AuthenticationResponse,
-  type AuthUser,
   type RegistrationInput,
 } from '@motionmeet/shared';
 import { clearSessionState, store } from '../store/store';
