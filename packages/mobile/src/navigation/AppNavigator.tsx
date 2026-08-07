@@ -51,6 +51,10 @@ const loadAdvancedStatistics = () => require('../pages/AdvancedStatisticsScreen'
 const loadMuscleDistributionBody = () => require('../pages/MuscleDistributionBodyScreen').default;
 const loadMainExercises = () => require('../pages/MainExercisesScreen').default;
 const loadLeaderboard = () => require('../pages/LeaderboardScreen').default;
+const loadLocationPicker = () => require('../pages/LocationPickerScreen').default;
+const loadLocationSettings = () => require('../pages/LocationSettingsScreen').default;
+const loadNearby = () => require('../pages/NearbyScreen').default;
+const loadLicenses = () => require('../pages/LicensesScreen').default;
 
 const Tab = createMaterialTopTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -82,6 +86,10 @@ const ProfileStack = () => (
     <Stack.Screen name="Connections" getComponent={loadConnections} />
     <Stack.Screen name="MeasurementsScreen" getComponent={loadMeasurements} />
     <Stack.Screen name="MeasurementEntryScreen" getComponent={loadMeasurementEntry} />
+    <Stack.Screen name="LocationPickerScreen" getComponent={loadLocationPicker} />
+    <Stack.Screen name="LocationSettingsScreen" getComponent={loadLocationSettings} />
+    <Stack.Screen name="NearbyScreen" getComponent={loadNearby} />
+    <Stack.Screen name="LicensesScreen" getComponent={loadLicenses} />
   </Stack.Navigator>
 );
 
@@ -115,6 +123,10 @@ const MainStack = () => (
     <Stack.Screen name="MuscleDistributionBodyScreen" getComponent={loadMuscleDistributionBody} />
     <Stack.Screen name="MainExercisesScreen" getComponent={loadMainExercises} />
     <Stack.Screen name="LeaderboardScreen" getComponent={loadLeaderboard} />
+    <Stack.Screen name="LocationPickerScreen" getComponent={loadLocationPicker} />
+    <Stack.Screen name="LocationSettingsScreen" getComponent={loadLocationSettings} />
+    <Stack.Screen name="NearbyScreen" getComponent={loadNearby} />
+    <Stack.Screen name="LicensesScreen" getComponent={loadLicenses} />
   </Stack.Navigator>
 );
 

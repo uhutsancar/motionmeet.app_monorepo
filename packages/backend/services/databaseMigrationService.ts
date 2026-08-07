@@ -6,6 +6,7 @@ export const REQUIRED_TABLES = [
   "routines", "routine_exercises", "routine_sets", "workouts", "workout_exercises", "workout_sets", "posts", "post_media", "post_likes", "post_comments",
   "stories", "story_views", "user_follows", "connections", "conversations", "conversation_participants", "messages", "sessions", "password_reset_tokens",
   "upload_reservations", "media_deletion_jobs", "usage_counters", "outbox_events", "personal_records", "user_daily_workout_stats", "user_daily_muscle_stats", "user_exercise_daily_stats",
+  "location_countries", "location_states", "location_cities", "user_locations",
 ] as const;
 
 export const getIntegrityMigrationStatus = async (): Promise<{ applied: boolean; missingTables: string[]; migrationCount: number }> => {

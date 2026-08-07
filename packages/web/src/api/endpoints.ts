@@ -6,8 +6,11 @@ import {
   type Conversation,
   type Exercise,
   type ExerciseStats,
+  type LocationSuggestion,
   type Message,
   type Plan,
+  type ProfileLocation,
+  type ProfileLocationSource,
   type Post,
   type PublicUser,
   type Routine,
@@ -136,6 +139,45 @@ export const getRecentMessages = async (token: Token): Promise<MessagesResponse>
 export const getSuggestedUsers = async (token: Token): Promise<UsersResponse> => {
   const { data } = await api.get<UsersResponse>(API_ROUTES.user_extras.suggested, {
     headers: { Authorization: `Bearer ${token}` }
+  });
+  return data;
+};
+
+// PROFILE LOCATION
+// The profile update endpoint no longer accepts a location string: a place has
+// to be picked from the reference dataset so the backend can render the label
+// itself. These two calls are the whole write path.
+interface LocationSearchResponse extends BasicResponse { results: LocationSuggestion[] }
+interface ProfileLocationResponse extends BasicResponse { location: ProfileLocation }
+
+export const searchLocations = async (
+  query: string,
+  token: Token,
+  options: { locale?: string; limit?: number; signal?: AbortSignal } = {},
+): Promise<LocationSearchResponse> => {
+  const { data } = await api.get<LocationSearchResponse>(API_ROUTES.location.search, {
+    headers: { Authorization: `Bearer ${token}` },
+    params: { q: query, ...(options.locale ? { locale: options.locale } : {}), ...(options.limit ? { limit: options.limit } : {}) },
+    signal: options.signal,
+  });
+  return data;
+};
+
+export const saveProfileLocation = async (
+  selection: { cityId?: number; stateId?: number; countryId?: number; source?: ProfileLocationSource },
+  token: Token,
+  locale?: string,
+): Promise<ProfileLocationResponse> => {
+  const { data } = await api.put<ProfileLocationResponse>(API_ROUTES.profileLocation.base, selection, {
+    headers: { Authorization: `Bearer ${token}` },
+    params: locale ? { locale } : undefined,
+  });
+  return data;
+};
+
+export const clearProfileLocation = async (token: Token): Promise<ProfileLocationResponse> => {
+  const { data } = await api.delete<ProfileLocationResponse>(API_ROUTES.profileLocation.base, {
+    headers: { Authorization: `Bearer ${token}` },
   });
   return data;
 };

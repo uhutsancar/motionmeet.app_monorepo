@@ -246,6 +246,14 @@ const Connections = ({ navigation, route }: ConnectionsProps) => {
           title={t('connections.title', 'Connections')}
           titleStyle={{ color: theme.text, fontWeight: '700' }}
         />
+        {/* Finding people is what this screen is for, so proximity discovery
+            belongs here rather than buried in settings. */}
+        <Appbar.Action
+          icon="map-marker-radius-outline"
+          color={theme.text}
+          accessibilityLabel={t('nearby.title', 'Nearby')}
+          onPress={() => navigation.navigate('NearbyScreen')}
+        />
       </Appbar.Header>
 
       {/* Stats row. It must keep its natural height: squeezed by the list below

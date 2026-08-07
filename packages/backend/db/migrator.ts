@@ -5,6 +5,7 @@ import * as partialIdempotencyIndexes from "./migrations/002_partial_idempotency
 import * as detachedExerciseSnapshots from "./migrations/003_detached_exercise_snapshots.js";
 import * as bodyMeasurements from "./migrations/004_body_measurements.js";
 import * as exerciseMediaPathStyle from "./migrations/005_exercise_media_path_style.js";
+import * as locationsAndProximity from "./migrations/006_locations_and_proximity.js";
 
 const migrationProvider: MigrationProvider = {
   async getMigrations() {
@@ -14,6 +15,7 @@ const migrationProvider: MigrationProvider = {
       "003_detached_exercise_snapshots": detachedExerciseSnapshots,
       "004_body_measurements": bodyMeasurements,
       "005_exercise_media_path_style": exerciseMediaPathStyle,
+      "006_locations_and_proximity": locationsAndProximity,
     };
   },
 };

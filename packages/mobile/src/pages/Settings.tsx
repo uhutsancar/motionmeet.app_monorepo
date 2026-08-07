@@ -11,6 +11,7 @@ import {
   Text,
   TouchableRipple,
 } from 'react-native-paper';
+import Constants from 'expo-constants';
 import { useAuthContext } from '../context/AuthProvider';
 import { useTranslation } from 'react-i18next';
 import { useTheme, type MotionTheme } from '../context/ThemeContext';
@@ -214,6 +215,15 @@ const Settings = ({ navigation }: NavigationOnlyProps) => {
           />
           <Divider />
           <SettingsRow
+            icon="map-marker-outline"
+            iconColor={theme.primary}
+            title={t('settings.location', 'Location & Nearby')}
+            description={t('settings.location_sub', 'Profile place, visibility and stored position')}
+            onPress={() => navigation.navigate('LocationSettingsScreen')}
+            theme={theme}
+          />
+          <Divider />
+          <SettingsRow
             icon={isDark ? 'weather-night' : 'weather-sunny'}
             iconColor={theme.primary}
             title={t('settings.theme', 'Theme')}
@@ -240,6 +250,17 @@ const Settings = ({ navigation }: NavigationOnlyProps) => {
             onPress={() => navigation.navigate('SupportScreen')}
             theme={theme}
           />
+          <Divider />
+          {/* Both bundled datasets require their notice to stay reachable in
+              released builds; see docs/LICENSES.md. */}
+          <SettingsRow
+            icon="license"
+            iconColor={theme.textMuted}
+            title={t('licenses.title', 'Data & licences')}
+            description={t('licenses.subtitle', 'Open data sources used by MotionMeet')}
+            onPress={() => navigation.navigate('LicensesScreen')}
+            theme={theme}
+          />
         </SettingsSection>
 
         <Button
@@ -254,8 +275,10 @@ const Settings = ({ navigation }: NavigationOnlyProps) => {
           {t('settings.logout', 'Sign out')}
         </Button>
 
+        {/* Read from the app config rather than hardcoded, so a version bump
+            cannot leave this line claiming an older build. */}
         <Text style={{ color: theme.textMuted, textAlign: 'center', fontSize: 10.5 }}>
-          MotionMeet v1.0.0 · © 2026 MotionMeet Studios
+          MotionMeet v{Constants.expoConfig?.version ?? '—'} · © 2026 MotionMeet Studios
         </Text>
       </ScrollView>
     </SafeAreaView>

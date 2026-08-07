@@ -25,3 +25,8 @@
 
 # # env
 # .env
+
+# Downloaded Countries States Cities source files, cached per dataset version by
+# scripts/importLocationDataset.ts. Reproducible from the pinned tag, so they are
+# not worth carrying in git.
+.location-dataset/

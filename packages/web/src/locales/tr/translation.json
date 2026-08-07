@@ -531,5 +531,13 @@
         "faq4_a": "MotionMeet iOS, Android ve Web üzerinde kullanılabilir.",
         "faq5_q": "Bildirimler gelmiyor, ne yapmalıyım?",
         "faq5_a": "Ayarlar > Bildirimler bölümünden bildirimlerin açık olduğunu kontrol edin."
+    },
+    "location": {
+        "hint": "Şehrini, ilçeni veya ülkeni bulmak için en az iki harf yaz.",
+        "search_placeholder": "Şehir, ilçe veya ülke",
+        "no_results_title": "Sonuç bulunamadı",
+        "current_value": "Profilinde görünen",
+        "not_set": "Belirlenmedi",
+        "attribution": "Yer verisi: Countries States Cities Database · ODbL v1.0"
     }
 }

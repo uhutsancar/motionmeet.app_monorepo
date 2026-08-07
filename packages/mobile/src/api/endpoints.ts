@@ -10,7 +10,15 @@ import {
   type Exercise,
   type ExerciseSessionEntry,
   type ExerciseStats,
+  type LocationSuggestion,
   type Message,
+  type NearbySettings,
+  type NearbyUser,
+  type ProfileLocation,
+  type ProfileLocationSource,
+  type ProfileLocationVisibility,
+  type NearbyScope,
+  type DistanceVisibility,
   type PersonalRecord,
   type Plan,
   type Post,
@@ -430,6 +438,140 @@ export const getSuggestedUsers = async (token: Token): Promise<UsersResponse> =>
   return data;
 };
 
+// ============= LOCATION APIs =============
+// Profile location and Nearby are separate features that happen to share a
+// dataset. Nothing below ever receives coordinates back from the server: the
+// nearby endpoints answer with distance bands and coarse area labels only.
+
+interface LocationSearchResponse extends BasicResponse { results: LocationSuggestion[] }
+interface LocationResolveResponse extends BasicResponse { suggestion: LocationSuggestion | null; approximateArea: string | null }
+interface ProfileLocationResponse extends BasicResponse { location: ProfileLocation }
+interface NearbySettingsResponse extends BasicResponse { settings: NearbySettings }
+interface NearbyUsersResponse extends NearbySettingsResponse {
+  users: NearbyUser[];
+  reason: 'disabled' | 'no_fix' | 'stale_fix' | 'no_results' | null;
+}
+
+export const searchLocations = async (
+  query: string,
+  token: Token,
+  options: { locale?: string; country?: string | null; limit?: number; signal?: AbortSignal } = {},
+): Promise<LocationSearchResponse> => {
+  const { data } = await api.get(API_ROUTES.location.search, {
+    headers: { Authorization: `Bearer ${token}` },
+    params: {
+      q: query,
+      ...(options.locale ? { locale: options.locale } : {}),
+      ...(options.country ? { country: options.country } : {}),
+      ...(options.limit ? { limit: options.limit } : {}),
+    },
+    // Lets the picker cancel the request a keystroke made obsolete.
+    signal: options.signal,
+  });
+  return data;
+};
+
+export const getRecentLocations = async (token: Token, locale?: string): Promise<LocationSearchResponse> => {
+  const { data } = await api.get(API_ROUTES.location.recent, {
+    headers: { Authorization: `Bearer ${token}` },
+    params: locale ? { locale } : undefined,
+  });
+  return data;
+};
+
+/** Turns a device fix into a suggestion. Saves nothing until the member agrees. */
+export const resolveCoordinates = async (
+  coordinates: { latitude: number; longitude: number },
+  token: Token,
+  locale?: string,
+): Promise<LocationResolveResponse> => {
+  const { data } = await api.post(API_ROUTES.location.resolve, coordinates, {
+    headers: { Authorization: `Bearer ${token}` },
+    params: locale ? { locale } : undefined,
+  });
+  return data;
+};
+
+export const getProfileLocation = async (token: Token): Promise<ProfileLocationResponse> => {
+  const { data } = await api.get(API_ROUTES.profileLocation.base, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const saveProfileLocation = async (
+  selection: { cityId?: number; stateId?: number; countryId?: number; source?: ProfileLocationSource; visibility?: ProfileLocationVisibility },
+  token: Token,
+  locale?: string,
+): Promise<ProfileLocationResponse> => {
+  const { data } = await api.put(API_ROUTES.profileLocation.base, selection, {
+    headers: { Authorization: `Bearer ${token}` },
+    params: locale ? { locale } : undefined,
+  });
+  return data;
+};
+
+export const setProfileLocationVisibility = async (
+  visibility: ProfileLocationVisibility,
+  token: Token,
+): Promise<ProfileLocationResponse> => {
+  const { data } = await api.patch(API_ROUTES.profileLocation.base, { visibility }, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const clearProfileLocation = async (token: Token): Promise<ProfileLocationResponse> => {
+  const { data } = await api.delete(API_ROUTES.profileLocation.base, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+// ============= NEARBY APIs =============
+export const getNearbySettings = async (token: Token): Promise<NearbySettingsResponse> => {
+  const { data } = await api.get(API_ROUTES.nearby.settings, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const updateNearbySettings = async (
+  patch: { enabled?: boolean; visible?: boolean; distanceVisibility?: DistanceVisibility; scope?: NearbyScope },
+  token: Token,
+): Promise<NearbySettingsResponse> => {
+  const { data } = await api.patch(API_ROUTES.nearby.settings, patch, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+/** Sends a fix. The coordinates leave the device and are never returned. */
+export const updateNearbyPosition = async (
+  fix: { latitude: number; longitude: number; accuracy?: number | null; source?: 'gps' | 'network' | 'coarse'; permissionStatus?: string },
+  token: Token,
+): Promise<NearbySettingsResponse> => {
+  const { data } = await api.put(API_ROUTES.nearby.position, fix, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const deleteNearbyPosition = async (token: Token): Promise<NearbySettingsResponse> => {
+  const { data } = await api.delete(API_ROUTES.nearby.position, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const getNearbyUsers = async (token: Token, limit?: number): Promise<NearbyUsersResponse> => {
+  const { data } = await api.get(API_ROUTES.nearby.users, {
+    headers: { Authorization: `Bearer ${token}` },
+    params: limit ? { limit } : undefined,
+  });
+  return data;
+};
+
 export default {
   // User
   getUserData,
@@ -496,4 +638,20 @@ export default {
 
   // User Extras
   getSuggestedUsers,
+
+  // Location
+  searchLocations,
+  getRecentLocations,
+  resolveCoordinates,
+  getProfileLocation,
+  saveProfileLocation,
+  setProfileLocationVisibility,
+  clearProfileLocation,
+
+  // Nearby
+  getNearbySettings,
+  updateNearbySettings,
+  updateNearbyPosition,
+  deleteNearbyPosition,
+  getNearbyUsers,
 };

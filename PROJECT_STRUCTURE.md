@@ -1,10 +1,13 @@
 # MotionMeet — kapsamlı proje yapısı ve mimari referansı
 
-> Son kaynak incelemesi: 2 Ağustos 2026
+> Son kaynak incelemesi: 7 Ağustos 2026
 >
 > Repository türü: pnpm workspace + Turborepo monorepo
 >
 > Ana amaç: antrenman takibi ile sosyal fitness deneyimini web ve mobil istemcilerde aynı API sözleşmesi üzerinden sunmak
+>
+> Bu sürümdeki en büyük ekleme: profil konumu ve yakındakiler özellikleri. İkisinin
+> neden ayrı tutulduğu ve nasıl çalıştığı **14A** bölümünde anlatılır.
 
 Bu belge MotionMeet repository'sine ilk kez bakan bir geliştiricinin projenin ne
 yaptığını, hangi parçanın neden var olduğunu, verinin nerede tutulduğunu, bir
@@ -32,6 +35,10 @@ TypeScript bir uygulamadır. Kullanıcılar:
 - kullanıcıları takip edebilir, bağlantı isteği gönderebilir ve kabul edebilir;
 - gerçek zamanlı mesajlaşabilir, yazıyor ve çevrim içi durumlarını görebilir;
 - plan özellikleri ve kotalarına göre ürün yeteneklerini kullanabilir;
+- profiline dünya genelinde doğrulanmış bir konum (şehir/ilçe/ülke) seçebilir ve
+  bunu kimlerin göreceğini belirleyebilir;
+- açık izniyle yakınındaki sporcuları bulabilir; mesafeler yalnız kilometre
+  ölçekli aralık olarak gösterilir, kesin konum hiç kimseye açılmaz;
 - verilerini JSON olarak dışa aktarabilir ve hesabını ilişkili verilerle birlikte
   silebilir.
 
@@ -80,13 +87,19 @@ Temel mimari kararı şudur:
   paketinde tanımlanır.
 - **Eski MongoDB production runtime'ın parçası değildir.** MongoDB sürücüsü
   yalnızca izole migration workspace'inde eski veriyi okumak için bulunur.
+- **Konum için üçüncü taraf servise sorgu başına ödeme yapılmaz.** Ülke/şehir
+  verisi bir kez PostgreSQL'e alınır, yakınlık hesabı da veritabanında yapılır;
+  Google Places veya benzeri bir geocoding API'si çağrılmaz.
+- **Hassas koordinat asla istemciye dönmez.** GPS fix'i ayrı bir tabloda kalır ve
+  dışarıya yalnız kilometre ölçekli bir mesafe bandı olarak yansır.
 
 ## 3. Ana dizin ağacı
 
 ```text
 motionmeet.app_monorepo/
 ├─ .github/workflows/ci.yml       # GitHub Actions doğrulama hattı
-├─ docs/                          # DB, production, OpenAPI ve responsive notları
+├─ docs/                          # DB, production, OpenAPI, lisans ve responsive notları
+│  └─ LICENSES.md                 # Konum ve egzersiz veri setlerinin lisans yükümlülükleri
 ├─ exercises-dataset-main/        # Yerel/ignore edilen egzersiz veri snapshot'ı
 ├─ packages/
 │  ├─ backend/                    # Express + Socket.IO + PostgreSQL uygulaması
@@ -130,12 +143,13 @@ motionmeet.app_monorepo/
 | Monorepo | pnpm 11.10 workspaces, Turborepo 2.5, TypeScript 5.8 |
 | Runtime | Geliştirme/CI için Node.js 22.22+, container build/runtime için Node.js 24 Alpine |
 | Backend | Express 5.1, Kysely 0.29, `pg` 8.22, Socket.IO 4.8, JWT, bcryptjs, Helmet, CORS, Multer |
-| Kalıcı veri | PostgreSQL 18, `pgcrypto`, `citext`, UUID, enum, FK, check, trigger ve composite/partial index'ler |
+| Kalıcı veri | PostgreSQL 18, `pgcrypto`, `citext`, `pg_trgm`, opsiyonel `postgis`, UUID, enum, FK, check, trigger ve composite/partial/GIN/GiST index'ler |
+| Konum verisi | Countries States Cities Database `v3.2-export.7` (ODbL v1.0), PostgreSQL'e sınırlı alan seti olarak import edilir |
 | Geçici altyapı | Redis 7.4, Redis rate-limit store, Socket.IO Redis adapter |
 | Medya | AWS SDK v3 S3, multipart upload, presigned PUT, ImageKit URL dönüşümü |
 | E-posta | Nodemailer 9, Brevo SMTP relay (`smtp-relay.brevo.com:587`) |
 | Web | React 19.2, React Router 8, Vite 7, MUI 7, Emotion, Redux Toolkit 2, Axios, Recharts, i18next, Socket.IO client |
-| Mobile | Expo SDK 54, React Native 0.81.5, React 19.1, React Navigation 7, React Native Paper 5, SecureStore, AsyncStorage, Expo Image/Video/ImagePicker |
+| Mobile | Expo SDK 54, React Native 0.81.5, React 19.1, React Navigation 7, React Native Paper 5, SecureStore, AsyncStorage, Expo Image/Video/ImagePicker/Location/Localization |
 | Production web | Multi-stage Vite build + unprivileged Nginx Alpine |
 | Test/kalite | ESLint 9, strict TypeScript, Node test runner üzerinden `tsx --test`, Docker PostgreSQL integration testi, pnpm audit |
 
@@ -169,7 +183,7 @@ packages/backend/
 ├─ db/
 │  ├─ migrations/ # PostgreSQL schema sürümleri
 │  ├─ migrator.ts # Kysely migration registry/runner
-│  └─ types.ts    # 35 uygulama tablosunun tipli DB sözleşmesi
+│  └─ types.ts    # 39 uygulama tablosunun tipli DB sözleşmesi
 ├─ middlewares/   # JWT auth, DB user bağlama, RBAC, request ID, error handling
 ├─ realtime/      # Socket.IO auth sonrası mesaj/presence/typing işleyicileri
 ├─ repositories/  # SQL okuma/hydration ve DB entity -> API entity dönüşümü
@@ -243,6 +257,9 @@ status'a çevrilir; PostgreSQL unique violation `409`, bilinmeyen server hatalar
 | Exercise | `GET/POST /api/exercise`, `GET /records`, `GET /:id`, `GET /:id/stats` | Katalog, custom exercise ve analitik. |
 | Plan | `GET /api/plans`, `POST /api/plans/update` | Aktif planları okuma ve mevcut kullanıcı planını değiştirme. |
 | Lookup | `GET /api/muscle-groups`, `GET /api/equipment` | Aktif master data. |
+| Location | `GET /api/locations/search`, `/countries`, `/recent`, `/attribution`, `/:kind/:id`; `POST /api/locations/resolve` | Dünya ülke/bölge/şehir referans verisinde arama, tekil kayıt okuma, koordinattan öneri üretme ve ODbL attribution metni. |
+| Profil konumu | `GET/PUT/PATCH/DELETE /api/user/location` | Dataset kaydına referansla profil konumu okuma, kaydetme, görünürlük değiştirme ve kaldırma. |
+| Nearby | `GET/PATCH /api/nearby/settings`; `PUT/DELETE /api/nearby/position`; `GET /api/nearby/users` | Yakındakiler tercihleri, GPS fix yazma/silme ve mesafe bandıyla yakın kullanıcı listesi. |
 | Media | `POST /api/media/presign` | Kullanıcı ve plan limitleriyle S3 upload rezervasyonu. |
 | Admin | `GET /api/admin/users`, `PUT /users/:id/role`, `PUT /users/:id/plan` | Yalnız `superadmin`; kullanıcı/rol/plan yönetimi. |
 
@@ -342,6 +359,13 @@ değişimi şu an API/admin uygulama mantığıyla yapılır.
   conversation'lar ve kullanıcı cascade ile silinir.
 - **Account export:** büyük JSON tek seferde belleğe alınmaz; tablolar 200 satırlık
   stream'lerle response'a yazılır ve backpressure dikkate alınır.
+- **Profil konumu:** istemcinin gönderdiği id dataset'te yeniden okunur; pasif
+  veya bilinmeyen kayıt reddedilir, ülke/bölge/şehir üçlüsü çözülür ve profilde
+  görünen etiket backend tarafından üretilir. Serbest metin hiçbir yoldan
+  profile ulaşamaz.
+- **Yakındakiler:** GPS fix'i yazılırken en yakın dataset şehri bir kez çözülür;
+  liste sorgusu artık geocode yapmaz. Sonuç kilometre ölçekli banda indirgenir ve
+  bandı belirleyen, arayanın değil karşı tarafın görünürlük tercihidir.
 
 ### 6.8 Pagination ve idempotency
 
@@ -432,12 +456,21 @@ asıl veri bütünlüğü PostgreSQL FK, unique, check, enum ve transaction'lar�
 - `pgcrypto`: `gen_random_uuid()` ile DB tarafında UUID üretimi.
 - `citext`: email, username, plan slug/name ve lookup code alanlarında
   case-insensitive eşitlik/unique davranışı.
+- `pg_trgm`: konum arama tablolarında GIN trigram indeksleriyle "içinde geçen"
+  eşleşmelerini indeksli hale getirir (migration 006).
+- `postgis` (**opsiyonel**): kuruluysa migration 006 `location_cities` ve
+  `user_locations` üzerine `geography(Point,4326)` generated kolonu ve GiST
+  indeksi ekler, sorgular `ST_DWithin` kullanır. Kurulu değilse aynı
+  `latitude`/`longitude` kolonları üzerinden bounding box + haversine yolu
+  çalışır. Seçim boot'ta `detectGeometrySupport()` ile yapılır; şema iki durumda
+  da aynıdır, sonradan PostGIS eklenebilir.
 - Enum'lar: `user_role`, `plan_status`, `billing_interval`, `set_type`,
   `post_type`, `post_visibility`, `media_type`, `story_media_type`,
   `connection_status`, `message_type`, `upload_purpose`, `outbox_status`,
-  `outbox_type`.
+  `outbox_type`. Konum tabloları enum yerine `CHECK` kısıtı kullanır: dataset
+  yenilendiğinde yeni bir değer eklemek `ALTER TYPE` gerektirmesin diye.
 
-### 7.3 35 uygulama tablosu
+### 7.3 39 uygulama tablosu
 
 #### Plan ve kullanıcı
 
@@ -445,7 +478,23 @@ asıl veri bütünlüğü PostgreSQL FK, unique, check, enum ve transaction'lar�
 | --- | --- |
 | `plans` | Plan fiyatı, trial, aktiflik ve bütün ürün feature/kota değerleri. |
 | `plan_billing_cycles` | Plan başına monthly/yearly fiyat ve gelecekteki Stripe price ID. Composite PK `(plan_id, interval)`. |
-| `users` | Kimlik, password hash, profil/kapak key ve URL'leri, rol, plan, privacy, sosyal ve workout toplam sayaçları. |
+| `users` | Kimlik, password hash, profil/kapak key ve URL'leri, rol, plan, privacy, sosyal ve workout toplam sayaçları. Ayrıca profil konumu: `location` (backend'in ürettiği etiket), `location_country_id` / `location_state_id` / `location_city_id` (dataset referansları), `location_source`, `location_visibility`, `location_selected_at`. |
+
+#### Konum referans verisi ve yakınlık
+
+| Tablo | Ana alanlar ve amaç |
+| --- | --- |
+| `location_countries` | dr5hn dataset'inin kendi integer id'si (PK), ad, Türkçe ad, native ad, ISO2/ISO3, telefon kodu, emoji, koordinat, `search_name`, `is_active`, `dataset_version`. |
+| `location_states` | İl/eyalet/bölge katmanı: ülke FK, ad, kod, tür, koordinat, `search_name`, `is_active`, `dataset_version`. |
+| `location_cities` | Şehir/ilçe katmanı: ülke ve bölge FK, ad, zorunlu koordinat, sıralama için `population`, `search_name`, `is_active`, `dataset_version`. 152.970 kayıt, ~50 MB. |
+| `user_locations` | **Hassas GPS verisi.** Kullanıcı başına tek satır: koordinat, doğruluk, kaynak, çözümlenmiş `city_id`, `enabled`, `visible`, `distance_visibility`, `scope`, `permission_status`, `location_updated_at`. Hiçbir alanı istemciye serialize edilmez. |
+
+`search_name`, importer'ın ürettiği aksan/Türkçe duyarsız arama anahtarıdır
+("Nilüfer" → `nilufer`, "İstanbul" → `istanbul`, "Kadıköy" → `kadikoy`). Sorgu
+tarafı aynı `normalizeLocationName()` fonksiyonundan geçtiği için yazım
+varyasyonları aynı satıra düşer. Dataset id'lerinin korunması, dataset
+yenilendiğinde kullanıcıların seçtiği konumun bozulmamasını sağlar: kaybolan
+kayıtlar silinmez, `is_active = false` yapılır.
 
 #### Egzersiz master data
 
@@ -509,7 +558,7 @@ asıl veri bütünlüğü PostgreSQL FK, unique, check, enum ve transaction'lar�
 | `user_daily_muscle_stats` | Günlük aggregate'e bağlı kas başına set sayısı. |
 | `user_exercise_daily_stats` | Kullanıcı-gün-egzersiz başına volume, rep, set, session ve max weight. |
 
-Kysely'nin kendi migration metadata tabloları bu 35 uygulama tablosuna dahil
+Kysely'nin kendi migration metadata tabloları bu 39 uygulama tablosuna dahil
 değildir.
 
 ### 7.4 Normalizasyon ve bilinçli denormalizasyon
@@ -542,6 +591,13 @@ Bazı alanlar performans için bilinçli denormalized tutulur:
   olur; snapshot alanları durur.
 - Genel soft-delete katmanı yoktur. Kullanıcı tarafından istenen silme gerçek
   relational delete'tir; S3 gibi transaction dışı etkiler durable job'a çevrilir.
+- `user_locations` kullanıcıyla cascade olur: hesap silindiğinde hassas konum
+  ayrı bir adım gerektirmeden gider.
+- Kullanıcının profil konumu referansları (`location_country_id`,
+  `location_state_id`, `location_city_id`) `SET NULL`'dır. Ancak normal akışta bu
+  tetiklenmez: dataset yenilendiğinde kaybolan kayıtlar silinmez, `is_active`
+  false yapılır — böylece kullanıcının seçtiği yer kaybolmaz, yalnız yeni
+  aramalarda seçilemez hale gelir.
 
 ### 7.6 Constraint ve index stratejisi
 
@@ -556,7 +612,18 @@ Bazı alanlar performans için bilinçli denormalized tutulur:
   index'leri.
 - Session, reset token, story, upload reservation ve usage expiry index'leri.
 - Outbox/media job claim ve analytics history/rank index'leri.
-- `updated_at` destekleyen tablolarda ortak PostgreSQL trigger'ı.
+- Konum arama için her referans tablosunda iki tamamlayıcı indeks: `LIKE 'q%'`
+  önek eşleşmesi için `varchar_pattern_ops` b-tree (yalnız `is_active` satırlarda,
+  partial), `LIKE '%q%'` için `gin_trgm_ops` trigram GIN. Tek bir sorgu ikisini
+  birden BitmapOr ile kullanır.
+- Ters coğrafi çözümleme için `location_cities (latitude, longitude)`: dar bir
+  enlem bandı taranır, boylam filtresi birkaç yüz satırda çalışır.
+- `user_locations` üzerinde partial indeks yalnız `enabled AND visible` satırları
+  kapsar; opt-out etmiş kullanıcılar yakınlık sorgusuna hiç girmez.
+- PostGIS kuruluysa `location_cities.geo` ve `user_locations.geo` generated
+  kolonları üzerinde GiST indeksleri.
+- `updated_at` destekleyen tablolarda ortak PostgreSQL trigger'ı; konum tabloları
+  da bu trigger'a bağlıdır.
 
 ### 7.7 Migration sürümleri
 
@@ -566,6 +633,16 @@ Bazı alanlar performans için bilinçli denormalized tutulur:
    ID'lerini yalnız dolu değerlerde unique yapan beş partial index.
 3. `003_detached_exercise_snapshots`: routine/workout exercise FK'lerini nullable
    `ON DELETE SET NULL` yaparak geçmiş snapshot'ı korur.
+4. `004_body_measurements`: gün başına tek kayıt kısıtlı vücut ölçüm tablosu.
+5. `005_exercise_media_path_style`: egzersiz medya URL'lerini virtual-hosted S3
+   yerine path-style endpoint'e taşır.
+6. `006_locations_and_proximity`: `pg_trgm`; `location_countries`,
+   `location_states`, `location_cities` referans tabloları; `users` üzerine altı
+   profil konumu kolonu; hassas `user_locations` tablosu; PostGIS **varsa**
+   generated `geography` kolonu ve GiST indeksi. PostGIS varlığı
+   `pg_available_extensions` üzerinden `CREATE EXTENSION`'dan **önce** kontrol
+   edilir — migrator her migration'ı transaction'a sardığı için başarısız bir
+   `CREATE EXTENSION` bütün migration'ı düşürürdü ve try/catch bunu kurtaramaz.
 
 Migration komutu:
 
@@ -583,8 +660,23 @@ Redis'in dört görevi vardır:
 
 1. **Cache:** feed 30 sn, profile 60 sn, exercise list 300 sn, exercise detail
    900 sn gibi kısa TTL'li JSON cache'leri. Key prefix'i `motionmeet:v1:`.
-2. **Rate limit:** global, auth, account, media presign ve custom exercise
-   limiter'ları. Prefix `motionmeet:rate-limit:*`.
+   Konum özellikleri de bu katmanı kullanır:
+   - `loc:search:{locale}:{country}:{limit}:{query}` — 600 sn. Konum arama her
+     tuş vuruşunda tetiklenebildiği için en yüksek getirili cache burasıdır;
+     popüler sorgular 150k satırlık şehir tablosuna hiç inmez.
+   - `loc:countries:{locale}` — 3600 sn. 250 satırlık tam ülke listesi.
+   - `loc:node:{kind}:{id}:{locale}` — 3600 sn. Tekil dataset kaydı; her profil
+     konumu yazımı bu kaydı doğrulamak için okur.
+   - `loc:recent:{userId}` — 90 gün. Kullanıcının son seçtiği konumlar.
+     **Bilinçli olarak PostgreSQL'de tutulmaz:** cache temizliğinde kaybolması
+     sorun değildir ve kullanıcının gezdiği yerlerin izini tutan bir tablo
+     daha az olur.
+   - `nearby:{userId}:{scope}:{limit}:{fixTs}` — 45 sn. Yakındakiler sonucu.
+     Key'de fix zaman damgası bulunduğu için yeni konum yazımı otomatik olarak
+     yeni bir key üretir.
+2. **Rate limit:** global, auth, account, media presign, custom exercise,
+   `location-search`, `nearby-position` ve `nearby-list` limiter'ları. Prefix
+   `motionmeet:rate-limit:*`.
 3. **Realtime:** Socket.IO publisher/subscriber adapter ve instance'lar arası room
    yayını.
 4. **Koordinasyon:** cron lease'leri ve socket message/typing sayaçları.
@@ -794,11 +886,21 @@ Vercel dağıtımında API/Socket origin'i external HTTPS/WSS olmalıdır.
 - Uygulama adı/slug: `MotionMeet` / `motionmeet`.
 - Deep-link scheme: `motionmeet`.
 - Android package ve iOS bundle ID: `app.motionmeet.mobile`.
-- Android `versionCode: 1`, iOS `buildNumber: 1`, uygulama sürümü `1.0.0`.
+- Android `versionCode: 2`, iOS `buildNumber: 2`, uygulama sürümü `1.1.0`.
+  Ayarlar ekranındaki sürüm satırı bu değeri `expo-constants` üzerinden okur,
+  elle yazılmaz.
 - Portrait orientation, automatic light/dark UI, custom icon/splash.
 - iOS tablet desteği açık.
 - Android keyboard layout mode `resize`; uygulama backup'ı kapalı, legacy harici
   depolama izinleri engelli ve ImagePicker mikrofon izni kapalıdır.
+- Konum izinleri (SDK 54, `expo-location` ~19.0):
+  - iOS: yalnız `locationWhenInUsePermission` metni tanımlıdır;
+    `locationAlwaysAndWhenInUsePermission` ve background location kapalıdır.
+  - Android: `ACCESS_COARSE_LOCATION` ve `ACCESS_FINE_LOCATION` eklenir.
+    `ACCESS_BACKGROUND_LOCATION` hem plugin ayarında kapalıdır hem de
+    `blockedPermissions` ve manifest'teki `tools:node="remove"` ile açıkça
+    kaldırılır — böylece bir bağımlılık onu geri getiremez ve Play Store veri
+    güvenliği formu "arka planda takip yok" beyanıyla tutarlı kalır.
 
 ### 12.2 Provider ve state ağacı
 
@@ -834,9 +936,21 @@ Alt tab'lar:
 Root stack; ChatBox, profile edit, settings, connections, exercise detail,
 active workout, workout detail/summary, statistics, advanced statistics, muscle
 distribution, monthly report detayları, notifications, privacy, support,
-pricing, main exercise ve leaderboard ekranlarını açar. Messages badge başlangıçta
-conversation unread toplamından hesaplanır ve Socket.IO `message_received` ile
-canlı güncellenir.
+pricing, main exercise, leaderboard, konum seçici, konum ayarları, yakındakiler
+ve lisans ekranlarını açar. Messages badge başlangıçta conversation unread
+toplamından hesaplanır ve Socket.IO `message_received` ile canlı güncellenir.
+
+Konum ekranlarının giriş noktaları:
+
+| Ekran | Nereden açılır |
+| --- | --- |
+| `LocationPickerScreen` | Profil düzenleme ekranındaki konum satırı; konum ayarlarındaki "Konumu değiştir". |
+| `LocationSettingsScreen` | Ayarlar → Konum ve Yakındakiler; Yakındakiler ekranının dişli ikonu. |
+| `NearbyScreen` | Connections ekranının başlığındaki harita ikonu. Kişi bulma ekranı burasıdır, ayarların içine gömülmez. |
+| `LicensesScreen` | Ayarlar → Destek → Veri ve lisanslar. |
+
+Ekranlar `getComponent` ile lazy yüklenir; konum özelliği kullanılmadığı sürece
+`expo-location` ve şehir listesi ekranları bundle'dan çalıştırılmaz.
 
 `navigation/types.ts` exercise/workout/stat route parametrelerini ve ortak
 navigation prop sözleşmelerini merkezileştirir.
@@ -877,6 +991,33 @@ adb -s <cihaz-serisi> reverse tcp:5173 tcp:5173
 ADB reverse eşleşmesi USB kopunca veya cihaz yeniden başlayınca tekrar kurulmalıdır.
 Release/store build ise gerçek public HTTPS backend/web origin'iyle üretilmelidir.
 
+### 12.5.1 Cihaz konumu
+
+`src/hooks/useDeviceLocation.ts` `expo-location`'ı tek bir dar yüzeyin arkasına
+alır: bir kez izin ister, bir kez okur, sonucu döner. Watcher, background task ve
+geçmiş yoktur.
+
+Hata yolları exception olarak değil, adlandırılmış sonuç olarak döner; çünkü her
+biri kullanıcıya farklı bir cümle ve farklı bir kurtarma aksiyonu gerektirir:
+
+| Sonuç | Anlamı | Ekranın yaptığı |
+| --- | --- | --- |
+| `granted` | Fix alındı | Akışa devam |
+| `denied` | Bu sefer reddedildi, tekrar sorulabilir | "İzin ver" butonu |
+| `blocked` | Kalıcı reddedildi veya politika ile kısıtlı | "Ayarları aç" |
+| `services_off` | Cihaz genelinde konum kapalı | "Ayarları aç" |
+| `unavailable` | İzin var ama donanım fix üretmedi | "Tekrar dene" |
+| `timeout` | 15 saniyede fix gelmedi | "Tekrar dene" |
+
+Okuma stratejisi: 2 dakikadan yeni bir `getLastKnownPositionAsync` sonucu varsa
+o kullanılır, yoksa `Accuracy.Balanced` ile tek bir `getCurrentPositionAsync`
+yapılır. Üründe hiçbir şey kilometre altını ayırt etmediği için daha hassas bir
+mod istemek yalnız pil ve süre maliyeti olurdu.
+
+iOS'ta Precise Location kapalıysa veya Android yalnız yaklaşık konum verdiyse
+okuma reddedilmez; doğruluk 2 km'nin üzerindeyse `source: "coarse"` olarak
+işaretlenip yine kullanılır.
+
 ### 12.6 Mobile medya
 
 Expo ImagePicker asset'i Blob'a çevrilir. İstemci mümkünse gerçek magic byte'tan
@@ -893,11 +1034,40 @@ kaynağı değil tool config dosyalarıdır.
 
 `packages/mobile/dist-*` Git tarafından ignore edilir. Yerel APK/Expo export
 artifact'leri source code değildir ve release signing secret'ları repository'ye
-konmaz. Son fiziksel Android kontrolünde arm64-v8a release APK Reeder P13 Blue
-Max, Android 9/API 28 üzerinde açılmış; login ekranı render edilmiş, USB reverse
-üzerinden backend auth cevabı alınmış ve fatal React Native/AndroidRuntime hatası
-görülmemiştir. Bu bir yerel smoke testtir; mağaza imzası ve production HTTPS
-dağıtımının yerine geçmez.
+konmaz.
+
+#### Yerel backend'e bakan sideload APK
+
+Fiziksel cihazda kendi makinemizdeki backend'e bağlanan bir release APK üretmek
+için:
+
+```powershell
+adb -s <cihaz> reverse tcp:4000 tcp:4000
+cd packages/mobile/android
+$env:EXPO_PUBLIC_API_URL       = 'http://127.0.0.1:4000'
+$env:EXPO_PUBLIC_WEB_URL       = 'http://127.0.0.1:5173'
+$env:EXPO_PUBLIC_ALLOW_INSECURE_LAN = 'true'
+./gradlew assembleRelease
+```
+
+`EXPO_PUBLIC_ALLOW_INSECURE_LAN`, `src/config/environment.ts` içindeki HTTPS
+zorunluluğunu yalnız loopback ve özel LAN adresleri için gevşetir; public bir
+http origin'e bakan build yine başlamayı reddeder. Bu bayrakla üretilen APK
+mağazaya gönderilmemelidir.
+
+> Daha önce aynı iş `-PmmLanTestBundle=true` ile, gömülü bir **development**
+> bundle üreterek yapılıyordu. Bu yol artık çalışmıyor: React Native embedded
+> ortamda dev bundle'ı çalıştırırken devtools websocket'i açmayı deniyor,
+> "Cannot create devtools websocket connections in embedded environments"
+> hatasıyla modül değerlendirmesi kesiliyor, `AppRegistry.registerComponent`
+> hiç çağrılmıyor ve uygulama beyaz ekranda kalıyor. Gradle bayrağı kaldırıldı;
+> yerine yukarıdaki environment opt-in'i kullanılıyor.
+
+Son fiziksel Android kontrolü (2026-08-07, uygulama 1.1.0 / versionCode 2):
+arm64-v8a release APK Reeder P13 Blue Max, Android 9/API 28 üzerinde açılmış;
+merged manifest'te yalnız `ACCESS_COARSE_LOCATION` ve `ACCESS_FINE_LOCATION`
+bulunduğu, `ACCESS_BACKGROUND_LOCATION`'ın olmadığı doğrulanmış. Bu bir yerel
+smoke testtir; mağaza imzası ve production HTTPS dağıtımının yerine geçmez.
 
 ## 13. Shared paket (`packages/shared`)
 
@@ -909,6 +1079,10 @@ gruplar:
 - user, plan, privacy, role, connection ve follow tipleri;
 - exercise, set, workout, routine, stats ve personal record tipleri;
 - post, comment, media, story, message, conversation ve notification tipleri;
+- konum tipleri: `LocationSuggestion`, `ProfileLocation`, `NearbySettings`,
+  `NearbyUser`, `DistanceBand`, `NearbyScope` ve bunların sabit listeleri
+  (`NEARBY_SCOPES`, `NEARBY_SCOPE_METERS`, `DISTANCE_VISIBILITIES`,
+  `PROFILE_LOCATION_VISIBILITIES`) ile `LOCATION_DATASET_ATTRIBUTION`;
 - Socket.IO `ClientToServerEvents` / `ServerToClientEvents` event map'leri;
 - `API_ROUTES` endpoint sabitleri;
 - auth/content/pagination limitleri;
@@ -967,6 +1141,118 @@ olasılıklarını, self-edge'leri, kritik user alanlarını, natural-key edge'l
 ve S3 object key kapsamını karşılaştırıp tek JSON raporda `valid` üretir. Migration
 öncesinde her iki sistemin doğrulanmış backup'ı alınmalı; Mongo kaynak salt
 okunur tutulmalı ve final doğrulama bitmeden eski kaynak silinmemelidir.
+
+## 14A. Konum mimarisi
+
+MotionMeet iki ayrı konum kavramı taşır. Aynı referans tablolarını
+kullanmaları dışında hiçbir ortak noktaları yoktur ve bu ayrım bilinçlidir.
+
+| | Profil konumu | Yakındakiler (Nearby) |
+| --- | --- | --- |
+| Kaynak | Kullanıcının listeden seçtiği dataset kaydı | Cihazın GPS fix'i |
+| Hassasiyet | Şehir/ilçe düzeyi | Ham koordinat |
+| Görünürlük | Profilde, arama sonuçlarında | **Hiç kimseye gösterilmez** |
+| Depolama | `users` tablosundaki altı kolon | Ayrı `user_locations` tablosu |
+| İzin | GPS izni gerekmez | Açık foreground konum izni |
+| Değişim | Yalnız kullanıcı değiştirir | Ekran açıldıkça yenilenir |
+| Silme | Profil konumunu kaldır | Kayıtlı konumu sil |
+
+Bu ayrım şu somut sorunları çözer: profilinde "Bursa" yazan biri İstanbul'a
+gittiğinde profili kendiliğinden değişmez; GPS izni vermeyen biri yine de şehir
+bazlı önerilerden yararlanır; yakındakiler kapatıldığında profil bozulmaz;
+hassas koordinat hiçbir zaman profil verisiyle aynı satırda durmaz.
+
+### 14A.1 Profil konumu akışı
+
+```text
+Kullanıcı "nil" yazar
+  -> mobil 280 ms debounce, önceki istek AbortController ile iptal
+  -> GET /api/locations/search?q=nil&locale=tr&country=TR
+  -> normalizeLocationQuery(): "nil" (2 karakterden kısaysa hiç istek atılmaz)
+  -> Redis: loc:search:tr:TR:15:nil  (hit ise DB'ye hiç inilmez)
+  -> üç paralel sorgu: cities / states / countries
+     her biri: search_name = q  OR  LIKE 'q%'  OR  LIKE '%q%'
+     (btree varchar_pattern_ops + GIN trigram indeksleri)
+  -> JS'te tek listede birleştirilir ve sıralanır:
+     tam eşleşme > prefix > içeren
+       -> kullanıcının ülkesi
+       -> city > state > country
+       -> nüfus
+       -> alfabetik
+  -> aynı displayName'e düşen ikizler elenir ("Bursa" ili ve "Bursa" şehri)
+  -> Redis'e 600 sn yazılır, istemciye döner
+
+Kullanıcı bir öneriye dokunur
+  -> PUT /api/user/location { cityId: 108249, source: "manual_search" }
+  -> backend id'yi tekrar okur; pasif veya bilinmeyen id 404 döner
+  -> ülke/bölge/şehir üçlüsü çözülür, etiket **backend'de** üretilir
+  -> users.location + üç id + source + selected_at yazılır
+  -> profile cache invalidate edilir, seçim Redis'teki "son kullanılanlar"a eklenir
+```
+
+İstemcinin gönderdiği metin hiçbir aşamada profile yazılmaz. `POST /api/user/update`
+gövdesindeki `location` alanı okunmaz bile.
+
+### 14A.2 Yakındakiler akışı
+
+```text
+Kullanıcı Yakındakiler ekranını açar / anahtarı açar
+  -> expo-location foreground izni istenir (arka plan izni hiç istenmez)
+  -> son 2 dakikadan yeni bir fix varsa o kullanılır, yoksa Balanced accuracy
+     ile tek okuma yapılır, 15 sn'de gelmezse timeout durumu gösterilir
+  -> PUT /api/nearby/position { latitude, longitude, accuracy, source }
+  -> backend en yakın dataset şehrini çözer ve satıra yazar
+     (yazma anında bir kez; liste sorgusu artık geocode yapmaz)
+  -> GET /api/nearby/users
+  -> SQL: enabled AND visible AND user_id <> me
+          AND location_updated_at > now() - 7 gün
+          AND users.privacy_show_in_search
+          AND (yarıçap içinde | aynı city_id)
+  -> her satır için mesafe **banda** çevrilir; bandı belirleyen
+     karşı tarafın distance_visibility tercihidir
+  -> istemciye ad, kullanıcı adı, kaba bölge etiketi ve bant döner
+```
+
+Depolanan fix 15 dakikadan yeniyse ekran GPS'i tekrar uyandırmaz; 7 günden
+eskiyse kullanıcı başkalarının listesinden düşer.
+
+### 14A.3 Mesafe bantları ve neden bu şekilde
+
+`utils/distanceBands.ts` metreyi altı banda indirger ve **1 km'nin altını hiç
+ayırt etmez**. Aynı odadaki iki kişi ile birkaç sokak ötedeki iki kişi aynı
+cevabı üretir.
+
+| Gerçek mesafe | Bant |
+| --- | --- |
+| 0 – 1 km | `nearby` |
+| 1 – 2 km | `within_2km` |
+| 2 – 5 km | `2_5km` |
+| 5 – 10 km | `5_10km` |
+| 10 – 25 km | `10_25km` |
+| 25 – 50 km | `25_50km` |
+| daha uzak | `same_city` / `same_region` |
+
+Bu taban, üçgenleme saldırısını işe yaramaz kılar: saldırgan kendi konumunu
+gezdirip tekrar tekrar sorgulasa bile öğrenebileceği en fazla şey hedefin
+hangi kilometrelik halkada olduğudur. Karşı taraf `nearby_only` seçtiyse her
+mesafe `nearby`'ye, `hidden` seçtiyse `unknown`'a düşer.
+
+### 14A.4 Dosya haritası
+
+| Dosya | Sorumluluk |
+| --- | --- |
+| `packages/shared/src/types/location.ts` | Ortak tipler, bant/kapsam sabitleri, ODbL attribution metni. |
+| `backend/utils/locationText.ts` | Türkçe/aksan duyarsız `search_name` üretimi, sorgu normalizasyonu, LIKE kaçışı, etiket biçimlendirme. |
+| `backend/utils/distanceBands.ts` | Metre -> bant dönüşümü ve görünürlük tercihinin uygulanması. |
+| `backend/services/locationGeometry.ts` | PostGIS / bounding-box seçimi ve iki yolun SQL parçaları. |
+| `backend/services/locationService.ts` | Arama, tekil kayıt okuma, ters coğrafi çözümleme, profil konumu yazma. |
+| `backend/services/nearbyService.ts` | Fix yazma, tercih yönetimi, yakınlık sorgusu. |
+| `backend/scripts/importLocationDataset.ts` | Sürümü sabitlenmiş, tekrar çalıştırılabilir dataset import'u. |
+| `mobile/src/hooks/useDeviceLocation.ts` | expo-location sarmalayıcısı; her hata yolunu adlandırılmış bir sonuca çevirir. |
+| `mobile/src/pages/LocationPickerScreen.tsx` | Konum seçici. |
+| `mobile/src/pages/NearbyScreen.tsx` | Yakındakiler listesi ve izin durumları. |
+| `mobile/src/pages/LocationSettingsScreen.tsx` | İki konumun görünürlük ve silme kontrolleri. |
+| `mobile/src/pages/LicensesScreen.tsx` | Veri seti lisans bildirimleri. |
 
 ## 15. Temel uçtan uca veri akışları
 
@@ -1040,6 +1326,36 @@ Authenticated ve rate-limited delete request
  -> media worker S3 nesnelerini retry ederek siler
 ```
 
+`user_locations` satırı `user_id` üzerinden `ON DELETE CASCADE` ile gider; hesap
+silindiğinde hassas konum verisi ayrıca bir temizlik adımı gerektirmez.
+
+### 15.6 Profil konumu seçme
+
+```text
+Konum seçici ekranı (mobil) veya profil düzenleme (web)
+ -> en az 2 karakter, 280 ms debounce, eski istek iptal
+ -> GET /api/locations/search (Redis 600 sn cache)
+ -> kullanıcı bir öneriye dokunur (serbest metin yolu yok)
+ -> PUT /api/user/location { cityId | stateId | countryId }
+ -> backend id'yi yeniden doğrular, üçlüyü çözer, etiketi kendi üretir
+ -> users satırı + profile cache invalidation + Redis "son kullanılanlar"
+ -> istemci fetchUser ile Redux/Query state'ini tazeler
+```
+
+### 15.7 Yakındakiler
+
+```text
+Yakındakiler ekranı açılır
+ -> foreground konum izni (arka plan izni hiç istenmez)
+ -> saklı fix 15 dakikadan yeniyse GPS hiç uyandırılmaz
+ -> PUT /api/nearby/position (rate limit: 15 dakikada 40)
+ -> backend en yakın dataset şehrini çözer, satırı upsert eder
+ -> GET /api/nearby/users (rate limit: 15 dakikada 120, Redis 45 sn cache)
+ -> gizlilik filtreleri + yarıçap/aynı şehir koşulu SQL'de uygulanır
+ -> her satır kilometre ölçekli banda indirgenir
+ -> istemciye koordinat değil bant ve kaba bölge etiketi döner
+```
+
 ## 16. Environment değişkenleri
 
 ### 16.1 Backend
@@ -1087,6 +1403,7 @@ Vite değişkenleri build-time'dır; secret içermemelidir.
 | --- | --- |
 | `EXPO_PUBLIC_API_URL` | API ve Socket origin'i; public bundle içine gömülür. |
 | `EXPO_PUBLIC_WEB_URL` | Web/terms/privacy origin'i; public bundle içine gömülür. |
+| `EXPO_PUBLIC_ALLOW_INSECURE_LAN` | Yalnız yerel cihaz testine yönelik sideload build'lerde `true`. HTTPS zorunluluğunu **sadece** loopback/özel LAN adresleri için gevşetir; public bir http origin'de build yine başlamayı reddeder. Mağaza build'inde asla set edilmez. |
 | `EXPO_NO_DEPENDENCY_VALIDATION` | Expo CLI online version lookup'ını kapatır. |
 | `REACT_NATIVE_PACKAGER_HOSTNAME` | LAN Metro host'u; local-network script'i üretir. |
 
@@ -1141,7 +1458,16 @@ pnpm dev:local
 pnpm dev:local:backend
 pnpm dev:local:web
 pnpm dev:local:mobile
+
+# Dünya ülke/bölge/şehir veri setini içeri al (bir kez; sürüm değişince tekrar)
+pnpm --filter @motionmeet/backend run import:locations
 ```
+
+`import:locations` migration 006 uygulandıktan sonra çalıştırılmalıdır. İndirdiği
+kaynak dosyaları `packages/backend/.location-dataset/<sürüm>/` altına önbelleğe
+alır; bu dizin git dışıdır ve sabitlenmiş tag'den her zaman yeniden üretilebilir.
+Konum arama, bu import çalışmadan önce sessizce boş sonuç döner — hata değil,
+sadece veri yoktur.
 
 `local-network.mjs` Wi-Fi'ye en yüksek, fiziksel Ethernet'e ikinci önceliği
 verir; WSL, Hyper-V, VirtualBox, VMware, Docker, VPN, tunnel ve loopback
@@ -1244,6 +1570,20 @@ stories, messages, media upload, export ve account deletion ayrı QA hesaplarıy
 doğrulanmalıdır. S3 testinde presign, PUT, signature verify, public URL ve delete
 job tamamlanması birlikte kontrol edilmelidir.
 
+Konum özellikleri için ek smoke listesi:
+
+- "Nil" aramasında "Nilüfer, Bursa, Türkiye" ilk sırada geliyor mu?
+- Aksansız ("nilufer") ve büyük harfli ("NİLÜFER") yazımlar aynı sonucu veriyor mu?
+- Seçim yapılmadan profil konumu kaydedilebiliyor mu (kaydedilememeli)?
+- `POST /api/user/update` gövdesine `location` konması profili değiştiriyor mu
+  (değiştirmemeli)?
+- Konum görünürlüğü `private` iken başka bir hesap etiketi görüyor mu (görmemeli)?
+- Konum izni reddedildiğinde, "bir daha sorma" durumunda ve konum servisi kapalıyken
+  ekran ayrı ayrı doğru mesajı ve doğru kurtarma aksiyonunu gösteriyor mu?
+- Yakındakiler kapatıldığında kullanıcı diğer hesapların listesinden hemen çıkıyor mu?
+- "Kayıtlı konumumu sil" sonrası `user_locations` satırı tamamen gidiyor mu?
+- Herhangi bir API cevabında `latitude`/`longitude` alanı var mı (olmamalı)?
+
 ## 20. Güvenlik modeli
 
 - Strict environment validation ve production HTTPS zorunluluğu.
@@ -1252,7 +1592,10 @@ job tamamlanması birlikte kontrol edilmelidir.
 - Cookie refresh/logout için exact-origin + custom-header CSRF doğrulaması.
 - JSON/multipart content-type allowlist'i, 500 KB JSON body ve endpoint bazlı
   Multer dosya/adet/alan limitleri.
-- Global, auth, account, media ve custom exercise rate limitleri.
+- Global, auth, account, media, custom exercise, konum arama ve nearby
+  (position/list) rate limitleri.
+- Hassas konum verisi hiçbir API cevabında, log satırında veya analytics
+  event'inde bulunmaz; yakınlık yalnızca kilometre ölçekli bant olarak döner.
 - Password hash, hash'li refresh/reset secret; kısa access token; refresh rotation.
 - Role, ownership, privacy ve plan-feature kontrolleri.
 - SQL identifier/legacy import doğrulaması ve Kysely parameter binding.
@@ -1273,6 +1616,12 @@ Production'da izlenmesi gerekenler:
 - Socket bağlantı sayısı ve instance'lar arası adapter sağlığı;
 - outbox pending/attempt/lag;
 - media deletion backlog ve S3 hata oranı;
+- boot'taki `location_geometry_mode` satırı: production'da `postgis` beklenir,
+  `bounding-box` görülüyorsa extension kurulmamış demektir;
+- konum arama p95 süresi ve `loc:search:*` cache hit oranı;
+- `nearby-position` / `nearby-list` limiter'larının 429 oranı — normalin üstüne
+  çıkması scraping denemesinin ilk işaretidir;
+- `user_locations` satır sayısı ve bunların kaçının 7 günden eski olduğu;
 - abandoned upload ve expired story temizleme gecikmesi;
 - disk değil managed PostgreSQL point-in-time backup ve düzenli restore testi;
 - JWT, DB, Redis, AWS/ImageKit ve SMTP credential rotation.
@@ -1307,7 +1656,27 @@ Bu bölüm mevcut kaynak durumunu dürüstçe kaydeder:
    lifecycle/CDN ve secret manager ayarları dış deployment sorumluluğudur.
 10. Web/mobile için tam otomatik browser/device E2E framework'ü yoktur; mevcut
     güvence typecheck/build, backend integration ve manuel smoke test ağırlıklıdır.
-11. Exercise medya lisansı production dağıtımı öncesi ayrıca çözülmelidir.
+11. **Exercise medya lisansı production dağıtımı öncesi ayrıca çözülmelidir.**
+    2026-08-07 itibarıyla 1.325 egzersizin 1.323'ü görselini ve GIF'ini
+    MotionMeet'in kendi S3 bucket'ından servis ediyor. Bu medya Gym visual'a
+    aittir; upstream repository'nin izni o repository'ye verilmiştir ve
+    "cloning this repo is not a licence" der. Gerekli attribution artık
+    uygulamada gösteriliyor, ancak kendi lisansımızı almak (veya medyayı
+    değiştirmek) hâlâ açık bir karardır. Ayrıntı: `docs/LICENSES.md` §2b.
+12. **Engelleme (block) özelliği yok.** Yakındakiler sorgusu `privacy_show_in_search`
+    ile filtreler; ürün ileride kullanıcı engelleme eklerse aynı sorguya bir
+    `NOT EXISTS (user_blocks ...)` koşulu eklenmelidir. Şu anda engellenecek bir
+    ilişki bulunmadığı için filtre de yoktur.
+13. **Konum verisi yaşam döngüsü için zamanlanmış temizlik yok.** 7 günden eski
+    fix'ler sorgu sırasında elenir ama satır kalır. Gizlilik politikası bir
+    saklama süresi taahhüt ederse `workers/cronJobs.ts` içine bir purge görevi
+    eklenmelidir.
+14. **PostGIS bu geliştirme makinesinde kurulu değil.** Şema ve servis iki yolu
+    da destekliyor ve yerelde bounding-box + haversine yolu çalışıyor; production
+    PostgreSQL'inde PostGIS etkinleştirildiğinde migration generated `geography`
+    kolonunu ve GiST indeksini kurar, servis boot'ta otomatik olarak `ST_DWithin`
+    yoluna geçer. Yükseltme sonrası `location_geometry_mode` log satırı
+    `postgis` göstermelidir.
 
 Bu maddeler çalışan production path'i tarif eden bölümlerle karıştırılmamalı;
 teknik borç kapatıldığında hem kod hem bu belge birlikte güncellenmelidir.
@@ -1343,7 +1712,13 @@ Yeni bir domain özelliği eklerken önerilen sıra:
 | Bir endpoint gerçekten var mı? | `packages/backend/routes/*.ts`, ardından controller |
 | Domain kuralı/transaction nerede? | `packages/backend/services/*.ts` |
 | SQL satırı API tipine nasıl dönüşüyor? | `packages/backend/repositories/*.ts` |
-| DB'de hangi tablo/constraint/index var? | `db/migrations/001_*`, `002_*`, `003_*` ve `db/types.ts` |
+| DB'de hangi tablo/constraint/index var? | `db/migrations/001_*` … `006_*` ve `db/types.ts` |
+| Profil konumu ile yakındakiler arasındaki fark? | Bu belgenin 14A bölümü |
+| Konum araması neden bu sırayla dönüyor? | `services/locationService.ts` içindeki `searchLocations` |
+| Mesafe neden tam sayı değil de aralık? | `utils/distanceBands.ts` ve 14A.3 |
+| PostGIS var mı, yoksa ne oluyor? | `services/locationGeometry.ts`, boot'taki `location_geometry_mode` logu |
+| Şehir verisi nereden geldi, nasıl yenilenir? | `scripts/importLocationDataset.ts`, `docs/LICENSES.md` |
+| Veri seti lisans yükümlülükleri neler? | `docs/LICENSES.md` |
 | Ortak API route ve tipler? | `packages/shared/src/index.ts`, `src/types/*` |
 | Web route'ları? | `packages/web/src/App.tsx` |
 | Mobile route/tab/stack? | `packages/mobile/src/navigation/*` |

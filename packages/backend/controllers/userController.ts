@@ -6,6 +6,7 @@ import { isFiniteNumber, isNonEmptyString, isOptionalString, isUserId } from "..
 import { hasValidMediaSignature } from "../utils/mediaValidation.js";
 import * as userService from "../services/userService.js";
 import * as accountService from "../services/accountService.js";
+import * as locationService from "../services/locationService.js";
 import { parsePagination } from "../utils/pagination.js";
 import {
   discardReservedUploads,
@@ -120,14 +121,17 @@ export const deleteAccount: RequestHandler = async (req, res, next) => {
 export const updateUserData: RequestHandler = async (req, res, next) => {
   try {
     const userId = req.userId;
-    const { username, bio, location, full_name, weight, height } = req.body || {};
+    // `location` is intentionally not read here. It is derived from a dataset
+    // record chosen through /api/user/location, so accepting a string on this
+    // endpoint would reopen the free-text path the picker exists to close.
+    const { username, bio, full_name, weight, height } = req.body || {};
     const user = await userService.getUserForProfileUpdate(userId);
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
     if (username !== undefined && (!isNonEmptyString(username, 30) || !/^[A-Za-z0-9._-]{3,30}$/.test(username.trim()))) {
       return res.status(400).json({ success: false, message: "Invalid username" });
     }
-    if (!isOptionalString(bio, 500) || !isOptionalString(location, 100) || !isOptionalString(full_name, 100)) {
+    if (!isOptionalString(bio, 500) || !isOptionalString(full_name, 100)) {
       return res.status(400).json({ success: false, message: "Invalid profile data" });
     }
     if (weight !== undefined && !isFiniteNumber(weight, { min: 0, max: 1000 })) {
@@ -145,7 +149,6 @@ export const updateUserData: RequestHandler = async (req, res, next) => {
     const updatedData: Record<string, string | number> = {};
     if (username !== undefined) updatedData.username = username.trim();
     if (bio !== undefined) updatedData.bio = bio?.trim() ?? "";
-    if (location !== undefined) updatedData.location = location?.trim() ?? "";
     if (full_name !== undefined) updatedData.full_name = full_name?.trim() ?? "";
     if (weight !== undefined) updatedData.weight = Number(weight);
     if (height !== undefined) updatedData.height = Number(height);
@@ -407,6 +410,70 @@ export const getUserProfile: RequestHandler = async (req, res, next) => {
       posts: result.posts,
       nextCursor: result.nextCursor,
     });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * Profile location is written through its own endpoints rather than the generic
+ * profile update, because it is the one field a client may not author. The
+ * request names a dataset record; the backend re-reads that record, rejects it
+ * if it is unknown or deactivated, and renders the label itself.
+ */
+export const getProfileLocation: RequestHandler = async (req, res, next) => {
+  try {
+    return res.json({ success: true, location: await locationService.getProfileLocation(req.userId) });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const saveProfileLocation: RequestHandler = async (req, res, next) => {
+  try {
+    const body = req.body ?? {};
+    const candidates = (["city", "state", "country"] as const)
+      .map((kind) => ({ kind, id: locationService.parseLocationId(body[`${kind}Id`]) }))
+      .filter((candidate) => candidate.id !== null);
+
+    if (candidates.length !== 1) {
+      return res.status(400).json({ success: false, message: "Supply exactly one of cityId, stateId or countryId" });
+    }
+    if (body.visibility !== undefined && !locationService.parseVisibility(body.visibility)) {
+      return res.status(400).json({ success: false, message: "Unsupported location visibility" });
+    }
+
+    const [selection] = candidates;
+    const saved = await locationService.saveProfileLocation(
+      req.userId,
+      { kind: selection.kind, id: selection.id as number },
+      {
+        source: locationService.parseSource(body.source),
+        visibility: locationService.parseVisibility(body.visibility),
+        locale: locationService.parseLocale(req.query?.locale ?? req.get("accept-language")),
+      },
+    );
+    if (!saved) return res.status(404).json({ success: false, message: "Location not found" });
+
+    return res.json({ success: true, location: saved });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const updateProfileLocationVisibility: RequestHandler = async (req, res, next) => {
+  try {
+    const visibility = locationService.parseVisibility(req.body?.visibility);
+    if (!visibility) return res.status(400).json({ success: false, message: "Unsupported location visibility" });
+    return res.json({ success: true, location: await locationService.updateProfileLocationVisibility(req.userId, visibility) });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const clearProfileLocation: RequestHandler = async (req, res, next) => {
+  try {
+    return res.json({ success: true, location: await locationService.clearProfileLocation(req.userId) });
   } catch (error) {
     return next(error);
   }

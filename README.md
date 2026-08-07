@@ -103,6 +103,28 @@ Application startup also runs the same idempotent migration set unless
 under `tools/database-migration`; it is not imported by or shipped with the
 production API. See [database operations](docs/database.md).
 
+## Location reference data
+
+The profile-location picker searches country, region and city records held in
+PostgreSQL. Import them once after migrating:
+
+```bash
+corepack pnpm --filter @motionmeet/backend run import:locations
+```
+
+The script downloads a pinned release of the Countries States Cities Database,
+keeps only the columns the app reads, and can be re-run to pick up a newer
+dataset — records that disappear upstream are deactivated rather than deleted so
+saved profile locations survive. Until it runs, location search simply returns
+no results.
+
+Proximity search uses PostGIS where the extension is available and falls back to
+an indexed bounding box plus haversine where it is not; the schema is identical
+either way. The mode is logged at boot as `location_geometry_mode`.
+
+Both bundled datasets carry attribution obligations — see
+[LICENSES.md](docs/LICENSES.md) before shipping.
+
 ## Docker production
 
 1. Copy `.env.production.example` to `.env.production`.
@@ -130,3 +152,7 @@ See [production.md](docs/production.md) and [the API contract](docs/openapi.yaml
 
 Large media remains in S3/CDN storage. PostgreSQL stores only object keys,
 public URLs and metadata. See [exercises-dataset.md](docs/exercises-dataset.md).
+
+The exercise animations are Gym visual's property and their redistribution
+licence is still open — read [LICENSES.md §2b](docs/LICENSES.md) before a public
+release.

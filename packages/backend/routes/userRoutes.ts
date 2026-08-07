@@ -16,6 +16,10 @@ import {
   updatePrivacySettings,
   getSuggestedUsers,
   removeConnection,
+  clearProfileLocation,
+  getProfileLocation,
+  saveProfileLocation,
+  updateProfileLocationVisibility,
 } from "../controllers/userController.js";
 import { protect } from "../middlewares/auth.js";
 import { imageUpload } from "../configs/multer.js";
@@ -50,6 +54,12 @@ userRouter.post(
   ]),
   updateUserData
 );
+// Profile location is a separate resource from the profile form: it is written
+// by reference to a dataset record, never as text. See locationService.ts.
+userRouter.get("/location", protect, getProfileLocation);
+userRouter.put("/location", protect, saveProfileLocation);
+userRouter.patch("/location", protect, updateProfileLocationVisibility);
+userRouter.delete("/location", protect, clearProfileLocation);
 userRouter.post("/discover", protect, discoverUsers);
 userRouter.post("/follow", protect, followUser);
 userRouter.post("/unfollow", protect, unfollowUser);

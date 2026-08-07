@@ -10,8 +10,10 @@ import type { ClientToServerEvents, ServerToClientEvents } from "@motionmeet/sha
 import authRoutes from "./routes/authRoutes.js";
 import equipmentRouter from "./routes/equipmentRoutes.js";
 import exerciseRouter from "./routes/exerciseRoutes.js";
+import locationRouter from "./routes/locationRoutes.js";
 import mediaRouter from "./routes/mediaRoutes.js";
 import measurementRouter from "./routes/measurementRoutes.js";
+import nearbyRouter from "./routes/nearbyRoutes.js";
 import messageRouter from "./routes/messageRoutes.js";
 import muscleGroupRouter from "./routes/muscleGroupRoutes.js";
 import planRouter from "./routes/planRoutes.js";
@@ -32,6 +34,7 @@ import { handleSocketConnection } from "./realtime/socketHandlers.js";
 import { setSocketServer, userSockets, type SocketData } from "./realtime/socketRegistry.js";
 import { ensureApplicationData } from "./services/bootstrapService.js";
 import { assertDatabaseContract } from "./services/databaseMigrationService.js";
+import { detectGeometrySupport } from "./services/locationGeometry.js";
 import * as userService from "./services/userService.js";
 import { verifyAccessToken } from "./utils/authTokens.js";
 import { logger, safeErrorMetadata } from "./utils/logger.js";
@@ -67,8 +70,11 @@ try {
   if (process.env.RUN_MIGRATIONS !== "false") await timedPhase("migrations", migrateToLatest);
   // assertDatabaseContract and initializeRedis are independent of each other;
   // run them concurrently to reduce startup latency.
-  const [, redisResult] = await Promise.all([
+  const [, , redisResult] = await Promise.all([
     timedPhase("database_contract", assertDatabaseContract),
+    // Decides whether proximity queries use PostGIS or the portable
+    // bounding-box path; both read the same columns, so this only picks SQL.
+    timedPhase("location_geometry", detectGeometrySupport),
     timedPhase("redis", initializeRedis),
   ]);
   redis = redisResult;
@@ -111,6 +117,7 @@ app.get("/health/ready", async (_request, response) => {
 app.use("/api/auth", authRoutes); app.use("/api/user", userRouter); app.use("/api/post", postRouter); app.use("/api/story", storyRouter);
 app.use("/api/message", messageRouter); app.use("/api/exercise", exerciseRouter); app.use("/api/routine", routineRouter); app.use("/api/workout", workoutRouter);
 app.use("/api/plans", planRouter); app.use("/api/admin", rbacRouter); app.use("/api/muscle-groups", muscleGroupRouter); app.use("/api/equipment", equipmentRouter); app.use("/api/media", mediaRouter); app.use("/api/measurements", measurementRouter);
+app.use("/api/locations", locationRouter); app.use("/api/nearby", nearbyRouter);
 app.use(notFoundHandler); app.use(errorHandler);
 
 io.use(async (socket, next) => {

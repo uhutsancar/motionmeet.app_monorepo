@@ -1,6 +1,7 @@
 export * from "./types/auth.js";
 export * from "./types/common.js";
 export * from "./types/exercise.js";
+export * from "./types/location.js";
 export * from "./types/measurement.js";
 export * from "./types/media.js";
 export * from "./types/message.js";
@@ -23,6 +24,20 @@ export const API_ROUTES = Object.freeze({
   user_extras: Object.freeze({ update: "/api/user/update", profiles: "/api/user/profiles", discover: "/api/user/discover", follow: "/api/user/follow", unfollow: "/api/user/unfollow", connect: "/api/user/connect", accept: "/api/user/accept", remove_connection: "/api/user/connection", connections: "/api/user/connections", recent_messages: "/api/user/recent-messages", suggested: "/api/user/suggested" }),
   measurement: Object.freeze({ base: "/api/measurements", byId: (measurementId: string) => `/api/measurements/${measurementId}` }),
   metadata: Object.freeze({ muscleGroups: "/api/muscle-groups", equipment: "/api/equipment" }),
+  location: Object.freeze({
+    search: "/api/locations/search",
+    countries: "/api/locations/countries",
+    resolve: "/api/locations/resolve",
+    recent: "/api/locations/recent",
+    attribution: "/api/locations/attribution",
+    byKind: (kind: string, id: number) => `/api/locations/${kind}/${id}`,
+  }),
+  profileLocation: Object.freeze({ base: "/api/user/location" }),
+  nearby: Object.freeze({
+    settings: "/api/nearby/settings",
+    position: "/api/nearby/position",
+    users: "/api/nearby/users",
+  }),
 });
 
 export const PRIVACY_DEFAULTS = Object.freeze({ publicProfile: true, showWorkoutsOnFeed: true, allowFollowers: true, showInSearch: true, allowMessages: true });

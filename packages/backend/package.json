@@ -11,6 +11,7 @@
     "seed:exercises": "tsx scripts/seedExercises.ts",
     "seed:master-data": "tsx scripts/seedMasterData.ts",
     "seed:default-user": "tsx scripts/seedDefaultUser.ts",
+    "import:locations": "tsx scripts/importLocationDataset.ts",
     "admin:promote": "tsx scripts/setSuperadmin.ts",
     "migrate:postgres": "tsx scripts/migrate.ts",
     "lint": "eslint .",

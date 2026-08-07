@@ -54,7 +54,14 @@ export interface UserTable extends BaseTable {
   profile_picture_key: Generated<string>;
   cover_photo_url: Generated<string>;
   cover_photo_key: Generated<string>;
+  /** Rendered label such as `Nilüfer, Bursa, Türkiye`; written by the backend. */
   location: Generated<string>;
+  location_country_id: number | null;
+  location_state_id: number | null;
+  location_city_id: number | null;
+  location_source: Generated<string>;
+  location_visibility: Generated<"public" | "followers" | "connections" | "private">;
+  location_selected_at: NullableTimestamp;
   role: Generated<"user" | "admin" | "superadmin">;
   plan_id: string | null;
   plan_status: Generated<"free" | "active" | "trialing" | "cancelled" | "expired">;
@@ -76,6 +83,82 @@ export interface UserTable extends BaseTable {
   total_workouts: Generated<number>;
   total_duration_minutes: Generated<number>;
   total_volume_kg: GeneratedNumeric;
+}
+
+/**
+ * Reference tables keep the Countries States Cities dataset's own integer ids
+ * so a dataset refresh is an upsert and saved profile locations survive it.
+ * `search_name` is the accent-folded key the autocomplete matches against; the
+ * importer writes it, queries only read it.
+ */
+export interface LocationCountryTable {
+  id: number;
+  name: string;
+  name_tr: Generated<string>;
+  native_name: Generated<string>;
+  iso2: string;
+  iso3: string;
+  phone_code: Generated<string>;
+  emoji: Generated<string>;
+  latitude: number | null;
+  longitude: number | null;
+  search_name: string;
+  is_active: Generated<boolean>;
+  dataset_version: string;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+}
+
+export interface LocationStateTable {
+  id: number;
+  country_id: number;
+  name: string;
+  state_code: Generated<string>;
+  type: Generated<string>;
+  latitude: number | null;
+  longitude: number | null;
+  search_name: string;
+  is_active: Generated<boolean>;
+  dataset_version: string;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+}
+
+export interface LocationCityTable {
+  id: number;
+  country_id: number;
+  state_id: number | null;
+  name: string;
+  latitude: number;
+  longitude: number;
+  population: Generated<number>;
+  search_name: string;
+  is_active: Generated<boolean>;
+  dataset_version: string;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+}
+
+/**
+ * The device GPS fix. Deliberately separate from `users` so that clearing it,
+ * or opting out of nearby, cannot disturb the profile. No column here is ever
+ * serialised to a client.
+ */
+export interface UserLocationTable {
+  user_id: string;
+  latitude: number;
+  longitude: number;
+  accuracy_meters: NullableNumeric;
+  source: Generated<"gps" | "network" | "coarse">;
+  city_id: number | null;
+  enabled: Generated<boolean>;
+  visible: Generated<boolean>;
+  distance_visibility: Generated<"approximate" | "nearby_only" | "hidden">;
+  scope: Generated<"5km" | "10km" | "25km" | "50km" | "city">;
+  permission_status: Generated<string>;
+  location_updated_at: GeneratedTimestamp;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
 }
 
 export interface LookupTable extends BaseTable {
@@ -388,6 +471,10 @@ export interface Database {
   plans: PlanTable;
   plan_billing_cycles: PlanBillingCycleTable;
   users: UserTable;
+  location_countries: LocationCountryTable;
+  location_states: LocationStateTable;
+  location_cities: LocationCityTable;
+  user_locations: UserLocationTable;
   equipment: LookupTable;
   muscle_groups: LookupTable;
   exercises: ExerciseTable;

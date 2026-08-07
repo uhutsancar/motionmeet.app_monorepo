@@ -4,6 +4,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import {
   Appbar,
@@ -66,10 +67,12 @@ const ProfileEditScreen = ({ navigation }: NavigationOnlyProps) => {
     full_name: user?.full_name || '',
     username: user?.username || '',
     bio: user?.bio || '',
-    location: user?.location || '',
     weight: String(user?.weight || ''),
     height: String(user?.height || ''),
   });
+  // Location is not part of this form. It is chosen from the dataset on its own
+  // screen and written by the backend, so it is only shown here as a link.
+  const locationLabel = user?.location || '';
 
   const profilePreview = profileAsset?.uri || user?.profile_picture || '';
   const coverPreview = coverAsset?.uri || user?.cover_photo || '';
@@ -139,7 +142,6 @@ const ProfileEditScreen = ({ navigation }: NavigationOnlyProps) => {
         full_name: form.full_name.trim(),
         username: form.username.trim(),
         bio: form.bio.trim(),
-        location: form.location.trim(),
         weight: form.weight.trim() || 0,
         height: form.height.trim() || 0,
         ...(uploadedProfileKey ? { uploadedProfileKey } : {}),
@@ -297,15 +299,37 @@ const ProfileEditScreen = ({ navigation }: NavigationOnlyProps) => {
               theme={inputTheme}
               textColor={theme.text}
             />
-            <TextInput
-              mode="outlined"
-              label={t('profile.location', 'Location')}
-              value={form.location}
-              onChangeText={updateField('location')}
-              maxLength={100}
-              theme={inputTheme}
-              textColor={theme.text}
-            />
+            {/* A validated place from the world city list, not free text: the
+                label on a profile is rendered by the backend from the record
+                the member picked. */}
+            <TouchableRipple
+              onPress={() => navigation.navigate('LocationPickerScreen', { source: 'profile_update' })}
+              disabled={saving}
+              style={{ borderRadius: 4 }}
+            >
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 11,
+                  minHeight: 56,
+                  paddingHorizontal: 14,
+                  borderRadius: 4,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  backgroundColor: theme.surfaceLight,
+                }}
+              >
+                <Ionicons name="location-outline" size={19} color={theme.textMuted} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ color: theme.textMuted, fontSize: 11 }}>{t('profile.location', 'Location')}</Text>
+                  <Text numberOfLines={1} style={{ color: locationLabel ? theme.text : theme.textMuted, fontSize: 14.5, marginTop: 1 }}>
+                    {locationLabel || t('location.not_set', 'Not set')}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={17} color={theme.textMuted} />
+              </View>
+            </TouchableRipple>
             <View style={{ flexDirection: isNarrow ? 'column' : 'row', gap: 12 }}>
               <TextInput
                 mode="outlined"

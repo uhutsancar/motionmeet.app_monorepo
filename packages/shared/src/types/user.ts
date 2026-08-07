@@ -1,4 +1,5 @@
 import type { EntityId, Timestamped } from "./common.js";
+import type { ProfileLocation } from "./location.js";
 
 export type Role = "user" | "admin" | "superadmin";
 export type PlanStatus = "free" | "active" | "trialing" | "cancelled" | "expired";
@@ -64,7 +65,14 @@ export interface PublicUser {
 export interface UserProfile extends PublicUser, Timestamped {
   bio: string;
   cover_photo: string;
+  /** Rendered profile-location label, written by the backend. Empty when unset. */
   location: string;
+  /**
+   * The dataset record behind `location`. Present on the account owner's own
+   * payload so the editor can pre-select; omitted for other people's profiles,
+   * which only need the label.
+   */
+  profileLocation?: ProfileLocation | null;
   weight: number;
   height: number;
   followers_count: number;
@@ -97,7 +105,6 @@ export interface User extends UserProfile {
 export interface UserUpdateInput {
   username?: string;
   bio?: string;
-  location?: string;
   full_name?: string;
   weight?: number;
   height?: number;

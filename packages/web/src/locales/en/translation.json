@@ -531,5 +531,13 @@
         "faq4_a": "MotionMeet is available on iOS, Android, and Web.",
         "faq5_q": "I'm not receiving notifications, what should I do?",
         "faq5_a": "Make sure notifications are enabled in Settings > Notifications and check your device permission settings."
+    },
+    "location": {
+        "hint": "Type at least two letters to find your city, district or country.",
+        "search_placeholder": "City, district or country",
+        "no_results_title": "No matches",
+        "current_value": "Shown on your profile",
+        "not_set": "Not set",
+        "attribution": "Place data by Countries States Cities Database · ODbL v1.0"
     }
 }

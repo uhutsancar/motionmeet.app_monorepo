@@ -1,4 +1,4 @@
-import type { Plan, PlanFeatures, PrivacySettings, User, UserStatistics } from "@motionmeet/shared";
+import type { Plan, PlanFeatures, PrivacySettings, ProfileLocation, ProfileLocationSource, User, UserStatistics } from "@motionmeet/shared";
 import type { Row } from "../db/types.js";
 
 export interface InternalPlan extends Plan {
@@ -72,6 +72,26 @@ export const privacySettings = (row: Row<"users">): PrivacySettings => ({
   allowMessages: row.privacy_allow_messages,
 });
 
+/**
+ * The dataset record behind `users.location`. Attached to the owner's own
+ * payload so the picker can pre-select what is already saved; other people only
+ * ever receive the rendered label.
+ *
+ * `countryCode` stays empty here: this serialiser only sees the `users` row and
+ * resolving the code would cost a join on every profile read. Callers that need
+ * it use GET /api/user/location, which joins and fills it in.
+ */
+export const profileLocation = (row: Row<"users">): ProfileLocation => ({
+  countryId: row.location_country_id,
+  stateId: row.location_state_id,
+  cityId: row.location_city_id,
+  displayName: row.location,
+  countryCode: "",
+  source: (row.location_source || null) as ProfileLocationSource | null,
+  visibility: row.location_visibility,
+  selectedAt: iso(row.location_selected_at),
+});
+
 export const userStatistics = (row: Row<"users">): UserStatistics => ({
   totalWorkouts: row.total_workouts,
   totalDurationMinutes: row.total_duration_minutes,
@@ -91,6 +111,7 @@ export const serializeUser = (row: Row<"users">, plan: InternalPlan | null = nul
     profile_picture: row.profile_picture_url,
     cover_photo: row.cover_photo_url,
     location: row.location,
+    profileLocation: profileLocation(row),
     role: row.role,
     plan: plan ?? row.plan_id,
     planStatus: row.plan_status,

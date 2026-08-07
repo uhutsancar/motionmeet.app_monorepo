@@ -234,6 +234,17 @@ const Profile = ({ route, navigation }: ProfileProps) => {
                   {user.bio}
                 </Text>
               )}
+              {/* The backend already withholds this label from anyone the
+                  member did not open it to, so an empty string here means
+                  "not shared" and the row simply disappears. */}
+              {!!user?.location && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
+                  <Ionicons name="location-outline" size={12} color={theme.textMuted} />
+                  <Text style={{ color: theme.textMuted, fontSize: 11.5, flex: 1 }} numberOfLines={1}>
+                    {user.location}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
 

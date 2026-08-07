@@ -150,7 +150,16 @@ const ExerciseDetail = ({ route, navigation }: BaseNavigationScreenProps) => {
         {activeTab !== 'history' && (
           <Surface elevation={0} style={styles.mediaContainer}>
             {mediaUrl ? (
-              <Image source={{ uri: mediaUrl }} style={styles.media} resizeMode="contain" accessibilityLabel={exercise.name} />
+              <>
+                <Image source={{ uri: mediaUrl }} style={styles.media} resizeMode="contain" accessibilityLabel={exercise.name} />
+                {/* The exercise animations are Gym visual's property. Their
+                    terms require this notice to stay with every use of the
+                    media, so it renders next to the media itself rather than
+                    only in a licences list. See docs/LICENSES.md. */}
+                <Text style={{ color: theme.textMuted, fontSize: 9.5, textAlign: 'center', marginTop: 6 }}>
+                  © Gym visual — https://gymvisual.com/
+                </Text>
+              </>
             ) : (
               <Surface style={[styles.placeholderMedia, { backgroundColor: theme.surface }]} elevation={0}>
                 <Ionicons name="barbell" size={44} color={theme.textMuted} />

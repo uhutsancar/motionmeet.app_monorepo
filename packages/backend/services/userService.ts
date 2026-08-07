@@ -14,7 +14,9 @@ import type { Pagination } from "../utils/pagination.js";
 
 const MAX_RELATIONSHIPS = 10_000;
 const brief = (row: { id: string; full_name: string; username: string; profile_picture_url: string }): PublicUser => ({ id: row.id, _id: row.id, full_name: row.full_name, username: row.username, profile_picture: row.profile_picture_url });
-const summary = (row: { id: string; full_name: string; username: string; profile_picture_url: string; bio: string; location: string; followers_count: number; following_count: number; connections_count: number }) => ({ ...brief(row), bio: row.bio, location: row.location, followers_count: row.followers_count, following_count: row.following_count, connections_count: row.connections_count });
+// Search and suggestion lists reach people the member has no relationship with,
+// so anything short of a public profile location is withheld there.
+const summary = (row: { id: string; full_name: string; username: string; profile_picture_url: string; bio: string; location: string; location_visibility: string; followers_count: number; following_count: number; connections_count: number }) => ({ ...brief(row), bio: row.bio, location: row.location_visibility === "public" ? row.location : "", followers_count: row.followers_count, following_count: row.following_count, connections_count: row.connections_count });
 export const withRelationshipCounts = <T>(user: T): T => user;
 export const getUserById = (userId: string): Promise<InternalUser | null> => findUserById(userId, { plan: true });
 
@@ -40,7 +42,8 @@ export const updateUser = async (userId: string, input: UserUpdate, { reservatio
       ...(typeof input.full_name === "string" ? { full_name: input.full_name } : {}),
       ...(typeof input.username === "string" ? { username: input.username.toLowerCase() } : {}),
       ...(typeof input.bio === "string" ? { bio: input.bio } : {}),
-      ...(typeof input.location === "string" ? { location: input.location } : {}),
+      // `location` is owned by locationService: it is rendered from a validated
+      // dataset record, so it is never taken from a profile-update payload.
       ...(typeof input.profile_picture === "string" ? { profile_picture_url: input.profile_picture } : {}),
       ...(typeof input.profile_picture_key === "string" ? { profile_picture_key: input.profile_picture_key } : {}),
       ...(typeof input.cover_photo === "string" ? { cover_photo_url: input.cover_photo } : {}),
@@ -71,7 +74,7 @@ export const updateUser = async (userId: string, input: UserUpdate, { reservatio
 
 export const searchUsers = async (input: string, excludeUserId: string) => {
   const term = input.trim().toLowerCase(); if (!term) return [];
-  const rows = await database.selectFrom("users").select(["id", "full_name", "username", "profile_picture_url", "bio", "location", "followers_count", "following_count", "connections_count"])
+  const rows = await database.selectFrom("users").select(["id", "full_name", "username", "profile_picture_url", "bio", "location", "location_visibility", "followers_count", "following_count", "connections_count"])
     .where("id", "!=", excludeUserId).where("privacy_show_in_search", "=", true)
     .where((expression) => expression.or([expression("username", "ilike", `${term}%`), expression("full_name", "ilike", `%${term}%`)]))
     .orderBy(sql`case when username ilike ${`${term}%`} then 0 else 1 end`).orderBy("followers_count", "desc").limit(20).execute();
@@ -197,13 +200,19 @@ const buildProfileAndPosts = async (profileId: string, requesterId: string, pagi
   if (pagination.cursor) query = query.where((expression) => expression.or([expression("created_at", "<", pagination.cursor!.date), expression.and([expression("created_at", "=", pagination.cursor!.date), expression("id", "<", pagination.cursor!.id)])]));
   const postRows = await query.orderBy("created_at", "desc").orderBy("id", "desc").limit(pagination.limit + 1).execute();
   const hasMore = postRows.length > pagination.limit; const selected = hasMore ? postRows.slice(0, pagination.limit) : postRows;
-  const internal = serializeUser(row); const profile: UserProfile = { id: internal.id, _id: internal._id, full_name: internal.full_name, username: internal.username, profile_picture: internal.profile_picture, bio: internal.bio, cover_photo: internal.cover_photo, location: internal.location, weight: internal.weight, height: internal.height, followers_count: internal.followers_count, following_count: internal.following_count, connections_count: internal.connections_count, statistics: internal.statistics, createdAt: internal.createdAt, updatedAt: internal.updatedAt, isFollowing, isConnection, connectionPending };
+  const internal = serializeUser(row);
+  // The label is withheld from anyone the member did not open it to, and the
+  // dataset ids behind it never leave the owner's own payload at all.
+  const locationVisible = owner || row.location_visibility === "public"
+    || (row.location_visibility === "followers" && (isFollowing || isConnection))
+    || (row.location_visibility === "connections" && isConnection);
+  const profile: UserProfile = { id: internal.id, _id: internal._id, full_name: internal.full_name, username: internal.username, profile_picture: internal.profile_picture, bio: internal.bio, cover_photo: internal.cover_photo, location: locationVisible ? internal.location : "", profileLocation: owner ? internal.profileLocation : null, weight: internal.weight, height: internal.height, followers_count: internal.followers_count, following_count: internal.following_count, connections_count: internal.connections_count, statistics: internal.statistics, createdAt: internal.createdAt, updatedAt: internal.updatedAt, isFollowing, isConnection, connectionPending };
   const last = selected.at(-1); return { restricted: false as const, profile, posts: await hydratePostInteractions(await hydratePosts(selected), requesterId), nextCursor: hasMore && last ? Buffer.from(JSON.stringify({ date: new Date(last.created_at).toISOString(), id: last.id })).toString("base64url") : null };
 };
 
 export const getSuggestedUsersList = async (userId: string, requestedLimit = 10) => {
   const limit = Math.min(Math.max(Number(requestedLimit) || 10, 1), 50);
-  const rows = await database.selectFrom("users").select(["id", "full_name", "username", "profile_picture_url", "bio", "location", "followers_count", "following_count", "connections_count"]).where("id", "!=", userId).where("privacy_show_in_search", "=", true)
+  const rows = await database.selectFrom("users").select(["id", "full_name", "username", "profile_picture_url", "bio", "location", "location_visibility", "followers_count", "following_count", "connections_count"]).where("id", "!=", userId).where("privacy_show_in_search", "=", true)
     .where(sql<boolean>`not exists (select 1 from user_follows uf where uf.follower_id = ${userId} and uf.followee_id = users.id)`).orderBy("created_at", "desc").orderBy("id", "desc").limit(limit).execute();
   return rows.map(summary);
 };
