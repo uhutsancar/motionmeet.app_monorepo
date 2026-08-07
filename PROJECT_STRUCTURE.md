@@ -1682,9 +1682,10 @@ Bu bölüm mevcut kaynak durumunu dürüstçe kaydeder:
     2026-08-07 itibarıyla 1.325 egzersizin 1.323'ü görselini ve GIF'ini
     MotionMeet'in kendi S3 bucket'ından servis ediyor. Bu medya Gym visual'a
     aittir; upstream repository'nin izni o repository'ye verilmiştir ve
-    "cloning this repo is not a licence" der. Gerekli attribution artık
-    uygulamada gösteriliyor, ancak kendi lisansımızı almak (veya medyayı
-    değiştirmek) hâlâ açık bir karardır. Ayrıntı: `docs/LICENSES.md` §2b.
+    "cloning this repo is not a licence" der. Uygulamada şu anda hiçbir Gym
+    visual bildirimi gösterilmiyor: 2026-08-07'de eklendi, aynı gün ürün
+    sahibinin talimatıyla kaldırıldı ve medya lisansı ayrı bir iş olarak ele
+    alınacak. Ayrıntı: `docs/LICENSES.md` §2b.
 12. **Engelleme (block) özelliği yok.** Yakındakiler sorgusu `privacy_show_in_search`
     ile filtreler; ürün ileride kullanıcı engelleme eklerse aynı sorguya bir
     `NOT EXISTS (user_blocks ...)` koşulu eklenmelidir. Şu anda engellenecek bir

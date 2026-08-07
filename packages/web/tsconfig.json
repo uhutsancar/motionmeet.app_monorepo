@@ -6,7 +6,9 @@
     "strict": true,
     "noEmit": true,
     "types": ["vite/client"],
-    "baseUrl": ".",
+    // No `baseUrl`: it is deprecated and stops working in TypeScript 7. Since
+    // TypeScript 5 `paths` entries resolve relative to this file on their own,
+    // which is why the mapping below is written as an explicit relative path.
     "paths": {
       "~/*": ["./src/*"]
     }

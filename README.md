@@ -154,5 +154,5 @@ Large media remains in S3/CDN storage. PostgreSQL stores only object keys,
 public URLs and metadata. See [exercises-dataset.md](docs/exercises-dataset.md).
 
 The exercise animations are Gym visual's property and their redistribution
-licence is still open — read [LICENSES.md §2b](docs/LICENSES.md) before a public
-release.
+licence is still open, and is being handled as separate work — read
+[LICENSES.md §2b](docs/LICENSES.md) before a public release.

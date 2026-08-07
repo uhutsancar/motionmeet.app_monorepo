@@ -29,6 +29,8 @@ const LicensesScreen = ({ navigation }: NavigationOnlyProps) => {
   const { t } = useTranslation();
   const { horizontalPadding } = useResponsiveLayout();
 
+  // Only the location dataset is listed. Its ODbL licence makes this notice a
+  // condition of use, so it has to stay in released builds.
   const notices: Notice[] = [
     {
       title: t('licenses.locations_title', 'Place data'),
@@ -40,18 +42,6 @@ const LicensesScreen = ({ navigation }: NavigationOnlyProps) => {
       links: [
         { label: 'github.com/dr5hn/countries-states-cities-database', url: LOCATION_DATASET_ATTRIBUTION.url },
         { label: 'ODbL v1.0', url: LOCATION_DATASET_ATTRIBUTION.licenseUrl },
-      ],
-    },
-    {
-      title: t('licenses.exercises_title', 'Exercise data and animations'),
-      body: t(
-        'licenses.exercises_body',
-        'Exercise names, categories and instructions are used under the MIT License. The exercise images and animations are the property of Gym visual and remain subject to their terms.',
-      ),
-      attribution: '© Gym visual — https://gymvisual.com/',
-      links: [
-        { label: 'github.com/hasaneyldrm/exercises-dataset', url: 'https://github.com/hasaneyldrm/exercises-dataset' },
-        { label: 'gymvisual.com terms', url: 'https://gymvisual.com/content/3-terms-and-conditions-of-use' },
       ],
     },
   ];

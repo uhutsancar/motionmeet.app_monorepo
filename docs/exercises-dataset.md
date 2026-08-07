@@ -33,9 +33,9 @@ Before a production seed:
 
 ## Attribution in the app
 
-The **© Gym visual — https://gymvisual.com/** notice renders under the animation
-on the mobile exercise detail screen and in Settings → Data & licences. Both are
-licence obligations and must not be removed from a release build.
+None is shown. A Gym visual notice was added on 2026-08-07 and removed the same
+day at the product owner's instruction; the media licence is being handled as
+separate work. See [LICENSES.md §2b](LICENSES.md).
 
 ## Sources
 

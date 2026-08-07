@@ -734,8 +734,6 @@
         "subtitle": "Open data sources used by MotionMeet",
         "intro": "MotionMeet uses open data from the projects below. Their licences require these notices to be shown.",
         "locations_title": "Place data",
-        "locations_body": "Country, region and city names used by the location picker come from the Countries States Cities Database, licensed under the Open Database License (ODbL) v1.0.",
-        "exercises_title": "Exercise data and animations",
-        "exercises_body": "Exercise names, categories and instructions are used under the MIT License. The exercise images and animations are the property of Gym visual and remain subject to their terms."
+        "locations_body": "Country, region and city names used by the location picker come from the Countries States Cities Database, licensed under the Open Database License (ODbL) v1.0."
     }
 }

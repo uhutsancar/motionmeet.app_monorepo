@@ -734,8 +734,6 @@
         "subtitle": "MotionMeet'in kullandığı açık veri kaynakları",
         "intro": "MotionMeet aşağıdaki projelerin açık verilerini kullanır. Lisansları bu bildirimlerin gösterilmesini gerektirir.",
         "locations_title": "Yer verisi",
-        "locations_body": "Konum seçicide kullanılan ülke, bölge ve şehir adları Countries States Cities Database kaynağından gelir ve Open Database License (ODbL) v1.0 ile lisanslanmıştır.",
-        "exercises_title": "Egzersiz verisi ve animasyonlar",
-        "exercises_body": "Egzersiz adları, kategorileri ve talimatları MIT Lisansı kapsamında kullanılır. Egzersiz görselleri ve animasyonları Gym visual mülkiyetindedir ve onların şartlarına tabidir."
+        "locations_body": "Konum seçicide kullanılan ülke, bölge ve şehir adları Countries States Cities Database kaynağından gelir ve Open Database License (ODbL) v1.0 ile lisanslanmıştır."
     }
 }

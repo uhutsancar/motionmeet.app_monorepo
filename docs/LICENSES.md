@@ -8,14 +8,20 @@ Where the notices appear in the product:
 
 | Surface | Location dataset | Exercise media |
 | --- | --- | --- |
-| Mobile — Settings → Data & licences | ✅ | ✅ |
+| Mobile — Settings → Data & licences | ✅ | ✗ removed |
 | Mobile — location picker footer | ✅ | — |
 | Mobile — location settings footer | ✅ | — |
-| Mobile — exercise detail, under the animation | — | ✅ |
+| Mobile — exercise detail, under the animation | — | ✗ removed |
 | Web — profile editor, under the location field | ✅ | — |
 | API — `GET /api/locations/attribution` | ✅ | — |
 
-None of these may be removed from a production build.
+The location-dataset notices are a condition of its licence and may not be
+removed from a production build.
+
+The exercise-media notices were added on 2026-08-07 and removed the same day at
+the product owner's instruction: the exercise-media licence is being handled as
+a separate piece of work, and the app carries no Gym visual notice in the
+meantime. §2b below records the underlying position, which is unchanged.
 
 ---
 
@@ -129,11 +135,12 @@ https://s3.eu-north-1.amazonaws.com/motionmeet-assets/exercises/videos/…
 That is MotionMeet redistributing Gym visual's media from its own
 infrastructure, to its own users.
 
-### What has been done
+### Current status
 
-- The required notice **© Gym visual — https://gymvisual.com/** now renders
-  directly under the animation on the exercise detail screen, and again in
-  Settings → Data & licences.
+The app shows no Gym visual notice. One was added on 2026-08-07 and removed the
+same day: the product owner decided to keep the existing arrangement for now and
+to handle the media licence as separate work. Nothing else about the position
+below has changed.
 
 ### What is still open — decision required before public release
 
@@ -143,6 +150,9 @@ infrastructure, to its own users.
    redistribution that permission does not cover.
 2. **The 180×180 limit must be verified** against what is actually in the
    bucket; the upstream permission is scoped to that resolution.
+
+3. **No attribution is currently shown**, so even the notice requirement that
+   the upstream permission spells out is unmet.
 
 Until (1) is resolved, the options are: obtain a licence from Gym visual,
 replace the media with originally produced or clearly redistributable
