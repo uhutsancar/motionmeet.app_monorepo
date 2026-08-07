@@ -18,9 +18,19 @@ interface SuggestedUser extends PublicUser {
 interface UserCardProps {
   user: SuggestedUser;
   onPress?: (user: SuggestedUser) => void;
+  /** Set by carousels so every card matches the screen it is rendered on. */
+  width?: number;
+  /** Optional chip under the name, e.g. the nearby distance band. */
+  badge?: string;
+  /**
+   * Replaces the follower count, e.g. an approximate area. Pass an empty string
+   * to drop the line entirely - callers whose users carry no follower count
+   * must not fall through to a hardcoded "0 followers".
+   */
+  caption?: string;
 }
 
-const UserCard = ({ user, onPress }: UserCardProps) => {
+const UserCard = ({ user, onPress, width = 220, badge, caption }: UserCardProps) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
@@ -45,13 +55,14 @@ const UserCard = ({ user, onPress }: UserCardProps) => {
     }
   };
 
+  const secondaryLine = caption ?? `${user.followers_count ?? 0} ${t('feed.followers', 'followers')}`;
+
   return (
     <Surface
       elevation={0}
       style={{
-        width: 220,
+        width,
         padding: 12,
-        marginRight: 10,
         borderRadius: 12,
         borderWidth: 1,
         borderColor: theme.border,
@@ -87,11 +98,30 @@ const UserCard = ({ user, onPress }: UserCardProps) => {
           <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
             @{user.username || 'member'}
           </Text>
-          <Text style={{ color: theme.textMuted, fontSize: 10, marginTop: 3 }} numberOfLines={1}>
-            {user.followers_count ?? 0} {t('feed.followers', 'followers')}
-          </Text>
+          {secondaryLine ? (
+            <Text style={{ color: theme.textMuted, fontSize: 10, marginTop: 3 }} numberOfLines={1}>
+              {secondaryLine}
+            </Text>
+          ) : null}
         </View>
       </View>
+
+      {badge ? (
+        <View
+          style={{
+            alignSelf: 'flex-start',
+            marginTop: 10,
+            paddingHorizontal: 8,
+            paddingVertical: 4,
+            borderRadius: 8,
+            backgroundColor: theme.surfaceLight,
+          }}
+        >
+          <Text style={{ color: theme.textSecondary, fontSize: 10, fontWeight: '800' }} numberOfLines={1}>
+            {badge}
+          </Text>
+        </View>
+      ) : null}
 
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
         <TouchableRipple

@@ -669,6 +669,7 @@
     "nearby": {
         "title": "Yakındakiler",
         "section": "Yakındakiler",
+        "see_all": "Tümünü gör",
         "feature_title": "Yakınımdaki sporcuları göster",
         "feature_body": "Kesin konumun hiç kimseye gösterilmez ve yalnızca bu ekran açıkken okunur.",
         "loading": "Çevrene bakılıyor…",

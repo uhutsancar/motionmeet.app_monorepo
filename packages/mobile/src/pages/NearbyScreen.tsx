@@ -4,10 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Appbar, Divider, Surface, Switch, Text, TouchableRipple } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
-import type { DistanceBand, NearbyScope, NearbySettings, NearbyUser } from '@motionmeet/shared';
+import type { NearbyScope, NearbySettings, NearbyUser } from '@motionmeet/shared';
 import { NEARBY_SCOPES } from '@motionmeet/shared';
 import { useAuthContext } from '../context/AuthProvider';
 import { useTheme } from '../context/ThemeContext';
+import { BAND_LABELS, SCOPE_LABELS } from '../config/nearbyLabels';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useDeviceLocation, type LocationOutcome } from '../hooks/useDeviceLocation';
 import {
@@ -33,26 +34,6 @@ import type { NavigationOnlyProps } from '../navigation/types';
 
 /** A fix this fresh is not worth asking the GPS for again. */
 const FIX_REUSE_MS = 15 * 60 * 1000;
-
-const BAND_LABELS: Record<DistanceBand, { key: string; fallback: string }> = {
-  nearby: { key: 'nearby.band_nearby', fallback: 'Nearby' },
-  within_2km: { key: 'nearby.band_within_2km', fallback: 'Within 2 km' },
-  '2_5km': { key: 'nearby.band_2_5km', fallback: '2–5 km' },
-  '5_10km': { key: 'nearby.band_5_10km', fallback: '5–10 km' },
-  '10_25km': { key: 'nearby.band_10_25km', fallback: '10–25 km' },
-  '25_50km': { key: 'nearby.band_25_50km', fallback: '25–50 km' },
-  same_city: { key: 'nearby.band_same_city', fallback: 'Same city' },
-  same_region: { key: 'nearby.band_same_region', fallback: 'Same area' },
-  unknown: { key: 'nearby.band_unknown', fallback: 'Distance hidden' },
-};
-
-const SCOPE_LABELS: Record<NearbyScope, { key: string; fallback: string }> = {
-  '5km': { key: 'nearby.scope_5km', fallback: '5 km' },
-  '10km': { key: 'nearby.scope_10km', fallback: '10 km' },
-  '25km': { key: 'nearby.scope_25km', fallback: '25 km' },
-  '50km': { key: 'nearby.scope_50km', fallback: '50 km' },
-  city: { key: 'nearby.scope_city', fallback: 'Same city' },
-};
 
 const NearbyScreen = ({ navigation }: NavigationOnlyProps) => {
   const { theme, isDark } = useTheme();

@@ -669,6 +669,7 @@
     "nearby": {
         "title": "Nearby",
         "section": "Nearby",
+        "see_all": "See all",
         "feature_title": "Show athletes near me",
         "feature_body": "Your exact position is never shown to anyone and is only read while this screen is open.",
         "loading": "Looking around you…",

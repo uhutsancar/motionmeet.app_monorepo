@@ -34,6 +34,24 @@ export const CARD = Object.freeze({
   gap: 10,
 });
 
+/**
+ * Horizontal gutter of the feed's own content.
+ *
+ * Posts are full bleed and pad their contents by this much, so any section that
+ * sits between them lines its title and first card up with the same edge.
+ */
+export const FEED_GUTTER = 16;
+
+/**
+ * Width of one card in a full-bleed horizontal feed carousel.
+ *
+ * Just under two thirds of the screen, so the next card always peeks in and the
+ * row reads as scrollable, while the clamps keep it usable from a 320pt phone
+ * up to a tablet.
+ */
+export const feedCarouselCardWidth = (usableWidth: number): number =>
+  Math.round(Math.min(268, Math.max(198, usableWidth * 0.62)));
+
 export const exerciseThumbStyle = (size: number) => ({
   width: size,
   height: size,

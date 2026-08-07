@@ -28,6 +28,7 @@ import PostCard from '../components/PostCard';
 import CreatePostModal from '../components/CreatePostModal';
 import StoryModal from '../components/StoryModal';
 import SuggestedAthletes from '../components/SuggestedAthletes';
+import NearbyAthletes from '../components/NearbyAthletes';
 import MotionMark from '../components/MotionMark';
 import { logHandledError } from '../utils/feedback';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
@@ -37,7 +38,10 @@ import type { Post, PublicUser } from '@motionmeet/shared';
 import type { NavigationOnlyProps } from '../navigation/types';
 
 type FeedMode = 'discover' | 'following';
-type FeedRow = { type: 'post'; item: Post } | { type: 'suggested'; id: string };
+type FeedRow =
+  | { type: 'post'; item: Post }
+  | { type: 'suggested'; id: string }
+  | { type: 'nearby'; id: string };
 
 const Feed = ({ navigation }: NavigationOnlyProps) => {
   const { theme } = useTheme();
@@ -115,14 +119,19 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
     const author: PublicUser | null = typeof post.user === 'object' ? post.user : null;
     return Boolean(post._id && author?._id);
   });
+  // Both carousels hide themselves when they have nothing to show, so they can
+  // be slotted in unconditionally once there is a feed to break up.
   const listData: FeedRow[] = [
     ...validPosts.slice(0, 2).map((post): FeedRow => ({ type: 'post', item: post })),
     ...(validPosts.length ? [{ type: 'suggested', id: 'suggested' } as FeedRow] : []),
-    ...validPosts.slice(2).map((post): FeedRow => ({ type: 'post', item: post })),
+    ...validPosts.slice(2, 5).map((post): FeedRow => ({ type: 'post', item: post })),
+    ...(validPosts.length ? [{ type: 'nearby', id: 'nearby' } as FeedRow] : []),
+    ...validPosts.slice(5).map((post): FeedRow => ({ type: 'post', item: post })),
   ];
 
   const renderItem: ListRenderItem<FeedRow> = useCallback(({ item: row }) => {
     if (row.type === 'suggested') return <SuggestedAthletes navigation={navigation} />;
+    if (row.type === 'nearby') return <NearbyAthletes navigation={navigation} />;
     return (
       <PostCard
         post={row.item}
@@ -199,7 +208,7 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
       <FlatList
         data={listData}
         renderItem={renderItem}
-        keyExtractor={(row, index) => row.type === 'suggested' ? row.id : row.item._id || String(index)}
+        keyExtractor={(row, index) => row.type === 'post' ? row.item._id || String(index) : row.id}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
@@ -276,8 +285,13 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
               accessibilityLabel={t('feed.create_post', 'Create post')}
               style={{
                 minHeight: 50,
+                // The stories rail ends on a hairline. Without a fixed gap the
+                // composer sat right on top of it, and how stuck it looked
+                // depended on the device, so the spacing is a constant rather
+                // than whatever the rail happened to leave behind.
+                marginTop: CARD.gap,
                 marginHorizontal: 12,
-                marginBottom: 8,
+                marginBottom: CARD.gap,
                 paddingHorizontal: 10,
                 flexDirection: 'row',
                 alignItems: 'center',
