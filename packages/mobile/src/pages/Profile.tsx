@@ -20,8 +20,10 @@ import { setAuthToken } from '../api/client';
 import { logHandledError } from '../utils/feedback';
 import { getUserProfile, getWorkouts } from '../api/endpoints';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { AVATAR, CARD } from '../config/layout';
+import { AVATAR, CARD, EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
+import { API_URL } from '../config/environment';
 import { useAppSelector } from '../store/hooks';
+import { resolvePublicMediaUrl } from '@motionmeet/shared';
 import type { UserProfile, Workout } from '@motionmeet/shared';
 import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation/native';
 
@@ -44,6 +46,23 @@ interface ProfileStat {
   /** Connections tab opened when the counter is tapped. */
   section?: string;
 }
+
+/**
+ * Artwork for a session row: the first exercise in it that ships media.
+ *
+ * A row of identical dumbbells told the member nothing about which session they
+ * were looking at, and the backend already hydrates each exercise, so the real
+ * movement's artwork is available without another request. The generic icon
+ * stays as the fallback for custom exercises, which have no media.
+ */
+const workoutArtwork = (workout: Workout): string | null => {
+  for (const entry of workout.exercises ?? []) {
+    const exercise = typeof entry.exerciseId === 'object' ? entry.exerciseId : null;
+    const media = resolvePublicMediaUrl(exercise?.gifUrl || exercise?.imageUrl, API_URL);
+    if (media) return media;
+  }
+  return null;
+};
 
 const Profile = ({ route, navigation }: ProfileProps) => {
   const { signOut, getToken } = useAuthContext();
@@ -522,8 +541,20 @@ const Profile = ({ route, navigation }: ProfileProps) => {
           </Surface>
         )}
 
-        <View style={{ marginTop: 24, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between' }}>
-          <Text style={{ color: theme.text, fontSize: 17, fontWeight: '800' }}>
+        {/* Same gutter as every card on this screen. Without it the heading sat
+            on the screen edge and the counter was clipped off the right side. */}
+        <View
+          style={{
+            marginTop: 24,
+            marginBottom: 10,
+            paddingHorizontal: CARD.padding,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 10,
+          }}
+        >
+          <Text numberOfLines={1} style={{ flexShrink: 1, color: theme.text, fontSize: 17, fontWeight: '800' }}>
             {t('profile.recent_workouts', 'Recent workouts')}
           </Text>
           <Text style={{ color: theme.textMuted, fontSize: 12, fontWeight: '700' }}>
@@ -542,14 +573,17 @@ const Profile = ({ route, navigation }: ProfileProps) => {
           }}
         >
           {workouts.length ? (
-            workouts.slice(0, 3).map((workout, index) => (
+            workouts.slice(0, 3).map((workout, index) => {
+              const artwork = workoutArtwork(workout);
+              return (
               <TouchableOpacity
                 key={workout._id || index}
                 activeOpacity={0.72}
                 onPress={() => navigation.navigate('WorkoutDetailScreen', { workout })}
                 style={{
                   minHeight: 76,
-                  padding: 14,
+                  paddingHorizontal: CARD.padding,
+                  paddingVertical: 14,
                   flexDirection: 'row',
                   alignItems: 'center',
                   borderBottomWidth: index < Math.min(workouts.length, 3) - 1 ? 1 : 0,
@@ -558,15 +592,22 @@ const Profile = ({ route, navigation }: ProfileProps) => {
               >
                 <View
                   style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 9,
+                    ...exerciseThumbStyle(EXERCISE_THUMB.large),
+                    overflow: 'hidden',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: theme.primarySoft,
+                    backgroundColor: artwork ? '#FFFFFF' : theme.primarySoft,
                   }}
                 >
-                  <Ionicons name="barbell-outline" size={20} color={theme.primary} />
+                  {artwork ? (
+                    <Image
+                      source={{ uri: artwork }}
+                      style={{ width: '100%', height: '100%' }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Ionicons name="barbell-outline" size={20} color={theme.primary} />
+                  )}
                 </View>
                 <View style={{ flex: 1, minWidth: 0, paddingHorizontal: 12 }}>
                   <Text style={{ color: theme.text, fontSize: 14, fontWeight: '700' }} numberOfLines={1}>
@@ -585,7 +626,8 @@ const Profile = ({ route, navigation }: ProfileProps) => {
                   {workout.durationMinutes || 0} {t('common.min', 'min')}
                 </Text>
               </TouchableOpacity>
-            ))
+              );
+            })
           ) : (
             <View style={{ alignItems: 'center', padding: 24 }}>
               <Ionicons name="barbell-outline" size={26} color={theme.textMuted} />
