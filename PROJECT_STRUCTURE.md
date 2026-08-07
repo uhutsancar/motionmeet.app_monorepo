@@ -1055,6 +1055,19 @@ zorunluluğunu yalnız loopback ve özel LAN adresleri için gevşetir; public b
 http origin'e bakan build yine başlamayı reddeder. Bu bayrakla üretilen APK
 mağazaya gönderilmemelidir.
 
+> **Android 9+ ayrıca cleartext HTTP'yi engeller.** Debug manifest'i
+> `usesCleartextTraffic="true"` içerir, release manifest'i içermez. Yani yukarıdaki
+> release APK cihazda **açılır** ama düz HTTP bir backend'e istek atamaz; ekranda
+> "Authentication failed / Network Error" görülür. Bu bir Android platform
+> kuralıdır ve uygulamanın kendi HTTPS zorunluluğundan bağımsızdır.
+>
+> Pratik sonuç: fiziksel cihazda **özellik testi Expo Go ile** yapılır (Expo Go'nun
+> kendi manifest'i cleartext'e izin verir ve aynı JS'i çalıştırır). Release APK ise
+> gerçek bir HTTPS backend'e yöneltildiğinde standalone çalışır. Düz HTTP'ye bakan
+> standalone bir APK istenirse, yalnız loopback ve özel aralıklara izin veren bir
+> `network_security_config.xml` gerekir; şu anda bilinçli olarak eklenmemiştir,
+> çünkü üretim APK'sında da yer alırdı.
+
 > Daha önce aynı iş `-PmmLanTestBundle=true` ile, gömülü bir **development**
 > bundle üreterek yapılıyordu. Bu yol artık çalışmıyor: React Native embedded
 > ortamda dev bundle'ı çalıştırırken devtools websocket'i açmayı deniyor,
@@ -1063,11 +1076,20 @@ mağazaya gönderilmemelidir.
 > hiç çağrılmıyor ve uygulama beyaz ekranda kalıyor. Gradle bayrağı kaldırıldı;
 > yerine yukarıdaki environment opt-in'i kullanılıyor.
 
-Son fiziksel Android kontrolü (2026-08-07, uygulama 1.1.0 / versionCode 2):
-arm64-v8a release APK Reeder P13 Blue Max, Android 9/API 28 üzerinde açılmış;
-merged manifest'te yalnız `ACCESS_COARSE_LOCATION` ve `ACCESS_FINE_LOCATION`
-bulunduğu, `ACCESS_BACKGROUND_LOCATION`'ın olmadığı doğrulanmış. Bu bir yerel
-smoke testtir; mağaza imzası ve production HTTPS dağıtımının yerine geçmez.
+Son fiziksel Android kontrolü (2026-08-07, uygulama 1.1.0 / versionCode 2),
+Reeder P13 Blue Max, Android 9 / API 28, arm64-v8a:
+
+- Release APK kuruldu ve açıldı; `Running "main"` başarılı, fatal React Native
+  hatası yok. Merged manifest'te yalnız `ACCESS_COARSE_LOCATION` ve
+  `ACCESS_FINE_LOCATION` var, `ACCESS_BACKGROUND_LOCATION` yok.
+- Özellik testleri Expo Go üzerinden yapıldı (yukarıdaki cleartext notu):
+  cihaz dili Türkçe, konum seçicide "nil" araması "Nilüfer, Bursa, Türkiye"yi
+  ilk sıraya getirdi, seçim profile yazıldı, Yakındakiler ekranı gerçek GPS
+  fix'iyle listeyi kilometre bantlarıyla döndürdü ve Android 9'un izin diyaloğu
+  doğru şekilde ele alındı.
+
+Bu bir yerel smoke testtir; mağaza imzası ve production HTTPS dağıtımının yerine
+geçmez.
 
 ## 13. Shared paket (`packages/shared`)
 
@@ -1671,7 +1693,14 @@ Bu bölüm mevcut kaynak durumunu dürüstçe kaydeder:
     fix'ler sorgu sırasında elenir ama satır kalır. Gizlilik politikası bir
     saklama süresi taahhüt ederse `workers/cronJobs.ts` içine bir purge görevi
     eklenmelidir.
-14. **PostGIS bu geliştirme makinesinde kurulu değil.** Şema ve servis iki yolu
+14. **Profil konumu etiketi kaydedildiği dilde donar.** Etiket yazma anında
+    üretilip `users.location` içinde saklandığı için, üye sonradan uygulama
+    dilini değiştirirse ülke adı eski dilde kalır ("Nilüfer, Bursa, Turkey").
+    Şehir ve bölge adları dataset'te zaten tek biçimde olduğu için yalnız ülke
+    segmenti etkilenir. Okuma anında yeniden üretmek her profil, feed ve arama
+    satırında üç tablolu bir join gerektirirdi; bu yüzden bilinçli olarak
+    yapılmadı. Üye konumunu yeniden seçerse etiket güncel dilde yenilenir.
+15. **PostGIS bu geliştirme makinesinde kurulu değil.** Şema ve servis iki yolu
     da destekliyor ve yerelde bounding-box + haversine yolu çalışıyor; production
     PostgreSQL'inde PostGIS etkinleştirildiğinde migration generated `geography`
     kolonunu ve GiST indeksini kurar, servis boot'ta otomatik olarak `ST_DWithin`
