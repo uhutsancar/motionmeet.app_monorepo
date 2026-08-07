@@ -1055,18 +1055,37 @@ zorunluluğunu yalnız loopback ve özel LAN adresleri için gevşetir; public b
 http origin'e bakan build yine başlamayı reddeder. Bu bayrakla üretilen APK
 mağazaya gönderilmemelidir.
 
-> **Android 9+ ayrıca cleartext HTTP'yi engeller.** Debug manifest'i
-> `usesCleartextTraffic="true"` içerir, release manifest'i içermez. Yani yukarıdaki
-> release APK cihazda **açılır** ama düz HTTP bir backend'e istek atamaz; ekranda
-> "Authentication failed / Network Error" görülür. Bu bir Android platform
-> kuralıdır ve uygulamanın kendi HTTPS zorunluluğundan bağımsızdır.
->
-> Pratik sonuç: fiziksel cihazda **özellik testi Expo Go ile** yapılır (Expo Go'nun
-> kendi manifest'i cleartext'e izin verir ve aynı JS'i çalıştırır). Release APK ise
-> gerçek bir HTTPS backend'e yöneltildiğinde standalone çalışır. Düz HTTP'ye bakan
-> standalone bir APK istenirse, yalnız loopback ve özel aralıklara izin veren bir
-> `network_security_config.xml` gerekir; şu anda bilinçli olarak eklenmemiştir,
-> çünkü üretim APK'sında da yer alırdı.
+Cihazın kendisine (`127.0.0.1`) düz HTTP ile bağlanabilmesi için ikinci bir
+parça daha gerekir. Android 9 / API 28'den beri cleartext trafiği varsayılan
+olarak yasaktır: debug manifest'i `usesCleartextTraffic="true"` ile bunu geri
+açar, release manifest'i açmaz. Bu yüzden düzeltilmeden önce release APK cihazda
+**açılıyor** ama her istek "Authentication failed / Network Error" ile
+düşüyordu.
+
+Çözüm `plugins/withLoopbackCleartext.js` config plugin'idir. Android'in
+varsayılan `cleartextTrafficPermitted="false"` davranışını bütün gerçek host'lar
+için korur ve yalnız üç ada izin verir:
+
+| Host | Neden |
+| --- | --- |
+| `127.0.0.1` | `adb reverse` tünelinin cihaz tarafındaki ucu |
+| `localhost` | aynı adresin isim hâli |
+| `10.0.2.2` | Android emülatörünün host makineye verdiği alias |
+
+Üçü de gerçek bir kullanıcının sunucusu olamaz, dolayısıyla bu ayar hiçbir üyenin
+trafiğini açıktan taşıyamaz. `usesCleartextTraffic="true"` bayrağından
+kasıtlı olarak daha dardır — o bayrak her host'a düz HTTP izni verirdi.
+
+JS tarafındaki kontrol bundan bağımsız durmaya devam eder:
+`src/config/environment.ts` production bundle'ı, origin'ler HTTPS değilse ve
+`EXPO_PUBLIC_ALLOW_INSECURE_LAN=true` verilmemişse yine başlatmaz. Düz metin bir
+build'in çalışması için iki koşulun da sağlanması gerekir.
+
+> Config plugin'leri yalnız `expo prebuild` sırasında çalışır. `android/` klasörü
+> git dışı olduğu ve içinde elle korunan `build.gradle` düzeltmesi bulunduğu için
+> aynı iki değişiklik (res/xml dosyası + manifest özniteliği) mevcut klasöre elle
+> de uygulanmıştır. Bir gün `expo prebuild` çalıştırılırsa plugin aynı sonucu
+> kendiliğinden üretir.
 
 > Daha önce aynı iş `-PmmLanTestBundle=true` ile, gömülü bir **development**
 > bundle üreterek yapılıyordu. Bu yol artık çalışmıyor: React Native embedded
@@ -1082,11 +1101,16 @@ Reeder P13 Blue Max, Android 9 / API 28, arm64-v8a:
 - Release APK kuruldu ve açıldı; `Running "main"` başarılı, fatal React Native
   hatası yok. Merged manifest'te yalnız `ACCESS_COARSE_LOCATION` ve
   `ACCESS_FINE_LOCATION` var, `ACCESS_BACKGROUND_LOCATION` yok.
-- Özellik testleri Expo Go üzerinden yapıldı (yukarıdaki cleartext notu):
-  cihaz dili Türkçe, konum seçicide "nil" araması "Nilüfer, Bursa, Türkiye"yi
-  ilk sıraya getirdi, seçim profile yazıldı, Yakındakiler ekranı gerçek GPS
-  fix'iyle listeyi kilometre bantlarıyla döndürdü ve Android 9'un izin diyaloğu
-  doğru şekilde ele alındı.
+- Loopback cleartext izni eklendikten sonra APK `adb reverse` üzerinden yerel
+  backend'e bağlanıp login olabildi.
+- Özellik testleri ayrıca Expo Go üzerinden yapıldı: cihaz dili Türkçe, konum
+  seçicide "nil" araması "Nilüfer, Bursa, Türkiye"yi ilk sıraya getirdi, seçim
+  profile yazıldı, Yakındakiler ekranı gerçek GPS fix'iyle listeyi kilometre
+  bantlarıyla döndürdü ve Android 9'un izin diyaloğu doğru ele alındı.
+
+> `adb reverse` eşlemeleri USB kablosu çıkarılıp takıldığında veya cihaz yeniden
+> başlatıldığında **düşer**; APK backend'i bulamıyorsa ilk bakılacak yer burasıdır.
+> `adb -s <seri> reverse --list` boş dönüyorsa üç portu yeniden kurmak gerekir.
 
 Bu bir yerel smoke testtir; mağaza imzası ve production HTTPS dağıtımının yerine
 geçmez.

@@ -54,7 +54,8 @@
           "isAndroidBackgroundLocationEnabled": false,
           "isAndroidForegroundServiceEnabled": false
         }
-      ]
+      ],
+      "./plugins/withLoopbackCleartext"
     ]
   }
 }
