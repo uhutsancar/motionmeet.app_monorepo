@@ -162,13 +162,35 @@ const PrivacyScreen = ({ navigation }: NavigationOnlyProps) => {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Profile Visibility */}
         <Surface elevation={0} style={styles.section}>
-          <Text style={styles.sectionLabel}>{t('privacy.profile_section', 'PROFİL GÖRÜNÜRLÜĞü').toUpperCase()}</Text>
+          <Text style={styles.sectionLabel}>{t('privacy.profile_section', 'PROFİL GÖRÜNÜRLÜĞÜ').toUpperCase()}</Text>
           <Surface elevation={0} style={styles.card}>
-            <SwitchRow
-              label={t('privacy.public_profile', 'Genel Profil')}
-              subtitle={t('privacy.public_sub', 'Profiliniz herkes tarafından görülür')}
-              prefKey="publicProfile"
-            />
+            {/*
+              This one switch decides who may see the account's posts, stories
+              and open a chat, so it is spelled out as the two named choices
+              rather than left as a generic toggle label.
+            */}
+            <Surface elevation={0} style={[styles.row, styles.rowBorder]}>
+              <Surface elevation={0} style={styles.rowText}>
+                <Text style={styles.rowLabel}>
+                  {prefs.publicProfile
+                    ? t('privacy.open_profile', 'Açık profil')
+                    : t('privacy.closed_profile', 'Kapalı profil')}
+                </Text>
+                <Text style={styles.rowSub}>
+                  {prefs.publicProfile
+                    ? t('privacy.open_profile_sub', 'Herkes gönderilerini görebilir ve sana mesaj gönderebilir.')
+                    : t('privacy.closed_profile_sub', 'Gönderilerini yalnızca onayladığın takipçiler görür. Mesaj için karşılıklı takip gerekir.')}
+                </Text>
+              </Surface>
+              <Switch
+                value={prefs.publicProfile}
+                onValueChange={() => toggle('publicProfile')}
+                trackColor={{ false: theme.border, true: theme.primary }}
+                thumbColor="#fff"
+                ios_backgroundColor={theme.border}
+                accessibilityLabel={t('privacy.open_profile', 'Açık profil')}
+              />
+            </Surface>
             <SwitchRow
               label={t('privacy.show_in_search', 'Aramada Göster')}
               subtitle={t('privacy.search_sub', 'Arama sonuçlarında görün')}

@@ -14,7 +14,9 @@ import {
   type Message,
   type NearbySettings,
   type NearbyUser,
+  type Notification,
   type ProfileLocation,
+  type RelationshipState,
   type ProfileLocationSource,
   type ProfileLocationVisibility,
   type NearbyScope,
@@ -63,6 +65,10 @@ interface RecordsResponse extends BasicResponse { records: PersonalRecord[] }
 interface PlansResponse extends BasicResponse { plans: Plan[] }
 interface LikeResponse extends BasicResponse { liked: boolean; like_count: number }
 interface CommentResponse extends BasicResponse { comment: Comment; comment_count: number }
+interface RelationshipResponse extends BasicResponse { relationship: RelationshipState; action?: 'followed' | 'requested' | 'already_requested' | 'already_following' }
+interface FollowRequestsResponse extends BasicResponse { items: Array<{ user: PublicUser; createdAt: string }>; nextCursor: string | null }
+interface NotificationsResponse extends BasicResponse { items: Notification[]; nextCursor: string | null; unreadCount: number }
+interface UnreadCountResponse extends BasicResponse { unreadCount: number }
 
 const withOperationId = (payload: OperationPayload, prefix: string): { payload: OperationPayload; operationId: string } => {
   if (typeof FormData !== 'undefined' && payload instanceof FormData) {
@@ -107,15 +113,90 @@ export const discoverUsers = async (input: string, token: Token): Promise<UsersR
   return data;
 };
 
-export const followUser = async (userId: string, token: Token): Promise<BasicResponse> => {
-  const { data } = await api.post(API_ROUTES.user_extras.follow, { id: userId }, {
+/**
+ * Follows an open account and sends a request to a private one. Which happened
+ * is only knowable from the response, so this returns the resulting
+ * relationship rather than a bare success flag.
+ */
+export const requestFollow = async (userId: string, token: Token): Promise<RelationshipResponse> => {
+  const { data } = await api.post(API_ROUTES.followRequest.send, { id: userId }, {
     headers: { Authorization: `Bearer ${token}` },
   });
   return data;
 };
 
-export const unfollowUser = async (userId: string, token: Token): Promise<BasicResponse> => {
+/** Kept as an alias so older call sites keep compiling; it sends a request too. */
+export const followUser = requestFollow;
+
+export const unfollowUser = async (userId: string, token: Token): Promise<RelationshipResponse> => {
   const { data } = await api.post(API_ROUTES.user_extras.unfollow, { id: userId }, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const cancelFollowRequest = async (userId: string, token: Token): Promise<RelationshipResponse> => {
+  const { data } = await api.delete(API_ROUTES.followRequest.cancel(userId), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const acceptFollowRequest = async (requesterId: string, token: Token): Promise<RelationshipResponse> => {
+  const { data } = await api.post(API_ROUTES.followRequest.accept(requesterId), {}, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const declineFollowRequest = async (requesterId: string, token: Token): Promise<RelationshipResponse> => {
+  const { data } = await api.post(API_ROUTES.followRequest.decline(requesterId), {}, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const getIncomingFollowRequests = async (token: Token, cursor?: Cursor): Promise<FollowRequestsResponse> => {
+  const { data } = await api.get(API_ROUTES.followRequest.incoming, {
+    headers: { Authorization: `Bearer ${token}` },
+    params: cursor ? { cursor } : undefined,
+  });
+  return data;
+};
+
+export const getOutgoingFollowRequests = async (token: Token, cursor?: Cursor): Promise<FollowRequestsResponse> => {
+  const { data } = await api.get(API_ROUTES.followRequest.outgoing, {
+    headers: { Authorization: `Bearer ${token}` },
+    params: cursor ? { cursor } : undefined,
+  });
+  return data;
+};
+
+export const getRelationship = async (userId: string, token: Token): Promise<RelationshipResponse> => {
+  const { data } = await api.get(API_ROUTES.user_extras.relationship(userId), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+// ============= NOTIFICATION APIs =============
+export const getNotifications = async (token: Token, cursor?: Cursor): Promise<NotificationsResponse> => {
+  const { data } = await api.get(API_ROUTES.notification.list, {
+    headers: { Authorization: `Bearer ${token}` },
+    params: cursor ? { cursor } : undefined,
+  });
+  return data;
+};
+
+export const getUnreadNotificationCount = async (token: Token): Promise<UnreadCountResponse> => {
+  const { data } = await api.get(API_ROUTES.notification.unreadCount, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+export const markNotificationsRead = async (token: Token): Promise<UnreadCountResponse> => {
+  const { data } = await api.post(API_ROUTES.notification.readAll, {}, {
     headers: { Authorization: `Bearer ${token}` },
   });
   return data;
@@ -188,8 +269,12 @@ export const likePost = async (postId: string, token: Token): Promise<LikeRespon
   return data;
 };
 
+// The payload is deliberately an empty object rather than `null`: React Native
+// hands a body-less PUT to OkHttp, which stamps its own
+// `application/x-www-form-urlencoded` content type on it, and the API only
+// accepts JSON. Sending `{}` keeps the declared type honest on every platform.
 export const likePostIdempotent = async (postId: string, token: Token): Promise<LikeResponse> => {
-  const { data } = await api.put(API_ROUTES.post.likeIdempotent(postId), null, {
+  const { data } = await api.put(API_ROUTES.post.likeIdempotent(postId), {}, {
     headers: { Authorization: `Bearer ${token}` },
   });
   return data;
@@ -579,10 +664,22 @@ export default {
   getUserProfile,
   discoverUsers,
   followUser,
+  requestFollow,
   unfollowUser,
+  cancelFollowRequest,
+  acceptFollowRequest,
+  declineFollowRequest,
+  getIncomingFollowRequests,
+  getOutgoingFollowRequests,
+  getRelationship,
   sendConnectionRequest,
   acceptConnectionRequest,
   getUserConnections,
+
+  // Notifications
+  getNotifications,
+  getUnreadNotificationCount,
+  markNotificationsRead,
   getUserRecentMessages,
   getUserConversations,
   

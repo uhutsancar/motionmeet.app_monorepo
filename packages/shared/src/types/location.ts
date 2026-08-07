@@ -127,6 +127,11 @@ export interface NearbyUser {
   /** Coarse label of the other member's area, subject to their settings. */
   approximateArea: string | null;
   lastActiveAt: string | null;
+  /** Follow graph, so the card opens on the correct button. */
+  isFollowing?: boolean;
+  isFollowedBy?: boolean;
+  requestSent?: boolean;
+  requestReceived?: boolean;
 }
 
 /** Result of resolving a raw GPS fix to a dataset record. */

@@ -9,6 +9,7 @@ import { isUserId } from "../utils/validation.js";
 import { extractS3Key } from "../utils/s3Utils.js";
 import { queueMediaDeletions } from "./mediaDeletionService.js";
 import { commitReservedUploads } from "./mediaUploadService.js";
+import { evaluateMessagePermission, type MessagePermission } from "./accessControlService.js";
 
 export interface MessageAccess { id: string; _id: string; conversationId: string; from_user_id: string; to_user_id: string; media_url: string; media_key: string; seen: boolean }
 export const conversationPairKey = (left: string, right: string): string => [left, right].sort().join(":");
@@ -20,15 +21,27 @@ const hydrateMessages = async (rows: Array<Row<"messages">>, transaction: Databa
   return rows.map((row) => ({ id: row.id, _id: row.id, operationId: row.operation_id, conversationId: row.conversation_id, from_user_id: byId.get(row.from_user_id) ?? row.from_user_id, to_user_id: byId.get(row.to_user_id) ?? row.to_user_id, text: row.text, message_type: row.message_type, media_url: row.media_url, seen: row.seen, createdAt: toIsoString(row.created_at) ?? new Date(0).toISOString(), updatedAt: toIsoString(row.updated_at) ?? new Date(0).toISOString() }));
 };
 
-export const canSendToUser = async (sender: InternalUser | undefined, recipientId: unknown): Promise<boolean> => {
+/**
+ * A public account can be messaged by anyone it has not switched messages off
+ * for. A private account needs a mutual follow, so both sides have opted in;
+ * an existing accepted connection still counts, as does a plan that grants
+ * `can_message_anyone`.
+ *
+ * Applied on the REST send path, the socket send path and the typing indicator,
+ * so there is no route into a stranger's inbox.
+ */
+export const describeSendPermission = async (sender: InternalUser | undefined, recipientId: unknown): Promise<MessagePermission> => {
   const senderId = sender?.id;
-  if (!senderId || !isUserId(recipientId) || recipientId === senderId) return false;
-  const recipient = await database.selectFrom("users").select("id").where("id", "=", recipientId).where("privacy_allow_messages", "=", true).executeTakeFirst();
-  if (!recipient) return false;
+  if (!senderId || !isUserId(recipientId)) return { allowed: false, reason: "invalid_recipient" };
   const features = sender.plan && typeof sender.plan === "object" ? sender.plan.features : null;
-  if (sender.role === "superadmin" || features?.can_message_anyone) return true;
-  return Boolean(await database.selectFrom("connections").select("id").where("pair_key", "=", conversationPairKey(senderId, recipientId)).where("status", "=", "accepted").executeTakeFirst());
+  return evaluateMessagePermission(
+    { id: senderId, role: sender.role, canMessageAnyone: Boolean(features?.can_message_anyone) },
+    recipientId,
+  );
 };
+
+export const canSendToUser = async (sender: InternalUser | undefined, recipientId: unknown): Promise<boolean> =>
+  (await describeSendPermission(sender, recipientId)).allowed;
 
 export const findMessageByOperation = async (userId: string, operationId: string): Promise<Message | null> => {
   const row = await database.selectFrom("messages").selectAll().where("from_user_id", "=", userId).where("operation_id", "=", operationId).executeTakeFirst();

@@ -10,6 +10,7 @@ import { database } from "../configs/database.js";
 import { getCachedJson, invalidateCachePrefix, setCachedJson } from "../configs/redis.js";
 import { distanceMeters, withinRadius } from "./locationGeometry.js";
 import { describeCity, findNearestCity } from "./locationService.js";
+import { getRelationshipMap } from "./relationshipService.js";
 import { distanceBandFor } from "../utils/distanceBands.js";
 
 /**
@@ -246,6 +247,10 @@ export const listNearbyUsers = async (userId: string, requestedLimit = 20): Prom
 
   const rows = await query.orderBy(sql`distance_meters`, "asc").orderBy("u.id", "asc").limit(limit).execute() as unknown as NearbyRow[];
 
+  // One extra query for the whole page, so each card can open on the right
+  // follow state instead of offering "Takip et" for someone already followed.
+  const relationships = await getRelationshipMap(userId, rows.map((row) => row.id));
+
   const users: NearbyUser[] = rows.map((row) => ({
     id: row.id,
     _id: row.id,
@@ -260,6 +265,7 @@ export const listNearbyUsers = async (userId: string, requestedLimit = 20): Prom
       ? null
       : [row.city_name, row.region_name !== row.city_name ? row.region_name : null].filter(Boolean).join(", ") || null,
     lastActiveAt: new Date(row.location_updated_at).toISOString(),
+    ...(relationships.get(row.id) ?? { isFollowing: false, isFollowedBy: false, requestSent: false, requestReceived: false }),
   }));
 
   await setCachedJson(cacheKey, users, RESULTS_CACHE_SECONDS);

@@ -38,8 +38,18 @@ export const sendMessage: RequestHandler = async (req, res, next) => {
       });
     }
 
-    if (!(await messageService.canSendToUser(req.dbUser, recipientId))) {
-      return res.status(403).json({ success: false, message: "You cannot message this user" });
+    const permission = await messageService.describeSendPermission(req.dbUser, recipientId);
+    if (!permission.allowed) {
+      // The reason is returned so the app can explain *why* - a locked account
+      // needing a mutual follow reads very differently from one that has turned
+      // messages off entirely.
+      return res.status(403).json({
+        success: false,
+        reason: permission.reason,
+        message: permission.reason === "needs_mutual_follow"
+          ? "This account is private; you both need to follow each other to chat"
+          : "You cannot message this user",
+      });
     }
     const reservedUploads = await resolveReservedUploads(
       req.userId,

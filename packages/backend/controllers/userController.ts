@@ -258,6 +258,12 @@ export const discoverUsers: RequestHandler = async (req, res, next) => {
   }
 };
 
+/**
+ * Kept at its original path for clients that still call it. An open account is
+ * followed immediately; a private one gets a request it has to approve. The
+ * response carries the resulting relationship so a caller can render the right
+ * button without a second round trip.
+ */
 export const followUser: RequestHandler = async (req, res, next) => {
   try {
     const targetId = req.body?.id;
@@ -265,13 +271,20 @@ export const followUser: RequestHandler = async (req, res, next) => {
       return res.status(403).json({ success: false, message: "This user does not allow followers" });
     }
 
-    await userService.followUser(req.userId, targetId);
-    return res.json({ success: true, message: "Follow relationship synchronized" });
+    const action = await userService.requestFollow(req.userId, targetId);
+    const relationship = await userService.getRelationshipState(req.userId, targetId);
+    return res.json({
+      success: true,
+      action,
+      relationship,
+      message: relationship.isFollowing ? "You are now following this user" : "Follow request sent",
+    });
   } catch (error) {
     return next(error);
   }
 };
 
+/** Stops following, and withdraws a request that was never approved. */
 export const unfollowUser: RequestHandler = async (req, res, next) => {
   try {
     const targetId = req.body?.id;
@@ -280,7 +293,8 @@ export const unfollowUser: RequestHandler = async (req, res, next) => {
     }
 
     await userService.unfollowUser(req.userId, targetId);
-    return res.json({ success: true, message: "You are no longer following this user" });
+    const relationship = await userService.getRelationshipState(req.userId, targetId);
+    return res.json({ success: true, relationship, message: "You are no longer following this user" });
   } catch (error) {
     return next(error);
   }
@@ -400,10 +414,6 @@ export const getUserProfile: RequestHandler = async (req, res, next) => {
       pagination
     );
     if (!result) return res.json({ success: false, message: "Profile not found" });
-    if (result.restricted) {
-      return res.status(403).json({ success: false, message: "This profile is private" });
-    }
-
     return res.json({
       success: true,
       profile: result.profile,

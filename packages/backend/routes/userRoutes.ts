@@ -21,6 +21,15 @@ import {
   saveProfileLocation,
   updateProfileLocationVisibility,
 } from "../controllers/userController.js";
+import {
+  acceptFollowRequest as acceptFollowRequestHandler,
+  cancelFollowRequest,
+  declineFollowRequest,
+  getIncomingFollowRequests,
+  getOutgoingFollowRequests,
+  getRelationship,
+  sendFollowRequest,
+} from "../controllers/followRequestController.js";
 import { protect } from "../middlewares/auth.js";
 import { imageUpload } from "../configs/multer.js";
 import { getUserRecentMessages } from "../controllers/messageController.js";
@@ -61,6 +70,16 @@ userRouter.put("/location", protect, saveProfileLocation);
 userRouter.patch("/location", protect, updateProfileLocationVisibility);
 userRouter.delete("/location", protect, clearProfileLocation);
 userRouter.post("/discover", protect, discoverUsers);
+// Follow requests. The literal segments are declared before `/:userId/...` so a
+// path like /follow-requests/incoming can never be read as a user id.
+userRouter.get("/follow-requests/incoming", protect, getIncomingFollowRequests);
+userRouter.get("/follow-requests/outgoing", protect, getOutgoingFollowRequests);
+userRouter.post("/follow-requests", protect, sendFollowRequest);
+userRouter.post("/follow-requests/:requesterId/accept", protect, acceptFollowRequestHandler);
+userRouter.post("/follow-requests/:requesterId/decline", protect, declineFollowRequest);
+userRouter.delete("/follow-requests/:targetId", protect, cancelFollowRequest);
+// `/follow` now sends a request rather than creating the edge outright; the
+// route name is kept so older installs keep working instead of failing silently.
 userRouter.post("/follow", protect, followUser);
 userRouter.post("/unfollow", protect, unfollowUser);
 userRouter.post("/connect", protect, sendConnectionRequest);
@@ -70,5 +89,6 @@ userRouter.get("/connections", protect, getUserConnection);
 userRouter.post("/profiles", protect, getUserProfile);
 userRouter.get("/recent-messages", protect, getUserRecentMessages);
 userRouter.get("/suggested", protect, getSuggestedUsers);
+userRouter.get("/:userId/relationship", protect, getRelationship);
 
 export default userRouter;

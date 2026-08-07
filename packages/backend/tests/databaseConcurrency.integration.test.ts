@@ -6,7 +6,8 @@ import { connectDatabase, database, disconnectDatabase } from "../configs/databa
 import { canSendToUser, createMessage } from "../services/messageService.js";
 import { likePost } from "../services/postInteractionService.js";
 import { deletePostById, getPostById } from "../services/postService.js";
-import { acceptConnection, createConnection, followUser, getUserById } from "../services/userService.js";
+import { acceptConnection, createConnection, getUserById } from "../services/userService.js";
+import { acceptFollowRequest, requestFollow } from "../services/relationshipService.js";
 import { createWorkoutWithStatistics } from "../services/workoutService.js";
 
 test("PostgreSQL transactions remain idempotent under concurrent writes", { timeout: 120_000 }, async () => {
@@ -32,11 +33,27 @@ test("PostgreSQL transactions remain idempotent under concurrent writes", { time
     assert.deepEqual(usersAfterConnection.map((row) => row.connections_count).sort(), [1, 1]);
     assert.equal(await canSendToUser((await getUserById(sender.id)) ?? undefined, recipient.id), true);
 
-    await Promise.all(Array.from({ length: 20 }, () => followUser(sender.id, recipient.id)));
+    // The recipient is an open account, so twenty concurrent follow taps must
+    // settle on exactly one edge and one increment per counter.
+    await Promise.allSettled(Array.from({ length: 20 }, () => requestFollow(sender.id, recipient.id)));
     assert.equal(Number((await database.selectFrom("user_follows").select((expression) => expression.fn.countAll<number>().as("count")).where("follower_id", "=", sender.id).where("followee_id", "=", recipient.id).executeTakeFirstOrThrow()).count), 1);
+    assert.equal(Number((await database.selectFrom("follow_requests").select((expression) => expression.fn.countAll<number>().as("count")).where("requester_id", "=", sender.id).where("target_id", "=", recipient.id).executeTakeFirstOrThrow()).count), 0);
     const senderCounts = await database.selectFrom("users").select("following_count").where("id", "=", sender.id).executeTakeFirstOrThrow();
     const recipientCounts = await database.selectFrom("users").select("followers_count").where("id", "=", recipient.id).executeTakeFirstOrThrow();
     assert.equal(senderCounts.following_count, 1); assert.equal(recipientCounts.followers_count, 1);
+
+    // The private half of the same rule: a locked account only collects a
+    // request, and twenty concurrent approvals still produce one edge.
+    await database.updateTable("users").set({ privacy_public_profile: false }).where("id", "=", sender.id).execute();
+    await Promise.allSettled(Array.from({ length: 20 }, () => requestFollow(recipient.id, sender.id)));
+    assert.equal(Number((await database.selectFrom("follow_requests").select((expression) => expression.fn.countAll<number>().as("count")).where("requester_id", "=", recipient.id).where("target_id", "=", sender.id).executeTakeFirstOrThrow()).count), 1);
+    assert.equal(Number((await database.selectFrom("user_follows").select((expression) => expression.fn.countAll<number>().as("count")).where("follower_id", "=", recipient.id).where("followee_id", "=", sender.id).executeTakeFirstOrThrow()).count), 0);
+
+    await Promise.allSettled(Array.from({ length: 20 }, () => acceptFollowRequest(sender.id, recipient.id)));
+    assert.equal(Number((await database.selectFrom("follow_requests").select((expression) => expression.fn.countAll<number>().as("count")).where("requester_id", "=", recipient.id).where("target_id", "=", sender.id).executeTakeFirstOrThrow()).count), 0);
+    assert.equal(Number((await database.selectFrom("user_follows").select((expression) => expression.fn.countAll<number>().as("count")).where("follower_id", "=", recipient.id).where("followee_id", "=", sender.id).executeTakeFirstOrThrow()).count), 1);
+    assert.equal((await database.selectFrom("users").select("followers_count").where("id", "=", sender.id).executeTakeFirstOrThrow()).followers_count, 1);
+    await database.updateTable("users").set({ privacy_public_profile: true }).where("id", "=", sender.id).execute();
 
     await Promise.all(Array.from({ length: 10 }, (_, index) => createMessage({ from_user_id: sender.id, to_user_id: recipient.id, operationId: `message-${runId}-${index}`, text: `message ${index}`, message_type: "text", media_url: "", media_key: "" })));
     assert.equal(Number((await database.selectFrom("conversations").select((expression) => expression.fn.countAll<number>().as("count")).where("pair_key", "=", [sender.id, recipient.id].sort().join(":")).executeTakeFirstOrThrow()).count), 1);

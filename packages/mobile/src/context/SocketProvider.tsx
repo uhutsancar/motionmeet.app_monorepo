@@ -14,6 +14,9 @@ import { io, type Socket } from 'socket.io-client';
 import { createOperationId, type ClientToServerEvents, type ServerToClientEvents } from '@motionmeet/shared';
 import { SOCKET_URL } from '../config/environment';
 import { logHandledError } from '../utils/feedback';
+import { store } from '../store/store';
+import { followRequestResolved, notificationReceived } from '../features/notifications/notificationsSlice';
+import { setRelationship } from '../features/relationships/relationshipsSlice';
 
 type MotionSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 interface SocketContextValue {
@@ -86,12 +89,34 @@ export const SocketProvider = ({ children }: PropsWithChildren) => {
       });
     };
 
+    // Activity and follow state are dispatched straight to the store rather
+    // than held in context: the bell badge, the activity list and every follow
+    // button read the same slices, so one event updates all of them at once.
+    const onNotification = (payload: Parameters<ServerToClientEvents['notification_received']>[0]) => {
+      if (payload?.notification) store.dispatch(notificationReceived(payload));
+    };
+    const onRelationshipChanged = (payload: Parameters<ServerToClientEvents['relationship_changed']>[0]) => {
+      if (!payload?.userId) return;
+      store.dispatch(setRelationship({
+        userId: payload.userId,
+        relationship: {
+          isFollowing: payload.isFollowing,
+          isFollowedBy: payload.isFollowedBy,
+          requestSent: payload.requestSent,
+          requestReceived: payload.requestReceived,
+        },
+      }));
+      if (!payload.requestReceived) store.dispatch(followRequestResolved({ userId: payload.userId }));
+    };
+
     client.on('connect', onConnect);
     client.on('disconnect', onDisconnect);
     client.on('connect_error', onConnectError);
     client.on('online_users', onOnlineUsers);
     client.on('user_online', onUserOnline);
     client.on('user_offline', onUserOffline);
+    client.on('notification_received', onNotification);
+    client.on('relationship_changed', onRelationshipChanged);
     client.connect();
 
     const appStateSubscription = AppState.addEventListener('change', (state) => {

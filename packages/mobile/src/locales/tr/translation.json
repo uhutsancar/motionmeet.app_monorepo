@@ -115,6 +115,8 @@
         "media": "Medya",
         "post": "Gönderi",
         "follow": "Takip Et",
+        "follow_back": "Geri Takip Et",
+        "follow_requested": "İstek Gönderildi",
         "follow_failed": "Takip işlemi başarısız oldu",
         "followers": "Takipçi",
         "following_status": "Takip Ediliyor",
@@ -209,8 +211,25 @@
         "kettlebell": "Kettlebell",
         "other": "Diğer"
     },
+    "activity": {
+        "title": "Bildirimler",
+        "someone": "Bir sporcu",
+        "follow_request": "{{name}} seni takip etmek istiyor",
+        "follow_request_accepted": "{{name}} takip isteğini kabul etti",
+        "follow": "{{name}} seni takip etmeye başladı",
+        "post_like": "{{name}} gönderini beğendi",
+        "post_comment": "{{name}} gönderine yorum yaptı",
+        "confirm": "Onayla",
+        "decline": "Sil",
+        "empty_title": "Henüz bildirim yok",
+        "empty_body": "Takip istekleri ve beğeniler burada görünecek."
+    },
     "profile": {
         "workouts": "Antrenmanlar",
+        "private_title": "Bu hesap gizli",
+        "private_body": "Gönderilerini ve hikâyelerini görmek için takip isteği gönder.",
+        "private_requested": "İsteğin onaylandığında gönderilerini ve hikâyelerini görebilirsin.",
+        "message_needs_mutual": "Mesaj gönderebilmek için birbirinizi takip etmeniz gerekiyor.",
         "followers": "Takipçi",
         "following": "Takip",
         "duration": "Süre",
@@ -312,7 +331,8 @@
         "unfollow": "Takibi bırak",
         "empty": "Henüz kimse yok",
         "title": "Bağlantılar",
-        "pending": "Bekleyen"
+        "pending": "Bekleyen",
+        "requests": "İstekler"
     },
     "statistics": {
         "title": "İstatistikler",
@@ -530,6 +550,10 @@
         "legal_section": "YASAL",
         "public_profile": "Genel Profil",
         "public_sub": "Profiliniz herkes tarafından görülür",
+        "open_profile": "Açık profil",
+        "open_profile_sub": "Herkes gönderilerini görebilir ve sana mesaj gönderebilir.",
+        "closed_profile": "Kapalı profil",
+        "closed_profile_sub": "Gönderilerini yalnızca onayladığın takipçiler görür. Mesaj için karşılıklı takip gerekir.",
         "show_in_search": "Aramada Göster",
         "search_sub": "Arama sonuçlarında görün",
         "workouts_on_feed": "Antrenmanları Akışta Göster",
@@ -671,7 +695,7 @@
         "section": "Yakındakiler",
         "see_all": "Tümünü gör",
         "feature_title": "Yakınımdaki sporcuları göster",
-        "feature_body": "Kesin konumun hiç kimseye gösterilmez ve yalnızca bu ekran açıkken okunur.",
+        "feature_body": "Konumun yalnızca bu ekran açıkken okunur.",
         "loading": "Çevrene bakılıyor…",
         "load_failed": "Yakındaki sporcular yüklenemedi.",
         "radius": "MESAFE",
@@ -699,7 +723,7 @@
         "empty_body": "Daha geniş bir mesafe dene — MotionMeet senin bölgende hâlâ büyüyor.",
         "location_needed": "Konum gerekli",
         "denied_title": "Konum izni kapalı",
-        "denied_body": "Yakındakiler, ekran açıkken konumuna ihtiyaç duyar. İstediğin zaman izin verebilirsin.",
+        "denied_body": "Yakındaki sporcuları görmek için konum izni gerekir.",
         "blocked_title": "Ayarlardan konuma izin ver",
         "blocked_body": "MotionMeet için konum kapalı. İzin vermek için Ayarları aç.",
         "services_off_title": "Konum servisleri kapalı",
@@ -728,7 +752,7 @@
         "delete_body": "Kayıtlı konumun ve yakındakiler tercihlerin silinir, özellik kapatılır. Profil konumun bundan etkilenmez.",
         "deleted_title": "Konum silindi",
         "deleted_body": "Konumuna dair hiçbir şey artık saklanmıyor.",
-        "privacy_note": "Mesafeler aralık olarak gösterilir, kesin değer olarak asla. MotionMeet seni arka planda takip etmez ve konum geçmişi tutmaz."
+        "privacy_note": "Mesafeler aralık olarak gösterilir. Arka planda takip yok, konum geçmişi tutulmaz."
     },
     "licenses": {
         "title": "Veri ve lisanslar",

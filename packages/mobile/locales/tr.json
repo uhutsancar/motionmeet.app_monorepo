@@ -1,0 +1,5 @@
+{
+  "NSLocationWhenInUseUsageDescription": "MotionMeet, Yakındakiler ekranı açıkken yakınındaki sporcuları göstermek için konumunu kullanır.",
+  "NSPhotoLibraryUsageDescription": "MotionMeet, yalnızca paylaşmak veya profilini güncellemek için seçtiğin fotoğrafa erişir.",
+  "NSCameraUsageDescription": "MotionMeet, yalnızca antrenman fotoğrafı çekmeyi seçtiğinde kameranı kullanır."
+}

@@ -5,6 +5,10 @@
     "version": "1.1.0",
     "scheme": "motionmeet",
     "orientation": "portrait",
+    "//locales": "The app is Turkish-first, so iOS shows its own permission prompts in Turkish rather than falling back to the English strings below.",
+    "locales": {
+      "tr": "./locales/tr.json"
+    },
     "icon": "./assets/motionmeet-icon-v2.png",
     "userInterfaceStyle": "automatic",
     "splash": {
@@ -49,7 +53,7 @@
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": false,
-          "locationWhenInUsePermission": "MotionMeet uses your location only while the Nearby screen is open, to show athletes close to you. Your exact position is never shown to anyone.",
+          "locationWhenInUsePermission": "MotionMeet uses your location to show athletes near you while the Nearby screen is open.",
           "isIosBackgroundLocationEnabled": false,
           "isAndroidBackgroundLocationEnabled": false,
           "isAndroidForegroundServiceEnabled": false

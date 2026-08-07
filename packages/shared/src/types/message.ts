@@ -20,11 +20,26 @@ export interface Conversation {
   unreadCount: number;
 }
 
+export type NotificationType =
+  | "follow_request"
+  | "follow_request_accepted"
+  | "follow"
+  | "post_like"
+  | "post_comment";
+
 export interface Notification extends Timestamped {
   id: EntityId;
-  type: string;
+  _id: EntityId;
+  type: NotificationType;
   actor: PublicUser | null;
   read: boolean;
+  /** Present on post_like / post_comment so the row can deep-link. */
+  postId: EntityId | null;
+  /**
+   * Only set on `follow_request` rows, and only while the request is still
+   * pending, so the row can offer Confirm/Delete inline.
+   */
+  actionable: boolean;
   payload: Record<string, string | number | boolean | null>;
 }
 
@@ -45,4 +60,12 @@ export interface ServerToClientEvents {
   typing_start: (payload: { from_user_id: EntityId }) => void;
   typing_stop: (payload: { from_user_id: EntityId }) => void;
   message_error: (payload: { message: string; operationId: string }) => void;
+  /** A new activity row landed; carries the unread total so the bell can badge. */
+  notification_received: (payload: { notification: Notification; unreadCount: number }) => void;
+  /**
+   * The viewer's relationship with `userId` changed from the other side — a
+   * request was accepted, or someone followed or unfollowed them. Lets both
+   * devices re-render follow buttons without a refetch.
+   */
+  relationship_changed: (payload: { userId: EntityId; isFollowing: boolean; isFollowedBy: boolean; requestSent: boolean; requestReceived: boolean }) => void;
 }

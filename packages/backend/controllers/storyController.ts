@@ -4,6 +4,7 @@ import type { RequestHandler } from "express";
 import { isOptionalString, isUuid } from "../utils/validation.js";
 import { hasValidMediaSignature } from "../utils/mediaValidation.js";
 import * as storyService from "../services/storyService.js";
+import { canViewStoriesOf } from "../services/accessControlService.js";
 import {
   discardReservedUploads,
   resolveReservedUploads,
@@ -165,6 +166,14 @@ export const viewStory: RequestHandler = async (req, res, next) => {
     const { storyId } = req.params;
     if (!isUuid(storyId)) {
       return res.status(400).json({ success: false, message: "Invalid story id" });
+    }
+
+    // A story id is guessable in principle, so the audience is re-checked here
+    // rather than trusting that the client only ever posts ids it was given.
+    const story = await storyService.getStoryById(storyId);
+    if (!story) return res.status(404).json({ success: false, message: "Story not found" });
+    if (!(await canViewStoriesOf(req.userId, story.user))) {
+      return res.status(403).json({ success: false, message: "Story is not accessible" });
     }
 
     await storyService.recordStoryView(storyId, req.userId);

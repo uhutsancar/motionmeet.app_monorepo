@@ -21,7 +21,21 @@ export const API_ROUTES = Object.freeze({
   routine: Object.freeze({ base: "/api/routine" }),
   exercise: Object.freeze({ base: "/api/exercise", byId: (exerciseId: string) => `/api/exercise/${exerciseId}`, records: "/api/exercise/records", stats: (exerciseId: string) => `/api/exercise/${exerciseId}/stats`, history: (exerciseId: string) => `/api/exercise/${exerciseId}/history` }),
   plan: Object.freeze({ base: "/api/plans", update: "/api/plans/update" }),
-  user_extras: Object.freeze({ update: "/api/user/update", profiles: "/api/user/profiles", discover: "/api/user/discover", follow: "/api/user/follow", unfollow: "/api/user/unfollow", connect: "/api/user/connect", accept: "/api/user/accept", remove_connection: "/api/user/connection", connections: "/api/user/connections", recent_messages: "/api/user/recent-messages", suggested: "/api/user/suggested" }),
+  user_extras: Object.freeze({ update: "/api/user/update", profiles: "/api/user/profiles", discover: "/api/user/discover", follow: "/api/user/follow", unfollow: "/api/user/unfollow", connect: "/api/user/connect", accept: "/api/user/accept", remove_connection: "/api/user/connection", connections: "/api/user/connections", recent_messages: "/api/user/recent-messages", suggested: "/api/user/suggested", relationship: (userId: string) => `/api/user/${userId}/relationship` }),
+  followRequest: Object.freeze({
+    /** Ask to follow someone; answers with the resulting relationship state. */
+    send: "/api/user/follow-requests",
+    incoming: "/api/user/follow-requests/incoming",
+    outgoing: "/api/user/follow-requests/outgoing",
+    accept: (requesterId: string) => `/api/user/follow-requests/${requesterId}/accept`,
+    decline: (requesterId: string) => `/api/user/follow-requests/${requesterId}/decline`,
+    cancel: (targetId: string) => `/api/user/follow-requests/${targetId}`,
+  }),
+  notification: Object.freeze({
+    list: "/api/notifications",
+    unreadCount: "/api/notifications/unread-count",
+    readAll: "/api/notifications/read",
+  }),
   measurement: Object.freeze({ base: "/api/measurements", byId: (measurementId: string) => `/api/measurements/${measurementId}` }),
   metadata: Object.freeze({ muscleGroups: "/api/muscle-groups", equipment: "/api/equipment" }),
   location: Object.freeze({

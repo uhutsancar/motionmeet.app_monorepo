@@ -50,6 +50,9 @@ const loadWorkoutsDetail = () => require('../pages/WorkoutsDetailScreen').defaul
 const loadDurationDetail = () => require('../pages/DurationDetailScreen').default;
 const loadVolumeDetail = () => require('../pages/VolumeDetailScreen').default;
 const loadSetsDetail = () => require('../pages/SetsDetailScreen').default;
+// Two distinct screens: `ActivityScreen` is the bell's list of what happened,
+// `NotificationsScreen` is the preference toggles under Settings.
+const loadActivity = () => require('../pages/ActivityScreen').default;
 const loadNotifications = () => require('../pages/NotificationsScreen').default;
 const loadPrivacy = () => require('../pages/PrivacyScreen').default;
 const loadSupport = () => require('../pages/SupportScreen').default;
@@ -98,6 +101,8 @@ const ProfileStack = () => (
     <Stack.Screen name="LocationSettingsScreen" getComponent={loadLocationSettings} />
     <Stack.Screen name="NearbyScreen" getComponent={loadNearby} />
     <Stack.Screen name="LicensesScreen" getComponent={loadLicenses} />
+    <Stack.Screen name="ActivityScreen" getComponent={loadActivity} />
+    <Stack.Screen name="NotificationsScreen" getComponent={loadNotifications} />
   </Stack.Navigator>
 );
 
@@ -123,7 +128,6 @@ const MainStack = () => (
     <Stack.Screen name="DurationDetailScreen" getComponent={loadDurationDetail} />
     <Stack.Screen name="VolumeDetailScreen" getComponent={loadVolumeDetail} />
     <Stack.Screen name="SetsDetailScreen" getComponent={loadSetsDetail} />
-    <Stack.Screen name="NotificationsScreen" getComponent={loadNotifications} />
     <Stack.Screen name="PrivacyScreen" getComponent={loadPrivacy} />
     <Stack.Screen name="SupportScreen" getComponent={loadSupport} />
     <Stack.Screen name="PricingScreen" getComponent={loadPricing} />
@@ -135,6 +139,8 @@ const MainStack = () => (
     <Stack.Screen name="LocationSettingsScreen" getComponent={loadLocationSettings} />
     <Stack.Screen name="NearbyScreen" getComponent={loadNearby} />
     <Stack.Screen name="LicensesScreen" getComponent={loadLicenses} />
+    <Stack.Screen name="ActivityScreen" getComponent={loadActivity} />
+    <Stack.Screen name="NotificationsScreen" getComponent={loadNotifications} />
   </Stack.Navigator>
 );
 

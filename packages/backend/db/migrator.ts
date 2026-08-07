@@ -6,6 +6,7 @@ import * as detachedExerciseSnapshots from "./migrations/003_detached_exercise_s
 import * as bodyMeasurements from "./migrations/004_body_measurements.js";
 import * as exerciseMediaPathStyle from "./migrations/005_exercise_media_path_style.js";
 import * as locationsAndProximity from "./migrations/006_locations_and_proximity.js";
+import * as followRequestsAndNotifications from "./migrations/007_follow_requests_and_notifications.js";
 
 const migrationProvider: MigrationProvider = {
   async getMigrations() {
@@ -16,6 +17,7 @@ const migrationProvider: MigrationProvider = {
       "004_body_measurements": bodyMeasurements,
       "005_exercise_media_path_style": exerciseMediaPathStyle,
       "006_locations_and_proximity": locationsAndProximity,
+      "007_follow_requests_and_notifications": followRequestsAndNotifications,
     };
   },
 };

@@ -16,9 +16,8 @@ import {
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useAuthContext } from "../context/AuthProvider";
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { likePostIdempotent, unlikePostIdempotent, followUser, unfollowUser, addComment, getPostComments } from '../api/endpoints';
-import { fetchUser } from '../features/user/userSlice';
-import { setAuthorFollowState } from '../features/posts/postsSlice';
+import { likePostIdempotent, unlikePostIdempotent, addComment, getPostComments } from '../api/endpoints';
+import { useFollowAction } from '../hooks/useFollowAction';
 import dayjs, { setDayjsLocale } from '../utils/dayjs';
 
 import { useTranslation } from 'react-i18next';
@@ -26,7 +25,7 @@ import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { AVATAR, EXERCISE_THUMB, POST_MEDIA_ASPECT, exerciseThumbStyle } from '../config/layout';
 import { useTheme } from '../context/ThemeContext';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
-import { logHandledError } from '../utils/feedback';
+import { getUserFacingError, logHandledError, showError } from '../utils/feedback';
 import {
   CONTENT_LIMITS,
   type Comment,
@@ -34,7 +33,7 @@ import {
   type Post,
   type Workout,
 } from '@motionmeet/shared';
-import { useAppDispatch, useAppSelector } from '../store/hooks';
+import { useAppSelector } from '../store/hooks';
 import type { NavigationLike } from '../navigation/types';
 
 const POST_PADDING = 16;
@@ -111,13 +110,21 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
     ? `${durationHours}${t('common.hours_short', 'h')} ${durationMinutes % 60}${t('common.min', 'min')}`
     : `${durationMinutes} ${t('common.min', 'min')}`;
   const currentUser = useAppSelector((state) => state.user.value);
-  const dispatch = useAppDispatch();
   const { getToken } = useAuthContext();
-  
+  // Seeded from the feed payload so the button is correct on first paint, then
+  // kept in step with every other follow button through the shared store.
+  const follow = useFollowAction(postUser?._id, {
+    isFollowing: Boolean(post.author_followed_by_me),
+    requestSent: Boolean(post.author_follow_requested),
+    isFollowedBy: Boolean(post.author_follows_me),
+  });
+  // "Following" and "Requested" are both settled states, so they share the
+  // quiet styling; "Follow" and "Follow back" are the calls to action.
+  const isMutedFollowState = follow.state === 'following' || follow.state === 'requested';
+
   const [likeCount, setLikeCount] = useState(post.like_count ?? 0);
   const [isLiked, setIsLiked] = useState(Boolean(post.liked_by_me));
   const [isProcessing, setIsProcessing] = useState(false);
-  const [followProcessing, setFollowProcessing] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [comments, setComments] = useState<Comment[]>(post.comments || []);
@@ -516,35 +523,14 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
       setIsLiked(!willLike);
       setLikeCount((prev) => prev + (willLike ? -1 : 1));
       logHandledError('like-post', error);
-      Alert.alert(t('common.error', 'Error'), t('feed.failed_like', 'Failed to like post'));
+      // A private account's post can be refused server-side even when the card
+      // is still on screen, so the reason is surfaced rather than a generic one.
+      showError(
+        t('common.error', 'Hata'),
+        getUserFacingError(error, t('feed.failed_like', 'Gönderi beğenilemedi')),
+      );
     } finally {
       setIsProcessing(false);
-    }
-  };
-
-  const isFollowing = Boolean(post.author_followed_by_me);
-
-  const handleFollow = async () => {
-    if (followProcessing) return;
-    try {
-      setFollowProcessing(true);
-      const token = await getToken();
-      if (!token) throw new Error('Authentication required');
-      if (isFollowing) {
-        await unfollowUser(postUser._id, token);
-      } else {
-        await followUser(postUser._id, token);
-      }
-      dispatch(setAuthorFollowState({
-        authorId: postUser._id,
-        isFollowing: !isFollowing,
-      }));
-      dispatch(fetchUser(token));
-    } catch (error) {
-      logHandledError('follow-user', error);
-      Alert.alert(t('common.error'), t('feed.follow_failed'));
-    } finally {
-      setFollowProcessing(false);
     }
   };
 
@@ -725,22 +711,22 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
         </TouchableRipple>
 
         {currentUser?._id !== postUser._id && (
-          <TouchableRipple 
-            style={[s.followBtn, isFollowing && s.followingBtn]}
-            onPress={handleFollow}
-            disabled={followProcessing}
-            accessibilityLabel={isFollowing ? t('feed.unfollow', 'Unfollow') : t('feed.follow', 'Follow')}
+          <TouchableRipple
+            style={[s.followBtn, isMutedFollowState && s.followingBtn]}
+            onPress={() => { void follow.toggle(); }}
+            disabled={follow.busy}
+            accessibilityLabel={follow.label}
           >
-            {followProcessing ? (
+            {follow.busy ? (
                <ActivityIndicator size="small" color={theme.primary} />
             ) : (
                 <Text
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.78}
-                  style={[s.followBtnText, isFollowing && s.followingBtnText]}
+                  style={[s.followBtnText, isMutedFollowState && s.followingBtnText]}
                 >
-                {isFollowing ? t('feed.following_status', 'Following') : t('feed.follow')}
+                {follow.label}
                 </Text>
             )}
           </TouchableRipple>

@@ -6,10 +6,19 @@ import { useAuthContext } from "../context/AuthProvider";
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { fetchConnections } from '../features/connections/connectionsSlice';
-import { acceptConnectionRequest, getUserConnections, unfollowUser } from '../api/endpoints';
+import {
+  acceptConnectionRequest,
+  acceptFollowRequest,
+  declineFollowRequest,
+  getIncomingFollowRequests,
+  getUserConnections,
+  unfollowUser,
+} from '../api/endpoints';
 import { useTheme } from '../context/ThemeContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { AVATAR } from '../config/layout';
+import { setRelationship } from '../features/relationships/relationshipsSlice';
+import { getUserFacingError, showError } from '../utils/feedback';
 import { useAppDispatch } from '../store/hooks';
 import type { PublicUser } from '@motionmeet/shared';
 import type { NavigationOnlyProps, RouteLike } from '../navigation/types';
@@ -22,6 +31,9 @@ interface ConnectionPage { items: PublicUser[]; nextCursor: string | null; loade
 type ConnectionPages = Record<ConnectionTabKey, ConnectionPage>;
 
 const TABS = [
+  // `Requests` is the follow-request inbox; `Pending` is the older two-way
+  // connection queue, which still exists alongside it.
+  { key: 'Requests', section: 'followRequests', labelKey: 'connections.requests', fallback: 'Requests' },
   { key: 'Followers', section: 'followers', labelKey: 'profile.followers', fallback: 'Followers' },
   { key: 'Following', section: 'following', labelKey: 'profile.following', fallback: 'Following' },
   { key: 'Pending', section: 'pendingConnections', labelKey: 'connections.pending', fallback: 'Pending' },
@@ -66,7 +78,16 @@ const Connections = ({ navigation, route }: ConnectionsProps) => {
     try {
       const token = await getToken();
       if (!token) throw new Error('Authentication required');
-      const data = await getUserConnections(token, tab.section, cursor);
+      // Follow requests live on their own endpoint, which answers with
+      // `{ user, createdAt }` rows rather than bare users.
+      const data = tab.section === 'followRequests'
+        ? await getIncomingFollowRequests(token, cursor).then((page) => ({
+            success: page.success,
+            message: page.message,
+            items: (page.items || []).map((entry) => entry.user),
+            nextCursor: page.nextCursor,
+          }))
+        : await getUserConnections(token, tab.section, cursor);
       if (!data.success) throw new Error(data.message || 'Connections could not be loaded');
       setPages((current) => {
         const previousItems = append ? current[tabKey].items : [];
@@ -140,6 +161,30 @@ const Connections = ({ navigation, route }: ConnectionsProps) => {
     }
   };
 
+  /** Approves or rejects an incoming follow request from the Requests tab. */
+  const handleFollowRequest = async (userId: string, accept: boolean) => {
+    try {
+      setActionLoading(true);
+      const token = await getToken();
+      if (!token) throw new Error('Authentication required');
+      const data = accept
+        ? await acceptFollowRequest(userId, token)
+        : await declineFollowRequest(userId, token);
+      if (!data.success) throw new Error(data.message || 'Request failed');
+      dispatch(setRelationship({ userId, relationship: data.relationship }));
+      // The row leaves Requests either way; accepting also adds a follower.
+      setPages((current) => ({
+        ...current,
+        Requests: { ...current.Requests, items: current.Requests.items.filter((user) => user._id !== userId) },
+        Followers: { ...current.Followers, loaded: false },
+      }));
+    } catch (error: unknown) {
+      showError(t('common.error', 'Hata'), getUserFacingError(error));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const currentPage = pages[currentTab];
   const currentData = currentPage.items;
 
@@ -205,6 +250,31 @@ const Connections = ({ navigation, route }: ConnectionsProps) => {
           >
             <Ionicons name="chatbubble-outline" size={16} color={theme.primary} />
           </TouchableRipple>
+        )}
+        {currentTab === 'Requests' && (
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            <Button
+              mode="contained"
+              compact
+              onPress={() => handleFollowRequest(user._id, true)}
+              disabled={actionLoading}
+              style={{ borderRadius: 16 }}
+              labelStyle={{ fontSize: 11, fontWeight: '700' }}
+            >
+              {t('activity.confirm', 'Onayla')}
+            </Button>
+            <Button
+              mode="outlined"
+              compact
+              onPress={() => handleFollowRequest(user._id, false)}
+              disabled={actionLoading}
+              textColor={theme.textMuted}
+              style={{ borderRadius: 16, borderColor: theme.border }}
+              labelStyle={{ fontSize: 11, fontWeight: '700' }}
+            >
+              {t('activity.decline', 'Sil')}
+            </Button>
+          </View>
         )}
         {currentTab === 'Pending' && (
           <Button

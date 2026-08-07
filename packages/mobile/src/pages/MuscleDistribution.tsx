@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ScrollView, ActivityIndicator, TouchableOpacity, StyleSheet, View } from 'react-native';
-import { Surface, Text } from 'react-native-paper';
+import { Menu, Surface, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
@@ -98,28 +98,43 @@ const MuscleDistribution = ({ navigation }: NavigationOnlyProps) => {
 
       <ScrollView contentContainerStyle={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: horizontalPadding, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
 
-        {/* Period dropdown */}
-        <Surface elevation={0} style={{ alignSelf: 'center', marginTop: 10 }}>
-          <TouchableOpacity style={styles.dropdownBtn} onPress={() => setShowDropdown(!showDropdown)}>
-            <Text style={styles.dropdownText}>{periodLabels[period]}</Text>
-            <Ionicons name="chevron-down" size={18} color={theme.textMuted} />
-          </TouchableOpacity>
-          {showDropdown && (
-            <Surface elevation={0} style={[styles.dropdownMenu, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              {Object.entries(periodLabels).map(([key, label]) => (
-                <TouchableOpacity
-                  key={key}
-                  style={[styles.dropdownItem, { borderBottomColor: theme.border }]}
-                  onPress={() => { setPeriod(key as StatsPeriod); setShowDropdown(false); }}
-                >
-                  <Text style={{ color: period === key ? theme.primary : theme.text, fontWeight: period === key ? 'bold' : 'normal' }}>
-                    {label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </Surface>
-          )}
-        </Surface>
+        {/*
+          Period picker. The options used to be an absolutely positioned view
+          inside this ScrollView: `zIndex` there only orders siblings within the
+          same parent, so the chart card that comes after it painted on top and
+          the choices were half-hidden behind it. Paper's Menu renders through a
+          Portal above the whole tree, which fixes the overlap identically on
+          Android and iOS while keeping the same pill-and-chevron anchor.
+        */}
+        <View style={{ alignSelf: 'center', marginTop: 10 }}>
+          <Menu
+            visible={showDropdown}
+            onDismiss={() => setShowDropdown(false)}
+            anchorPosition="bottom"
+            contentStyle={{ backgroundColor: theme.surface, borderRadius: 12, borderWidth: 1, borderColor: theme.border }}
+            anchor={
+              <TouchableOpacity
+                style={styles.dropdownBtn}
+                onPress={() => setShowDropdown(true)}
+                accessibilityRole="button"
+                accessibilityLabel={periodLabels[period]}
+              >
+                <Text style={styles.dropdownText}>{periodLabels[period]}</Text>
+                <Ionicons name="chevron-down" size={18} color={theme.textMuted} />
+              </TouchableOpacity>
+            }
+          >
+            {(Object.entries(periodLabels) as Array<[StatsPeriod, string]>).map(([key, label]) => (
+              <Menu.Item
+                key={key}
+                onPress={() => { setPeriod(key); setShowDropdown(false); }}
+                title={label}
+                titleStyle={{ color: period === key ? theme.primary : theme.text, fontWeight: period === key ? '700' : '400' }}
+                trailingIcon={period === key ? 'check' : undefined}
+              />
+            ))}
+          </Menu>
+        </View>
 
         {/* Radar Chart */}
         <Surface elevation={0} style={styles.chartContainer}>
@@ -257,11 +272,6 @@ const getStyles = (theme: MotionTheme, chartAccent: string) => StyleSheet.create
     marginTop: 10
   },
   dropdownText: { color: theme.text, fontSize: 16, fontWeight: '600' },
-  dropdownMenu: {
-    position: 'absolute', top: 50, left: 0, right: 0,
-    borderRadius: 12, borderWidth: 1, overflow: 'hidden', zIndex: 100,
-  },
-  dropdownItem: { padding: 14, borderBottomWidth: 1 },
   chartContainer: {
     width: '100%',
     alignItems: 'center',

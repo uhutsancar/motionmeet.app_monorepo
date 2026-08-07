@@ -3,23 +3,21 @@ import { sql } from "kysely";
 import { database, withTransaction } from "../configs/database.js";
 import { getCachedJson, invalidateCachePrefix, setCachedJson } from "../configs/redis.js";
 import { findHydratedPost, findPostAccessRecord, hydratePosts, type PostAccessRecord } from "../repositories/postRepository.js";
+import { canAccessPost as evaluatePostAccess } from "./accessControlService.js";
 import type { Pagination } from "../utils/pagination.js";
+import { UUID_PATTERN } from "../utils/validation.js";
 import { commitReservedUploads } from "./mediaUploadService.js";
 import { queueMediaDeletions } from "./mediaDeletionService.js";
 import { createPostComment, deleteInteractionsForPost, getPostComments, hydratePostInteractions, likePost, togglePostLike, unlikePost } from "./postInteractionService.js";
 import * as quotaService from "./quotaService.js";
 
-export const canAccessPost = async (post: PostAccessRecord, requester: { _id: string }): Promise<boolean> => {
-  const requesterId = requester._id;
-  if (post.user === requesterId || post.visibility === "public") return true;
-  if (post.visibility !== "followers") return false;
-  const pairKey = [post.user, requesterId].sort().join(":");
-  const [follow, connection] = await Promise.all([
-    database.selectFrom("user_follows").select("follower_id").where("follower_id", "=", requesterId).where("followee_id", "=", post.user).executeTakeFirst(),
-    database.selectFrom("connections").select("id").where("pair_key", "=", pairKey).where("status", "=", "accepted").executeTakeFirst(),
-  ]);
-  return Boolean(follow || connection);
-};
+/**
+ * Authority for every read of a single post. `accessControlService` applies both
+ * the account gate (a private account hides even its public posts from
+ * non-followers) and the per-post visibility gate.
+ */
+export const canAccessPost = (post: PostAccessRecord, requester: { _id: string }): Promise<boolean> =>
+  evaluatePostAccess({ user: post.user, visibility: post.visibility }, requester._id);
 
 export const checkWorkoutExists = async (workoutId: string, userId: string): Promise<boolean> => Boolean(await database.selectFrom("workouts").select("id").where("id", "=", workoutId).where("user_id", "=", userId).executeTakeFirst());
 
@@ -71,14 +69,49 @@ export const createPost = async (input: NewPostInput, { quotaLimit = -1, reserva
   }
 };
 
+/**
+ * `following` is the home feed: the member's own posts at every visibility, plus
+ * posts from accounts they follow (or are connected to) that are `public` or
+ * `followers`. Somebody else's `private` post is never in this set.
+ *
+ * `discover` is Keşfet: `public` posts only - not the member's own `private` or
+ * `followers` posts either - and nothing from a private account the member does
+ * not follow.
+ */
 export const getFeedPostsForUser = async (userId: string, pagination: Pagination, mode: unknown = "discover"): Promise<{ items: Post[]; nextCursor: string | null }> => {
   const feedMode = mode === "following" ? "following" : "discover";
-  const cacheKey = `feed:${userId}:${feedMode}:${pagination.cursor?.date.toISOString() ?? "first"}:${pagination.cursor?.id ?? ""}:${pagination.limit}`;
+  // Keyed on the raw cursor rather than its decoded parts: Keşfet paginates on
+  // `(discover_rank, id)`, which does not decode into `pagination.cursor` at
+  // all, so keying on the decoded date collapsed every discover page onto the
+  // same entry and served page one forever.
+  const cacheKey = `feed:${userId}:${feedMode}:${pagination.rawCursor ?? "first"}:${pagination.limit}`;
   const cached = await getCachedJson<{ items: Post[]; nextCursor: string | null }>(cacheKey);
   if (cached) return cached;
-  let query = database.selectFrom("posts").innerJoin("users as author", "author.id", "posts.user_id").selectAll("posts");
-  if (feedMode === "following") {
-    query = query.where((expression) => expression.or([
+
+  const rows = feedMode === "following"
+    ? await queryFollowingFeed(userId, pagination)
+    : await queryDiscoverFeed(userId, pagination);
+
+  const hasMore = rows.length > pagination.limit;
+  const selected = hasMore ? rows.slice(0, pagination.limit) : rows;
+  const hydrated = await hydratePostInteractions(await hydratePosts(selected), userId);
+  const last = selected.at(-1);
+  const nextCursor = hasMore && last
+    ? feedMode === "following"
+      ? encodeCursor({ date: new Date(last.created_at).toISOString(), id: last.id })
+      : encodeCursor({ rank: Number(last.discover_rank), id: last.id })
+    : null;
+  const result = { items: hydrated, nextCursor };
+  await setCachedJson(cacheKey, result, 30);
+  return result;
+};
+
+const encodeCursor = (value: Record<string, unknown>): string =>
+  Buffer.from(JSON.stringify(value)).toString("base64url");
+
+const queryFollowingFeed = async (userId: string, pagination: Pagination) => {
+  let query = database.selectFrom("posts").innerJoin("users as author", "author.id", "posts.user_id").selectAll("posts")
+    .where((expression) => expression.or([
       expression("posts.user_id", "=", userId),
       expression.and([
         expression("posts.visibility", "in", ["public", "followers"]),
@@ -89,23 +122,57 @@ export const getFeedPostsForUser = async (userId: string, pagination: Pagination
         expression.or([expression("posts.post_type", "!=", "workout"), expression("author.privacy_show_workouts_on_feed", "=", true)]),
       ]),
     ]));
-  } else {
+  if (pagination.cursor) {
     query = query.where((expression) => expression.or([
-      expression("posts.user_id", "=", userId),
-      expression.and([expression("posts.visibility", "=", "public"), expression("posts.post_type", "!=", "workout")]),
+      expression("posts.created_at", "<", pagination.cursor!.date),
+      expression.and([expression("posts.created_at", "=", pagination.cursor!.date), expression("posts.id", "<", pagination.cursor!.id)]),
     ]));
   }
-  if (pagination.cursor) query = query.where((expression) => expression.or([
-    expression("posts.created_at", "<", pagination.cursor!.date),
-    expression.and([expression("posts.created_at", "=", pagination.cursor!.date), expression("posts.id", "<", pagination.cursor!.id)]),
-  ]));
-  const rows = await query.orderBy("posts.created_at", "desc").orderBy("posts.id", "desc").limit(pagination.limit + 1).execute();
-  const hasMore = rows.length > pagination.limit; const selected = hasMore ? rows.slice(0, pagination.limit) : rows;
-  const hydrated = await hydratePostInteractions(await hydratePosts(selected), userId);
-  const last = selected.at(-1);
-  const result = { items: hydrated, nextCursor: hasMore && last ? Buffer.from(JSON.stringify({ date: new Date(last.created_at).toISOString(), id: last.id })).toString("base64url") : null };
-  await setCachedJson(cacheKey, result, 30);
-  return result;
+  return query.orderBy("posts.created_at", "desc").orderBy("posts.id", "desc").limit(pagination.limit + 1).execute();
+};
+
+/**
+ * Keşfet ranks by `posts.discover_rank`, a stored column that adds a
+ * logarithmic engagement bonus to the post's age in days - so a well-liked post
+ * outranks quieter newer ones without the feed freezing on all-time favourites.
+ * Pagination is a keyset walk over `(discover_rank, id)`, which the partial
+ * index on public posts serves directly.
+ */
+const queryDiscoverFeed = async (userId: string, pagination: Pagination) => {
+  const rankCursor = parseRankCursor(pagination.rawCursor);
+  let query = database.selectFrom("posts").innerJoin("users as author", "author.id", "posts.user_id").selectAll("posts")
+    .where("posts.visibility", "=", "public")
+    // A private account is absent from Keşfet unless the viewer already follows
+    // it; its own posts stay reachable from the home feed and its profile.
+    .where((expression) => expression.or([
+      expression("author.privacy_public_profile", "=", true),
+      expression("posts.user_id", "=", userId),
+      sql<boolean>`exists (select 1 from user_follows uf where uf.follower_id = ${userId} and uf.followee_id = posts.user_id)`,
+    ]))
+    .where((expression) => expression.or([
+      expression("posts.post_type", "!=", "workout"),
+      expression("author.privacy_show_workouts_on_feed", "=", true),
+    ]));
+  if (rankCursor) {
+    query = query.where((expression) => expression.or([
+      expression("posts.discover_rank", "<", rankCursor.rank),
+      expression.and([expression("posts.discover_rank", "=", rankCursor.rank), expression("posts.id", "<", rankCursor.id)]),
+    ]));
+  }
+  return query.orderBy("posts.discover_rank", "desc").orderBy("posts.id", "desc").limit(pagination.limit + 1).execute();
+};
+
+const parseRankCursor = (raw: string | null): { rank: number; id: string } | null => {
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+    if (!parsed || typeof parsed !== "object") return null;
+    const value = parsed as { rank?: unknown; id?: unknown };
+    const rank = Number(value.rank);
+    return Number.isFinite(rank) && typeof value.id === "string" && UUID_PATTERN.test(value.id) ? { rank, id: value.id } : null;
+  } catch {
+    return null;
+  }
 };
 
 export const getPostById = (postId: string): Promise<PostAccessRecord | null> => findPostAccessRecord(postId, true);

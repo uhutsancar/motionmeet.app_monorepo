@@ -17,8 +17,9 @@ import dayjs, { setDayjsLocale } from '../utils/dayjs';
 import { useAuthContext } from '../context/AuthProvider';
 import { useTheme } from '../context/ThemeContext';
 import { setAuthToken } from '../api/client';
-import { logHandledError } from '../utils/feedback';
+import { logHandledError, showInfo } from '../utils/feedback';
 import { getUserProfile, getWorkouts } from '../api/endpoints';
+import { useFollowAction } from '../hooks/useFollowAction';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { AVATAR, CARD, EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
 import { API_URL } from '../config/environment';
@@ -80,6 +81,17 @@ const Profile = ({ route, navigation }: ProfileProps) => {
   const [publicProfile, setPublicProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(!isOwnProfile);
   const user = isOwnProfile ? currentUser : publicProfile;
+  // Seeded from the profile payload, then kept in step with every other follow
+  // button in the app through the shared relationship store.
+  const follow = useFollowAction(isOwnProfile ? undefined : profileId, {
+    isFollowing: Boolean(publicProfile?.isFollowing),
+    isFollowedBy: Boolean(publicProfile?.isFollowedBy),
+    requestSent: Boolean(publicProfile?.requestSent),
+    requestReceived: Boolean(publicProfile?.requestReceived),
+  });
+  // The server is the authority on both of these; the UI only mirrors them.
+  const contentHidden = !isOwnProfile && publicProfile?.canViewContent === false;
+  const canMessage = isOwnProfile ? false : publicProfile?.canMessage !== false;
 
   useEffect(() => {
     setDayjsLocale(i18n.language);
@@ -109,7 +121,10 @@ const Profile = ({ route, navigation }: ProfileProps) => {
       }
     };
     fetchProfile();
-  }, [getToken, isOwnProfile, profileId]);
+    // Re-runs when the follow edge changes - including when the other side
+    // accepts on their own device - because that is exactly what decides
+    // whether this profile's posts are visible.
+  }, [getToken, isOwnProfile, profileId, follow.relationship.isFollowing]);
 
   useEffect(() => {
     if (!isOwnProfile) return;
@@ -313,7 +328,7 @@ const Profile = ({ route, navigation }: ProfileProps) => {
             })}
           </View>
 
-          {isOwnProfile && (
+          {isOwnProfile ? (
             <Button
               mode="outlined"
               icon="pencil-outline"
@@ -324,9 +339,70 @@ const Profile = ({ route, navigation }: ProfileProps) => {
             >
               {t('profile.edit_profile', 'Edit profile')}
             </Button>
+          ) : (
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+              <Button
+                mode={follow.state === 'following' || follow.state === 'requested' ? 'outlined' : 'contained'}
+                onPress={() => { void follow.toggle(); }}
+                loading={follow.busy}
+                disabled={follow.busy}
+                style={{ flex: 1, borderRadius: 10, borderColor: theme.border }}
+                contentStyle={{ minHeight: 42 }}
+                labelStyle={{ fontWeight: '700' }}
+              >
+                {follow.label}
+              </Button>
+              <Button
+                mode="outlined"
+                icon="message-outline"
+                onPress={() => {
+                  if (!canMessage) {
+                    showInfo(
+                      t('profile.private_title', 'Bu hesap gizli'),
+                      t('profile.message_needs_mutual', 'Mesaj gönderebilmek için birbirinizi takip etmeniz gerekiyor.'),
+                    );
+                    return;
+                  }
+                  navigation.navigate('ChatBox', { userId: user?._id, user });
+                }}
+                style={{ flex: 1, borderRadius: 10, borderColor: theme.border, opacity: canMessage ? 1 : 0.55 }}
+                contentStyle={{ minHeight: 42 }}
+                labelStyle={{ color: theme.text, fontWeight: '700' }}
+              >
+                {t('messages.message', 'Mesaj')}
+              </Button>
+            </View>
           )}
           </View>
         </Surface>
+
+        {/* A locked account keeps its header - name, avatar and counts - and
+            swaps only the content for an explanation, the way Instagram does. */}
+        {contentHidden && (
+          <Surface
+            elevation={0}
+            style={{
+              marginTop: 16,
+              marginHorizontal: CARD.padding,
+              padding: 28,
+              alignItems: 'center',
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+            }}
+          >
+            <Ionicons name="lock-closed-outline" size={30} color={theme.textMuted} />
+            <Text style={{ color: theme.text, fontSize: 15, fontWeight: '800', marginTop: 10 }}>
+              {t('profile.private_title', 'Bu hesap gizli')}
+            </Text>
+            <Text style={{ color: theme.textMuted, fontSize: 12.5, lineHeight: 18, textAlign: 'center', marginTop: 5 }}>
+              {follow.state === 'requested'
+                ? t('profile.private_requested', 'İsteğin onaylandığında gönderilerini ve hikâyelerini görebilirsin.')
+                : t('profile.private_body', 'Gönderilerini ve hikâyelerini görmek için takip isteği gönder.')}
+            </Text>
+          </Surface>
+        )}
 
         {isOwnProfile && (
           <Surface
@@ -543,6 +619,7 @@ const Profile = ({ route, navigation }: ProfileProps) => {
 
         {/* Same gutter as every card on this screen. Without it the heading sat
             on the screen edge and the counter was clipped off the right side. */}
+        {!contentHidden && <>
         <View
           style={{
             marginTop: 24,
@@ -640,6 +717,7 @@ const Profile = ({ route, navigation }: ProfileProps) => {
             </View>
           )}
         </Surface>
+        </>}
 
         {isOwnProfile && (
           <Surface

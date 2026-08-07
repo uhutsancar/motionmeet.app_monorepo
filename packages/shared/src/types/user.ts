@@ -62,6 +62,34 @@ export interface PublicUser {
   profile_picture: string;
 }
 
+/**
+ * Everything the UI needs to pick between Follow / Requested / Following /
+ * Follow back / Confirm. The two directions are independent: A following B says
+ * nothing about B following A.
+ */
+export interface RelationshipState {
+  /** Viewer follows this account. */
+  isFollowing: boolean;
+  /** This account follows the viewer, so the viewer can follow back. */
+  isFollowedBy: boolean;
+  /** Viewer has a follow request awaiting this account's approval. */
+  requestSent: boolean;
+  /** This account asked to follow the viewer and is awaiting approval. */
+  requestReceived: boolean;
+  /** Legacy two-way connection, kept for presence and messaging. */
+  isConnection: boolean;
+  connectionPending: boolean;
+}
+
+export const EMPTY_RELATIONSHIP: RelationshipState = Object.freeze({
+  isFollowing: false,
+  isFollowedBy: false,
+  requestSent: false,
+  requestReceived: false,
+  isConnection: false,
+  connectionPending: false,
+});
+
 export interface UserProfile extends PublicUser, Timestamped {
   bio: string;
   cover_photo: string;
@@ -82,6 +110,15 @@ export interface UserProfile extends PublicUser, Timestamped {
   isFollowing?: boolean;
   isConnection?: boolean;
   connectionPending?: boolean;
+  isFollowedBy?: boolean;
+  requestSent?: boolean;
+  requestReceived?: boolean;
+  /** True when the account is private and the viewer may not see its content. */
+  isPrivate?: boolean;
+  /** False when a private account is hiding its posts and stories from the viewer. */
+  canViewContent?: boolean;
+  /** False when the viewer is not allowed to open a chat with this account. */
+  canMessage?: boolean;
 }
 
 export interface AuthUser extends PublicUser {

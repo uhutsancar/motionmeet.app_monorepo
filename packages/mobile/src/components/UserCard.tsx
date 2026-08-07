@@ -1,17 +1,17 @@
-import React, { useState } from 'react';
-import { Alert, Image, View } from 'react-native';
-import { Surface, Text, TouchableRipple } from 'react-native-paper';
+import React from 'react';
+import { Image, View } from 'react-native';
+import { ActivityIndicator, Surface, Text, TouchableRipple } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
-import { useAuthContext } from '../context/AuthProvider';
 import { useTheme } from '../context/ThemeContext';
-import { followUser, unfollowUser } from '../api/endpoints';
-import { fetchUser } from '../features/user/userSlice';
+import { useFollowAction } from '../hooks/useFollowAction';
 import type { PublicUser } from '@motionmeet/shared';
-import { useAppDispatch } from '../store/hooks';
 
 interface SuggestedUser extends PublicUser {
   isFollowing?: boolean;
+  isFollowedBy?: boolean;
+  requestSent?: boolean;
+  requestReceived?: boolean;
   followers_count?: number;
 }
 
@@ -33,27 +33,14 @@ interface UserCardProps {
 const UserCard = ({ user, onPress, width = 220, badge, caption }: UserCardProps) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
-  const dispatch = useAppDispatch();
-  const { getToken } = useAuthContext();
-  const [processing, setProcessing] = useState(false);
-  const [isFollowing, setIsFollowing] = useState(Boolean(user.isFollowing));
-
-  const handleFollow = async () => {
-    if (processing) return;
-    try {
-      setProcessing(true);
-      const token = await getToken();
-      if (!token) throw new Error('Authentication required');
-      if (isFollowing) await unfollowUser(user._id, token);
-      else await followUser(user._id, token);
-      setIsFollowing(!isFollowing);
-      dispatch(fetchUser(token));
-    } catch {
-      Alert.alert(t('common.error'), t('feed.follow_failed'));
-    } finally {
-      setProcessing(false);
-    }
-  };
+  const follow = useFollowAction(user._id, {
+    isFollowing: Boolean(user.isFollowing),
+    isFollowedBy: Boolean(user.isFollowedBy),
+    requestSent: Boolean(user.requestSent),
+    requestReceived: Boolean(user.requestReceived),
+  });
+  // "Following" and "Requested" are settled; the other two are calls to action.
+  const settled = follow.state === 'following' || follow.state === 'requested';
 
   const secondaryLine = caption ?? `${user.followers_count ?? 0} ${t('feed.followers', 'followers')}`;
 
@@ -125,20 +112,30 @@ const UserCard = ({ user, onPress, width = 220, badge, caption }: UserCardProps)
 
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
         <TouchableRipple
-          onPress={handleFollow}
-          disabled={processing}
+          onPress={() => { void follow.toggle(); }}
+          disabled={follow.busy}
+          accessibilityLabel={follow.label}
           style={{
             flex: 1,
             height: 36,
             alignItems: 'center',
             justifyContent: 'center',
             borderRadius: 9,
-            backgroundColor: isFollowing ? theme.surfaceLight : theme.primary,
+            backgroundColor: settled ? theme.surfaceLight : theme.primary,
           }}
         >
-          <Text style={{ color: isFollowing ? theme.text : '#FFFFFF', fontSize: 12, fontWeight: '800' }}>
-            {isFollowing ? t('feed.following_status', 'Following') : t('feed.follow', 'Follow')}
-          </Text>
+          {follow.busy ? (
+            <ActivityIndicator size="small" color={settled ? theme.text : '#FFFFFF'} />
+          ) : (
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.75}
+              style={{ color: settled ? theme.text : '#FFFFFF', fontSize: 12, fontWeight: '800', paddingHorizontal: 6 }}
+            >
+              {follow.label}
+            </Text>
+          )}
         </TouchableRipple>
         <TouchableRipple
           onPress={() => onPress?.(user)}

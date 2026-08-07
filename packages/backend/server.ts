@@ -16,6 +16,7 @@ import measurementRouter from "./routes/measurementRoutes.js";
 import nearbyRouter from "./routes/nearbyRoutes.js";
 import messageRouter from "./routes/messageRoutes.js";
 import muscleGroupRouter from "./routes/muscleGroupRoutes.js";
+import notificationRouter from "./routes/notificationRoutes.js";
 import planRouter from "./routes/planRoutes.js";
 import postRouter from "./routes/postRoutes.js";
 import rbacRouter from "./routes/rbacRoutes.js";
@@ -111,7 +112,7 @@ app.get("/health/ready", async (_request, response) => {
 app.use("/api/auth", authRoutes); app.use("/api/user", userRouter); app.use("/api/post", postRouter); app.use("/api/story", storyRouter);
 app.use("/api/message", messageRouter); app.use("/api/exercise", exerciseRouter); app.use("/api/routine", routineRouter); app.use("/api/workout", workoutRouter);
 app.use("/api/plans", planRouter); app.use("/api/admin", rbacRouter); app.use("/api/muscle-groups", muscleGroupRouter); app.use("/api/equipment", equipmentRouter); app.use("/api/media", mediaRouter); app.use("/api/measurements", measurementRouter);
-app.use("/api/locations", locationRouter); app.use("/api/nearby", nearbyRouter);
+app.use("/api/locations", locationRouter); app.use("/api/nearby", nearbyRouter); app.use("/api/notifications", notificationRouter);
 app.use(notFoundHandler); app.use(errorHandler);
 
 io.use(async (socket, next) => {

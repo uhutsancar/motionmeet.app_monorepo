@@ -114,6 +114,8 @@
         "media": "Media",
         "post": "Post",
         "follow": "Follow",
+        "follow_back": "Follow back",
+        "follow_requested": "Requested",
         "follow_failed": "Failed to update follow status",
         "followers": "Followers",
         "following_status": "Following",
@@ -209,8 +211,25 @@
         "kettlebell": "Kettlebell",
         "other": "Other"
     },
+    "activity": {
+        "title": "Notifications",
+        "someone": "An athlete",
+        "follow_request": "{{name}} wants to follow you",
+        "follow_request_accepted": "{{name}} accepted your follow request",
+        "follow": "{{name}} started following you",
+        "post_like": "{{name}} liked your post",
+        "post_comment": "{{name}} commented on your post",
+        "confirm": "Confirm",
+        "decline": "Delete",
+        "empty_title": "No notifications yet",
+        "empty_body": "Follow requests and likes will show up here."
+    },
     "profile": {
         "workouts": "Workouts",
+        "private_title": "This account is private",
+        "private_body": "Send a follow request to see their posts and stories.",
+        "private_requested": "You will see their posts and stories once the request is approved.",
+        "message_needs_mutual": "You both need to follow each other before you can chat.",
         "followers": "Followers",
         "following": "Following",
         "duration": "Duration",
@@ -312,7 +331,8 @@
         "unfollow": "Unfollow",
         "empty": "No one here yet",
         "title": "Connections",
-        "pending": "Pending"
+        "pending": "Pending",
+        "requests": "Requests"
     },
     "statistics": {
         "title": "Statistics",
@@ -530,6 +550,10 @@
         "legal_section": "LEGAL",
         "public_profile": "Public Profile",
         "public_sub": "Your profile is visible to everyone",
+        "open_profile": "Open profile",
+        "open_profile_sub": "Anyone can see your posts and send you a message.",
+        "closed_profile": "Private profile",
+        "closed_profile_sub": "Only followers you approve can see your posts. Messaging needs a mutual follow.",
         "show_in_search": "Show in Search",
         "search_sub": "Appear in search results",
         "workouts_on_feed": "Show Workouts on Feed",
@@ -671,7 +695,7 @@
         "section": "Nearby",
         "see_all": "See all",
         "feature_title": "Show athletes near me",
-        "feature_body": "Your exact position is never shown to anyone and is only read while this screen is open.",
+        "feature_body": "Your location is only read while this screen is open.",
         "loading": "Looking around you…",
         "load_failed": "Nearby athletes could not be loaded.",
         "radius": "RADIUS",
@@ -699,7 +723,7 @@
         "empty_body": "Try a wider radius — MotionMeet is still growing in your area.",
         "location_needed": "Location needed",
         "denied_title": "Location permission is off",
-        "denied_body": "Nearby needs your location while the screen is open. You can allow it any time.",
+        "denied_body": "Location access is needed to show athletes near you.",
         "blocked_title": "Allow location in Settings",
         "blocked_body": "Location is turned off for MotionMeet. Open Settings to allow it.",
         "services_off_title": "Location services are off",
@@ -728,7 +752,7 @@
         "delete_body": "Your saved position and nearby preferences are erased and the feature is switched off. Your profile location is not affected.",
         "deleted_title": "Location deleted",
         "deleted_body": "Nothing about your position is stored any more.",
-        "privacy_note": "Distances are shown as ranges, never as an exact figure. MotionMeet does not track you in the background and keeps no location history."
+        "privacy_note": "Distances are shown as ranges. No background tracking, no location history."
     },
     "licenses": {
         "title": "Data & licences",

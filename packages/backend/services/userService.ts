@@ -2,7 +2,10 @@ import { sql } from "kysely";
 import type { PublicUser, UserProfile } from "@motionmeet/shared";
 import { database, withTransaction } from "../configs/database.js";
 import { getCachedJson, invalidateCachePrefix, setCachedJson } from "../configs/redis.js";
+import type { Row } from "../db/types.js";
 import { serializeUser, toIsoString, type InternalUser } from "../repositories/entities.js";
+import { evaluateMessagePermission } from "./accessControlService.js";
+import { getRelationshipMap, getRelationshipState, unfollow } from "./relationshipService.js";
 import { findUserById } from "../repositories/userRepository.js";
 import { hydratePosts } from "../repositories/postRepository.js";
 import { hydratePostInteractions } from "./postInteractionService.js";
@@ -18,6 +21,20 @@ const brief = (row: { id: string; full_name: string; username: string; profile_p
 // so anything short of a public profile location is withheld there.
 const summary = (row: { id: string; full_name: string; username: string; profile_picture_url: string; bio: string; location: string; location_visibility: string; followers_count: number; following_count: number; connections_count: number }) => ({ ...brief(row), bio: row.bio, location: row.location_visibility === "public" ? row.location : "", followers_count: row.followers_count, following_count: row.following_count, connections_count: row.connections_count });
 export const withRelationshipCounts = <T>(user: T): T => user;
+
+/**
+ * Stamps each row in a people list with both directions of the follow graph in
+ * one extra query, so the cards can render Follow / Requested / Following /
+ * Follow back without a request per card.
+ */
+type SummaryRow = ReturnType<typeof summary>;
+const withRelationships = async <T extends SummaryRow>(rows: T[], viewerId: string): Promise<Array<T & { isFollowing: boolean; isFollowedBy: boolean; requestSent: boolean; requestReceived: boolean }>> => {
+  const states = await getRelationshipMap(viewerId, rows.map((row) => row.id));
+  return rows.map((row) => ({
+    ...row,
+    ...(states.get(row.id) ?? { isFollowing: false, isFollowedBy: false, requestSent: false, requestReceived: false }),
+  }));
+};
 export const getUserById = (userId: string): Promise<InternalUser | null> => findUserById(userId, { plan: true });
 
 export const getUserByIdWithPassword = async (userId: string): Promise<InternalUser | null> => {
@@ -78,7 +95,7 @@ export const searchUsers = async (input: string, excludeUserId: string) => {
     .where("id", "!=", excludeUserId).where("privacy_show_in_search", "=", true)
     .where((expression) => expression.or([expression("username", "ilike", `${term}%`), expression("full_name", "ilike", `%${term}%`)]))
     .orderBy(sql`case when username ilike ${`${term}%`} then 0 else 1 end`).orderBy("followers_count", "desc").limit(20).execute();
-  return rows.map(summary);
+  return withRelationships(rows.map(summary), excludeUserId);
 };
 
 export const validateTargetUser = async (requesterId: string, targetId: unknown, privacyField?: "allowFollowers" | "allowMessages"): Promise<{ id: string } | null> => {
@@ -89,26 +106,10 @@ export const validateTargetUser = async (requesterId: string, targetId: unknown,
   return await query.executeTakeFirst() ?? null;
 };
 
-export const followUser = async (userId: string, targetId: string): Promise<boolean> => {
-  await withTransaction(async (transaction) => {
-    const inserted = await transaction.insertInto("user_follows").values({ follower_id: userId, followee_id: targetId }).onConflict((conflict) => conflict.columns(["follower_id", "followee_id"]).doNothing()).returning("follower_id").executeTakeFirst();
-    if (!inserted) return;
-    const requester = await transaction.updateTable("users").set((expression) => ({ following_count: expression("following_count", "+", 1) })).where("id", "=", userId).where("following_count", "<", MAX_RELATIONSHIPS).executeTakeFirst();
-    const target = await transaction.updateTable("users").set((expression) => ({ followers_count: expression("followers_count", "+", 1) })).where("id", "=", targetId).where("followers_count", "<", MAX_RELATIONSHIPS).executeTakeFirst();
-    if (Number(requester.numUpdatedRows) !== 1 || Number(target.numUpdatedRows) !== 1) throw Object.assign(new Error("Relationship limit reached"), { status: 409 });
-  });
-  await Promise.all([invalidateCachePrefix(`profile:${userId}:`), invalidateCachePrefix(`profile:${targetId}:`), invalidateCachePrefix("feed:")]); return true;
-};
-
-export const unfollowUser = async (userId: string, targetId: string): Promise<void> => {
-  await withTransaction(async (transaction) => {
-    const deleted = await transaction.deleteFrom("user_follows").where("follower_id", "=", userId).where("followee_id", "=", targetId).returning("follower_id").executeTakeFirst();
-    if (!deleted) return;
-    await transaction.updateTable("users").set((expression) => ({ following_count: expression.fn<number>("greatest", [expression("following_count", "-", 1), expression.val(0)]) })).where("id", "=", userId).execute();
-    await transaction.updateTable("users").set((expression) => ({ followers_count: expression.fn<number>("greatest", [expression("followers_count", "-", 1), expression.val(0)]) })).where("id", "=", targetId).execute();
-  });
-  await Promise.all([invalidateCachePrefix(`profile:${userId}:`), invalidateCachePrefix(`profile:${targetId}:`), invalidateCachePrefix("feed:")]);
-};
+// Following is a request/accept handshake now; both directions live in
+// relationshipService so there is one implementation of the counter bookkeeping.
+export { requestFollow, acceptFollowRequest, declineFollowRequest, cancelFollowRequest, getRelationshipState } from "./relationshipService.js";
+export const unfollowUser = (userId: string, targetId: string): Promise<void> => unfollow(userId, targetId);
 
 export const checkRecentConnectionRequests = async (userId: string): Promise<number> => Number((await database.selectFrom("connections").select((expression) => expression.fn.countAll<number>().as("count")).where("from_user_id", "=", userId).where("created_at", ">", new Date(Date.now() - 86_400_000)).executeTakeFirst())?.count ?? 0);
 export const getConnectionBetweenUsers = async (left: string, right: string) => {
@@ -190,29 +191,67 @@ export const getUserProfileAndPosts = async (profileId: string, requesterId: str
   const result = await buildProfileAndPosts(profileId, requesterId, pagination); if (result) await setCachedJson(cacheKey, result, 60); return result;
 };
 
+/**
+ * A locked account still shows its header - name, avatar, bio and counts - so
+ * the app can render "Bu hesap gizli" next to a working Follow button, exactly
+ * as Instagram does. Only the posts are withheld, and they are withheld here in
+ * the query rather than filtered by the client.
+ */
 const buildProfileAndPosts = async (profileId: string, requesterId: string, pagination: Pagination) => {
   const row = await database.selectFrom("users").selectAll().where("id", "=", profileId).executeTakeFirst(); if (!row) return null;
-  const owner = profileId === requesterId; const [follow, connection] = owner ? [null, null] : await Promise.all([database.selectFrom("user_follows").select("follower_id").where("follower_id", "=", requesterId).where("followee_id", "=", profileId).executeTakeFirst(), getConnectionBetweenUsers(requesterId, profileId)]);
-  const isFollowing = Boolean(follow); const isConnection = connection?.status === "accepted"; const connectionPending = connection?.status === "pending";
-  if (!owner && !row.privacy_public_profile && !isConnection) return { restricted: true as const };
-  const visibility: Array<"public" | "followers" | "private"> = owner ? ["public", "followers", "private"] : isFollowing || isConnection ? ["public", "followers"] : ["public"];
-  let query = database.selectFrom("posts").selectAll().where("user_id", "=", profileId).where("visibility", "in", visibility);
-  if (pagination.cursor) query = query.where((expression) => expression.or([expression("created_at", "<", pagination.cursor!.date), expression.and([expression("created_at", "=", pagination.cursor!.date), expression("id", "<", pagination.cursor!.id)])]));
-  const postRows = await query.orderBy("created_at", "desc").orderBy("id", "desc").limit(pagination.limit + 1).execute();
-  const hasMore = postRows.length > pagination.limit; const selected = hasMore ? postRows.slice(0, pagination.limit) : postRows;
+  const owner = profileId === requesterId;
+  const [relationship, messagePermission] = await Promise.all([
+    getRelationshipState(requesterId, profileId),
+    owner ? Promise.resolve({ allowed: false }) : evaluateMessagePermission({ id: requesterId }, profileId),
+  ]);
+  const { isFollowing, isFollowedBy, requestSent, requestReceived, isConnection, connectionPending } = relationship;
+  const isPrivate = !row.privacy_public_profile;
+  const canViewContent = owner || !isPrivate || isFollowing || isConnection;
+
+  const visibility: Array<"public" | "followers" | "private"> = owner
+    ? ["public", "followers", "private"]
+    : isFollowing || isConnection ? ["public", "followers"] : ["public"];
+  let selected: Array<Row<"posts">> = [];
+  let hasMore = false;
+  if (canViewContent) {
+    let query = database.selectFrom("posts").selectAll().where("user_id", "=", profileId).where("visibility", "in", visibility);
+    if (pagination.cursor) query = query.where((expression) => expression.or([expression("created_at", "<", pagination.cursor!.date), expression.and([expression("created_at", "=", pagination.cursor!.date), expression("id", "<", pagination.cursor!.id)])]));
+    const postRows = await query.orderBy("created_at", "desc").orderBy("id", "desc").limit(pagination.limit + 1).execute();
+    hasMore = postRows.length > pagination.limit;
+    selected = hasMore ? postRows.slice(0, pagination.limit) : postRows;
+  }
+
   const internal = serializeUser(row);
   // The label is withheld from anyone the member did not open it to, and the
   // dataset ids behind it never leave the owner's own payload at all.
   const locationVisible = owner || row.location_visibility === "public"
     || (row.location_visibility === "followers" && (isFollowing || isConnection))
     || (row.location_visibility === "connections" && isConnection);
-  const profile: UserProfile = { id: internal.id, _id: internal._id, full_name: internal.full_name, username: internal.username, profile_picture: internal.profile_picture, bio: internal.bio, cover_photo: internal.cover_photo, location: locationVisible ? internal.location : "", profileLocation: owner ? internal.profileLocation : null, weight: internal.weight, height: internal.height, followers_count: internal.followers_count, following_count: internal.following_count, connections_count: internal.connections_count, statistics: internal.statistics, createdAt: internal.createdAt, updatedAt: internal.updatedAt, isFollowing, isConnection, connectionPending };
-  const last = selected.at(-1); return { restricted: false as const, profile, posts: await hydratePostInteractions(await hydratePosts(selected), requesterId), nextCursor: hasMore && last ? Buffer.from(JSON.stringify({ date: new Date(last.created_at).toISOString(), id: last.id })).toString("base64url") : null };
+  const profile: UserProfile = {
+    id: internal.id, _id: internal._id, full_name: internal.full_name, username: internal.username,
+    profile_picture: internal.profile_picture, bio: internal.bio, cover_photo: internal.cover_photo,
+    location: locationVisible ? internal.location : "", profileLocation: owner ? internal.profileLocation : null,
+    weight: internal.weight, height: internal.height,
+    followers_count: internal.followers_count, following_count: internal.following_count, connections_count: internal.connections_count,
+    statistics: internal.statistics, createdAt: internal.createdAt, updatedAt: internal.updatedAt,
+    isFollowing, isConnection, connectionPending, isFollowedBy, requestSent, requestReceived,
+    isPrivate, canViewContent, canMessage: owner ? false : messagePermission.allowed,
+  };
+  const last = selected.at(-1);
+  return {
+    restricted: false as const,
+    profile,
+    posts: canViewContent ? await hydratePostInteractions(await hydratePosts(selected), requesterId) : [],
+    nextCursor: hasMore && last ? Buffer.from(JSON.stringify({ date: new Date(last.created_at).toISOString(), id: last.id })).toString("base64url") : null,
+  };
 };
 
 export const getSuggestedUsersList = async (userId: string, requestedLimit = 10) => {
   const limit = Math.min(Math.max(Number(requestedLimit) || 10, 1), 50);
   const rows = await database.selectFrom("users").select(["id", "full_name", "username", "profile_picture_url", "bio", "location", "location_visibility", "followers_count", "following_count", "connections_count"]).where("id", "!=", userId).where("privacy_show_in_search", "=", true)
-    .where(sql<boolean>`not exists (select 1 from user_follows uf where uf.follower_id = ${userId} and uf.followee_id = users.id)`).orderBy("created_at", "desc").orderBy("id", "desc").limit(limit).execute();
-  return rows.map(summary);
+    .where(sql<boolean>`not exists (select 1 from user_follows uf where uf.follower_id = ${userId} and uf.followee_id = users.id)`)
+    // Someone already waiting on this member's approval is not a suggestion.
+    .where(sql<boolean>`not exists (select 1 from follow_requests fr where fr.requester_id = ${userId} and fr.target_id = users.id)`)
+    .orderBy("created_at", "desc").orderBy("id", "desc").limit(limit).execute();
+  return withRelationships(rows.map(summary), userId);
 };

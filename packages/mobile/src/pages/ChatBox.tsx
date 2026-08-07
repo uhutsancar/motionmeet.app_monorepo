@@ -34,7 +34,7 @@ import {
 import dayjs from '../utils/dayjs';
 
 import { Appbar, Avatar, Text, IconButton, Surface, ActivityIndicator, Badge, useTheme as usePaperTheme, TouchableRipple } from 'react-native-paper';
-import { showError } from '../utils/feedback';
+import { getUserFacingError, showError } from '../utils/feedback';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { KeyboardResponsiveView } from '../components/KeyboardAwareScrollView';
 import { CONTENT_LIMITS, createOperationId } from '@motionmeet/shared';
@@ -372,8 +372,13 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
       } else {
         throw new Error(data.message || 'Failed to send message');
       }
-    } catch {
-      showError(t('common.error', 'Error'), t('messages.send_failed', 'Failed to send message'));
+    } catch (error) {
+      // A private account that requires a mutual follow answers 403 with a
+      // reason, and saying so beats a flat "message could not be sent".
+      showError(
+        t('common.error', 'Hata'),
+        getUserFacingError(error, t('messages.send_failed', 'Mesaj gönderilemedi')),
+      );
     }
     finally {
       setSending(false);

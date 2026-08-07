@@ -22,6 +22,7 @@ import { useTheme } from '../context/ThemeContext';
 import { fetchPosts } from '../features/posts/postsSlice';
 import { fetchStories } from '../features/stories/storiesSlice';
 import { fetchUser } from '../features/user/userSlice';
+import { fetchUnreadCount } from '../features/notifications/notificationsSlice';
 import { setAuthToken } from '../api/client';
 import StoriesBar from '../components/StoriesBar';
 import PostCard from '../components/PostCard';
@@ -56,6 +57,9 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
     loadingMore,
   } = useAppSelector((state) => state.posts);
   const user = useAppSelector((state) => state.user.value);
+  // Kept live by the socket, so a like or follow request badges the bell without
+  // the screen polling for it.
+  const unreadCount = useAppSelector((state) => state.notifications.unreadCount);
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [showStoryModal, setShowStoryModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -70,6 +74,9 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
       await Promise.all([
         dispatch(fetchUser(token)),
         dispatch(fetchStories(token)),
+        // One small call seeds the bell badge; every later change arrives over
+        // the socket rather than by polling.
+        dispatch(fetchUnreadCount(token)),
       ]);
     } catch (error) {
       logHandledError('load-feed-static-data', error);
@@ -195,14 +202,37 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
             />
           </Menu>
         </View>
-        <IconButton
-          icon="bell-outline"
-          size={20}
-          iconColor={theme.text}
-          style={{ margin: 0 }}
-          onPress={() => navigation.navigate('NotificationsScreen')}
-          accessibilityLabel={t('menu.notifications', 'Notifications')}
-        />
+        <View>
+          <IconButton
+            icon="bell-outline"
+            size={20}
+            iconColor={theme.text}
+            style={{ margin: 0 }}
+            onPress={() => navigation.navigate('ActivityScreen')}
+            accessibilityLabel={t('activity.title', 'Bildirimler')}
+          />
+          {unreadCount > 0 && (
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                top: 2,
+                right: 0,
+                minWidth: 17,
+                height: 17,
+                paddingHorizontal: 4,
+                borderRadius: 9,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: theme.danger,
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '800' }}>
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </Text>
+            </View>
+          )}
+        </View>
       </Surface>
 
       <FlatList
