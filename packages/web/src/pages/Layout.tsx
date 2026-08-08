@@ -1,4 +1,5 @@
 import MenuRounded from "@mui/icons-material/MenuRounded";
+import NotificationsNoneRounded from "@mui/icons-material/NotificationsNoneRounded";
 import SearchRounded from "@mui/icons-material/SearchRounded";
 import Badge from "@mui/material/Badge";
 import Avatar from "@mui/material/Avatar";
@@ -104,6 +105,7 @@ const MobileNavigation = ({ unreadCount = 0 }: UnreadCountProps) => {
 
 const Layout = ({ unreadCount = 0 }: UnreadCountProps) => {
   const user = useAppSelector((state) => state.user.value);
+  const unreadActivity = useAppSelector((state) => state.notifications.unreadCount);
   const [sideBarOpen, setSideBarOpen] = useState(false);
   const { pathname } = useLocation();
   const navigate = useNavigate();
@@ -163,6 +165,11 @@ const Layout = ({ unreadCount = 0 }: UnreadCountProps) => {
           <Stack direction="row" spacing={0.25} sx={{ alignItems: "center", ml: "auto" }}>
             <IconButton aria-label="Search" onClick={() => navigate("/exercises")}>
               <SearchRounded />
+            </IconButton>
+            <IconButton aria-label={t("activity.title", "Notifications")} onClick={() => navigate("/activity")}>
+              <Badge badgeContent={unreadActivity} color="error" max={99}>
+                <NotificationsNoneRounded />
+              </Badge>
             </IconButton>
             <IconButton aria-label="Open profile" onClick={() => navigate("/profile")} sx={{ p: 0.5 }}>
               <Avatar

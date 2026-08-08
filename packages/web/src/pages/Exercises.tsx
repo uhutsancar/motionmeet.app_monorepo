@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -10,6 +10,8 @@ import {
   Paper,
   Select,
   Stack,
+  Tab,
+  Tabs,
   TextField,
   Typography,
 } from "@mui/material";
@@ -23,8 +25,11 @@ import moment from "moment";
 import { useMuscleGroups } from "../hooks/useMuscleGroups";
 import { useEquipment } from "../hooks/useEquipment";
 import { getExercises, getExerciseStats } from "../services/exerciseService";
-import { resolvePublicMediaUrl, type Exercise, type ExerciseStats } from "@motionmeet/shared";
+import { getExerciseHistory } from "~/api/endpoints";
+import { resolvePublicMediaUrl, type Exercise, type ExerciseSessionEntry, type ExerciseStats } from "@motionmeet/shared";
 import { EmptyState, PageHeader, PageShell } from "~/components/AppPage";
+
+type DetailTab = "summary" | "history" | "instructions";
 
 const getMediaUrl = (gifUrl: string): string | null => {
   return resolvePublicMediaUrl(gifUrl);
@@ -51,6 +56,34 @@ const ExerciseImage = ({ gifUrl, size = 56 }: { gifUrl: string; size?: number })
   );
 };
 
+/** Steps are stored per language, with English as the shipped fallback. */
+const ExerciseInstructions = ({ exercise }: { exercise: Exercise }) => {
+  const { t, i18n } = useTranslation();
+  const language = i18n.resolvedLanguage?.split("-")[0] || "en";
+  const steps = exercise.instructionSteps?.[language] || exercise.instructionSteps?.en || [];
+  const instruction = exercise.instructions?.[language] || exercise.instructions?.en || "";
+
+  if (steps.length === 0 && !instruction) {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        {t("exercises.instructions_unavailable", "Instructions are not available for this exercise yet.")}
+      </Typography>
+    );
+  }
+
+  return steps.length > 0 ? (
+    <Stack component="ol" spacing={1.25} sx={{ pl: 2.5, m: 0 }}>
+      {steps.map((step, index) => (
+        <Typography key={`${index}-${step.slice(0, 12)}`} component="li" variant="body2" sx={{ lineHeight: 1.7 }}>
+          {step}
+        </Typography>
+      ))}
+    </Stack>
+  ) : (
+    <Typography variant="body2" sx={{ lineHeight: 1.75 }}>{instruction}</Typography>
+  );
+};
+
 const Exercises = () => {
   const { t } = useTranslation();
   const { getToken } = useAuthContext();
@@ -64,6 +97,10 @@ const Exercises = () => {
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const [exerciseStats, setExerciseStats] = useState<ExerciseStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
+  const [detailTab, setDetailTab] = useState<DetailTab>("summary");
+  const [history, setHistory] = useState<ExerciseSessionEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyLoadedFor, setHistoryLoadedFor] = useState<string | null>(null);
   const [libraryLoading, setLibraryLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -92,6 +129,28 @@ const Exercises = () => {
       active = false;
     };
   }, [selectedExercise, getToken]);
+
+  // History is only fetched when its tab is opened; picking an exercise should
+  // not pay for a query the athlete may never look at.
+  const loadHistory = useCallback(async (exerciseId: string) => {
+    if (historyLoadedFor === exerciseId || historyLoading) return;
+    setHistoryLoading(true);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Authentication required");
+      const data = await getExerciseHistory(exerciseId, token, 20);
+      if (data.success) setHistory(data.history || []);
+      setHistoryLoadedFor(exerciseId);
+    } catch {
+      setHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [getToken, historyLoadedFor, historyLoading]);
+
+  useEffect(() => {
+    if (detailTab === "history" && selectedExercise) void loadHistory(selectedExercise._id);
+  }, [detailTab, loadHistory, selectedExercise]);
 
   useEffect(() => {
     const requestId = ++libraryRequestRef.current;
@@ -191,58 +250,114 @@ const Exercises = () => {
                 </Box>
               </Stack>
 
-              <Divider sx={{ my: 2.5 }} />
+              <Tabs
+                value={detailTab}
+                onChange={(_, value: DetailTab) => setDetailTab(value)}
+                sx={{ mt: 2, minHeight: 42, borderBottom: 1, borderColor: "divider" }}
+              >
+                <Tab value="summary" label={t("exercises.tab_summary", "Summary")} sx={{ fontWeight: 700, minHeight: 42 }} />
+                <Tab value="history" label={t("exercises.tab_history", "History")} sx={{ fontWeight: 700, minHeight: 42 }} />
+                <Tab value="instructions" label={t("exercises.tab_instructions", "Instructions")} sx={{ fontWeight: 700, minHeight: 42 }} />
+              </Tabs>
 
-              <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 1.5 }}>
-                <Paper variant="outlined" sx={{ p: 2, bgcolor: "action.hover" }}>
-                  <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 0.5, color: "warning.main" }}>
-                    <Zap size={16} />
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>{t("exercises.personal_record", "Personal record")}</Typography>
-                  </Stack>
-                  <Typography variant="h6">{exerciseStats?.personalRecord || 0} <Typography component="span" variant="caption" color="text.secondary">kg</Typography></Typography>
-                </Paper>
-                <Paper variant="outlined" sx={{ p: 2, bgcolor: "action.hover" }}>
-                  <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 0.5, color: "info.dark" }}>
-                    <Calendar size={16} />
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>{t("exercises.total_sessions", "Total sessions")}</Typography>
-                  </Stack>
-                  <Typography variant="h6">{exerciseStats?.totalSessions || 0}</Typography>
-                </Paper>
-              </Box>
-
-              <Box sx={{ mt: 2.5 }}>
-                <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 800 }}>{t("exercises.progress_history", "Progress history")}</Typography>
-                <Paper variant="outlined" sx={{ p: 2 }}>
-                  <Box sx={{ height: 220 }}>
-                    {statsLoading ? (
-                      <Stack sx={{ height: "100%", alignItems: "center", justifyContent: "center" }}><CircularProgress size={26} /></Stack>
-                    ) : exerciseHistory.length > 1 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={exerciseHistory}>
-                          <XAxis dataKey="date" hide />
-                          <YAxis hide domain={["dataMin - 5", "dataMax + 5"]} />
-                          <Tooltip
-                            content={({ active, payload }) => (
-                              active && payload?.length ? (
-                                <Paper elevation={3} sx={{ p: 1.5, border: 1, borderColor: "divider" }}>
-                                  <Typography variant="caption" color="text.secondary">{moment(payload[0].payload.date).format("MMM DD, YYYY")}</Typography>
-                                  <Typography variant="body2" color="primary.main" sx={{ fontWeight: 800 }}>{payload[0].value} kg</Typography>
-                                </Paper>
-                              ) : null
-                            )}
-                          />
-                          <Line type="monotone" dataKey="maxWeight" stroke="var(--mui-palette-primary-main)" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <Stack sx={{ height: "100%", alignItems: "center", justifyContent: "center", textAlign: "center" }} spacing={1}>
-                        <Info size={24} color="var(--text-muted)" />
-                        <Typography variant="body2" color="text.secondary">{t("exercises.more_sessions_needed", "Complete at least two sessions to see a trend.")}</Typography>
+              {detailTab === "summary" && (
+                <Box sx={{ mt: 2.5 }}>
+                  <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 1.5 }}>
+                    <Paper variant="outlined" sx={{ p: 2, bgcolor: "action.hover" }}>
+                      <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 0.5, color: "warning.main" }}>
+                        <Zap size={16} />
+                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>{t("exercises.personal_record", "Personal record")}</Typography>
                       </Stack>
-                    )}
+                      <Typography variant="h6">{exerciseStats?.personalRecord || 0} <Typography component="span" variant="caption" color="text.secondary">kg</Typography></Typography>
+                    </Paper>
+                    <Paper variant="outlined" sx={{ p: 2, bgcolor: "action.hover" }}>
+                      <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 0.5, color: "info.dark" }}>
+                        <Calendar size={16} />
+                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>{t("exercises.total_sessions", "Total sessions")}</Typography>
+                      </Stack>
+                      <Typography variant="h6">{exerciseStats?.totalSessions || 0}</Typography>
+                    </Paper>
                   </Box>
-                </Paper>
-              </Box>
+
+                  <Box sx={{ mt: 2.5 }}>
+                    <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 800 }}>{t("exercises.progress_history", "Progress history")}</Typography>
+                    <Paper variant="outlined" sx={{ p: 2 }}>
+                      <Box sx={{ height: 220 }}>
+                        {statsLoading ? (
+                          <Stack sx={{ height: "100%", alignItems: "center", justifyContent: "center" }}><CircularProgress size={26} /></Stack>
+                        ) : exerciseHistory.length > 1 ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={exerciseHistory}>
+                              <XAxis dataKey="date" hide />
+                              <YAxis hide domain={["dataMin - 5", "dataMax + 5"]} />
+                              <Tooltip
+                                content={({ active, payload }) => (
+                                  active && payload?.length ? (
+                                    <Paper elevation={3} sx={{ p: 1.5, border: 1, borderColor: "divider" }}>
+                                      <Typography variant="caption" color="text.secondary">{moment(payload[0].payload.date).format("MMM DD, YYYY")}</Typography>
+                                      <Typography variant="body2" color="primary.main" sx={{ fontWeight: 800 }}>{payload[0].value} kg</Typography>
+                                    </Paper>
+                                  ) : null
+                                )}
+                              />
+                              <Line type="monotone" dataKey="maxWeight" stroke="var(--mui-palette-primary-main)" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <Stack sx={{ height: "100%", alignItems: "center", justifyContent: "center", textAlign: "center" }} spacing={1}>
+                            <Info size={24} color="var(--text-muted)" />
+                            <Typography variant="body2" color="text.secondary">{t("exercises.more_sessions_needed", "Complete at least two sessions to see a trend.")}</Typography>
+                          </Stack>
+                        )}
+                      </Box>
+                    </Paper>
+                  </Box>
+                </Box>
+              )}
+
+              {detailTab === "history" && (
+                <Box sx={{ mt: 2.5 }}>
+                  {historyLoading ? (
+                    <Stack sx={{ minHeight: 180, alignItems: "center", justifyContent: "center" }}><CircularProgress size={26} /></Stack>
+                  ) : history.length === 0 ? (
+                    <Stack spacing={1} sx={{ minHeight: 180, alignItems: "center", justifyContent: "center", textAlign: "center" }}>
+                      <FitnessCenter sx={{ color: "text.disabled" }} />
+                      <Typography variant="body2" color="text.secondary">
+                        {t("exercises.no_history", "No sessions logged for this exercise yet")}
+                      </Typography>
+                    </Stack>
+                  ) : (
+                    <Stack spacing={1.5}>
+                      {history.map((session) => (
+                        <Paper key={`${session.workoutId}-${session.performedAt}`} variant="outlined" sx={{ p: 2 }}>
+                          <Typography variant="body2" noWrap sx={{ fontWeight: 800 }}>{session.workoutName}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {moment(session.performedAt).format("D MMM YYYY, HH:mm")}
+                          </Typography>
+                          <Stack spacing={0.5} sx={{ mt: 1.25 }}>
+                            {session.sets.map((set) => (
+                              <Stack key={`${session.workoutId}-${set.position}`} direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
+                                <Typography variant="caption" color="text.secondary" sx={{ width: 24, fontWeight: 700 }}>
+                                  {set.position + 1}
+                                </Typography>
+                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                  {set.weight} kg × {set.reps}
+                                </Typography>
+                              </Stack>
+                            ))}
+                          </Stack>
+                        </Paper>
+                      ))}
+                    </Stack>
+                  )}
+                </Box>
+              )}
+
+              {detailTab === "instructions" && (
+                <Box sx={{ mt: 2.5 }}>
+                  <ExerciseInstructions exercise={selectedExercise} />
+                </Box>
+              )}
             </Paper>
           ) : (
             <EmptyState
@@ -298,7 +413,14 @@ const Exercises = () => {
                 <Box
                   component="button"
                   key={exercise._id}
-                  onClick={() => setSelectedExercise(exercise)}
+                  onClick={() => {
+                    setSelectedExercise(exercise);
+                    // A new movement starts on its summary, never on the
+                    // previous one's history.
+                    setDetailTab("summary");
+                    setHistory([]);
+                    setHistoryLoadedFor(null);
+                  }}
                   sx={{
                     width: "100%",
                     display: "flex",

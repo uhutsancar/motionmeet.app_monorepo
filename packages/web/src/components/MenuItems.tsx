@@ -8,18 +8,21 @@ import { alpha } from "@mui/material/styles";
 import { useTranslation } from "react-i18next";
 import { NavLink, useLocation } from "react-router";
 import { menuItemsData } from "~/assets/assets";
+import { useAppSelector } from "~/app/hooks";
 
 interface MenuItemsProps { setSideBarOpen: (open: boolean) => void; unreadCount?: number }
 
 const MenuItems = ({ setSideBarOpen, unreadCount = 0 }: MenuItemsProps) => {
   const { t } = useTranslation();
   const { pathname } = useLocation();
+  const unreadActivity = useAppSelector((state) => state.notifications.unreadCount);
 
   return (
     <List component="nav" aria-label="Primary navigation" sx={{ px: 0, py: 0 }}>
       {menuItemsData.map(({ to, label, Icon }) => {
         const isActive = pathname === to || pathname.startsWith(`${to}/`);
         const icon = <Icon sx={{ fontSize: 21 }} />;
+        const badgeCount = to === "/messages" ? unreadCount : to === "/activity" ? unreadActivity : 0;
 
         return (
           <ListItemButton
@@ -64,8 +67,8 @@ const MenuItems = ({ setSideBarOpen, unreadCount = 0 }: MenuItemsProps) => {
                   bgcolor: isActive ? (theme) => alpha(theme.palette.primary.main, 0.1) : "transparent",
                 }}
               >
-                {to === "/messages" ? (
-                  <Badge badgeContent={unreadCount} color="error" max={99}>
+                {badgeCount > 0 ? (
+                  <Badge badgeContent={badgeCount} color="error" max={99}>
                     {icon}
                   </Badge>
                 ) : icon}

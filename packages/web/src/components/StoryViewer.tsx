@@ -1,9 +1,13 @@
-import { Avatar, Box, Dialog, IconButton, LinearProgress, Stack, Typography } from "@mui/material";
-import { BadgeCheck, X } from "lucide-react";
+import { Avatar, Box, Button, Dialog, Drawer, IconButton, LinearProgress, Stack, Typography } from "@mui/material";
+import { BadgeCheck, Eye, X } from "lucide-react";
 import moment from "moment";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Dispatch, SetStateAction } from "react";
-import type { Story } from "@motionmeet/shared";
+import type { Story, StoryViewer as StoryViewerEntry } from "@motionmeet/shared";
+import { getStoryViewers, markStoryViewed } from "~/api/endpoints";
+import { useAppSelector } from "~/app/hooks";
+import { useAuthContext } from "~/context/AuthProvider";
 
 interface StoryViewerProps {
   viewStory: Story | null;
@@ -11,10 +15,60 @@ interface StoryViewerProps {
 }
 
 const StoryViewer = ({ viewStory, setViewStory }: StoryViewerProps) => {
+  const { t } = useTranslation();
+  const { getToken } = useAuthContext();
+  const currentUserId = useAppSelector((state) => state.user.value?._id);
   const [progress, setProgress] = useState(0);
+  const [viewers, setViewers] = useState<StoryViewerEntry[]>([]);
+  const [viewersOpen, setViewersOpen] = useState(false);
+
+  const storyId = viewStory?._id;
+  const authorId = viewStory && typeof viewStory.user !== "string" ? viewStory.user._id : viewStory?.user;
+  const isOwnStory = Boolean(authorId && authorId === currentUserId);
+
+  // Opening the story is what counts as viewing it, so the receipt is sent
+  // here rather than waiting for the progress bar to run out.
+  useEffect(() => {
+    if (!storyId || isOwnStory) return undefined;
+    let active = true;
+    void (async () => {
+      const token = await getToken();
+      if (!active || !token) return;
+      try {
+        await markStoryViewed(storyId, token);
+      } catch {
+        // A missed view receipt is not worth interrupting playback for.
+      }
+    })();
+    return () => { active = false; };
+  }, [getToken, isOwnStory, storyId]);
+
+  const loadViewers = useCallback(async () => {
+    if (!storyId) return;
+    const token = await getToken();
+    if (!token) return;
+    try {
+      const response = await getStoryViewers(storyId, token);
+      if (response.success) setViewers(response.viewers ?? []);
+    } catch {
+      // The list simply stays empty when it cannot be loaded.
+    }
+  }, [getToken, storyId]);
 
   useEffect(() => {
-    if (!viewStory || viewStory.media_type === "video") return undefined;
+    if (!viewersOpen) return;
+    void loadViewers();
+  }, [loadViewers, viewersOpen]);
+
+  useEffect(() => {
+    // A story that just closed must not leave the previous one's viewers behind.
+    setViewers([]);
+    setViewersOpen(false);
+  }, [storyId]);
+
+  useEffect(() => {
+    // The auto-advance timer would fight the viewers sheet for attention.
+    if (!viewStory || viewStory.media_type === "video" || viewersOpen) return undefined;
 
     setProgress(0);
     const duration = 10000;
@@ -30,7 +84,7 @@ const StoryViewer = ({ viewStory, setViewStory }: StoryViewerProps) => {
       clearTimeout(timer);
       clearInterval(progressInterval);
     };
-  }, [viewStory, setViewStory]);
+  }, [viewStory, setViewStory, viewersOpen]);
 
   if (!viewStory) return null;
   const author = typeof viewStory.user === "string" ? null : viewStory.user;
@@ -102,6 +156,46 @@ const StoryViewer = ({ viewStory, setViewStory }: StoryViewerProps) => {
           )}
         </Box>
       </Box>
+
+      {/* View receipts are the author's data only, so the control is theirs. */}
+      {isOwnStory && (
+        <Stack sx={{ position: "absolute", bottom: 24, left: 0, right: 0, alignItems: "center" }}>
+          <Button
+            startIcon={<Eye size={17} />}
+            onClick={() => setViewersOpen(true)}
+            sx={{ color: "common.white", bgcolor: "rgba(255,255,255,.14)", "&:hover": { bgcolor: "rgba(255,255,255,.22)" } }}
+          >
+            {t("stories.viewers_count", "{{count}} views", { count: viewStory.view_count ?? 0 })}
+          </Button>
+        </Stack>
+      )}
+
+      <Drawer anchor="bottom" open={viewersOpen} onClose={() => setViewersOpen(false)}>
+        <Box sx={{ p: 2, maxHeight: "60vh", overflowY: "auto" }}>
+          <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 800 }}>
+            {t("stories.viewers", "Viewers")}
+          </Typography>
+          {viewers.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              {t("stories.no_viewers", "Nobody has seen this story yet.")}
+            </Typography>
+          ) : (
+            viewers.map((entry) => (
+              <Stack key={entry.user._id} direction="row" spacing={1.5} sx={{ py: 1, alignItems: "center" }}>
+                <Avatar src={entry.user.profile_picture || undefined} alt={entry.user.full_name} sx={{ width: 36, height: 36 }}>
+                  {entry.user.full_name?.charAt(0)}
+                </Avatar>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>{entry.user.full_name}</Typography>
+                  <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+                    @{entry.user.username} · {moment(entry.viewedAt).fromNow()}
+                  </Typography>
+                </Box>
+              </Stack>
+            ))
+          )}
+        </Box>
+      </Drawer>
     </Dialog>
   );
 };

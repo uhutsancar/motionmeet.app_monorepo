@@ -22,6 +22,7 @@ import { useTranslation } from "react-i18next";
 import { Link as RouterLink, useLocation } from "react-router";
 import motionmeetLogo from "../assets/motionmeet_logo.svg";
 import { useAppTheme } from "../context/appThemeContext";
+import { changeLanguage } from "../i18n";
 import { alpha } from "@mui/material/styles";
 
 const PublicNavbar = () => {
@@ -34,10 +35,9 @@ const PublicNavbar = () => {
     setMenuOpen(false);
   }, [pathname]);
 
+  // Non-English catalogues are fetched on demand, so switching is async.
   const toggleLanguage = () => {
-    const language = i18n.language.startsWith("tr") ? "en" : "tr";
-    i18n.changeLanguage(language);
-    localStorage.setItem("appLanguage", language);
+    void changeLanguage(i18n.language.startsWith("tr") ? "en" : "tr");
   };
 
   const navLinks = [

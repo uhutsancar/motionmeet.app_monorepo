@@ -1,72 +1,54 @@
-import { useAuthContext } from "../context/AuthProvider";
-import { Box, Button, CircularProgress, Stack } from "@mui/material";
+import { Box, Button, CircularProgress, Stack, Tab, Tabs } from "@mui/material";
 import { Dumbbell, Newspaper } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
-import api from "~/api/axios";
+import { useNavigate } from "react-router";
 import Loading from "~/components/Loading";
+import NearbyAthletes from "~/components/NearbyAthletes";
 import PostCard from "~/components/PostCard";
 import QuickProfile from "~/components/QuickProfile";
 import RecentMessages from "~/components/RecentMessages";
 import StoriesBar from "~/components/StoriesBar";
 import SuggestedAthletes from "~/components/SuggestedAthletes";
 import CreatePost from "./CreatePost";
-import { API_ROUTES, type Post } from "@motionmeet/shared";
-import { useNavigate } from "react-router";
 import { EmptyState, PageHeader, PageShell } from "~/components/AppPage";
+import { useAppDispatch, useAppSelector } from "~/app/hooks";
+import { fetchPosts } from "~/features/posts/postsSlice";
+import { useAuthContext } from "../context/AuthProvider";
+
+type FeedMode = "discover" | "following";
 
 const Feed = () => {
   const { t } = useTranslation();
-  const [feeds, setFeeds] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const { getToken } = useAuthContext();
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
+  const { getToken } = useAuthContext();
+  const { posts, nextCursor, loading, loadingMore } = useAppSelector((state) => state.posts);
+  const [mode, setMode] = useState<FeedMode>("discover");
+  // Only the very first load blanks the page; a mode switch keeps the shell.
+  const [ready, setReady] = useState(false);
 
-  const fetchFeeds = useCallback(async ({ cursor = null, append = false }: { cursor?: string | null; append?: boolean } = {}) => {
+  const load = useCallback(async (options: { cursor?: string | null; mode: FeedMode }) => {
+    const token = await getToken();
+    if (!token) return;
     try {
-      if (append) setLoadingMore(true);
-      const token = await getToken();
-      if (!token) return;
-      const { data } = await api.get<{ success: boolean; message?: string; posts: Post[]; nextCursor: string | null }>(API_ROUTES.post.feed, {
-        params: cursor ? { cursor } : undefined,
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (data.success) {
-        setFeeds((currentFeeds) => {
-          if (!append) return data.posts;
-          const knownIds = new Set(currentFeeds.map((post) => post._id));
-          return [
-            ...currentFeeds,
-            ...data.posts.filter((post) => !knownIds.has(post._id)),
-          ];
-        });
-        setNextCursor(data.nextCursor);
-      } else {
-        toast.error(data.message || "Feed could not be loaded");
-      }
+      await dispatch(fetchPosts({ token, cursor: options.cursor ?? null, mode: options.mode })).unwrap();
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Feed could not be loaded");
-    } finally {
-      if (append) setLoadingMore(false);
+      toast.error(error instanceof Error ? error.message : t("feed.load_failed", "Feed could not be loaded"));
     }
-  }, [getToken]);
+  }, [dispatch, getToken, t]);
 
   useEffect(() => {
-    const init = async () => {
-      setLoading(true);
-      await fetchFeeds();
-      setLoading(false);
-    };
-    init();
-  }, [fetchFeeds]);
+    let active = true;
+    void (async () => {
+      await load({ mode });
+      if (active) setReady(true);
+    })();
+    return () => { active = false; };
+  }, [load, mode]);
 
-  if (loading) return <Loading />;
+  if (!ready && loading) return <Loading />;
 
   return (
     <PageShell maxWidth={1200} sx={{ gap: 2.5 }}>
@@ -82,7 +64,7 @@ const Feed = () => {
         <Stack spacing={2} sx={{ minWidth: 0 }}>
           <PageHeader
             title={t("menu.feed", "Feed")}
-            description="Recent training updates from your community."
+            description={t("feed.description", "Recent training updates from your community.")}
             action={(
               <Button
                 variant="contained"
@@ -90,26 +72,49 @@ const Feed = () => {
                 startIcon={<Dumbbell size={17} />}
                 sx={{ alignSelf: { xs: "stretch", sm: "center" } }}
               >
-                Start workout
+                {t("feed.start_workout", "Start workout")}
               </Button>
             )}
           />
+
+          {/* Discover is everyone; Following is only the accounts the member
+              chose, which is what makes a private account worth following. */}
+          <Tabs
+            value={mode}
+            onChange={(_, value: FeedMode) => setMode(value)}
+            sx={{ minHeight: 40, borderBottom: 1, borderColor: "divider" }}
+          >
+            <Tab value="discover" label={t("feed.home_discover", "Discover")} sx={{ fontWeight: 700, minHeight: 40 }} />
+            <Tab value="following" label={t("feed.home_following", "Following")} sx={{ fontWeight: 700, minHeight: 40 }} />
+          </Tabs>
+
           <StoriesBar />
-          <CreatePost onSuccess={() => fetchFeeds()} />
-          {feeds.length > 0 ? (
-            feeds.map((post) => <PostCard key={post._id} post={post} />)
+          <NearbyAthletes />
+          <CreatePost onSuccess={() => load({ mode })} />
+
+          {loading && posts.length === 0 ? (
+            <Stack sx={{ minHeight: 200, alignItems: "center", justifyContent: "center" }}>
+              <CircularProgress size={28} />
+            </Stack>
+          ) : posts.length > 0 ? (
+            posts.map((post) => <PostCard key={post._id} post={post} />)
           ) : (
             <EmptyState
               icon={Newspaper}
-              title={t("feed.no_posts")}
-              description="Follow athletes or publish the first update in your community."
+              title={t("feed.no_posts", "No posts yet")}
+              description={
+                mode === "following"
+                  ? t("feed.no_following_posts", "Follow athletes to see their training here.")
+                  : t("feed.no_posts_description", "Follow athletes or publish the first update in your community.")
+              }
               minHeight={220}
             />
           )}
+
           {nextCursor && (
             <Button
               variant="outlined"
-              onClick={() => fetchFeeds({ cursor: nextCursor, append: true })}
+              onClick={() => load({ cursor: nextCursor, mode })}
               disabled={loadingMore}
               startIcon={loadingMore ? <CircularProgress size={16} /> : null}
               sx={{ alignSelf: "center" }}

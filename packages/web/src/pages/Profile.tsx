@@ -15,7 +15,7 @@ import {
   Typography,
   useTheme,
 } from "@mui/material";
-import { Calendar as CalendarIcon, Dumbbell, LineChart, Share2, Target, TrendingUp, Trophy } from "lucide-react";
+import { Calendar as CalendarIcon, Dumbbell, LineChart, Lock, MapPin, MessageCircle, Ruler, Share2, Target, TrendingUp, Trophy } from "lucide-react";
 import moment from "moment";
 import axios from "axios";
 import { useEffect, useRef, useState } from "react";
@@ -32,15 +32,18 @@ import {
   type Workout,
 } from "@motionmeet/shared";
 import api from "~/api/axios";
-import { useAppSelector } from "~/app/hooks";
+import { useAppDispatch, useAppSelector } from "~/app/hooks";
 import { createPost } from "~/api/endpoints";
+import FollowButton from "~/components/FollowButton";
 import Loading from "~/components/Loading";
 import ProfileModal from "~/components/ProfileModal";
 import { EmptyState, PageShell, SectionHeader } from "~/components/AppPage";
+import { setRelationship } from "~/features/relationships/relationshipsSlice";
 
 const Profile = () => {
   const theme = useTheme();
   const currentUser = useAppSelector((state) => state.user.value);
+  const dispatch = useAppDispatch();
   const { profileId } = useParams();
   const navigate = useNavigate();
   const { getToken } = useAuthContext();
@@ -96,6 +99,19 @@ const Profile = () => {
         if (active && data.success) {
           setPublicProfile(data.profile);
           setPublicPosts(data.posts || []);
+          // Seeds the shared store so the follow button here and the one on
+          // this person's feed cards agree from the first render.
+          dispatch(setRelationship({
+            userId: data.profile._id,
+            relationship: {
+              isFollowing: Boolean(data.profile.isFollowing),
+              isFollowedBy: Boolean(data.profile.isFollowedBy),
+              requestSent: Boolean(data.profile.requestSent),
+              requestReceived: Boolean(data.profile.requestReceived),
+              isConnection: Boolean(data.profile.isConnection),
+              connectionPending: Boolean(data.profile.connectionPending),
+            },
+          }));
         }
         if (active && !data.success) {
           setProfileError(data.message || "Profile could not be loaded");
@@ -117,7 +133,7 @@ const Profile = () => {
     return () => {
       active = false;
     };
-  }, [currentUser?._id, getToken, profileId]);
+  }, [currentUser?._id, dispatch, getToken, profileId]);
 
   useEffect(() => {
     if (!isOwnProfile) return undefined;
@@ -245,24 +261,38 @@ const Profile = () => {
     );
   }
 
+  // A private account the viewer does not follow shows its header and nothing
+  // else. The backend already withholds the posts; this keeps the page honest
+  // about why it is empty instead of looking broken.
+  const contentLocked = !isOwnProfile && publicProfile?.isPrivate === true && publicProfile?.canViewContent === false;
+  const profileLocation = user?.location?.trim() || "";
+
   const profileStats = [
     {
       label: t("profile.workouts"),
       value: user?.statistics?.totalWorkouts ?? visibleWorkouts.length,
       highlight: true,
+      route: null as string | null,
     },
-    { label: t("profile.followers"), value: followersCount },
-    { label: t("profile.following"), value: followingCount },
+    { label: t("profile.followers"), value: followersCount, highlight: false, route: isOwnProfile ? "/connections?section=Followers" : null },
+    { label: t("profile.following"), value: followingCount, highlight: false, route: isOwnProfile ? "/connections?section=Following" : null },
   ];
   const insights = [
     { label: t("profile.stats"), icon: LineChart, route: "/statistics" },
     { label: t("menu.exercises"), icon: Dumbbell, route: "/exercises" },
     { label: t("profile.awards"), icon: Trophy, route: "/statistics/records" },
     { label: t("profile.events"), icon: CalendarIcon, route: "/statistics/history" },
+    { label: t("measurements.title", "Measurements"), icon: Ruler, route: "/measurements" },
+    { label: t("connections.title", "Connections"), icon: Target, route: "/connections" },
   ];
   const currentAmount = chartData.at(-1)?.amt || 0;
   const currentUnit = activeStatTab === "duration" ? t("common.minutes_short") : activeStatTab === "volume" ? t("common.kg") : t("profile.reps");
 
+  /**
+   * The follow graph is owned by `FollowButton` and the relationships slice.
+   * What remains here is the older two-way connection request, which has its
+   * own queue and its own accept step.
+   */
   const updateRelationship = async (route: string) => {
     if (!profileId || relationshipLoading) return;
     setRelationshipLoading(true);
@@ -275,25 +305,7 @@ const Profile = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (!data.success) throw new Error(data.message);
-      setPublicProfile((profile) => profile ? ({
-        ...profile,
-        isFollowing:
-          route === API_ROUTES.user_extras.follow
-            ? true
-            : route === API_ROUTES.user_extras.unfollow
-              ? false
-              : profile.isFollowing,
-        followers_count:
-          route === API_ROUTES.user_extras.follow
-            ? (profile.followers_count || 0) + 1
-            : route === API_ROUTES.user_extras.unfollow
-              ? Math.max(0, (profile.followers_count || 0) - 1)
-              : profile.followers_count,
-        connectionPending:
-          route === API_ROUTES.user_extras.connect
-            ? true
-            : profile.connectionPending,
-      }) : profile);
+      setPublicProfile((profile) => (profile ? { ...profile, connectionPending: true } : profile));
       toast.success(data.message || "Profile updated");
     } catch (error: unknown) {
       const failure = axios.isAxiosError<ApiFailure>(error) ? error.response?.data : undefined;
@@ -341,12 +353,27 @@ const Profile = () => {
               </Avatar>
             </Box>
             <Stack spacing={1}>
-              <Typography variant="h5" sx={{ fontWeight: 900 }}>
-                {user.full_name || user.username}
-              </Typography>
+              <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: { xs: "center", sm: "flex-start" }, flexWrap: "wrap" }}>
+                <Typography variant="h5" sx={{ fontWeight: 900 }}>
+                  {user.full_name || user.username}
+                </Typography>
+                {publicProfile?.isPrivate && (
+                  <Chip icon={<Lock size={13} />} size="small" label={t("profile.private_account", "Private account")} sx={{ fontWeight: 700 }} />
+                )}
+              </Stack>
+              {profileLocation && (
+                <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", justifyContent: { xs: "center", sm: "flex-start" }, color: "text.secondary" }}>
+                  <MapPin size={14} />
+                  <Typography variant="caption">{profileLocation}</Typography>
+                </Stack>
+              )}
               <Stack direction="row" spacing={2} divider={<Box sx={{ width: "1px", height: 32, bgcolor: "divider" }} />} sx={{ alignItems: "center", flexWrap: "wrap" }}>
                 {profileStats.map((stat) => (
-                  <Stack key={stat.label}>
+                  <Stack
+                    key={stat.label}
+                    onClick={stat.route ? () => navigate(stat.route as string) : undefined}
+                    sx={stat.route ? { cursor: "pointer" } : undefined}
+                  >
                     <Typography variant="h6" color={stat.highlight ? "primary.main" : "text.primary"} sx={{ fontWeight: 900, lineHeight: 1 }}>
                       {stat.value}
                     </Typography>
@@ -364,17 +391,25 @@ const Profile = () => {
             </Button>
           ) : (
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ width: { xs: "100%", sm: "auto" } }}>
-              <Button
-                variant={user.isFollowing ? "outlined" : "contained"}
-                disabled={relationshipLoading}
-                onClick={() => updateRelationship(
-                  user.isFollowing
-                    ? API_ROUTES.user_extras.unfollow
-                    : API_ROUTES.user_extras.follow
-                )}
-              >
-                {user.isFollowing ? t("profile.unfollow", "Unfollow") : t("profile.follow", "Follow")}
-              </Button>
+              <FollowButton
+                size="medium"
+                userId={publicProfile?._id}
+                seed={{
+                  isFollowing: Boolean(publicProfile?.isFollowing),
+                  isFollowedBy: Boolean(publicProfile?.isFollowedBy),
+                  requestSent: Boolean(publicProfile?.requestSent),
+                  requestReceived: Boolean(publicProfile?.requestReceived),
+                }}
+              />
+              {publicProfile?.canMessage !== false && (
+                <Button
+                  variant="outlined"
+                  startIcon={<MessageCircle size={16} />}
+                  onClick={() => navigate(`/messages/${publicProfile?._id}`)}
+                >
+                  {t("common.message_action", "Message")}
+                </Button>
+              )}
               {!user.isConnection && (
                 <Button
                   variant="outlined"
@@ -391,6 +426,15 @@ const Profile = () => {
         </Stack>
       </Paper>
 
+      {contentLocked ? (
+        <EmptyState
+          icon={Lock}
+          title={t("profile.private_title", "This account is private")}
+          description={t("profile.private_body", "Follow this athlete to see their workouts, posts and stories.")}
+          minHeight={260}
+        />
+      ) : (
+        <>
         <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
           <Stack direction="row" spacing={1.5} sx={{ mb: 3, alignItems: "flex-start" }}>
             <Avatar variant="rounded" sx={{ bgcolor: "action.hover", color: "primary.main" }}>
@@ -451,7 +495,7 @@ const Profile = () => {
               {t("profile.insights")}
             </Typography>
           </Stack>
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, 1fr)", sm: "repeat(4, 1fr)" }, gap: 2 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, 1fr)", sm: "repeat(3, 1fr)", md: "repeat(6, 1fr)" }, gap: 2 }}>
             {insights.map(({ label, icon: Icon, route }) => (
               <Card key={label} variant="outlined">
                 <CardActionArea onClick={() => navigate(route)} sx={{ p: 2, height: "100%" }}>
@@ -529,6 +573,8 @@ const Profile = () => {
             </Button>
           )}
         </Stack>
+        </>
+      )}
       {isOwnProfile && showEdit && <ProfileModal setShowEdit={setShowEdit} />}
     </PageShell>
   );

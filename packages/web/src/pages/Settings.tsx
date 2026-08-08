@@ -35,8 +35,10 @@ import {
   HelpCircle,
   Lock,
   LogOut,
+  MapPin,
   Monitor,
   Moon,
+  Ruler,
   Sun,
   User,
 } from "lucide-react";
@@ -47,6 +49,7 @@ import { useNavigate } from "react-router";
 import toast from "react-hot-toast";
 import { useAppTheme } from "~/context/appThemeContext";
 import { PageHeader, PageShell } from "~/components/AppPage";
+import { changeLanguage, type SupportedLanguage } from "~/i18n";
 
 interface NotificationPreferences {
   newMessage: boolean;
@@ -134,9 +137,9 @@ const Settings = () => {
   });
   const isTr = i18n.language.startsWith("tr");
 
-  const changeLanguage = (language: string) => {
-    i18n.changeLanguage(language);
-    localStorage.setItem("appLanguage", language);
+  // Non-English catalogues are fetched on demand, so switching is async.
+  const selectLanguage = (language: SupportedLanguage) => {
+    void changeLanguage(language);
   };
 
   const toggleNotificationPreference = (key: keyof NotificationPreferences) => {
@@ -296,7 +299,7 @@ const Settings = () => {
                 <Typography variant="caption" color="text.secondary">{isTr ? t("settings.turkish", "Türkçe") : t("settings.english", "İngilizce")}</Typography>
               </Stack>
             </Stack>
-            <ToggleButtonGroup exclusive size="small" value={isTr ? "tr" : "en"} onChange={(_, value) => value && changeLanguage(value)}>
+            <ToggleButtonGroup exclusive size="small" value={isTr ? "tr" : "en"} onChange={(_, value: SupportedLanguage | null) => value && selectLanguage(value)}>
               <ToggleButton value="en">EN</ToggleButton>
               <ToggleButton value="tr">TR</ToggleButton>
             </ToggleButtonGroup>
@@ -309,6 +312,37 @@ const Settings = () => {
             subtitle={t("notifications.in_app_message_sub", "Yeni mesajlar için uygulama içi bildirim göster")}
             value={notifPrefs.newMessage}
             onChange={() => toggleNotificationPreference("newMessage")}
+          />
+          <LinkRow
+            label={t("activity.title", "Notifications")}
+            subtitle={t("activity.settings_hint", "Follow requests, likes and comments")}
+            onClick={() => navigate("/activity")}
+          />
+          <LinkRow
+            label={t("connections.title", "Connections")}
+            subtitle={t("connections.settings_hint", "Follow requests, followers and following")}
+            onClick={() => navigate("/connections")}
+          />
+        </Section>
+
+        <Section icon={MapPin} title={t("location.settings_title", "Location")}>
+          <LinkRow
+            label={t("location.profile_section", "Profile location")}
+            subtitle={t("location.settings_row_hint", "Where you are shown, and who can see it")}
+            onClick={() => navigate("/settings/location")}
+          />
+          <LinkRow
+            label={t("nearby.title", "Nearby")}
+            subtitle={t("nearby.settings_hint", "Find athletes training close to you")}
+            onClick={() => navigate("/nearby")}
+          />
+        </Section>
+
+        <Section icon={Ruler} title={t("measurements.title", "Measurements")}>
+          <LinkRow
+            label={t("measurements.title", "Measurements")}
+            subtitle={t("measurements.settings_hint", "Weight, body fat and circumferences over time")}
+            onClick={() => navigate("/measurements")}
           />
         </Section>
 
@@ -327,6 +361,9 @@ const Settings = () => {
         <Section icon={HelpCircle} title={t("settings.support", "Destek")}>
           <LinkRow label={t("support.email", "E-posta Desteği")} subtitle="support@motionmeet.app" onClick={() => { window.open("mailto:support@motionmeet.app"); }} external />
           <LinkRow label={t("support.web", "Web Sitesi")} subtitle="motionmeet.app" onClick={() => { window.open("https://motionmeet.app", "_blank", "noopener,noreferrer"); }} external />
+          {/* The place dataset ships under ODbL, whose notice has to stay
+              reachable from the released app. */}
+          <LinkRow label={t("licenses.title", "Data & licences")} onClick={() => navigate("/licenses")} />
           <Stack divider={<Divider flexItem />}>
             {faqs.map((faq) => <FaqItem key={faq.question} question={faq.question} answer={faq.answer} />)}
           </Stack>

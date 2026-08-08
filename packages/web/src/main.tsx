@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 import "./index.css";
-import "./i18n"; // Import i18n before App
+import { initI18n } from "./i18n"; // Import i18n before App
 import App from "./App";
 import { BrowserRouter } from "react-router";
 import { AuthProvider } from "./context/AuthProvider";
@@ -12,6 +12,10 @@ import { StyledEngineProvider } from "@mui/material/styles";
 
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("MotionMeet root element was not found");
+
+// Only English ships in the entry bundle; any other saved language is fetched
+// first so the first paint is already in the right one.
+await initI18n();
 
 createRoot(rootElement).render(
   <StyledEngineProvider enableCssLayer>

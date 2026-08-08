@@ -12,6 +12,7 @@ import { useAppDispatch } from "./app/hooks";
 import Notification from "./components/Notification";
 import { SocketProvider } from "./context/SocketProvider";
 import { addMessage } from "./features/messages/messagesSlice";
+import { fetchUnreadCount } from "./features/notifications/notificationsSlice";
 import { fetchUser } from "./features/user/userSlice";
 import { useSocket } from "./hooks/useSocket";
 import { getConversations } from "./services/messageService";
@@ -43,6 +44,14 @@ const WorkoutsDetail = lazy(() => import("./pages/WorkoutsDetail"));
 const DurationDetail = lazy(() => import("./pages/DurationDetail"));
 const VolumeDetail = lazy(() => import("./pages/VolumeDetail"));
 const SetsDetail = lazy(() => import("./pages/SetsDetail"));
+const MainExercises = lazy(() => import("./pages/MainExercises"));
+const MuscleLoadGrid = lazy(() => import("./pages/MuscleLoadGrid"));
+const Activity = lazy(() => import("./pages/Activity"));
+const Connections = lazy(() => import("./pages/Connections"));
+const Measurements = lazy(() => import("./pages/Measurements"));
+const Nearby = lazy(() => import("./pages/Nearby"));
+const LocationSettings = lazy(() => import("./pages/LocationSettings"));
+const Licenses = lazy(() => import("./pages/Licenses"));
 
 const PageLoader = () => (
   <Box sx={{ alignItems: "center", display: "flex", height: "100dvh", justifyContent: "center" }}>
@@ -81,6 +90,8 @@ const AppContent = () => {
       const token = await getToken();
       if (!token) return;
       dispatch(fetchUser(token));
+      // Seeds the bell; the socket keeps it current from here on.
+      dispatch(fetchUnreadCount(token));
       try {
         const data = await getConversations(token);
         if (data.success) {
@@ -159,6 +170,8 @@ const AppContent = () => {
             <Route path="/statistics/monthly-report/duration" element={<DurationDetail />} />
             <Route path="/statistics/monthly-report/volume" element={<VolumeDetail />} />
             <Route path="/statistics/monthly-report/sets" element={<SetsDetail />} />
+            <Route path="/statistics/main-exercises" element={<MainExercises />} />
+            <Route path="/statistics/muscle-load" element={<MuscleLoadGrid />} />
             <Route path="/active-workout" element={<ActiveWorkout />} />
             <Route path="/workout-summary" element={<WorkoutSummary />} />
             <Route path="/workout-share" element={<WorkoutShare />} />
@@ -166,7 +179,13 @@ const AppContent = () => {
             <Route path="/exercises" element={<Exercises />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/profile/:profileId" element={<Profile />} />
+            <Route path="/activity" element={<Activity />} />
+            <Route path="/connections" element={<Connections />} />
+            <Route path="/measurements" element={<Measurements />} />
+            <Route path="/nearby" element={<Nearby />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/settings/location" element={<LocationSettings />} />
+            <Route path="/licenses" element={<Licenses />} />
           </Route>
 
           <Route path="*" element={<NotFound authenticated={Boolean(user)} />} />

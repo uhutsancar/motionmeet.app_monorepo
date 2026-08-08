@@ -22,6 +22,8 @@ import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import api from "~/api/axios";
+import { useAppSelector } from "~/app/hooks";
+import FollowButton from "~/components/FollowButton";
 import {
   API_ROUTES,
   CONTENT_LIMITS,
@@ -67,6 +69,7 @@ const PostCard = ({ post }: PostCardProps) => {
   const { t, i18n } = useTranslation();
   const { getToken } = useAuthContext();
   const navigate = useNavigate();
+  const currentUserId = useAppSelector((state) => state.user.value?._id);
   const [likeCount, setLikeCount] = useState(post.like_count);
   const [isLiked, setIsLiked] = useState(Boolean(post.liked_by_me));
   const [activeSlide, setActiveSlide] = useState(0);
@@ -236,33 +239,46 @@ const PostCard = ({ post }: PostCardProps) => {
         "&:hover": { borderColor: "text.disabled" },
       }}
     >
-      <Box sx={{ px: { xs: 1.75, sm: 2.5 }, pt: { xs: 1.75, sm: 2.25 } }}>
-        <ButtonBase onClick={() => navigate(`/profile/${author._id}`)} sx={{ borderRadius: 2, textAlign: "left" }}>
-          <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
+      <Stack direction="row" spacing={1} sx={{ px: { xs: 1.75, sm: 2.5 }, pt: { xs: 1.75, sm: 2.25 }, alignItems: "center" }}>
+        <ButtonBase onClick={() => navigate(`/profile/${author._id}`)} sx={{ flex: 1, minWidth: 0, borderRadius: 2, justifyContent: "flex-start", textAlign: "left" }}>
+          <Stack direction="row" spacing={1.5} sx={{ minWidth: 0, alignItems: "center" }}>
             <Avatar src={author.profile_picture || undefined} alt={author.full_name} sx={{ width: 44, height: 44, border: 1, borderColor: "divider" }}>
               {author.full_name?.charAt(0)}
             </Avatar>
-            <Stack>
+            <Stack sx={{ minWidth: 0 }}>
               <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
-                <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                <Typography variant="body2" noWrap sx={{ fontWeight: 800 }}>
                   {author.full_name}
                 </Typography>
               </Stack>
-              <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
                 <Typography variant="caption" color="text.secondary">
                   @{author.username} · {moment(post.createdAt).fromNow()}
                 </Typography>
                 {post.visibility === "private" && (
-                  <Chip icon={<Lock size={12} />} label={t("feed.only_you", "Sadece siz")} size="small" sx={{ height: 21, fontSize: 10 }} />
+                  <Chip icon={<Lock size={12} />} label={t("feed.only_you", "Only you")} size="small" sx={{ height: 21, fontSize: 10 }} />
                 )}
                 {post.visibility === "followers" && (
-                  <Chip icon={<Users size={12} />} label={t("feed.followers", "Takipçiler")} size="small" sx={{ height: 21, fontSize: 10 }} />
+                  <Chip icon={<Users size={12} />} label={t("feed.followers", "Followers")} size="small" sx={{ height: 21, fontSize: 10 }} />
                 )}
               </Stack>
             </Stack>
           </Stack>
         </ButtonBase>
-      </Box>
+        {/* Own posts get no follow control; every other author does, seeded from
+            the follow flags the feed already carries so the button opens in the
+            right state without an extra request. */}
+        {author._id !== currentUserId && (
+          <FollowButton
+            userId={author._id}
+            seed={{
+              isFollowing: Boolean(post.author_followed_by_me),
+              isFollowedBy: Boolean(post.author_follows_me),
+              requestSent: Boolean(post.author_follow_requested),
+            }}
+          />
+        )}
+      </Stack>
 
       <Stack spacing={0.75} sx={{ px: { xs: 1.75, sm: 2.5 }, py: 1.75 }}>
         {hasWorkout && workout?.name && (
