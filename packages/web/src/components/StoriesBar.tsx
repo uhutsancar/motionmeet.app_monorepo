@@ -1,30 +1,52 @@
-import { useAuthContext } from "../context/AuthProvider";
-import { Avatar, Box, Card, CardActionArea, Paper, Stack, Typography } from "@mui/material";
-import { Plus } from "lucide-react";
-import moment from "moment";
-import { useCallback, useEffect, useState } from "react";
+import Avatar from "@mui/material/Avatar";
+import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
+import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
+import AddRounded from "@mui/icons-material/AddRounded";
+import axios from "axios";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import api from "~/api/axios";
-import axios from "axios";
-import StoryModal from "./StoryModal";
+import { useAppSelector } from "~/app/hooks";
+import { useAuthContext } from "~/context/AuthProvider";
+import StoryComposer from "./StoryComposer";
 import StoryViewer from "./StoryViewer";
-import { API_ROUTES, type ApiFailure, type Story } from "@motionmeet/shared";
+import { API_ROUTES, type ApiFailure, type PublicUser, type Story } from "@motionmeet/shared";
 
 interface StoriesResponse {
   success: boolean;
   stories: Story[];
 }
 
-const StoriesBar = () => {
-  const { t, i18n } = useTranslation();
-  const { getToken } = useAuthContext();
-  const [stories, setStories] = useState<Story[]>([]);
-  const [showModal, setShowModal] = useState(false);
-  const [viewStory, setViewStory] = useState<Story | null>(null);
+interface StoryGroup {
+  user: PublicUser;
+  stories: Story[];
+}
 
-  useEffect(() => {
-    moment.locale(i18n.language.startsWith("tr") ? "tr" : "en");
-  }, [i18n.language]);
+const RING_SIZE = 68;
+const AVATAR_SIZE = RING_SIZE - 9;
+/** The brand sweep, used for a story that has not been opened yet. */
+const RING_GRADIENT = "linear-gradient(135deg, #F86FE8 0%, #9757FB 50%, #28E7F7 100%)";
+
+const byOldestFirst = (left: Story, right: Story): number =>
+  new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+
+/**
+ * The rail of story bubbles above the feed.
+ *
+ * The author's own bubble is the first one and it is the only one they get:
+ * everything they posted in the last day lives inside it, and the plus badge
+ * adds another. Their stories never appear again as a separate bubble.
+ */
+const StoriesBar = () => {
+  const { t } = useTranslation();
+  const { getToken } = useAuthContext();
+  const currentUser = useAppSelector((state) => state.user.value);
+
+  const [stories, setStories] = useState<Story[]>([]);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [viewing, setViewing] = useState<Story[] | null>(null);
 
   const fetchStories = useCallback(async () => {
     try {
@@ -36,94 +58,176 @@ const StoriesBar = () => {
       if (data.success) setStories(data.stories);
     } catch (error: unknown) {
       const failure = axios.isAxiosError<ApiFailure>(error) ? error.response?.data : undefined;
-      console.error(failure?.message || (error instanceof Error ? error.message : "Stories could not be loaded"));
+      console.error(
+        failure?.message || (error instanceof Error ? error.message : "Stories could not be loaded"),
+      );
     }
   }, [getToken]);
 
   useEffect(() => {
-    fetchStories();
+    void fetchStories();
   }, [fetchStories]);
+
+  const { ownStories, otherGroups } = useMemo(() => {
+    const valid = stories.filter(
+      (story): story is Story & { user: PublicUser } =>
+        Boolean(story?._id && story.user && typeof story.user === "object"),
+    );
+
+    const mine: Story[] = [];
+    const byUser = new Map<string, Story[]>();
+    for (const story of valid) {
+      if (currentUser?._id && story.user._id === currentUser._id) {
+        mine.push(story);
+        continue;
+      }
+      const bucket = byUser.get(story.user._id);
+      if (bucket) bucket.push(story);
+      else byUser.set(story.user._id, [story]);
+    }
+
+    mine.sort(byOldestFirst);
+    for (const bucket of byUser.values()) bucket.sort(byOldestFirst);
+
+    // Rail order follows who posted most recently; each bubble plays that
+    // person's stories oldest first.
+    const groups: StoryGroup[] = [];
+    const seen = new Set<string>();
+    for (const story of [...valid].sort(
+      (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+    )) {
+      if (currentUser?._id && story.user._id === currentUser._id) continue;
+      if (seen.has(story.user._id)) continue;
+      seen.add(story.user._id);
+      groups.push({ user: story.user, stories: byUser.get(story.user._id) ?? [] });
+    }
+
+    return { ownStories: mine, otherGroups: groups };
+  }, [currentUser?._id, stories]);
+
+  const bubble = (
+    key: string,
+    picture: string | null | undefined,
+    fallback: string,
+    label: string,
+    ringed: boolean,
+    onOpen: () => void,
+    badge?: () => void,
+  ) => (
+    <Stack
+      key={key}
+      spacing={0.75}
+      sx={{ width: RING_SIZE + 10, flexShrink: 0, alignItems: "center" }}
+    >
+      <Box
+        onClick={onOpen}
+        role="button"
+        tabIndex={0}
+        aria-label={label}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") onOpen();
+        }}
+        sx={{
+          position: "relative",
+          display: "grid",
+          placeItems: "center",
+          width: RING_SIZE,
+          height: RING_SIZE,
+          borderRadius: "50%",
+          cursor: "pointer",
+          background: ringed ? RING_GRADIENT : "transparent",
+        }}
+      >
+        <Avatar
+          src={picture || undefined}
+          alt={label}
+          sx={{
+            width: AVATAR_SIZE,
+            height: AVATAR_SIZE,
+            border: 2.5,
+            borderColor: "background.paper",
+            fontWeight: 800,
+          }}
+        >
+          {fallback}
+        </Avatar>
+
+        {badge && (
+          <Box
+            component="button"
+            type="button"
+            aria-label={t("feed.create_story", "Create story")}
+            onClick={(event) => {
+              event.stopPropagation();
+              badge();
+            }}
+            sx={{
+              position: "absolute",
+              right: 0,
+              bottom: 0,
+              display: "grid",
+              placeItems: "center",
+              width: 22,
+              height: 22,
+              p: 0,
+              borderRadius: "50%",
+              cursor: "pointer",
+              color: "primary.contrastText",
+              bgcolor: "primary.main",
+              border: 2.5,
+              borderColor: "background.paper",
+            }}
+          >
+            <AddRounded sx={{ fontSize: 14 }} />
+          </Box>
+        )}
+      </Box>
+      <Typography variant="caption" noWrap sx={{ maxWidth: "100%", color: "text.secondary" }}>
+        {label}
+      </Typography>
+    </Stack>
+  );
 
   return (
     <>
-      <Paper variant="outlined" sx={{ p: 1.25 }}>
-        <Typography variant="subtitle2" sx={{ px: 0.25, mb: 1, fontWeight: 800 }}>
-          {t("feed.stories", "Stories")}
-        </Typography>
-      <Box className="no-scrollbar" sx={{ width: "100%", overflowX: "auto" }}>
-        <Stack direction="row" spacing={1} sx={{ width: "max-content", pb: 0.75 }}>
-          <Card
-            variant="outlined"
-            sx={{
-              width: 88,
-              height: 96,
-              flexShrink: 0,
-              borderRadius: 3,
-              bgcolor: "background.paper",
-            }}
-          >
-            <CardActionArea onClick={() => setShowModal(true)} sx={{ height: "100%", p: 1 }}>
-              <Stack spacing={1} sx={{ height: "100%", textAlign: "center", alignItems: "center", justifyContent: "center" }}>
-                <Box sx={{ width: 38, height: 38, borderRadius: 2, bgcolor: "primary.main", color: "primary.contrastText", display: "grid", placeItems: "center" }}>
-                  <Plus size={19} />
-                </Box>
-                <Typography variant="caption" sx={{ fontWeight: 800, lineHeight: 1.25 }}>
-                  {t("feed.create_story")}
-                </Typography>
-              </Stack>
-            </CardActionArea>
-          </Card>
+      <Paper variant="outlined" sx={{ p: 1.5 }}>
+        <Box className="no-scrollbar" sx={{ width: "100%", overflowX: "auto" }}>
+          <Stack direction="row" spacing={1.5} sx={{ width: "max-content", pb: 0.5 }}>
+            {bubble(
+              "own",
+              currentUser?.profile_picture,
+              currentUser?.full_name?.charAt(0)?.toUpperCase() || "U",
+              t("feed.your_story", "Your story"),
+              ownStories.length > 0,
+              () => (ownStories.length ? setViewing(ownStories) : setComposerOpen(true)),
+              () => setComposerOpen(true),
+            )}
 
-          {stories.map((story, index) => {
-            const author = typeof story.user === "string" ? null : story.user;
-            return (
-            <Card
-              key={story._id || `${author?._id}-${story.createdAt}-${index}`}
-              variant="outlined"
-              sx={{ width: 88, height: 96, flexShrink: 0, borderRadius: 3, bgcolor: "common.black" }}
-            >
-              <CardActionArea onClick={() => setViewStory(story)} sx={{ height: "100%", position: "relative" }}>
-                {story.media_type === "text" ? (
-                  <Box sx={{ position: "absolute", inset: 0, bgcolor: story.background_color, color: "common.white", display: "grid", placeItems: "center", p: 2 }}>
-                    <Typography variant="caption" sx={{ fontWeight: 700, textAlign: "center" }}>
-                      {story.content}
-                    </Typography>
-                  </Box>
-                ) : (
-                  <Box
-                    component={story.media_type === "image" ? "img" : "video"}
-                    src={story.media_url}
-                    alt={story.media_type === "image" ? "Story" : undefined}
-                    loading={story.media_type === "image" ? "lazy" : undefined}
-                    decoding={story.media_type === "image" ? "async" : undefined}
-                    muted={story.media_type === "video" ? true : undefined}
-                    playsInline={story.media_type === "video" ? true : undefined}
-                    preload={story.media_type === "video" ? "metadata" : undefined}
-                    sx={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
-                  />
-                )}
-                <Box sx={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,.65), transparent 42%, rgba(0,0,0,.82))" }} />
-                <Avatar src={author?.profile_picture || undefined} alt={author?.full_name} sx={{ position: "absolute", top: 7, left: 7, width: 28, height: 28, border: 2, borderColor: "primary.main" }}>
-                  {author?.full_name?.charAt(0)}
-                </Avatar>
-                <Stack sx={{ position: "absolute", left: 11, right: 9, bottom: 10, color: "common.white" }}>
-                  <Typography variant="caption" noWrap sx={{ fontWeight: 800 }}>
-                    {author?.full_name?.split(" ")[0]}
-                  </Typography>
-                  <Typography variant="caption" sx={{ fontSize: 9, opacity: 0.72 }}>
-                    {moment(story.createdAt).fromNow()}
-                  </Typography>
-                </Stack>
-              </CardActionArea>
-            </Card>
-            );
-          })}
-        </Stack>
-      </Box>
+            {otherGroups.map(({ user, stories: group }) =>
+              bubble(
+                user._id,
+                user.profile_picture,
+                (user.full_name || user.username || "?").charAt(0).toUpperCase(),
+                user.full_name?.split(" ")[0] || user.username,
+                true,
+                () => setViewing(group),
+              ),
+            )}
+          </Stack>
+        </Box>
       </Paper>
 
-      {showModal && <StoryModal setShowModal={setShowModal} fetchStories={fetchStories} />}
-      {viewStory && <StoryViewer viewStory={viewStory} setViewStory={setViewStory} />}
+      <StoryComposer open={composerOpen} onClose={() => setComposerOpen(false)} onCreated={fetchStories} />
+
+      <StoryViewer
+        stories={viewing ?? []}
+        open={Boolean(viewing?.length)}
+        onClose={() => setViewing(null)}
+        onDeleted={() => {
+          setViewing(null);
+          void fetchStories();
+        }}
+      />
     </>
   );
 };

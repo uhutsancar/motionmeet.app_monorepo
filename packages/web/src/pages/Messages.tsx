@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, type KeyboardEvent } f
 import { useTranslation } from 'react-i18next';
 import { useAuthContext } from "../context/AuthProvider";
 import { useSocket } from '../hooks/useSocket';
-import { Send, Search, MessageSquare, ArrowLeft, Check, CheckCheck, X, Trash2 } from 'lucide-react';
+import { Send, Search, ArrowLeft, Check, CheckCheck, X, Trash2 } from 'lucide-react';
 import moment from 'moment';
 import 'moment/locale/tr';
 import toast from 'react-hot-toast';
@@ -518,7 +518,7 @@ const WebMessages = () => {
           ) : displayedConvs.length === 0 && !(searchQuery && connectionCursor) ? (
             <Stack height={220} spacing={1.25} px={4} sx={{ justifyContent: "center",  alignItems: "center", textAlign: "center" }}>
               <Box sx={{ width: 42, height: 42, borderRadius: 2.5, bgcolor: 'action.hover', display: 'grid', placeItems: 'center', color: 'text.secondary' }}>
-                <MessageSquare size={20} />
+                <Send size={20} />
               </Box>
               <Typography variant="subtitle2" fontWeight={800}>{searchQuery ? t('messages.no_results', 'No users found') : t('messages.no_conversations', 'No conversations yet')}</Typography>
               <Typography variant="caption" color="text.secondary">{searchQuery ? 'Try a different name or username.' : 'Your conversations will appear here.'}</Typography>
@@ -614,7 +614,7 @@ const WebMessages = () => {
               </Stack>
             ) : messages.length === 0 ? (
               <Stack height="100%" spacing={1} sx={{ justifyContent: "center",  alignItems: "center", textAlign: "center" }}>
-                <MessageSquare size={40} color="var(--mui-palette-text-disabled)" />
+                <Send size={40} color="var(--mui-palette-text-disabled)" />
                 <Typography variant="body2" color="text.secondary">{t('messages.start_conversation', 'Start the conversation!')}</Typography>
               </Stack>
             ) : messages.map((msg, idx) => {
@@ -678,7 +678,7 @@ const WebMessages = () => {
         <Box sx={{ display: { xs: 'none', md: 'flex' }, flex: 1, alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default', p: 4 }}>
           <Stack spacing={1.5} sx={{ alignItems: "center", textAlign: "center" }}>
             <Box sx={{ borderRadius: 3, bgcolor: 'action.hover', color: 'primary.main', display: 'grid', placeItems: 'center', width: 52, height: 52, border: 1, borderColor: 'divider' }}>
-              <MessageSquare size={24} />
+              <Send size={24} />
             </Box>
             <Box>
               <Typography variant="subtitle1" fontWeight={700}>{t('messages.select_conversation', 'Select a conversation')}</Typography>

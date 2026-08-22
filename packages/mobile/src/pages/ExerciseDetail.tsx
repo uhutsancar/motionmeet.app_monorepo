@@ -3,6 +3,7 @@
 // view renders blank instead of erroring, so exercise photos and GIFs vanish.
 import React, { useState, useEffect, useCallback } from 'react';
 import { Image, ScrollView, ActivityIndicator, StyleSheet, TouchableOpacity, View } from 'react-native';
+import SwipeablePager from '../components/SwipeablePager';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { API_URL } from '../config/environment';
@@ -19,7 +20,9 @@ import dayjs from '../utils/dayjs';
 import type { ExerciseSessionEntry, ExerciseStats } from '@motionmeet/shared';
 import type { BaseNavigationScreenProps, ExerciseDetailRouteParams } from '../navigation/types';
 
-type DetailTab = 'summary' | 'history' | 'instructions';
+/** Pane order, shared by the tab strip and the pager so they cannot drift. */
+const TAB_ORDER = ['summary', 'history', 'instructions'] as const;
+type DetailTab = (typeof TAB_ORDER)[number];
 
 const ExerciseDetail = ({ route, navigation }: BaseNavigationScreenProps) => {
   const { exercise } = route.params as ExerciseDetailRouteParams;
@@ -105,6 +108,41 @@ const ExerciseDetail = ({ route, navigation }: BaseNavigationScreenProps) => {
   const chartPoints = (stats?.history || []).slice(-12);
   const maxChartWeight = Math.max(...chartPoints.map((point) => point.maxWeight), 1);
 
+  const pageContentStyle = [
+    styles.scrollContent,
+    { paddingHorizontal: horizontalPadding, paddingBottom: 24 + insets.bottom },
+  ];
+
+  // Two of the three panes open on the artwork, and all three end on the same
+  // call to action, so both are built once here rather than repeated per pane.
+  const renderMedia = () => (
+    <Surface elevation={0} style={styles.mediaContainer}>
+      {mediaUrl ? (
+        <Image source={{ uri: mediaUrl }} style={styles.media} resizeMode="contain" accessibilityLabel={exercise.name} />
+      ) : (
+        <Surface style={[styles.placeholderMedia, { backgroundColor: theme.surface }]} elevation={0}>
+          <Ionicons name="barbell" size={44} color={theme.textMuted} />
+          <Text variant="bodyMedium" style={{ color: theme.textMuted, marginTop: 8 }}>
+            {t('exercises.media_unavailable', 'Media unavailable')}
+          </Text>
+        </Surface>
+      )}
+    </Surface>
+  );
+
+  const renderLogButton = () => (
+    <Button
+      mode="contained"
+      style={styles.logButton}
+      contentStyle={{ height: 44 }}
+      labelStyle={styles.logButtonText}
+      buttonColor={theme.primary}
+      onPress={startWorkout}
+    >
+      {t('exercises.log_workout', 'Antrenman Kaydet')}
+    </Button>
+  );
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <Appbar.Header style={styles.header} statusBarHeight={0}>
@@ -115,14 +153,17 @@ const ExerciseDetail = ({ route, navigation }: BaseNavigationScreenProps) => {
         />
       </Appbar.Header>
 
-      {/* Tabs */}
+      {/* Tabs. The underline follows the pager, and the pager follows a tap,
+          so the three panes can also just be swiped through by hand. */}
       <View style={styles.tabBar}>
         {tabs.map((tab) => {
           const active = activeTab === tab.key;
           return (
             <TouchableOpacity
               key={tab.key}
-              onPress={() => setActiveTab(tab.key)}
+              onPress={() => {
+                setActiveTab(tab.key);
+              }}
               accessibilityRole="tab"
               accessibilityState={{ selected: active }}
               style={[styles.tabItem, active && { borderBottomColor: theme.primary }]}
@@ -140,30 +181,17 @@ const ExerciseDetail = ({ route, navigation }: BaseNavigationScreenProps) => {
         })}
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingHorizontal: horizontalPadding, paddingBottom: 24 + insets.bottom },
-        ]}
+      <SwipeablePager
+        page={TAB_ORDER.indexOf(activeTab)}
+        onPageChange={(index) => {
+          const tab = TAB_ORDER[index];
+          if (tab) setActiveTab(tab);
+        }}
       >
-        {activeTab !== 'history' && (
-          <Surface elevation={0} style={styles.mediaContainer}>
-            {mediaUrl ? (
-              <Image source={{ uri: mediaUrl }} style={styles.media} resizeMode="contain" accessibilityLabel={exercise.name} />
-            ) : (
-              <Surface style={[styles.placeholderMedia, { backgroundColor: theme.surface }]} elevation={0}>
-                <Ionicons name="barbell" size={44} color={theme.textMuted} />
-                <Text variant="bodyMedium" style={{ color: theme.textMuted, marginTop: 8 }}>
-                  {t('exercises.media_unavailable', 'Media unavailable')}
-                </Text>
-              </Surface>
-            )}
-          </Surface>
-        )}
+        <View key="summary" collapsable={false}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={pageContentStyle}>
+            {renderMedia()}
 
-        {activeTab === 'summary' && (
-          <>
             <Surface elevation={0} style={styles.infoSection}>
               <Text variant="headlineSmall" style={styles.title}>{exercise.name}</Text>
               <Text variant="bodyMedium" style={styles.subtitle}>
@@ -210,69 +238,70 @@ const ExerciseDetail = ({ route, navigation }: BaseNavigationScreenProps) => {
                 </>
               )}
             </Surface>
-          </>
-        )}
 
-        {activeTab === 'history' && (
-          <Surface elevation={0} style={{ marginTop: 12, backgroundColor: 'transparent' }}>
-            {historyLoading ? (
-              <ActivityIndicator color={theme.primary} style={{ marginTop: 28 }} />
-            ) : history.length === 0 ? (
-              <View style={{ alignItems: 'center', paddingVertical: 40 }}>
-                <Ionicons name="barbell" size={30} color={theme.textMuted} />
-                <Text style={{ color: theme.textMuted, marginTop: 10, textAlign: 'center' }}>
-                  {t('exercises.no_history', 'Bu egzersiz için henüz kayıt yok')}
-                </Text>
-              </View>
-            ) : (
-              history.map((session) => (
-                <Surface key={`${session.workoutId}-${session.performedAt}`} elevation={0} style={styles.historyCard}>
-                  <Text style={styles.historyTitle} numberOfLines={1}>{session.workoutName}</Text>
-                  <Text style={styles.historyDate}>{dayjs(session.performedAt).format('D MMM YYYY, HH:mm')}</Text>
+            {renderLogButton()}
+          </ScrollView>
+        </View>
 
-                  <View style={styles.historyHeaderRow}>
-                    <Text style={styles.historyColumnLabel}>{t('exercises.set_label', 'SET')}</Text>
-                    <Text style={[styles.historyColumnLabel, { flex: 1, marginLeft: 12 }]}>
-                      {t('exercises.weight_and_reps', 'AĞIRLIK VE TEKRAR')}
-                    </Text>
-                  </View>
+        <View key="history" collapsable={false}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={pageContentStyle}>
+            <Surface elevation={0} style={{ marginTop: 12, backgroundColor: 'transparent' }}>
+              {historyLoading ? (
+                <ActivityIndicator color={theme.primary} style={{ marginTop: 28 }} />
+              ) : history.length === 0 ? (
+                <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                  <Ionicons name="barbell" size={30} color={theme.textMuted} />
+                  <Text style={{ color: theme.textMuted, marginTop: 10, textAlign: 'center' }}>
+                    {t('exercises.no_history', 'Bu egzersiz için henüz kayıt yok')}
+                  </Text>
+                </View>
+              ) : (
+                history.map((session) => (
+                  <Surface key={`${session.workoutId}-${session.performedAt}`} elevation={0} style={styles.historyCard}>
+                    <Text style={styles.historyTitle} numberOfLines={1}>{session.workoutName}</Text>
+                    <Text style={styles.historyDate}>{dayjs(session.performedAt).format('D MMM YYYY, HH:mm')}</Text>
 
-                  {session.sets.map((set) => (
-                    <View key={`${session.workoutId}-${set.position}`} style={styles.historySetRow}>
-                      <Text style={styles.historySetIndex}>{set.position + 1}</Text>
-                      <Text style={styles.historySetValue}>
-                        {set.weight} kg x {set.reps}
+                    <View style={styles.historyHeaderRow}>
+                      <Text style={styles.historyColumnLabel}>{t('exercises.set_label', 'SET')}</Text>
+                      <Text style={[styles.historyColumnLabel, { flex: 1, marginLeft: 12 }]}>
+                        {t('exercises.weight_and_reps', 'AĞIRLIK VE TEKRAR')}
                       </Text>
                     </View>
-                  ))}
-                </Surface>
-              ))
-            )}
-          </Surface>
-        )}
 
-        {activeTab === 'instructions' && (
-          <Surface elevation={0} style={styles.section}>
-            <Text variant="titleMedium" style={styles.sectionTitle}>{exercise.name}</Text>
-            <Text variant="bodyLarge" style={styles.bodyText}>
-              {steps.length
-                ? steps.map((step, index) => `${index + 1}. ${step}`).join('\n\n')
-                : instruction || t('exercises.instructions_unavailable', 'Instructions are not available for this exercise yet.')}
-            </Text>
-          </Surface>
-        )}
+                    {session.sets.map((set) => (
+                      <View key={`${session.workoutId}-${set.position}`} style={styles.historySetRow}>
+                        <Text style={styles.historySetIndex}>{set.position + 1}</Text>
+                        <Text style={styles.historySetValue}>
+                          {set.weight} kg x {set.reps}
+                        </Text>
+                      </View>
+                    ))}
+                  </Surface>
+                ))
+              )}
+            </Surface>
 
-        <Button
-          mode="contained"
-          style={styles.logButton}
-          contentStyle={{ height: 44 }}
-          labelStyle={styles.logButtonText}
-          buttonColor={theme.primary}
-          onPress={startWorkout}
-        >
-          {t('exercises.log_workout', 'Antrenman Kaydet')}
-        </Button>
-      </ScrollView>
+            {renderLogButton()}
+          </ScrollView>
+        </View>
+
+        <View key="instructions" collapsable={false}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={pageContentStyle}>
+            {renderMedia()}
+
+            <Surface elevation={0} style={styles.section}>
+              <Text variant="titleMedium" style={styles.sectionTitle}>{exercise.name}</Text>
+              <Text variant="bodyLarge" style={styles.bodyText}>
+                {steps.length
+                  ? steps.map((step, index) => `${index + 1}. ${step}`).join('\n\n')
+                  : instruction || t('exercises.instructions_unavailable', 'Instructions are not available for this exercise yet.')}
+              </Text>
+            </Surface>
+
+            {renderLogButton()}
+          </ScrollView>
+        </View>
+      </SwipeablePager>
     </SafeAreaView>
   );
 };

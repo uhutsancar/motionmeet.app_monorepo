@@ -44,7 +44,7 @@ test("internal object-storage keys are never serialized by public hydrators", as
   const postRow = await database.insertInto("posts").values({ legacy_mongo_id: null, user_id: first.id, operation_id: `contract-post-${runId}`, author_full_name: "Media A", author_username: `media_a_${runId}`, content: "media", post_type: "image", visibility: "public", workout_id: null }).returningAll().executeTakeFirstOrThrow();
   await database.insertInto("post_media").values({ legacy_mongo_id: null, post_id: postRow.id, position: 0, url: "https://example.invalid/post.png", object_key: "posts/private-key.png", media_type: "image", mime_type: "image/png", file_size: null, width: null, height: null, duration_seconds: null }).execute();
   const post = (await hydratePosts([postRow]))[0];
-  const story = await createStory({ user: first.id, operationId: `contract-story-${runId}`, content: "", media_url: "https://example.invalid/story.png", media_key: "stories/private-key.png", media_type: "image", background_color: "" });
+  const story = await createStory({ user: first.id, operationId: `contract-story-${runId}`, content: "", media_url: "https://example.invalid/story.png", media_key: "stories/private-key.png", media_type: "image", background_color: "", overlays: [] });
   const message = await createMessage({ from_user_id: first.id, to_user_id: second.id, operationId: `contract-message-${runId}`, text: "hello", message_type: "text", media_url: "", media_key: "messages/private-key.png" });
   assert.ok(post);
   assert.equal("image_keys" in post, false);

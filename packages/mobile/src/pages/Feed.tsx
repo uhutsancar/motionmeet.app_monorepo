@@ -11,7 +11,6 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import {
   ActivityIndicator,
   Avatar,
-  IconButton,
   Menu,
   Surface,
   Text,
@@ -27,13 +26,15 @@ import { setAuthToken } from '../api/client';
 import StoriesBar from '../components/StoriesBar';
 import PostCard from '../components/PostCard';
 import CreatePostModal from '../components/CreatePostModal';
-import StoryModal from '../components/StoryModal';
+import StoryComposer from '../components/StoryComposer';
 import SuggestedAthletes from '../components/SuggestedAthletes';
 import NearbyAthletes from '../components/NearbyAthletes';
 import MotionMark from '../components/MotionMark';
 import { logHandledError } from '../utils/feedback';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { useUnreadMessages } from '../hooks/useUnreadMessages';
 import { AVATAR, CARD } from '../config/layout';
+import { MESSAGE_ICON } from '../config/icons';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import type { Post, PublicUser } from '@motionmeet/shared';
 import type { NavigationOnlyProps } from '../navigation/types';
@@ -43,6 +44,52 @@ type FeedRow =
   | { type: 'post'; item: Post }
   | { type: 'suggested'; id: string }
   | { type: 'nearby'; id: string };
+
+interface HeaderActionProps {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  badge: number;
+  label: string;
+  onPress: () => void;
+}
+
+/** One of the two round buttons at the top right of the feed. */
+const HeaderAction = ({ icon, badge, label, onPress }: HeaderActionProps) => {
+  const { theme } = useTheme();
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={badge > 0 ? `${label} (${badge})` : label}
+      style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
+    >
+      <Ionicons name={icon} size={23} color={theme.text} />
+      {badge > 0 && (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: 2,
+            right: 0,
+            minWidth: 16,
+            height: 16,
+            paddingHorizontal: 4,
+            borderRadius: 8,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: theme.danger,
+            borderWidth: 1.5,
+            borderColor: theme.surface,
+          }}
+        >
+          <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '900' }}>
+            {badge > 99 ? '99+' : badge}
+          </Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+};
 
 const Feed = ({ navigation }: NavigationOnlyProps) => {
   const { theme } = useTheme();
@@ -60,8 +107,9 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
   // Kept live by the socket, so a like or follow request badges the bell without
   // the screen polling for it.
   const unreadCount = useAppSelector((state) => state.notifications.unreadCount);
+  const { unreadMessages, clear: clearUnreadMessages } = useUnreadMessages();
   const [showCreatePost, setShowCreatePost] = useState(false);
-  const [showStoryModal, setShowStoryModal] = useState(false);
+  const [showStoryComposer, setShowStoryComposer] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<FeedMode>('discover');
   const [feedMenuVisible, setFeedMenuVisible] = useState(false);
@@ -202,36 +250,24 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
             />
           </Menu>
         </View>
-        <View>
-          <IconButton
-            icon="bell-outline"
-            size={20}
-            iconColor={theme.text}
-            style={{ margin: 0 }}
+        {/* Activity and messages sit together at the top right. Messages left
+            the tab bar, so this is now the one place either is opened from. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <HeaderAction
+            icon="heart-outline"
+            badge={unreadCount}
+            label={t('activity.title', 'Bildirimler')}
             onPress={() => navigation.navigate('ActivityScreen')}
-            accessibilityLabel={t('activity.title', 'Bildirimler')}
           />
-          {unreadCount > 0 && (
-            <View
-              pointerEvents="none"
-              style={{
-                position: 'absolute',
-                top: 2,
-                right: 0,
-                minWidth: 17,
-                height: 17,
-                paddingHorizontal: 4,
-                borderRadius: 9,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: theme.danger,
-              }}
-            >
-              <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '800' }}>
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </Text>
-            </View>
-          )}
+          <HeaderAction
+            icon={MESSAGE_ICON}
+            badge={unreadMessages}
+            label={t('tabs.messages', 'Mesajlar')}
+            onPress={() => {
+              clearUnreadMessages();
+              navigation.navigate('Messages');
+            }}
+          />
         </View>
       </Surface>
 
@@ -306,7 +342,11 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
               </View>
             </Surface>
 
-            <StoriesBar onAddStory={() => setShowStoryModal(true)} />
+            <StoriesBar
+              onAddStory={() => setShowStoryComposer(true)}
+              navigation={navigation}
+              onStoryDeleted={() => void loadStaticData()}
+            />
 
             <TouchableOpacity
               activeOpacity={0.75}
@@ -399,11 +439,11 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
           void loadPosts();
         }}
       />
-      <StoryModal
-        visible={showStoryModal}
-        onClose={() => setShowStoryModal(false)}
+      <StoryComposer
+        visible={showStoryComposer}
+        onClose={() => setShowStoryComposer(false)}
         onSuccess={() => {
-          setShowStoryModal(false);
+          setShowStoryComposer(false);
           void loadStaticData();
         }}
       />

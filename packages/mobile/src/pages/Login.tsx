@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Surface, Text, TextInput, TouchableRipple } from 'react-native-paper';
+import { useTranslation } from 'react-i18next';
 import { useAuthContext } from '../context/AuthProvider';
 import { useTheme, type MotionTheme } from '../context/ThemeContext';
 import MotionMark from '../components/MotionMark';
@@ -25,6 +26,7 @@ interface LoginFormData {
 }
 
 const Login = () => {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const { login, register } = useAuthContext();
   const [isLogin, setIsLogin] = useState(true);
@@ -49,14 +51,15 @@ const Login = () => {
       : [formData.email, formData.password, formData.username, formData.full_name];
 
     if (required.some((value) => !value.trim())) {
-      showError('Missing details', isLogin
-        ? 'Please enter your email and password.'
-        : 'Please complete every field.');
+      showError(
+        t('auth.error_missing_title'),
+        isLogin ? t('auth.error_missing_signin') : t('auth.error_missing_signup'),
+      );
       return;
     }
     const normalizedEmail = formData.email.trim().toLowerCase();
     if (!EMAIL_PATTERN.test(normalizedEmail) || normalizedEmail.length > AUTH_LIMITS.email) {
-      showError('Invalid email', 'Enter a valid email address.');
+      showError(t('auth.error_email_title'), t('auth.error_email_body'));
       return;
     }
     if (!isLogin) {
@@ -64,8 +67,8 @@ const Login = () => {
       const normalizedName = formData.full_name.trim();
       if (!USERNAME_PATTERN.test(normalizedUsername)) {
         showError(
-          'Invalid username',
-          'Use 3–30 lowercase letters, numbers, dots, underscores or hyphens.',
+          t('auth.error_username_title'),
+          t('auth.error_username_body'),
         );
         return;
       }
@@ -73,11 +76,11 @@ const Login = () => {
         normalizedName.length < AUTH_LIMITS.fullNameMin ||
         normalizedName.length > AUTH_LIMITS.fullNameMax
       ) {
-        showError('Invalid name', 'Full name must be between 2 and 100 characters.');
+        showError(t('auth.error_name_title'), t('auth.error_name_body'));
         return;
       }
       if (!hasValidPasswordByteLength(formData.password)) {
-        showError('Invalid password', 'Password must be between 10 and 72 UTF-8 bytes.');
+        showError(t('auth.error_password_title'), t('auth.error_password_body'));
         return;
       }
     }
@@ -94,7 +97,7 @@ const Login = () => {
         });
 
       if (!result.success) {
-        showError('Authentication failed', result.message || 'Please try again.');
+        showError(t('auth.error_failed_title'), result.message || t('auth.error_failed_body'));
       }
     } finally {
       setLoading(false);
@@ -117,21 +120,19 @@ const Login = () => {
             <MotionMark size={46} />
             <View>
               <Text style={styles.brandName}>MotionMeet</Text>
-              <Text style={styles.brandTag}>MOVE WITH PURPOSE</Text>
+              <Text style={styles.brandTag}>{t('auth.tagline')}</Text>
             </View>
           </View>
 
           <View style={styles.intro}>
             <Text style={styles.eyebrow}>
-              {isLogin ? 'WELCOME BACK' : 'YOUR NEXT CHAPTER'}
+              {isLogin ? t('auth.eyebrow_signin') : t('auth.eyebrow_signup')}
             </Text>
             <Text style={styles.title}>
-              {isLogin ? 'Ready for your next move?' : 'Build momentum that lasts.'}
+              {isLogin ? t('auth.title_signin') : t('auth.title_signup')}
             </Text>
             <Text style={styles.subtitle}>
-              {isLogin
-                ? 'Your sessions, progress and people are waiting.'
-                : 'Bring the work and the people behind it into one place.'}
+              {isLogin ? t('auth.subtitle_signin') : t('auth.subtitle_signup')}
             </Text>
           </View>
 
@@ -143,7 +144,7 @@ const Login = () => {
                 style={[styles.segmentButton, isLogin && styles.segmentButtonActive]}
               >
                 <Text style={[styles.segmentText, isLogin && styles.segmentTextActive]}>
-                  Sign in
+                  {t('auth.sign_in')}
                 </Text>
               </TouchableRipple>
               <TouchableRipple
@@ -152,7 +153,7 @@ const Login = () => {
                 style={[styles.segmentButton, !isLogin && styles.segmentButtonActive]}
               >
                 <Text style={[styles.segmentText, !isLogin && styles.segmentTextActive]}>
-                  Create account
+                  {t('auth.create_account')}
                 </Text>
               </TouchableRipple>
             </View>
@@ -161,7 +162,7 @@ const Login = () => {
               {!isLogin && (
                 <>
                   <TextInput
-                    label="Full name"
+                    label={t('auth.full_name')}
                     mode="outlined"
                     style={styles.input}
                     outlineStyle={styles.inputOutline}
@@ -171,7 +172,7 @@ const Login = () => {
                     left={<TextInput.Icon icon="account-outline" />}
                   />
                   <TextInput
-                    label="Username"
+                    label={t('auth.username')}
                     mode="outlined"
                     style={styles.input}
                     outlineStyle={styles.inputOutline}
@@ -184,7 +185,7 @@ const Login = () => {
                 </>
               )}
               <TextInput
-                label="Email address"
+                label={t('auth.email')}
                 mode="outlined"
                 style={styles.input}
                 outlineStyle={styles.inputOutline}
@@ -196,7 +197,7 @@ const Login = () => {
                 left={<TextInput.Icon icon="email-outline" />}
               />
               <TextInput
-                label="Password"
+                label={t('auth.password')}
                 mode="outlined"
                 style={styles.input}
                 outlineStyle={styles.inputOutline}
@@ -213,7 +214,7 @@ const Login = () => {
                 )}
               />
               {!isLogin && (
-                <Text style={styles.helper}>Use at least 10 characters.</Text>
+                <Text style={styles.helper}>{t('auth.password_helper')}</Text>
               )}
               {isLogin && (
                 <Button
@@ -222,7 +223,7 @@ const Login = () => {
                   onPress={() => Linking.openURL(`${WEB_URL}/forgot-password`)}
                   style={{ alignSelf: 'flex-end' }}
                 >
-                  Forgot password?
+                  {t('auth.forgot_password')}
                 </Button>
               )}
               <Button
@@ -234,13 +235,11 @@ const Login = () => {
                 style={styles.submitButton}
                 labelStyle={styles.submitLabel}
               >
-                {isLogin ? 'Sign in' : 'Create account'}
+                {isLogin ? t('auth.sign_in') : t('auth.create_account')}
               </Button>
             </View>
 
-            <Text style={styles.legal}>
-              By continuing, you agree to the MotionMeet Terms and Privacy Policy.
-            </Text>
+            <Text style={styles.legal}>{t('auth.legal')}</Text>
           </Surface>
         </KeyboardAwareScrollView>
     </SafeAreaView>

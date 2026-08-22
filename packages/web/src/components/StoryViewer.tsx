@@ -1,196 +1,468 @@
-import { Avatar, Box, Button, Dialog, Drawer, IconButton, LinearProgress, Stack, Typography } from "@mui/material";
-import { BadgeCheck, Eye, X } from "lucide-react";
+import Avatar from "@mui/material/Avatar";
+import Box from "@mui/material/Box";
+import CircularProgress from "@mui/material/CircularProgress";
+import Dialog from "@mui/material/Dialog";
+import Drawer from "@mui/material/Drawer";
+import IconButton from "@mui/material/IconButton";
+import InputBase from "@mui/material/InputBase";
+import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
+import ChevronRightRounded from "@mui/icons-material/ChevronRightRounded";
+import CloseRounded from "@mui/icons-material/CloseRounded";
+import DeleteOutlineRounded from "@mui/icons-material/DeleteOutlineRounded";
+import FavoriteBorderRounded from "@mui/icons-material/FavoriteBorderRounded";
+import KeyboardArrowUpRounded from "@mui/icons-material/KeyboardArrowUpRounded";
+import SendRounded from "@mui/icons-material/SendRounded";
 import moment from "moment";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { Dispatch, SetStateAction } from "react";
-import type { Story, StoryViewer as StoryViewerEntry } from "@motionmeet/shared";
-import { getStoryViewers, markStoryViewed } from "~/api/endpoints";
+import { useNavigate } from "react-router";
+import toast from "react-hot-toast";
+import { deleteStory, getStoryViewers, markStoryViewed, sendMessage } from "~/api/endpoints";
 import { useAppSelector } from "~/app/hooks";
 import { useAuthContext } from "~/context/AuthProvider";
+import StoryOverlayLayer from "./story/StoryOverlayLayer";
+import type { Story, StoryViewer as StoryViewerEntry } from "@motionmeet/shared";
 
 interface StoryViewerProps {
-  viewStory: Story | null;
-  setViewStory: Dispatch<SetStateAction<Story | null>>;
+  /** Every story by one author, oldest first. */
+  stories: Story[];
+  open: boolean;
+  onClose: () => void;
+  onDeleted?: () => void;
 }
 
-const StoryViewer = ({ viewStory, setViewStory }: StoryViewerProps) => {
+/** How long a photo stays on screen before the viewer advances. */
+const STORY_DURATION = 5000;
+const PROGRESS_TICK = 50;
+
+/**
+ * The story viewer.
+ *
+ * Playback pauses whenever something is layered over the story — the audience
+ * sheet, the reply box — so a frame never advances out from under whatever the
+ * viewer is reading or typing.
+ */
+const StoryViewer = ({ stories, open, onClose, onDeleted }: StoryViewerProps) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { getToken } = useAuthContext();
   const currentUserId = useAppSelector((state) => state.user.value?._id);
+
+  const [index, setIndex] = useState(0);
   const [progress, setProgress] = useState(0);
-  const [viewers, setViewers] = useState<StoryViewerEntry[]>([]);
   const [viewersOpen, setViewersOpen] = useState(false);
+  const [viewers, setViewers] = useState<StoryViewerEntry[]>([]);
+  const [viewersLoading, setViewersLoading] = useState(false);
+  const [reply, setReply] = useState("");
+  const [replyFocused, setReplyFocused] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [frameWidth, setFrameWidth] = useState(360);
 
-  const storyId = viewStory?._id;
-  const authorId = viewStory && typeof viewStory.user !== "string" ? viewStory.user._id : viewStory?.user;
+  const frameRef = useRef<HTMLDivElement>(null);
+  const recordedViews = useRef<Set<string>>(new Set());
+
+  const story = stories[index];
+  const author = story && typeof story.user !== "string" ? story.user : null;
+  const authorId = author?._id ?? (typeof story?.user === "string" ? story.user : undefined);
   const isOwnStory = Boolean(authorId && authorId === currentUserId);
+  const paused = viewersOpen || replyFocused || sending;
+  const overlays = useMemo(() => (Array.isArray(story?.overlays) ? story.overlays : []), [story]);
 
-  // Opening the story is what counts as viewing it, so the receipt is sent
-  // here rather than waiting for the progress bar to run out.
   useEffect(() => {
-    if (!storyId || isOwnStory) return undefined;
-    let active = true;
+    if (open) {
+      setIndex(0);
+      setProgress(0);
+      setViewersOpen(false);
+      setReply("");
+    }
+  }, [open, stories]);
+
+  useEffect(() => {
+    const element = frameRef.current;
+    if (!element || typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setFrameWidth(entry.contentRect.width);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [open]);
+
+  const goNext = useCallback(() => {
+    setIndex((current) => {
+      if (current + 1 < stories.length) {
+        setProgress(0);
+        return current + 1;
+      }
+      onClose();
+      return current;
+    });
+  }, [onClose, stories.length]);
+
+  const goPrev = useCallback(() => {
+    setProgress(0);
+    setIndex((current) => Math.max(0, current - 1));
+  }, []);
+
+  // Opening someone else's story counts as a view exactly once per session.
+  useEffect(() => {
+    const storyId = story?._id;
+    if (!open || !storyId || isOwnStory || recordedViews.current.has(storyId)) return;
+    recordedViews.current.add(storyId);
     void (async () => {
       const token = await getToken();
-      if (!active || !token) return;
+      if (!token) return;
       try {
         await markStoryViewed(storyId, token);
       } catch {
         // A missed view receipt is not worth interrupting playback for.
       }
     })();
-    return () => { active = false; };
-  }, [getToken, isOwnStory, storyId]);
+  }, [getToken, isOwnStory, open, story?._id]);
 
-  const loadViewers = useCallback(async () => {
-    if (!storyId) return;
-    const token = await getToken();
-    if (!token) return;
+  // Photo timer. Videos advance on their own `ended` event.
+  useEffect(() => {
+    if (!open || paused || !story || story.media_type === "video") return undefined;
+
+    setProgress(0);
+    let elapsed = 0;
+    const interval = setInterval(() => {
+      elapsed += PROGRESS_TICK;
+      setProgress((elapsed / STORY_DURATION) * 100);
+      if (elapsed >= STORY_DURATION) {
+        clearInterval(interval);
+        goNext();
+      }
+    }, PROGRESS_TICK);
+
+    return () => clearInterval(interval);
+  }, [goNext, index, open, paused, story]);
+
+  const openViewers = async () => {
+    const storyId = story?._id;
+    if (!storyId || !isOwnStory) return;
+    setViewersOpen(true);
+    setViewers([]);
+    setViewersLoading(true);
     try {
+      const token = await getToken();
+      if (!token) return;
       const response = await getStoryViewers(storyId, token);
       if (response.success) setViewers(response.viewers ?? []);
     } catch {
       // The list simply stays empty when it cannot be loaded.
+    } finally {
+      setViewersLoading(false);
     }
-  }, [getToken, storyId]);
+  };
 
-  useEffect(() => {
-    if (!viewersOpen) return;
-    void loadViewers();
-  }, [loadViewers, viewersOpen]);
+  const openProfile = (userId?: string) => {
+    if (!userId) return;
+    onClose();
+    navigate(`/profile/${userId}`);
+  };
 
-  useEffect(() => {
-    // A story that just closed must not leave the previous one's viewers behind.
-    setViewers([]);
-    setViewersOpen(false);
-  }, [storyId]);
+  /**
+   * Replies to the story as a direct message.
+   *
+   * The heart passes its emoji straight in rather than typing it into the box:
+   * a reaction is one tap in every story app, and making it a two-step edit
+   * would be the odd behaviour here.
+   */
+  const sendReply = async (override?: string) => {
+    const text = (override ?? reply).trim();
+    if (!text || !authorId || sending) return;
+    setSending(true);
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const result = await sendMessage({ to_user_id: authorId, text }, token);
+      if (result.success) {
+        if (!override) setReply("");
+        toast.success(t("story.reply_sent", "Reply sent"));
+      } else {
+        toast.error(t("story.reply_failed", "The reply could not be sent"));
+      }
+    } catch {
+      toast.error(t("story.reply_failed", "The reply could not be sent"));
+    } finally {
+      setSending(false);
+    }
+  };
 
-  useEffect(() => {
-    // The auto-advance timer would fight the viewers sheet for attention.
-    if (!viewStory || viewStory.media_type === "video" || viewersOpen) return undefined;
+  const removeStory = async () => {
+    const storyId = story?._id;
+    if (!storyId) return;
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const data = await deleteStory(storyId, token);
+      if (!data.success) {
+        toast.error(data.message || t("story.delete_failed", "The story could not be deleted"));
+        return;
+      }
+      onDeleted?.();
+      onClose();
+    } catch {
+      toast.error(t("story.delete_failed", "The story could not be deleted"));
+    }
+  };
 
-    setProgress(0);
-    const duration = 10000;
-    const intervalDuration = 50;
-    let elapsed = 0;
-    const progressInterval = setInterval(() => {
-      elapsed += intervalDuration;
-      setProgress((elapsed / duration) * 100);
-    }, intervalDuration);
-    const timer = setTimeout(() => setViewStory(null), duration);
-
-    return () => {
-      clearTimeout(timer);
-      clearInterval(progressInterval);
-    };
-  }, [viewStory, setViewStory, viewersOpen]);
-
-  if (!viewStory) return null;
-  const author = typeof viewStory.user === "string" ? null : viewStory.user;
+  if (!open || !story) return null;
 
   return (
-    <Dialog
-      open
-      fullScreen
-      onClose={() => setViewStory(null)}
-      slotProps={{ paper: { sx: { bgcolor: "rgba(0,0,0,.96)", color: "common.white" } } }}
-    >
-      <LinearProgress
-        variant="determinate"
-        value={viewStory.media_type === "video" ? 0 : Math.min(progress, 100)}
-        sx={{ position: "absolute", zIndex: 2, top: 18, left: 24, right: 24, width: "auto", height: 4, borderRadius: 2, bgcolor: "rgba(255,255,255,.2)", "& .MuiLinearProgress-bar": { bgcolor: "common.white" } }}
-      />
-
-      <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", position: "absolute", zIndex: 2, top: 40, left: 24, right: 24 }}>
-        <Stack direction="row" spacing={1.25} sx={{ alignItems: "center", py: 0.75, pl: 0.75, pr: 2, borderRadius: 99, bgcolor: "rgba(0,0,0,.35)" }}>
-          <Avatar src={author?.profile_picture || undefined} alt={author?.full_name} sx={{ width: 40, height: 40, border: 2, borderColor: "rgba(255,255,255,.25)" }}>
-            {author?.full_name?.charAt(0)}
-          </Avatar>
-          <Stack>
-            <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
-              <Typography variant="body2" sx={{ fontWeight: 800 }}>
-                {author?.full_name}
-              </Typography>
-              <BadgeCheck size={16} />
-            </Stack>
-            <Typography variant="caption" sx={{ opacity: 0.65 }}>
-              {viewStory.createdAt ? moment(viewStory.createdAt).fromNow() : moment().fromNow()}
-            </Typography>
-          </Stack>
-        </Stack>
-        <IconButton onClick={() => setViewStory(null)} aria-label="Close story" sx={{ color: "common.white", bgcolor: "rgba(255,255,255,.12)", "&:hover": { bgcolor: "rgba(255,255,255,.2)" } }}>
-          <X size={24} />
-        </IconButton>
-      </Stack>
-
-      <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", px: 2, py: 8 }}>
+    <Dialog open fullScreen onClose={onClose} slotProps={{ paper: { sx: { bgcolor: "#000000" } } }}>
+      <Box sx={{ height: "100dvh", display: "grid", placeItems: "center", p: { xs: 0, sm: 2 } }}>
         <Box
+          ref={frameRef}
           sx={{
-            height: { xs: "min(76vh, 720px)", sm: "min(84vh, 800px)" },
+            position: "relative",
+            height: { xs: "100dvh", sm: "min(94dvh, 900px)" },
+            width: { xs: "100%", sm: "auto" },
+            aspectRatio: { sm: "9 / 16" },
             maxWidth: "100%",
-            aspectRatio: "9 / 16",
             overflow: "hidden",
-            borderRadius: { xs: 2, sm: 4 },
-            bgcolor: viewStory.media_type === "text" ? viewStory.background_color : "common.black",
-            border: "1px solid rgba(255,255,255,.08)",
-            display: "grid",
-            placeItems: "center",
+            borderRadius: { xs: 0, sm: 3 },
+            bgcolor: story.background_color || "common.black",
           }}
         >
-          {viewStory.media_type === "text" ? (
-            <Typography variant="h4" sx={{ p: 4, color: "common.white", fontWeight: 800, textAlign: "center" }}>
-              {viewStory.content}
-            </Typography>
-          ) : (
+          {story.media_type !== "text" && story.media_url && (
             <Box
-              component={viewStory.media_type === "image" ? "img" : "video"}
-              src={viewStory.media_url}
-              alt={viewStory.media_type === "image" ? "Story" : undefined}
-              autoPlay={viewStory.media_type === "video" ? true : undefined}
-              playsInline={viewStory.media_type === "video" ? true : undefined}
-              controls={viewStory.media_type === "video" ? true : undefined}
-              onEnded={viewStory.media_type === "video" ? () => setViewStory(null) : undefined}
-              sx={{ width: "100%", height: "100%", objectFit: "contain" }}
+              component={story.media_type === "image" ? "img" : "video"}
+              src={story.media_url}
+              alt=""
+              autoPlay={story.media_type === "video" ? true : undefined}
+              playsInline={story.media_type === "video" ? true : undefined}
+              onEnded={story.media_type === "video" ? goNext : undefined}
+              // Cover, not contain: the story fills its frame edge to edge
+              // instead of sitting inside letterbox bars.
+              sx={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
             />
+          )}
+
+          {/* Text-only stories predate the overlay composer and still render. */}
+          {story.media_type === "text" && story.content && (
+            <Typography
+              sx={{
+                position: "absolute",
+                inset: 0,
+                display: "grid",
+                placeItems: "center",
+                p: 4,
+                color: "common.white",
+                fontSize: 30,
+                fontWeight: 800,
+                textAlign: "center",
+              }}
+            >
+              {story.content}
+            </Typography>
+          )}
+
+          <StoryOverlayLayer overlays={overlays} frameWidth={frameWidth} />
+
+          {/* Progress bars — one per story in the group */}
+          <Stack direction="row" spacing={0.5} sx={{ position: "absolute", top: 12, left: 10, right: 10, zIndex: 3 }}>
+            {stories.map((entry, position) => (
+              <Box
+                key={entry._id || position}
+                sx={{ flex: 1, height: 2.5, borderRadius: 1, overflow: "hidden", bgcolor: "rgba(255,255,255,.35)" }}
+              >
+                <Box
+                  sx={{
+                    height: "100%",
+                    bgcolor: "common.white",
+                    width:
+                      position < index ? "100%" : position === index ? `${Math.min(progress, 100)}%` : "0%",
+                  }}
+                />
+              </Box>
+            ))}
+          </Stack>
+
+          {/* Tap zones */}
+          <Box
+            onClick={goPrev}
+            sx={{ position: "absolute", top: 0, bottom: 90, left: 0, width: "32%", zIndex: 2, cursor: "pointer" }}
+          />
+          <Box
+            onClick={goNext}
+            sx={{ position: "absolute", top: 0, bottom: 90, left: "32%", right: 0, zIndex: 2, cursor: "pointer" }}
+          />
+
+          {/* Header */}
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ position: "absolute", top: 26, left: 12, right: 12, alignItems: "center", zIndex: 4 }}
+          >
+            <Stack
+              direction="row"
+              spacing={1.25}
+              onClick={() => openProfile(authorId)}
+              sx={{ flex: 1, minWidth: 0, alignItems: "center", cursor: "pointer" }}
+            >
+              <Avatar
+                src={author?.profile_picture || undefined}
+                alt={author?.full_name}
+                sx={{ width: 38, height: 38, border: 2, borderColor: "common.white" }}
+              >
+                {author?.full_name?.charAt(0)}
+              </Avatar>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography noWrap sx={{ color: "common.white", fontSize: 14.5, fontWeight: 700 }}>
+                  {author?.full_name || author?.username || "MotionMeet"}
+                </Typography>
+                <Typography sx={{ color: "rgba(255,255,255,.75)", fontSize: 12 }}>
+                  {moment(story.createdAt).fromNow()}
+                </Typography>
+              </Box>
+            </Stack>
+
+            {isOwnStory && (
+              <IconButton onClick={removeStory} aria-label={t("story.delete", "Delete story")} sx={{ color: "common.white" }}>
+                <DeleteOutlineRounded />
+              </IconButton>
+            )}
+            <IconButton onClick={onClose} aria-label={t("common.close", "Close")} sx={{ color: "common.white" }}>
+              <CloseRounded />
+            </IconButton>
+          </Stack>
+
+          {/* Author: how many people opened it. Everyone else: reply and react. */}
+          {isOwnStory ? (
+            <Stack
+              onClick={openViewers}
+              sx={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                bottom: 14,
+                alignItems: "center",
+                zIndex: 4,
+                cursor: "pointer",
+                color: "common.white",
+              }}
+            >
+              <KeyboardArrowUpRounded />
+              <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>
+                {typeof story.view_count === "number"
+                  ? t("stories.viewers_count", "{{count}} views", { count: story.view_count })
+                  : t("feed.swipe_up_viewers", "See who viewed this")}
+              </Typography>
+            </Stack>
+          ) : (
+            <Stack
+              direction="row"
+              spacing={0.75}
+              sx={{ position: "absolute", left: 12, right: 12, bottom: 14, alignItems: "center", zIndex: 4 }}
+            >
+              <Box
+                sx={{
+                  flex: 1,
+                  minWidth: 0,
+                  height: 46,
+                  px: 2.25,
+                  display: "flex",
+                  alignItems: "center",
+                  borderRadius: 23,
+                  border: "1.2px solid rgba(255,255,255,.6)",
+                }}
+              >
+                <InputBase
+                  value={reply}
+                  onChange={(event) => setReply(event.target.value)}
+                  onFocus={() => setReplyFocused(true)}
+                  onBlur={() => setReplyFocused(false)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") void sendReply();
+                  }}
+                  placeholder={t("story.reply_placeholder", "Send a message...")}
+                  inputProps={{ maxLength: 500, "aria-label": t("story.reply_placeholder", "Send a message...") }}
+                  sx={{ width: "100%", color: "common.white", fontSize: 14.5, "& input::placeholder": { color: "rgba(255,255,255,.65)", opacity: 1 } }}
+                />
+              </Box>
+
+              {reply.trim() ? (
+                <IconButton
+                  onClick={() => void sendReply()}
+                  disabled={sending}
+                  aria-label={t("story.send_reply", "Send")}
+                  sx={{ color: "common.white" }}
+                >
+                  {sending ? <CircularProgress size={20} color="inherit" /> : <SendRounded />}
+                </IconButton>
+              ) : (
+                <>
+                  <IconButton
+                    onClick={() => setReply((current) => `${current}❤️`)}
+                    aria-label={t("story.react", "Like")}
+                    sx={{ color: "common.white" }}
+                  >
+                    <FavoriteBorderRounded />
+                  </IconButton>
+                  <IconButton
+                    onClick={() => {
+                      if (!authorId) return;
+                      onClose();
+                      navigate(`/messages/${authorId}`);
+                    }}
+                    aria-label={t("story.send_message", "Send message")}
+                    sx={{ color: "common.white" }}
+                  >
+                    <SendRounded sx={{ transform: "rotate(-20deg)" }} />
+                  </IconButton>
+                </>
+              )}
+            </Stack>
           )}
         </Box>
       </Box>
 
-      {/* View receipts are the author's data only, so the control is theirs. */}
-      {isOwnStory && (
-        <Stack sx={{ position: "absolute", bottom: 24, left: 0, right: 0, alignItems: "center" }}>
-          <Button
-            startIcon={<Eye size={17} />}
-            onClick={() => setViewersOpen(true)}
-            sx={{ color: "common.white", bgcolor: "rgba(255,255,255,.14)", "&:hover": { bgcolor: "rgba(255,255,255,.22)" } }}
-          >
-            {t("stories.viewers_count", "{{count}} views", { count: viewStory.view_count ?? 0 })}
-          </Button>
-        </Stack>
-      )}
-
-      <Drawer anchor="bottom" open={viewersOpen} onClose={() => setViewersOpen(false)}>
-        <Box sx={{ p: 2, maxHeight: "60vh", overflowY: "auto" }}>
-          <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 800 }}>
-            {t("stories.viewers", "Viewers")}
+      {/* Audience sheet — deliberately over two thirds of the screen so the list
+          is readable instead of a strip at the bottom. */}
+      <Drawer
+        anchor="bottom"
+        open={viewersOpen}
+        onClose={() => setViewersOpen(false)}
+        slotProps={{ paper: { sx: { height: "72dvh", borderTopLeftRadius: 20, borderTopRightRadius: 20 } } }}
+      >
+        <Box sx={{ p: 2, height: "100%", overflowY: "auto" }}>
+          <Box sx={{ width: 40, height: 4, mx: "auto", mb: 1.5, borderRadius: 2, bgcolor: "divider" }} />
+          <Typography sx={{ mb: 1.5, fontWeight: 800 }}>
+            {t("feed.story_viewers", "Viewed by")}
+            {viewers.length ? ` · ${viewers.length}` : ""}
           </Typography>
-          {viewers.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
-              {t("stories.no_viewers", "Nobody has seen this story yet.")}
+
+          {viewersLoading ? (
+            <Stack sx={{ alignItems: "center", py: 5 }}>
+              <CircularProgress size={24} />
+            </Stack>
+          ) : viewers.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: "center" }}>
+              {t("feed.story_no_viewers", "No one has viewed this yet")}
             </Typography>
           ) : (
             viewers.map((entry) => (
-              <Stack key={entry.user._id} direction="row" spacing={1.5} sx={{ py: 1, alignItems: "center" }}>
-                <Avatar src={entry.user.profile_picture || undefined} alt={entry.user.full_name} sx={{ width: 36, height: 36 }}>
+              <Stack
+                key={`${entry.user._id}-${entry.viewedAt}`}
+                direction="row"
+                spacing={1.5}
+                onClick={() => openProfile(entry.user._id)}
+                sx={{ py: 1, alignItems: "center", cursor: "pointer", borderRadius: 2, "&:hover": { bgcolor: "action.hover" } }}
+              >
+                <Avatar src={entry.user.profile_picture || undefined} alt={entry.user.full_name} sx={{ width: 44, height: 44 }}>
                   {entry.user.full_name?.charAt(0)}
                 </Avatar>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>{entry.user.full_name}</Typography>
+                  <Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>
+                    {entry.user.full_name}
+                  </Typography>
                   <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
                     @{entry.user.username} · {moment(entry.viewedAt).fromNow()}
                   </Typography>
                 </Box>
+                <ChevronRightRounded fontSize="small" color="disabled" />
               </Stack>
             ))
           )}

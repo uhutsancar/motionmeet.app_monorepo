@@ -1,17 +1,34 @@
-<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="MotionMeet">
+  <title>MotionMeet</title>
   <defs>
-    <linearGradient id="tile" x1="8" y1="6" x2="55" y2="58" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#18213A"/>
-      <stop offset="1" stop-color="#0B1020"/>
+    <linearGradient id="mmTile" x1="40" y1="0" x2="460" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7215EA"/>
+      <stop offset=".45" stop-color="#2A0D7C"/>
+      <stop offset="1" stop-color="#08061F"/>
     </linearGradient>
-    <linearGradient id="pulse" x1="15" y1="16" x2="50" y2="48" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#C8F768"/>
-      <stop offset="0.5" stop-color="#8B7CFF"/>
-      <stop offset="1" stop-color="#FF7468"/>
+    <linearGradient id="mmLeft" x1="104" y1="120" x2="240" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F86FE8"/>
+      <stop offset="1" stop-color="#9757FB"/>
+    </linearGradient>
+    <linearGradient id="mmRight" x1="408" y1="120" x2="272" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6B8CFF"/>
+      <stop offset="1" stop-color="#8F62FB"/>
+    </linearGradient>
+    <linearGradient id="mmPulse" x1="180" y1="384" x2="332" y2="258" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#28E7F7"/>
+      <stop offset="1" stop-color="#0C9BFF"/>
     </linearGradient>
   </defs>
-  <rect x="3" y="3" width="58" height="58" rx="18" fill="url(#tile)"/>
-  <rect x="3.75" y="3.75" width="56.5" height="56.5" rx="17.25" stroke="white" stroke-opacity=".12" stroke-width="1.5"/>
-  <path d="M16.5 39.5V25.25C16.5 20.69 20.19 17 24.75 17C29.31 17 33 20.69 33 25.25V38.75C33 43.31 36.69 47 41.25 47C45.81 47 49.5 43.31 49.5 38.75V24.5" stroke="url(#pulse)" stroke-width="6.5" stroke-linecap="round"/>
-  <circle cx="49.5" cy="17.5" r="3.5" fill="#C8F768"/>
+
+  <rect width="512" height="512" rx="118" fill="url(#mmTile)"/>
+
+  <g fill="none" stroke-width="50" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M126 198 100 348q-4 44 40 46 40 2 58-34l40-70Z" stroke="url(#mmLeft)"/>
+    <path d="M386 198l26 150q4 44-40 46-40 2-58-34l-40-70Z" stroke="url(#mmRight)"/>
+  </g>
+  <circle cx="136" cy="146" r="38" fill="url(#mmLeft)"/>
+  <circle cx="376" cy="146" r="38" fill="url(#mmRight)"/>
+
+  <path d="M180 370h26l16-26 16 40 18-122 18 122 16-40 16 26h26"
+        fill="none" stroke="url(#mmPulse)" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

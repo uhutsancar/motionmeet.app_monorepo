@@ -6,6 +6,7 @@
   "packageManager": "pnpm@11.10.0",
   "scripts": {
     "dev": "turbo run dev --parallel",
+    "brand": "node scripts/generate-brand-assets.mjs",
     "local:ip": "node scripts/local-network.mjs ip",
     "dev:local": "node scripts/local-network.mjs all",
     "dev:local:backend": "node scripts/local-network.mjs backend",
@@ -20,15 +21,16 @@
     "docker:prod": "docker compose -f docker-compose.prod.yml up -d --build",
     "dev:backend": "turbo run dev --filter=@motionmeet/backend",
     "dev:web": "turbo run dev --filter=@motionmeet/web",
-    "dev:mobile": "cd packages/mobile && pnpm run dev",
-    "dev:mobile:clean": "cd packages/mobile && pnpm run dev -c"
+    "dev:mobile": "node scripts/local-network.mjs mobile lan",
+    "dev:mobile:usb": "node scripts/local-network.mjs mobile usb",
+    "dev:mobile:clean": "node scripts/local-network.mjs mobile lan clear"
   },
   "devDependencies": {
+    "sharp": "^0.35.3",
     "turbo": "^2.5.0",
     "typescript": "^5.8.0"
   },
   "engines": {
     "node": ">=22.22.0"
-  },
-  "dependencies": {}
+  }
 }

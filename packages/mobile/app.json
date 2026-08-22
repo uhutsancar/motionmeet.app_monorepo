@@ -9,12 +9,12 @@
     "locales": {
       "tr": "./locales/tr.json"
     },
-    "icon": "./assets/motionmeet-icon-v2.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/motionmeet-icon-v2.png",
+      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#100A45"
+      "backgroundColor": "#0B0630"
     },
     "ios": {
       "supportsTablet": true,
@@ -32,12 +32,12 @@
       ],
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/motionmeet-icon-v2.png",
-        "backgroundColor": "#100A45"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B0630"
       }
     },
     "web": {
-      "favicon": "./assets/motionmeet-icon-v2.png"
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-localization",

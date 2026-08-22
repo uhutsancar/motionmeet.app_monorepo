@@ -8,7 +8,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import { MessageSquare } from "lucide-react";
+import { Send as MessageIcon } from "lucide-react";
 import moment from "moment";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -122,7 +122,7 @@ const RecentMessages = () => {
                   justifyContent: "center",
                 }}
               >
-                <MessageSquare size={16} />
+                <MessageIcon size={16} />
               </Stack>
               <Typography variant="caption" color="text.secondary">
                 {t("chat.no_recent_messages", "No recent messages yet")}

@@ -12,11 +12,13 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { Link as RouterLink, useNavigate } from "react-router";
 import AuthShell from "~/components/AuthShell";
 import { useAuthContext } from "../context/AuthProvider";
 
 const Login = () => {
+  const { t } = useTranslation();
   const { login } = useAuthContext();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({ email: "", password: "" });
@@ -32,7 +34,7 @@ const Login = () => {
     event.preventDefault();
     setError("");
     if (!formData.email.trim() || !formData.password) {
-      setError("Enter your email address and password.");
+      setError(t("auth.error_credentials"));
       return;
     }
     setLoading(true);
@@ -42,7 +44,7 @@ const Login = () => {
       if (result.success) {
         navigate("/feed");
       } else {
-        setError(result.message || "We could not sign you in. Please check your details.");
+        setError(result.message || t("auth.error_signin_failed"));
       }
     } finally {
       setLoading(false);
@@ -51,16 +53,16 @@ const Login = () => {
 
   return (
     <AuthShell
-      eyebrow="Welcome back"
-      title="Ready for your next move?"
-      description="Sign in to continue your workouts, progress and conversations."
+      eyebrow={t("auth.eyebrow_signin")}
+      title={t("auth.title_signin")}
+      description={t("auth.signin_description")}
     >
       {error && <Alert severity="error" sx={{ mb: 2.5, borderRadius: 3 }}>{error}</Alert>}
 
       <Box component="form" onSubmit={handleSubmit} noValidate>
         <Stack spacing={2.25}>
           <TextField
-            label="Email address"
+            label={t("auth.email")}
             type="email"
             fullWidth
             required
@@ -79,7 +81,7 @@ const Login = () => {
             }}
           />
           <TextField
-            label="Password"
+            label={t("auth.password")}
             type={showPassword ? "text" : "password"}
             fullWidth
             required
@@ -96,7 +98,7 @@ const Login = () => {
                 endAdornment: (
                   <InputAdornment position="end">
                     <IconButton
-                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      aria-label={showPassword ? t("auth.hide_password") : t("auth.show_password")}
                       edge="end"
                       onClick={() => setShowPassword((visible) => !visible)}
                     >
@@ -109,19 +111,19 @@ const Login = () => {
           />
           <Stack direction="row" sx={{ alignItems: "center", justifyContent: "flex-end", mt: -0.5 }}>
             <Link component={RouterLink} to="/forgot-password" underline="hover" variant="body2" sx={{ fontWeight: 800 }}>
-              Forgot password?
+              {t("auth.forgot_password")}
             </Link>
           </Stack>
           <Button type="submit" variant="contained" size="large" fullWidth disabled={loading} sx={{ minHeight: 52 }}>
-            {loading ? "Signing in…" : "Sign in"}
+            {loading ? t("auth.signing_in") : t("auth.sign_in")}
           </Button>
         </Stack>
       </Box>
 
       <Typography variant="body2" align="center" color="text.secondary" sx={{ mt: 3 }}>
-        New to MotionMeet?{" "}
+        {t("auth.new_here")}{" "}
         <Link component={RouterLink} to="/signup" underline="hover" sx={{ fontWeight: 800 }}>
-          Create an account
+          {t("auth.create_an_account")}
         </Link>
       </Typography>
     </AuthShell>

@@ -15,7 +15,7 @@ import {
   Typography,
   useTheme,
 } from "@mui/material";
-import { Calendar as CalendarIcon, Dumbbell, LineChart, Lock, MapPin, MessageCircle, Ruler, Share2, Target, TrendingUp, Trophy } from "lucide-react";
+import { Calendar as CalendarIcon, Dumbbell, LineChart, Lock, MapPin, Ruler, Send as MessageIcon, Share2, Target, TrendingUp, Trophy } from "lucide-react";
 import moment from "moment";
 import axios from "axios";
 import { useEffect, useRef, useState } from "react";
@@ -404,7 +404,7 @@ const Profile = () => {
               {publicProfile?.canMessage !== false && (
                 <Button
                   variant="outlined"
-                  startIcon={<MessageCircle size={16} />}
+                  startIcon={<MessageIcon size={16} />}
                   onClick={() => navigate(`/messages/${publicProfile?._id}`)}
                 >
                   {t("common.message_action", "Message")}

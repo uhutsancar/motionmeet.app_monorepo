@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="MotionMeet">
+  <title>MotionMeet</title>
+  <defs>
+    <linearGradient id="mmgLeft" x1="104" y1="120" x2="240" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F86FE8"/>
+      <stop offset="1" stop-color="#9757FB"/>
+    </linearGradient>
+    <linearGradient id="mmgRight" x1="408" y1="120" x2="272" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6B8CFF"/>
+      <stop offset="1" stop-color="#8F62FB"/>
+    </linearGradient>
+    <linearGradient id="mmgPulse" x1="180" y1="384" x2="332" y2="258" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#28E7F7"/>
+      <stop offset="1" stop-color="#0C9BFF"/>
+    </linearGradient>
+  </defs>
+  <g fill="none" stroke-width="50" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M126 198 100 348q-4 44 40 46 40 2 58-34l40-70Z" stroke="url(#mmgLeft)"/>
+    <path d="M386 198l26 150q4 44-40 46-40 2-58-34l-40-70Z" stroke="url(#mmgRight)"/>
+  </g>
+  <circle cx="136" cy="146" r="38" fill="url(#mmgLeft)"/>
+  <circle cx="376" cy="146" r="38" fill="url(#mmgRight)"/>
+  <path d="M180 370h26l16-26 16 40 18-122 18 122 16-40 16 26h26"
+        fill="none" stroke="url(#mmgPulse)" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

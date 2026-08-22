@@ -570,12 +570,9 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
             </Surface>
           }
         />
-        <Surface style={[s.connBadge, { backgroundColor: connected ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)' }]} elevation={0}>
-          <View style={[s.connDot, { backgroundColor: connected ? '#22c55e' : '#ef4444' }]} />
-          <Text style={[s.connText, { color: connected ? '#22c55e' : '#ef4444' }]}>
-            {connected ? 'LIVE' : 'OFF'}
-          </Text>
-        </Surface>
+        {/* No socket badge here: whether the transport is up is not something a
+            member acts on, and the row under the name already says whether the
+            other person is online. */}
       </Appbar.Header>
 
       <KeyboardResponsiveView
@@ -690,13 +687,6 @@ const getStyles = (theme: MotionTheme, _paperTheme: MD3Theme, _insets: EdgeInset
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   headerName: { fontSize: 17, fontWeight: '800', color: theme.text, letterSpacing: -0.5 },
   headerStatus: { fontSize: 12, color: theme.textMuted, marginTop: 1, fontWeight: '500' },
-  connBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10,
-    marginRight: 16,
-  },
-  connDot: { width: 7, height: 7, borderRadius: 3.5 },
-  connText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   messageList: { width: '100%', maxWidth: MESSAGE_LIST_MAX_WIDTH, alignSelf: 'center' },
   msgList: {

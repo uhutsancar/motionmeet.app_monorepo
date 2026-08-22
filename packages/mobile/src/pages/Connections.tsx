@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActivityIndicator, Appbar, Button, Chip, Divider, Surface, Text, TouchableRipple } from 'react-native-paper';
 import { useAuthContext } from "../context/AuthProvider";
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { MESSAGE_ICON } from '../config/icons';
 import { useTranslation } from 'react-i18next';
 import { fetchConnections } from '../features/connections/connectionsSlice';
 import {
@@ -248,7 +249,7 @@ const Connections = ({ navigation, route }: ConnectionsProps) => {
             accessibilityLabel={`${t('common.message_action', 'Send message')}: ${user.username}`}
             borderless
           >
-            <Ionicons name="chatbubble-outline" size={16} color={theme.primary} />
+            <Ionicons name={MESSAGE_ICON} size={16} color={theme.primary} />
           </TouchableRipple>
         )}
         {currentTab === 'Requests' && (

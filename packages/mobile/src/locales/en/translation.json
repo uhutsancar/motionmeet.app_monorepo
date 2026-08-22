@@ -31,11 +31,42 @@
         "leave": "Leave",
         "edit": "Edit",
         "confirm": "Confirm",
-        "remove": "Remove"
+        "remove": "Remove",
+        "add": "Add",
+        "clear": "Clear"
     },
     "auth": {
         "session_expired": "Your session has expired.",
-        "password": "Password"
+        "password": "Password",
+        "tagline": "MOVE WITH PURPOSE",
+        "eyebrow_signin": "WELCOME BACK",
+        "eyebrow_signup": "YOUR NEXT CHAPTER",
+        "title_signin": "Ready for your next move?",
+        "title_signup": "Build momentum that lasts.",
+        "subtitle_signin": "Your sessions, progress and people are waiting.",
+        "subtitle_signup": "Bring the work and the people behind it into one place.",
+        "sign_in": "Sign in",
+        "create_account": "Create account",
+        "full_name": "Full name",
+        "username": "Username",
+        "email": "Email address",
+        "password_helper": "Use at least 10 characters.",
+        "forgot_password": "Forgot password?",
+        "legal": "By continuing, you agree to the MotionMeet Terms and Privacy Policy.",
+        "error_missing_title": "Missing details",
+        "error_missing_signin": "Please enter your email and password.",
+        "error_missing_signup": "Please complete every field.",
+        "error_email_title": "Invalid email",
+        "error_email_body": "Enter a valid email address.",
+        "error_username_title": "Invalid username",
+        "error_username_body": "Use 3-30 lowercase letters, numbers, dots, underscores or hyphens.",
+        "error_name_title": "Invalid name",
+        "error_name_body": "Full name must be between 2 and 100 characters.",
+        "error_password_title": "Invalid password",
+        "error_password_body": "Password must be between 10 and 72 UTF-8 bytes.",
+        "error_failed_title": "Authentication failed",
+        "error_failed_body": "Please try again.",
+        "back_home": "Back home"
     },
     "tabs": {
         "feed": "Feed",
@@ -43,7 +74,9 @@
         "exercises": "Exercises",
         "profile": "Profile",
         "messages": "Messages",
-        "settings": "Settings"
+        "settings": "Settings",
+        "home": "Home",
+        "explore": "Explore"
     },
     "routines": {
         "title": "Routines",
@@ -760,5 +793,36 @@
         "intro": "MotionMeet uses open data from the projects below. Their licences require these notices to be shown.",
         "locations_title": "Place data",
         "locations_body": "Country, region and city names used by the location picker come from the Countries States Cities Database, licensed under the Open Database License (ODbL) v1.0."
+    },
+    "story": {
+        "done": "Done",
+        "align": "Alignment",
+        "text_background": "Text background",
+        "add_text": "Add text",
+        "add_location": "Add location",
+        "location_placeholder": "Type a place",
+        "location_manual_hint": "No nearby places found — you can type a place name instead.",
+        "change_media": "Change photo",
+        "drag_to_delete": "Drag here to delete",
+        "delete": "Delete story",
+        "delete_failed": "The story could not be deleted",
+        "previous": "Previous story",
+        "next": "Next story",
+        "reply_placeholder": "Send a message...",
+        "reply_sent": "Reply sent",
+        "reply_failed": "The reply could not be sent",
+        "send_reply": "Send",
+        "react": "Like",
+        "send_message": "Send message"
+    },
+    "explore": {
+        "search_placeholder": "Search",
+        "search_hint": "Type at least two letters to search.",
+        "no_results": "No results",
+        "no_results_hint": "Check the username or the name.",
+        "empty": "Nothing to explore yet",
+        "empty_hint": "Share the first photo, or follow a few people.",
+        "open_post": "Open post",
+        "post_title": "Post"
     }
 }

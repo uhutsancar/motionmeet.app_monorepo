@@ -11,6 +11,7 @@ import {
   uploadAndReserve,
 } from "../services/mediaUploadService.js";
 import { parsePagination } from "../utils/pagination.js";
+import { parseStoryOverlays } from "../utils/storyOverlays.js";
 
 export const addUserStory: RequestHandler = async (req, res, next) => {
   try {
@@ -50,6 +51,13 @@ export const addUserStory: RequestHandler = async (req, res, next) => {
 
     if (!isOptionalString(content, 2000) || !isOptionalString(background_color, 32)) {
       return res.status(400).json({ success: false, message: "Invalid story content" });
+    }
+
+    // Multipart bodies arrive as strings, so the overlays field is parsed and
+    // re-derived here rather than trusted; see parseStoryOverlays.
+    const overlays = parseStoryOverlays(req.body?.overlays);
+    if (!overlays) {
+      return res.status(400).json({ success: false, message: "Invalid story overlays" });
     }
 
     const inferredMediaType = media
@@ -109,6 +117,7 @@ export const addUserStory: RequestHandler = async (req, res, next) => {
           media_key: mediaKey,
           media_type: resolvedMediaType,
           background_color: background_color?.trim() || "",
+          overlays,
         },
         {
           quotaLimit,

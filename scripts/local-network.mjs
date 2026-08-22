@@ -114,7 +114,16 @@ const listConnectedAndroidDevices = (adb) => {
     .filter(Boolean);
 };
 
-const mobileTransport = (process.env.MOTIONMEET_MOBILE_TRANSPORT || "lan").trim().toLowerCase();
+// Default to "auto": an attached Android device gets adb reverse and loopback
+// URLs, which works regardless of whether the phone shares the machine's Wi-Fi
+// and does not depend on an inbound firewall rule for the Metro port. Without a
+// device attached this still falls back to LAN, so iOS/Expo Go over Wi-Fi is
+// unaffected. Force either side with MOTIONMEET_MOBILE_TRANSPORT=lan|usb.
+// A second argument wins over the environment variable, so package.json scripts
+// can pin a transport without needing cross-env on Windows.
+const mobileTransport = (process.argv[3] || process.env.MOTIONMEET_MOBILE_TRANSPORT || "auto")
+  .trim()
+  .toLowerCase();
 if (!["auto", "lan", "usb"].includes(mobileTransport)) {
   throw new Error("MOTIONMEET_MOBILE_TRANSPORT must be auto, lan or usb.");
 }
@@ -176,7 +185,14 @@ const serviceDefinitions = {
   },
   mobile: {
     port: expoPort,
-    args: ["--filter", "@motionmeet/mobile", "exec", "expo", "start", useUsbTransport ? "--localhost" : "--lan", "--port", String(expoPort)],
+    args: [
+      "--filter", "@motionmeet/mobile", "exec", "expo", "start",
+      useUsbTransport ? "--localhost" : "--lan",
+      "--port", String(expoPort),
+      // A fourth argument of "clear" starts Expo with an empty cache, which is
+      // what a stale manifest or a renamed asset needs.
+      ...(process.argv[4] === "clear" ? ["--clear"] : []),
+    ],
     environment: {
       EXPO_PUBLIC_API_URL: mobileBackendUrl,
       EXPO_PUBLIC_WEB_URL: mobileWebUrl,

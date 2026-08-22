@@ -64,6 +64,20 @@ config.resolver.blockList = [
   new RegExp(
     `^${workspaceRoot}[\\\\/](\\.git|\\.github|\\.turbo|\\.pnpm-store|scripts|docs|tools)([\\\\/]|$)`,
   ),
+  // Gradle and CMake write their output *inside* the node_modules copy of every
+  // native module they build, so `expo run:android` leaves well over a gigabyte
+  // of build artifacts in the pnpm store - expo-modules-core/android/build
+  // alone is 1.1 GB. Metro crawled and watched all of it on every start.
+  /[\\/]android[\\/](build|\.cxx|\.gradle)([\\/]|$)/,
+  /[\\/]ios[\\/](build|Pods)([\\/]|$)/,
+  // react-native ships its iOS/Android sources next to its JS. Libraries/ and
+  // src/ hold the code the bundle needs; none of these do.
+  /[\\/]react-native[\\/](ReactAndroid|ReactCommon|React|sdks|template|third-party-podspecs)([\\/]|$)/,
+  // The debugger UI is served off disk by @react-native/dev-middleware and the
+  // gradle plugin only ever runs under Gradle. Both are blocked one level in,
+  // so each package.json stays resolvable and only the bulk disappears.
+  /[\\/]@react-native[\\/]debugger-frontend[\\/]dist([\\/]|$)/,
+  /[\\/]@react-native[\\/]gradle-plugin[\\/](build|src)([\\/]|$)/,
 ];
 
 // Expo SDK 54 resolves the workspace root and the app-relative entry point for
@@ -72,5 +86,68 @@ config.resolver.blockList = [
 
 config.resolver.unstable_enableSymlinks = true;
 config.resolver.unstable_enablePackageExports = true;
+
+/**
+ * Crawl node_modules, but do not watch it.
+ *
+ * Without watchman installed - and it is not, on any of our machines - Metro
+ * falls back to a watcher that opens one `fs.watch` handle per directory. The
+ * pnpm store under the workspace root is ~11k directories after the blockList
+ * above, and on Windows each handle costs a couple of milliseconds, so simply
+ * starting the watcher took 30-60 s. Past 240 s metro-file-map gives up with
+ * "Failed to start watch mode." and the bundler never comes up at all.
+ *
+ * Nothing in node_modules changes while the dev server runs; it only changes on
+ * `pnpm install`, which means a restart anyway. So the tree still gets crawled
+ * (the resolver needs every file in its map) and is simply left unwatched.
+ * Measured on this workspace: watcher startup 29.9 s -> 1.7 s.
+ *
+ * Set METRO_WATCH_NODE_MODULES=1 to opt back in when editing a dependency in
+ * place, e.g. while debugging a patch-package change.
+ *
+ * `roots` is swapped only for the duration of the watch() call because crawl()
+ * has already run by then and reads the same array.
+ */
+if (process.env.METRO_WATCH_NODE_MODULES !== '1') {
+  try {
+    // pnpm keeps metro-file-map out of this package's node_modules, so follow
+    // the same dependency chain Metro itself resolves through.
+    let req = require;
+    for (const pkg of ['expo', '@expo/metro-config', 'metro']) {
+      req = require('node:module').createRequire(req.resolve(`${pkg}/package.json`));
+    }
+    const { Watcher } = req('metro-file-map/private/Watcher');
+    const originalWatch = Watcher.prototype.watch;
+    if (typeof originalWatch !== 'function') {
+      throw new Error('Watcher.prototype.watch is missing');
+    }
+    const isNodeModulesRoot = (root) => /[\\/]node_modules$/.test(root);
+
+    Watcher.prototype.watch = function watch(onChange) {
+      const allRoots = this._options.roots;
+      const restore = () => {
+        this._options.roots = allRoots;
+      };
+      this._options.roots = allRoots.filter((root) => !isNodeModulesRoot(root));
+      return originalWatch.call(this, onChange).then(
+        (result) => {
+          restore();
+          return result;
+        },
+        (error) => {
+          restore();
+          throw error;
+        },
+      );
+    };
+  } catch (error) {
+    // A Metro upgrade can move this internal. Losing the optimisation is a slow
+    // dev server; throwing here would be no dev server at all.
+    console.warn(
+      `metro.config.js: could not skip watching node_modules (${error.message}). ` +
+        'Startup will be slower.',
+    );
+  }
+}
 
 module.exports = config;

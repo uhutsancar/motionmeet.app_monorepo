@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Image, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { MESSAGE_ICON_PAPER } from '../config/icons';
 import {
   ActivityIndicator,
   Appbar,
@@ -354,7 +355,7 @@ const Profile = ({ route, navigation }: ProfileProps) => {
               </Button>
               <Button
                 mode="outlined"
-                icon="message-outline"
+                icon={MESSAGE_ICON_PAPER}
                 onPress={() => {
                   if (!canMessage) {
                     showInfo(

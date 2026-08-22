@@ -1,4 +1,4 @@
-import type { Story, StoryViewer } from "@motionmeet/shared";
+import type { Story, StoryOverlay, StoryViewer } from "@motionmeet/shared";
 import { sql } from "kysely";
 import { database, withTransaction } from "../configs/database.js";
 import { publicUser } from "../repositories/postRepository.js";
@@ -10,13 +10,13 @@ import { commitReservedUploads } from "./mediaUploadService.js";
 import * as quotaService from "./quotaService.js";
 
 interface StoryAccess { id: string; _id: string; user: string; media_url: string; media_key: string }
-interface NewStory { user: string; operationId: string; content: string; media_url: string; media_key: string; media_type: "text" | "image" | "video"; background_color: string }
+interface NewStory { user: string; operationId: string; content: string; media_url: string; media_key: string; media_type: "text" | "image" | "video"; background_color: string; overlays: StoryOverlay[] }
 
-const hydrate = async (rows: Array<{ id: string; user_id: string; operation_id: string | null; content: string; media_url: string; media_key: string; media_type: "text" | "image" | "video"; background_color: string; expires_at: Date; created_at: Date; updated_at: Date }>): Promise<Story[]> => {
+const hydrate = async (rows: Array<{ id: string; user_id: string; operation_id: string | null; content: string; media_url: string; media_key: string; media_type: "text" | "image" | "video"; background_color: string; overlays: StoryOverlay[] | null; expires_at: Date; created_at: Date; updated_at: Date }>): Promise<Story[]> => {
   const ids = [...new Set(rows.map((row) => row.user_id))];
   const users = ids.length ? await database.selectFrom("users").select(["id", "full_name", "username", "profile_picture_url"]).where("id", "in", ids).execute() : [];
   const byId = new Map(users.map((user) => [user.id, publicUser(user.id, user.full_name, user.username, user.profile_picture_url)]));
-  return rows.map((row) => ({ id: row.id, _id: row.id, operationId: row.operation_id, user: byId.get(row.user_id) ?? row.user_id, content: row.content, media_url: row.media_url, media_type: row.media_type, background_color: row.background_color, expiresAt: toIsoString(row.expires_at) ?? new Date(0).toISOString(), createdAt: toIsoString(row.created_at) ?? new Date(0).toISOString(), updatedAt: toIsoString(row.updated_at) ?? new Date(0).toISOString() }));
+  return rows.map((row) => ({ id: row.id, _id: row.id, operationId: row.operation_id, user: byId.get(row.user_id) ?? row.user_id, content: row.content, media_url: row.media_url, media_type: row.media_type, background_color: row.background_color, overlays: Array.isArray(row.overlays) ? row.overlays : [], expiresAt: toIsoString(row.expires_at) ?? new Date(0).toISOString(), createdAt: toIsoString(row.created_at) ?? new Date(0).toISOString(), updatedAt: toIsoString(row.updated_at) ?? new Date(0).toISOString() }));
 };
 
 export const findStoryByOperation = async (userId: string, operationId: string): Promise<Story | null> => {
@@ -34,7 +34,7 @@ export const createStory = async (input: NewStory, { quotaLimit = -1, reservatio
         const reserved = await quotaService.reserveQuota({ userId: input.user, bucket: quotaService.dailyBucket("stories", now), limit: quotaLimit, getCurrentCount: async () => Number((await transaction.selectFrom("stories").select((expression) => expression.fn.countAll<number>().as("count")).where("user_id", "=", input.user).where("created_at", ">=", dayStart).executeTakeFirst())?.count ?? 0), transaction, expiresAt: quotaService.shortLivedUsageExpiry(now) });
         if (!reserved) throw Object.assign(new Error(`Daily story limit reached (${quotaLimit})`), { status: 403 });
       }
-      const row = await transaction.insertInto("stories").values({ legacy_mongo_id: null, user_id: input.user, operation_id: input.operationId, content: input.content, media_url: input.media_url, media_key: input.media_key, media_type: input.media_type, background_color: input.background_color, expires_at: new Date(Date.now() + 86_400_000) }).returningAll().executeTakeFirstOrThrow();
+      const row = await transaction.insertInto("stories").values({ legacy_mongo_id: null, user_id: input.user, operation_id: input.operationId, content: input.content, media_url: input.media_url, media_key: input.media_key, media_type: input.media_type, background_color: input.background_color, overlays: sql`${JSON.stringify(input.overlays)}::jsonb`, expires_at: new Date(Date.now() + 86_400_000) }).returningAll().executeTakeFirstOrThrow();
       await commitReservedUploads(reservationKeys, { transaction, userId: input.user });
       return (await hydrate([row]))[0]!;
     });

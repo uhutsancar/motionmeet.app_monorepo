@@ -11,6 +11,7 @@ import dayjs, { setDayjsLocale } from '../utils/dayjs';
 
 import { Appbar, Avatar, Text, Searchbar, TouchableRipple, Badge, Surface } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { MESSAGE_ICON } from '../config/icons';
 import { logHandledError } from '../utils/feedback';
 import { useFocusEffect } from '@react-navigation/native';
 import type { Message, PublicUser } from '@motionmeet/shared';
@@ -323,6 +324,9 @@ const Messages = ({ navigation }: NavigationOnlyProps) => {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       <Appbar.Header style={s.header} statusBarHeight={0}>
+        {/* Messages is pushed from the feed header now rather than being a tab,
+            so it needs its own way back. */}
+        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
         <Appbar.Content title={t('messages.title', 'Messages')} titleStyle={s.headerTitle} />
         <Appbar.Action icon="square-edit-outline" onPress={handleNewChat} color={theme.primary} />
       </Appbar.Header>
@@ -362,7 +366,7 @@ const Messages = ({ navigation }: NavigationOnlyProps) => {
         }
         ListEmptyComponent={
           <Surface elevation={0} style={s.emptyState}>
-            <Ionicons name="chatbubbles-outline" size={28} color={theme.textMuted} />
+            <Ionicons name={MESSAGE_ICON} size={28} color={theme.textMuted} />
             <Text variant="titleMedium" style={s.emptyTitle}>{t('messages.no_messages', 'No messages yet')}</Text>
             <Text variant="bodyMedium" style={s.emptySubtitle}>{t('messages.connect_hint', 'Connect with athletes to start chatting')}</Text>
           </Surface>

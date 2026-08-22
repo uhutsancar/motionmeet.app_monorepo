@@ -1,40 +1,54 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 // React Native's Image is used on purpose: expo-image's native view fails to
 // instantiate on some Android devices and would leave stories blank.
 import {
-  Modal,
   Image,
+  Keyboard,
+  Modal,
   PanResponder,
   Pressable,
   ScrollView,
-  View,
   StyleSheet,
+  TextInput,
+  View,
 } from 'react-native';
-import { ActivityIndicator, Surface, Text } from 'react-native-paper';
+import { ActivityIndicator, Text } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import dayjs from '../utils/dayjs';
 import { useAuthContext } from '../context/AuthProvider';
-import { getStoryViewers, markStoryViewed } from '../api/endpoints';
-import { logHandledError } from '../utils/feedback';
-import { AVATAR } from '../config/layout';
+import { deleteStory, getStoryViewers, markStoryViewed, sendMessage } from '../api/endpoints';
+import { logHandledError, showError, showSuccess } from '../utils/feedback';
 import { useAppSelector } from '../store/hooks';
-
+import { useStoryFrame } from '../hooks/useStoryFrame';
+import StoryOverlayAnchor from './story/StoryOverlayAnchor';
+import { MESSAGE_ICON } from '../config/icons';
 import type { PublicUser, Story, StoryViewer as StoryViewerEntry } from '@motionmeet/shared';
+import type { NavigationLike } from '../navigation/types';
 
-const STORY_DURATION = 5000; // 5 seconds per story
+/** How long a photo stays on screen before the viewer advances. */
+const STORY_DURATION = 5000;
+const PROGRESS_TICK = 50;
 
-interface StoryVideoProps { source: string; onEnded: () => void }
+interface StoryVideoProps {
+  source: string;
+  paused: boolean;
+  onEnded: () => void;
+}
+
 interface StoryViewerProps {
   visible: boolean;
   stories?: Story[];
   startIndex?: number;
   onClose: () => void;
+  navigation?: NavigationLike;
+  /** Called after the author deletes the story that is on screen. */
+  onDeleted?: (storyId: string) => void;
 }
 
-const StoryVideo = ({ source, onEnded }: StoryVideoProps) => {
+const StoryVideo = ({ source, paused, onEnded }: StoryVideoProps) => {
   const player = useVideoPlayer(source, (instance) => {
     instance.loop = false;
     instance.play();
@@ -45,11 +59,18 @@ const StoryVideo = ({ source, onEnded }: StoryVideoProps) => {
     return () => subscription.remove();
   }, [onEnded, player]);
 
+  useEffect(() => {
+    if (paused) player.pause();
+    else player.play();
+  }, [paused, player]);
+
   return (
     <VideoView
       player={player}
-      style={styles.mediaImage}
-      contentFit="contain"
+      style={StyleSheet.absoluteFill}
+      // Cover, not contain: a story fills the screen edge to edge on every
+      // aspect ratio rather than sitting inside letterbox bars.
+      contentFit="cover"
       nativeControls={false}
       surfaceType="textureView"
       accessibilityLabel="Story video"
@@ -58,34 +79,103 @@ const StoryVideo = ({ source, onEnded }: StoryVideoProps) => {
 };
 
 /**
- * Instagram-style StoryViewer
- * Props:
- *   visible: boolean
- *   stories: array of story objects from same user (or all stories)
- *   startIndex: which index to start from
- *   onClose: () => void
+ * The story viewer.
+ *
+ * Playback pauses whenever something is layered over the story — the audience
+ * sheet, the reply box, a long press — so the frame never advances out from
+ * under whatever the viewer is reading or typing.
  */
-const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }: StoryViewerProps) => {
+const StoryViewer = ({
+  visible,
+  stories = [],
+  startIndex = 0,
+  onClose,
+  navigation,
+  onDeleted,
+}: StoryViewerProps) => {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const [currentIndex, setCurrentIndex] = useState(startIndex);
-  const [progress, setProgress] = useState(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const nextFrameRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const currentIndexRef = useRef(startIndex);
-  const closingRef = useRef(false);
+  const { frameWidth, frameHeight, onFrameLayout } = useStoryFrame();
   const { getToken } = useAuthContext();
   const currentUser = useAppSelector((state) => state.user.value);
 
-  const currentStory = stories[currentIndex];
-  const storyOwnerId = typeof currentStory?.user === 'object' ? currentStory.user._id : currentStory?.user;
-  const isOwnStory = Boolean(currentUser?._id && storyOwnerId === currentUser._id);
-
-  // Swipe-up audience sheet, shown to the author of the story only.
+  const [currentIndex, setCurrentIndex] = useState(startIndex);
+  const [progress, setProgress] = useState(0);
+  const [heldDown, setHeldDown] = useState(false);
   const [viewersOpen, setViewersOpen] = useState(false);
   const [viewers, setViewers] = useState<StoryViewerEntry[]>([]);
   const [viewersLoading, setViewersLoading] = useState(false);
+  const [reply, setReply] = useState('');
+  const [replyFocused, setReplyFocused] = useState(false);
+  const [sendingReply, setSendingReply] = useState(false);
+
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const currentIndexRef = useRef(startIndex);
+  const closingRef = useRef(false);
   const recordedViewsRef = useRef<Set<string>>(new Set());
+
+  const currentStory = stories[currentIndex];
+  const storyUser: PublicUser | null =
+    currentStory && typeof currentStory.user === 'object' ? currentStory.user : null;
+  const storyOwnerId = storyUser?._id ?? (typeof currentStory?.user === 'string' ? currentStory.user : '');
+  const isOwnStory = Boolean(currentUser?._id && storyOwnerId === currentUser._id);
+  const paused = viewersOpen || replyFocused || heldDown || sendingReply;
+
+  const clearTimer = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
+  }, []);
+
+  const closeViewer = useCallback(() => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    clearTimer();
+    Keyboard.dismiss();
+    setViewersOpen(false);
+    setReply('');
+    setReplyFocused(false);
+    onClose?.();
+  }, [clearTimer, onClose]);
+
+  const goNext = useCallback(() => {
+    if (!visible || closingRef.current) return;
+    clearTimer();
+    const nextIndex = currentIndexRef.current + 1;
+    if (nextIndex < stories.length) {
+      currentIndexRef.current = nextIndex;
+      setCurrentIndex(nextIndex);
+      setProgress(0);
+    } else {
+      closeViewer();
+    }
+  }, [clearTimer, closeViewer, stories.length, visible]);
+
+  const goPrev = useCallback(() => {
+    if (!visible || closingRef.current) return;
+    clearTimer();
+    const previousIndex = currentIndexRef.current - 1;
+    if (previousIndex >= 0) {
+      currentIndexRef.current = previousIndex;
+      setCurrentIndex(previousIndex);
+    }
+    // Tapping back on the first story restarts it rather than closing.
+    setProgress(0);
+  }, [clearTimer, visible]);
+
+  // Reset when the viewer opens on a new group.
+  useEffect(() => {
+    if (!visible) {
+      clearTimer();
+      return;
+    }
+    const initialIndex = Math.min(Math.max(startIndex, 0), Math.max(stories.length - 1, 0));
+    closingRef.current = false;
+    currentIndexRef.current = initialIndex;
+    setCurrentIndex(initialIndex);
+    setProgress(0);
+    setViewersOpen(false);
+    setReply('');
+  }, [clearTimer, startIndex, stories.length, visible]);
 
   // Opening someone else's story counts as a view exactly once per session.
   useEffect(() => {
@@ -101,6 +191,29 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }: StoryVi
       }
     })();
   }, [currentStory?._id, getToken, isOwnStory, visible]);
+
+  // Photo timer. Videos advance on their own `playToEnd`.
+  useEffect(() => {
+    clearTimer();
+    if (!visible || paused || !currentStory || currentStory.media_type === 'video') return;
+
+    const step = 100 / (STORY_DURATION / PROGRESS_TICK);
+    intervalRef.current = setInterval(() => {
+      setProgress((previous) => {
+        const next = previous + step;
+        if (next >= 100) {
+          clearTimer();
+          // Advancing inside the tick would set state during another
+          // component's render, so it is deferred to the next frame.
+          setTimeout(goNext, 0);
+          return 100;
+        }
+        return next;
+      });
+    }, PROGRESS_TICK);
+
+    return clearTimer;
+  }, [clearTimer, currentIndex, currentStory, goNext, paused, visible]);
 
   const openViewers = useCallback(async () => {
     const storyId = currentStory?._id;
@@ -120,122 +233,98 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }: StoryVi
     }
   }, [currentStory?._id, getToken, isOwnStory]);
 
-  // The responder is created once, so it reads the latest handler from a ref.
+  // The responder is built once, so it reads the latest handler from a ref.
   const openViewersRef = useRef(openViewers);
   openViewersRef.current = openViewers;
-  const swipeResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponderCapture: (_event, gesture) =>
-        gesture.dy < -12 && Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.2,
-      onPanResponderRelease: (_event, gesture) => {
-        if (gesture.dy < -28 || gesture.vy < -0.5) void openViewersRef.current();
-      },
-      onPanResponderTerminationRequest: () => false,
-    }),
-  ).current;
+  const swipeResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponderCapture: (_event, gesture) =>
+          gesture.dy < -12 && Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.2,
+        onPanResponderRelease: (_event, gesture) => {
+          if (gesture.dy < -28 || gesture.vy < -0.5) void openViewersRef.current();
+        },
+        onPanResponderTerminationRequest: () => false,
+      }),
+    [],
+  );
 
-  const clearPlaybackTimers = useCallback(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    if (nextFrameRef.current) clearTimeout(nextFrameRef.current);
-    intervalRef.current = null;
-    nextFrameRef.current = null;
-  }, []);
-
-  const closeViewer = useCallback(() => {
-    if (closingRef.current) return;
-    closingRef.current = true;
-    clearPlaybackTimers();
-    currentIndexRef.current = startIndex;
-    setCurrentIndex(startIndex);
-    setProgress(0);
-    onClose?.();
-  }, [clearPlaybackTimers, onClose, startIndex]);
-
-  // Reset when opening
-  useEffect(() => {
-    if (visible) {
-      const initialIndex = Math.min(
-        Math.max(startIndex, 0),
-        Math.max(stories.length - 1, 0),
-      );
-      closingRef.current = false;
-      currentIndexRef.current = initialIndex;
-      setCurrentIndex(initialIndex);
-      setProgress(0);
-    } else {
-      clearPlaybackTimers();
-    }
-  }, [clearPlaybackTimers, startIndex, stories.length, visible]);
-
-  const goNext = useCallback(() => {
-    if (!visible || closingRef.current) return;
-    clearPlaybackTimers();
-    const nextIndex = currentIndexRef.current + 1;
-    if (nextIndex < stories.length) {
-      currentIndexRef.current = nextIndex;
-      setCurrentIndex(nextIndex);
-      setProgress(0);
-    } else {
+  const openProfile = useCallback(
+    (userId?: string) => {
+      if (!navigation || !userId) return;
       closeViewer();
+      navigation.navigate('Profile', { userId });
+    },
+    [closeViewer, navigation],
+  );
+
+  /** Carries on the conversation in the inbox rather than in the story frame. */
+  const openChat = useCallback(() => {
+    if (!navigation || !storyOwnerId) return;
+    closeViewer();
+    navigation.navigate('ChatBox', { userId: storyOwnerId, user: storyUser });
+  }, [closeViewer, navigation, storyOwnerId, storyUser]);
+
+  /**
+   * Replies to the story as a direct message.
+   *
+   * The heart passes its emoji straight in rather than typing it into the box:
+   * a reaction is one tap in every story app, and making it a two-step edit
+   * would be the odd behaviour here.
+   */
+  const sendReply = async (override?: string) => {
+    const text = (override ?? reply).trim();
+    if (!text || !storyOwnerId || sendingReply) return;
+    try {
+      setSendingReply(true);
+      const token = await getToken();
+      if (!token) return;
+      const result = await sendMessage({ to_user_id: storyOwnerId, text }, token);
+      if (result.success) {
+        if (!override) setReply('');
+        Keyboard.dismiss();
+        showSuccess(t('common.success'), t('story.reply_sent', 'Yanitin gonderildi'));
+      } else {
+        showError(t('common.error'), t('story.reply_failed', 'Yanit gonderilemedi'));
+      }
+    } catch (error) {
+      logHandledError('story-reply', error);
+      showError(t('common.error'), t('story.reply_failed', 'Yanit gonderilemedi'));
+    } finally {
+      setSendingReply(false);
     }
-  }, [clearPlaybackTimers, closeViewer, stories.length, visible]);
+  };
 
-  const goPrev = useCallback(() => {
-    if (!visible || closingRef.current) return;
-    clearPlaybackTimers();
-    const previousIndex = currentIndexRef.current - 1;
-    if (previousIndex >= 0) {
-      currentIndexRef.current = previousIndex;
-      setCurrentIndex(previousIndex);
-      setProgress(0);
-    } else {
-      // Instagram-style behavior: tapping left on the first story restarts it.
-      setProgress(0);
+  const removeStory = async () => {
+    const storyId = currentStory?._id;
+    if (!storyId) return;
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const data = await deleteStory(storyId, token);
+      if (!data.success) {
+        showError(t('common.error'), data.message || t('story.delete_failed', 'Hikaye silinemedi'));
+        return;
+      }
+      onDeleted?.(storyId);
+      closeViewer();
+    } catch (error) {
+      logHandledError('delete-story', error);
+      showError(t('common.error'), t('story.delete_failed', 'Hikaye silinemedi'));
     }
-  }, [clearPlaybackTimers, visible]);
-
-  // Progress timer per story. Reading the audience pauses playback so the
-  // story does not advance out from under the list.
-  useEffect(() => {
-    if (!visible || viewersOpen || !currentStory || currentStory.media_type === 'video') return;
-
-    setProgress(0);
-    clearPlaybackTimers();
-
-    const step = 100 / (STORY_DURATION / 50); // how much to increment each 50ms
-    intervalRef.current = setInterval(() => {
-      setProgress(prev => Math.min(prev + step, 100));
-    }, 50);
-
-    return clearPlaybackTimers;
-  }, [clearPlaybackTimers, currentIndex, currentStory, viewersOpen, visible]);
-
-  useEffect(() => {
-    if (!visible || progress < 100 || currentStory?.media_type === 'video') return;
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    nextFrameRef.current = setTimeout(goNext, 0);
-    return () => {
-      if (nextFrameRef.current) clearTimeout(nextFrameRef.current);
-    };
-  }, [currentStory?.media_type, goNext, progress, visible]);
+  };
 
   if (!visible || !currentStory) return null;
 
-  const backgroundColor = currentStory.background_color || '#4f46e5';
-  const mediaUrl =
-    typeof currentStory.media_url === 'string'
-      ? currentStory.media_url.trim()
-      : '';
-  const storyUser: PublicUser | null = typeof currentStory.user === 'object'
-    ? currentStory.user
-    : null;
+  const mediaUrl = typeof currentStory.media_url === 'string' ? currentStory.media_url.trim() : '';
+  const overlays = Array.isArray(currentStory.overlays) ? currentStory.overlays : [];
   const profilePicture =
-    typeof storyUser?.profile_picture === 'string'
-      ? storyUser.profile_picture.trim()
-      : '';
-  const displayName =
-    storyUser?.full_name || storyUser?.username || 'MotionMeet';
-  const avatarLabel = displayName.charAt(0).toUpperCase();
+    typeof storyUser?.profile_picture === 'string' ? storyUser.profile_picture.trim() : '';
+  const displayName = storyUser?.full_name || storyUser?.username || 'MotionMeet';
+  const backgroundColor = currentStory.background_color || '#101014';
+  // Comfortably over half the story, so the audience list is a list rather
+  // than a strip peeking above the bottom edge.
+  const viewersSheetHeight = Math.round(frameHeight * 0.72);
 
   return (
     <Modal
@@ -248,16 +337,15 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }: StoryVi
       navigationBarTranslucent
       onRequestClose={closeViewer}
     >
-      <Surface elevation={0} style={styles.container}>
-        {/* Story Background / Media */}
-        <Surface elevation={0} style={[styles.storyContent, { backgroundColor }]}>
+      <View style={styles.container}>
+        <View style={[styles.storyContent, { backgroundColor }]} onLayout={onFrameLayout}>
           {currentStory.media_type === 'image' && mediaUrl && (
             <Image
               source={{ uri: mediaUrl }}
-              style={styles.mediaImage}
-              // Matches the video behaviour: the whole frame stays visible on
-              // every aspect ratio instead of being cropped or stretched.
-              resizeMode="contain"
+              style={StyleSheet.absoluteFill}
+              // Cover keeps the story full-bleed: no bars on the sides of a
+              // wide phone, none above and below a tall one.
+              resizeMode="cover"
               accessibilityLabel={displayName}
             />
           )}
@@ -265,14 +353,15 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }: StoryVi
             <StoryVideo
               key={currentStory._id || mediaUrl}
               source={mediaUrl}
+              paused={paused}
               onEnded={goNext}
             />
           )}
-          {(currentStory.media_type === 'text' || !mediaUrl) && currentStory.content && (
+          {/* Text-only stories predate the overlay composer and still render. */}
+          {(currentStory.media_type === 'text' || !mediaUrl) && Boolean(currentStory.content) && (
             <Text
               style={[
-                styles.storyText,
-                // Keeps text clear of the header row and the home indicator.
+                styles.legacyText,
                 { marginTop: insets.top + 44, marginBottom: insets.bottom + 16 },
               ]}
               numberOfLines={10}
@@ -282,102 +371,251 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }: StoryVi
               {currentStory.content}
             </Text>
           )}
-        </Surface>
 
-        {/* Progress Bars — one per story */}
-        <Surface
-          elevation={0}
-          style={[styles.progressBarsRow, { top: Math.max(insets.top + 8, 16) }]}
-        >
-          {stories.map((_, i) => (
-            <Surface elevation={0} key={i} style={[styles.progressBarBg, { flex: 1 }]}>
+          {overlays.map((overlay) => (
+            <StoryOverlayAnchor
+              key={overlay.id}
+              overlay={overlay}
+              frameWidth={frameWidth}
+              frameHeight={frameHeight}
+            />
+          ))}
+        </View>
+
+        {/* Progress bars — one per story in the group */}
+        <View style={[styles.progressRow, { top: Math.max(insets.top + 8, 16) }]} pointerEvents="none">
+          {stories.map((story, index) => (
+            <View key={story._id || index} style={styles.progressTrack}>
               <View
                 style={[
-                  styles.progressBarFill,
+                  styles.progressFill,
                   {
                     width:
-                      i < currentIndex
+                      index < currentIndex
                         ? '100%'
-                        : i === currentIndex
-                        ? `${Math.min(progress, 100)}%`
-                        : '0%',
+                        : index === currentIndex
+                          ? `${Math.min(progress, 100)}%`
+                          : '0%',
                   },
                 ]}
               />
-            </Surface>
+            </View>
           ))}
-        </Surface>
+        </View>
 
-        {/* Tap Areas: left = previous/restart, right = next */}
+        {/* Tap zones: left restarts or steps back, right advances. Holding
+            anywhere pauses, which is the gesture people already use. */}
         <View style={styles.tapAreas} pointerEvents="box-none" {...swipeResponder.panHandlers}>
           <Pressable
             style={styles.tapLeft}
             onPress={goPrev}
+            onLongPress={() => setHeldDown(true)}
+            onPressOut={() => setHeldDown(false)}
+            delayLongPress={220}
             accessibilityRole="button"
-            accessibilityLabel="Previous story"
+            accessibilityLabel={t('story.previous', 'Onceki hikaye')}
           />
           <Pressable
             style={styles.tapRight}
             onPress={goNext}
+            onLongPress={() => setHeldDown(true)}
+            onPressOut={() => setHeldDown(false)}
+            delayLongPress={220}
             accessibilityRole="button"
-            accessibilityLabel="Next story"
+            accessibilityLabel={t('story.next', 'Sonraki hikaye')}
           />
         </View>
 
-        {/* Author-only: swipe-up handle showing how many people opened it */}
-        {isOwnStory && !viewersOpen && (
+        {/* Header */}
+        <View style={[styles.header, { top: Math.max(insets.top + 22, 34) }]} pointerEvents="box-none">
+          <Pressable
+            style={styles.userInfo}
+            onPress={() => openProfile(storyOwnerId)}
+            disabled={!navigation || !storyOwnerId}
+            accessibilityRole="button"
+            accessibilityLabel={displayName}
+          >
+            {profilePicture ? (
+              <Image source={{ uri: profilePicture }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Text style={styles.avatarPlaceholderText}>
+                  {displayName.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
+            <View style={styles.userText}>
+              <Text numberOfLines={1} style={styles.userName}>
+                {displayName}
+              </Text>
+              <Text style={styles.timeAgo}>{dayjs(currentStory.createdAt).fromNow()}</Text>
+            </View>
+          </Pressable>
+
+          {isOwnStory && (
+            <Pressable
+              onPress={removeStory}
+              hitSlop={12}
+              style={styles.headerAction}
+              accessibilityRole="button"
+              accessibilityLabel={t('story.delete', 'Hikayeyi sil')}
+            >
+              <Ionicons name="trash-outline" size={21} color="#FFFFFF" />
+            </Pressable>
+          )}
+
+          <Pressable
+            onPress={closeViewer}
+            hitSlop={14}
+            style={styles.headerAction}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.close', 'Kapat')}
+          >
+            <Ionicons name="close" size={26} color="#FFFFFF" />
+          </Pressable>
+        </View>
+
+        {/* Author: how many people opened it. Everyone else: reply and react. */}
+        {!viewersOpen && isOwnStory && (
           <Pressable
             onPress={openViewers}
-            style={[styles.viewersHandle, { paddingBottom: Math.max(insets.bottom, 12) }]}
+            style={[styles.viewersHandle, { paddingBottom: Math.max(insets.bottom, 14) }]}
             accessibilityRole="button"
-            accessibilityLabel={t('feed.story_viewers', 'Viewed by')}
+            accessibilityLabel={t('feed.story_viewers', 'Goruntuleyenler')}
           >
-            <Ionicons name="chevron-up" size={18} color="#fff" />
+            <Ionicons name="chevron-up" size={18} color="#FFFFFF" />
             <Text style={styles.viewersHandleText}>
               {typeof currentStory.view_count === 'number'
-                ? `${currentStory.view_count} ${t('feed.story_views_count', 'views')}`
-                : t('feed.swipe_up_viewers', 'Swipe up for viewers')}
+                ? `${currentStory.view_count} ${t('feed.story_views_count', 'goruntulenme')}`
+                : t('feed.swipe_up_viewers', 'Goruntuleyenler icin yukari kaydir')}
             </Text>
           </Pressable>
         )}
 
+        {!viewersOpen && !isOwnStory && (
+          <View
+            style={[styles.replyBar, { paddingBottom: Math.max(insets.bottom, 12) }]}
+            pointerEvents="box-none"
+          >
+            <View style={styles.replyField}>
+              <TextInput
+                value={reply}
+                onChangeText={setReply}
+                onFocus={() => setReplyFocused(true)}
+                onBlur={() => setReplyFocused(false)}
+                placeholder={t('story.reply_placeholder', 'Mesaj gonder...')}
+                placeholderTextColor="rgba(255,255,255,0.65)"
+                style={styles.replyInput}
+                maxLength={500}
+                returnKeyType="send"
+                onSubmitEditing={() => void sendReply()}
+                editable={!sendingReply}
+              />
+            </View>
+
+            {reply.trim().length > 0 ? (
+              <Pressable
+                onPress={() => void sendReply()}
+                disabled={sendingReply}
+                style={styles.replyAction}
+                accessibilityRole="button"
+                accessibilityLabel={t('story.send_reply', 'Gonder')}
+              >
+                {sendingReply ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Ionicons name="paper-plane" size={22} color="#FFFFFF" />
+                )}
+              </Pressable>
+            ) : (
+              <>
+                <Pressable
+                  onPress={() => void sendReply('❤️')}
+                  disabled={sendingReply}
+                  style={styles.replyAction}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('story.react', 'Begen')}
+                >
+                  <Ionicons name="heart-outline" size={25} color="#FFFFFF" />
+                </Pressable>
+                <Pressable
+                  onPress={openChat}
+                  style={styles.replyAction}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('story.send_message', 'Mesaj gonder')}
+                >
+                  <Ionicons name={MESSAGE_ICON} size={23} color="#FFFFFF" />
+                </Pressable>
+              </>
+            )}
+          </View>
+        )}
+
+        {/* Audience sheet — deliberately over two thirds of the screen so the
+            list is readable instead of a strip at the bottom. */}
         {viewersOpen && (
           <View style={styles.viewersSheet}>
             <Pressable
-              style={styles.viewersBackdrop}
+              style={StyleSheet.absoluteFill}
               onPress={() => setViewersOpen(false)}
               accessibilityRole="button"
-              accessibilityLabel={t('common.close', 'Close')}
+              accessibilityLabel={t('common.close', 'Kapat')}
             />
-            <Surface elevation={0} style={[styles.viewersPanel, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-              <View style={styles.viewersGrabber} />
+            <View
+              style={[
+                styles.viewersPanel,
+                { height: viewersSheetHeight, paddingBottom: Math.max(insets.bottom, 12) },
+              ]}
+            >
+              <Pressable
+                onPress={() => setViewersOpen(false)}
+                hitSlop={12}
+                style={styles.viewersGrabberHit}
+                accessibilityRole="button"
+                accessibilityLabel={t('common.close', 'Kapat')}
+              >
+                <View style={styles.viewersGrabber} />
+              </Pressable>
+
               <Text style={styles.viewersTitle}>
-                {t('feed.story_viewers', 'Viewed by')}
+                {t('feed.story_viewers', 'Bu hikayeyi goruntuleyenler')}
                 {viewers.length ? ` · ${viewers.length}` : ''}
               </Text>
 
               {viewersLoading ? (
-                <ActivityIndicator color="#fff" style={{ marginVertical: 24 }} />
+                <ActivityIndicator color="#FFFFFF" style={styles.viewersSpinner} />
               ) : viewers.length === 0 ? (
                 <Text style={styles.viewersEmpty}>
-                  {t('feed.story_no_viewers', 'No one has viewed this yet')}
+                  {t('feed.story_no_viewers', 'Henuz kimse goruntulemedi')}
                 </Text>
               ) : (
-                <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+                <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                   {viewers.map((entry) => {
-                    const picture = typeof entry.user.profile_picture === 'string' ? entry.user.profile_picture.trim() : '';
+                    const picture =
+                      typeof entry.user.profile_picture === 'string'
+                        ? entry.user.profile_picture.trim()
+                        : '';
                     return (
-                      <View key={`${entry.user._id}-${entry.viewedAt}`} style={styles.viewerRow}>
+                      <Pressable
+                        key={`${entry.user._id}-${entry.viewedAt}`}
+                        style={styles.viewerRow}
+                        onPress={() => openProfile(entry.user._id)}
+                        disabled={!navigation}
+                        accessibilityRole="button"
+                        accessibilityLabel={entry.user.full_name || entry.user.username}
+                      >
                         {picture ? (
                           <Image source={{ uri: picture }} style={styles.viewerAvatar} />
                         ) : (
                           <View style={[styles.viewerAvatar, styles.avatarPlaceholder]}>
                             <Text style={styles.avatarPlaceholderText}>
-                              {(entry.user.full_name || entry.user.username || '?').charAt(0).toUpperCase()}
+                              {(entry.user.full_name || entry.user.username || '?')
+                                .charAt(0)
+                                .toUpperCase()}
                             </Text>
                           </View>
                         )}
-                        <View style={{ flex: 1, minWidth: 0 }}>
+                        <View style={styles.viewerText}>
                           <Text numberOfLines={1} style={styles.viewerName}>
                             {entry.user.full_name || entry.user.username}
                           </Text>
@@ -385,53 +623,16 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }: StoryVi
                             @{entry.user.username} · {dayjs(entry.viewedAt).fromNow()}
                           </Text>
                         </View>
-                      </View>
+                        <Ionicons name="chevron-forward" size={17} color="rgba(255,255,255,0.35)" />
+                      </Pressable>
                     );
                   })}
                 </ScrollView>
               )}
-            </Surface>
-          </View>
-        )}
-
-        {/* Header */}
-        <View
-          style={[styles.header, { top: Math.max(insets.top + 20, 34) }]}
-          pointerEvents="box-none"
-        >
-          <View style={styles.userInfo} pointerEvents="none">
-            {profilePicture ? (
-              <Image
-                source={{ uri: profilePicture }}
-                style={styles.avatar}
-              />
-            ) : (
-              <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                <Text style={styles.avatarPlaceholderText}>{avatarLabel}</Text>
-              </View>
-            )}
-            <View style={styles.userText}>
-              <Text numberOfLines={1} style={styles.userName}>{displayName}</Text>
-              <Text style={styles.timeAgo}>{dayjs(currentStory.createdAt).fromNow()}</Text>
             </View>
           </View>
-          <Pressable
-            onPress={(event) => {
-              event.stopPropagation?.();
-              closeViewer();
-            }}
-            hitSlop={14}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.close', 'Close')}
-            style={({ pressed }) => [
-              styles.closeButton,
-              pressed && styles.closeButtonPressed,
-            ]}
-          >
-            <Ionicons name="close" size={28} color="#fff" />
-          </Pressable>
-        </View>
-      </Surface>
+        )}
+      </View>
     </Modal>
   );
 };
@@ -439,29 +640,27 @@ const StoryViewer = ({ visible, stories = [], startIndex = 0, onClose }: StoryVi
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#000000',
   },
   storyContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
   },
-  mediaImage: {
-    width: '100%',
-    height: '100%',
+  legacyText: {
     position: 'absolute',
-  },
-  storyText: {
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
     fontSize: 30,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#FFFFFF',
     textAlign: 'center',
+    textAlignVertical: 'center',
     paddingHorizontal: 36,
     lineHeight: 42,
-    maxHeight: '72%',
   },
-  // Progress bars row
-  progressBarsRow: {
+  progressRow: {
     position: 'absolute',
     left: 8,
     right: 8,
@@ -469,26 +668,33 @@ const styles = StyleSheet.create({
     gap: 4,
     zIndex: 10,
   },
-  progressBarBg: {
+  progressTrack: {
+    flex: 1,
     height: 2.5,
-    backgroundColor: 'rgba(255,255,255,0.35)',
     borderRadius: 2,
     overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.35)',
   },
-  progressBarFill: {
+  progressFill: {
     height: '100%',
-    backgroundColor: '#fff',
     borderRadius: 2,
+    backgroundColor: '#FFFFFF',
   },
-  // Header
+  tapAreas: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: 'row',
+    zIndex: 20,
+  },
+  tapLeft: { width: '32%', height: '100%' },
+  tapRight: { flex: 1, height: '100%' },
   header: {
     position: 'absolute',
     left: 0,
     right: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
+    gap: 4,
     zIndex: 30,
     elevation: 30,
   },
@@ -498,68 +704,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingRight: 12,
+    paddingRight: 10,
   },
   userText: { flex: 1, minWidth: 0 },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: '#FFFFFF',
   },
   avatarPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#312e81',
+    backgroundColor: '#312E81',
   },
   avatarPlaceholderText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
   },
   userName: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#fff',
+    color: '#FFFFFF',
   },
   timeAgo: {
     fontSize: 12,
     color: 'rgba(255,255,255,0.75)',
   },
-  closeButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  headerAction: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'transparent',
-    zIndex: 40,
-    elevation: 40,
   },
-  closeButtonPressed: {
-    backgroundColor: 'rgba(0,0,0,0.48)',
-  },
-  // Tap areas
-  tapAreas: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    zIndex: 20,
-    elevation: 20,
-  },
-  tapLeft: {
-    width: '35%',
-    height: '100%',
-  },
-  tapRight: {
-    flex: 1,
-    height: '100%',
-  },
-  // Audience sheet
   viewersHandle: {
     position: 'absolute',
     left: 0,
@@ -569,64 +749,101 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
     zIndex: 25,
-    elevation: 25,
   },
   viewersHandleText: {
-    color: '#fff',
-    fontSize: 12,
+    color: '#FFFFFF',
+    fontSize: 12.5,
     fontWeight: '700',
+  },
+  replyBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    zIndex: 25,
+  },
+  replyField: {
+    flex: 1,
+    minWidth: 0,
+    height: 46,
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    borderRadius: 23,
+    borderWidth: 1.2,
+    borderColor: 'rgba(255,255,255,0.6)',
+  },
+  replyInput: {
+    color: '#FFFFFF',
+    fontSize: 14.5,
+    padding: 0,
+  },
+  replyAction: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   viewersSheet: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     zIndex: 50,
     elevation: 50,
   },
-  viewersBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
   viewersPanel: {
     backgroundColor: '#14171B',
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     paddingHorizontal: 16,
     paddingTop: 8,
   },
-  viewersGrabber: {
+  viewersGrabberHit: {
     alignSelf: 'center',
-    width: 38,
+    paddingVertical: 6,
+    paddingHorizontal: 30,
+  },
+  viewersGrabber: {
+    width: 40,
     height: 4,
     borderRadius: 2,
     backgroundColor: 'rgba(255,255,255,0.3)',
-    marginBottom: 10,
   },
   viewersTitle: {
-    color: '#fff',
-    fontSize: 15,
+    color: '#FFFFFF',
+    fontSize: 15.5,
     fontWeight: '800',
+    marginTop: 6,
     marginBottom: 10,
+  },
+  viewersSpinner: {
+    marginVertical: 28,
   },
   viewersEmpty: {
     color: 'rgba(255,255,255,0.6)',
     fontSize: 13,
     textAlign: 'center',
-    paddingVertical: 26,
+    paddingVertical: 30,
   },
   viewerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 8,
+    gap: 11,
+    paddingVertical: 9,
   },
   viewerAvatar: {
-    width: AVATAR.medium,
-    height: AVATAR.medium,
-    borderRadius: AVATAR.medium / 2,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
+  viewerText: { flex: 1, minWidth: 0 },
   viewerName: {
-    color: '#fff',
-    fontSize: 14,
+    color: '#FFFFFF',
+    fontSize: 14.5,
     fontWeight: '700',
   },
   viewerHandle: {

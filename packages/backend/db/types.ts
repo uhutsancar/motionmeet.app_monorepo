@@ -1,3 +1,4 @@
+import type { StoryOverlay } from "@motionmeet/shared";
 import type { ColumnType, Generated, Insertable, Selectable, Updateable } from "kysely";
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
@@ -307,6 +308,7 @@ export interface StoryTable extends BaseTable {
   media_key: Generated<string>;
   media_type: "text" | "image" | "video";
   background_color: Generated<string>;
+  overlays: Generated<StoryOverlay[]>;
   expires_at: Timestamp;
 }
 

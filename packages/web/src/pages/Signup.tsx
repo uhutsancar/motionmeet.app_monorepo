@@ -14,6 +14,7 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { Link as RouterLink, useNavigate } from "react-router";
 import AuthShell from "~/components/AuthShell";
 import { useAuthContext } from "../context/AuthProvider";
@@ -24,6 +25,7 @@ const USERNAME_PATTERN = /^[a-z0-9._-]{3,30}$/;
 type SignupField = "email" | "password" | "username" | "full_name";
 
 const Signup = () => {
+  const { t } = useTranslation();
   const { register } = useAuthContext();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({ email: "", password: "", username: "", full_name: "" });
@@ -42,22 +44,22 @@ const Signup = () => {
     const username = formData.username.trim().toLowerCase();
     const fullName = formData.full_name.trim();
     if (!EMAIL_PATTERN.test(email) || email.length > AUTH_LIMITS.email) {
-      setError("Enter a valid email address.");
+      setError(t("auth.error_email_body"));
       return;
     }
     if (!USERNAME_PATTERN.test(username)) {
-      setError("Use 3–30 lowercase letters, numbers, dots, underscores or hyphens.");
+      setError(t("auth.error_username_body"));
       return;
     }
     if (
       fullName.length < AUTH_LIMITS.fullNameMin ||
       fullName.length > AUTH_LIMITS.fullNameMax
     ) {
-      setError("Full name must be between 2 and 100 characters.");
+      setError(t("auth.error_name_body"));
       return;
     }
     if (!hasValidPasswordByteLength(formData.password)) {
-      setError("Password must be between 10 and 72 UTF-8 bytes.");
+      setError(t("auth.error_password_body"));
       return;
     }
     setLoading(true);
@@ -72,7 +74,7 @@ const Signup = () => {
       if (result.success) {
         navigate("/feed");
       } else {
-        setError(result.message || "We could not create your account. Please review your details.");
+        setError(result.message || t("auth.error_signup_failed"));
       }
     } finally {
       setLoading(false);
@@ -87,16 +89,16 @@ const Signup = () => {
 
   return (
     <AuthShell
-      eyebrow="Create your account"
-      title="Build momentum that lasts."
-      description="Join MotionMeet and bring your training, progress and people into one place."
+      eyebrow={t("auth.signup_eyebrow")}
+      title={t("auth.title_signup")}
+      description={t("auth.signup_description")}
     >
       {error && <Alert severity="error" sx={{ mb: 2.5, borderRadius: 3 }}>{error}</Alert>}
 
       <Box component="form" onSubmit={handleSubmit} noValidate>
         <Stack spacing={2}>
           <TextField
-            label="Full name"
+            label={t("auth.full_name")}
             fullWidth
             required
             autoFocus
@@ -106,7 +108,7 @@ const Signup = () => {
             slotProps={{ input: { startAdornment: inputIcon(PersonOutlineRounded) } }}
           />
           <TextField
-            label="Username"
+            label={t("auth.username")}
             fullWidth
             required
             autoComplete="username"
@@ -115,7 +117,7 @@ const Signup = () => {
             slotProps={{ input: { startAdornment: inputIcon(AlternateEmailRounded) } }}
           />
           <TextField
-            label="Email address"
+            label={t("auth.email")}
             type="email"
             fullWidth
             required
@@ -125,14 +127,14 @@ const Signup = () => {
             slotProps={{ input: { startAdornment: inputIcon(MailOutlineRounded) } }}
           />
           <TextField
-            label="Password"
+            label={t("auth.password")}
             type={showPassword ? "text" : "password"}
             fullWidth
             required
             autoComplete="new-password"
             value={formData.password}
             onChange={updateField("password")}
-            helperText="Use at least 10 characters."
+            helperText={t("auth.password_helper")}
             slotProps={{
               htmlInput: { minLength: AUTH_LIMITS.passwordMinBytes },
               input: {
@@ -140,7 +142,7 @@ const Signup = () => {
                 endAdornment: (
                   <InputAdornment position="end">
                     <IconButton
-                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      aria-label={showPassword ? t("auth.hide_password") : t("auth.show_password")}
                       edge="end"
                       onClick={() => setShowPassword((visible) => !visible)}
                     >
@@ -152,7 +154,7 @@ const Signup = () => {
             }}
           />
           <Button type="submit" variant="contained" size="large" fullWidth disabled={loading} sx={{ minHeight: 52, mt: 0.5 }}>
-            {loading ? "Creating account…" : "Create account"}
+            {loading ? t("auth.creating_account") : t("auth.create_account")}
           </Button>
         </Stack>
       </Box>

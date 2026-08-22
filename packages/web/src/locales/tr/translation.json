@@ -21,7 +21,9 @@
     "load_more": "Daha fazla yükle",
     "continue": "Devam Et",
     "confirm": "Onayla",
-    "message_action": "Mesaj gönder"
+    "message_action": "Mesaj gönder",
+    "add": "Ekle",
+    "clear": "Temizle"
   },
   "discover": {
     "description": "Harika insanlarla bağlantı kurun ve ağınızı büyütün",
@@ -38,7 +40,8 @@
     "activity": "Bildirimler",
     "connections": "Bağlantılar",
     "nearby": "Yakındakiler",
-    "measurements": "Ölçümler"
+    "measurements": "Ölçümler",
+    "explore": "Keşfet"
   },
   "tabs": {
     "feed": "Keşfet",
@@ -46,7 +49,9 @@
     "exercises": "Egzersizler",
     "messages": "Mesajlar",
     "profile": "Profil",
-    "settings": "Ayarlar"
+    "settings": "Ayarlar",
+    "home": "Ana Sayfa",
+    "explore": "Keşfet"
   },
   "messages": {
     "title": "Mesajlar",
@@ -638,7 +643,57 @@
   },
   "auth": {
     "password": "Şifre",
-    "session_expired": "Oturumunuzun süresi doldu."
+    "session_expired": "Oturumunuzun süresi doldu.",
+    "tagline": "AMACINLA HAREKET ET",
+    "eyebrow_signin": "TEKRAR HOŞ GELDİN",
+    "eyebrow_signup": "YENİ BÖLÜMÜN",
+    "title_signin": "Sıradaki hamlene hazır mısın?",
+    "title_signup": "Kalıcı bir ivme kur.",
+    "subtitle_signin": "Antrenmanların, gelişimin ve çevren seni bekliyor.",
+    "subtitle_signup": "Emeğini ve arkasındaki insanları tek yerde topla.",
+    "sign_in": "Giriş yap",
+    "create_account": "Hesap oluştur",
+    "full_name": "Ad soyad",
+    "username": "Kullanıcı adı",
+    "email": "E-posta adresi",
+    "password_helper": "En az 10 karakter kullan.",
+    "forgot_password": "Şifreni mi unuttun?",
+    "legal": "Devam ederek MotionMeet Kullanım Koşulları ve Gizlilik Politikası'nı kabul edersin.",
+    "error_missing_title": "Eksik bilgi",
+    "error_missing_signin": "Lütfen e-posta ve şifreni gir.",
+    "error_missing_signup": "Lütfen tüm alanları doldur.",
+    "error_email_title": "Geçersiz e-posta",
+    "error_email_body": "Geçerli bir e-posta adresi gir.",
+    "error_username_title": "Geçersiz kullanıcı adı",
+    "error_username_body": "3-30 karakter; küçük harf, rakam, nokta, alt çizgi veya tire kullan.",
+    "error_name_title": "Geçersiz ad",
+    "error_name_body": "Ad soyad 2 ile 100 karakter arasında olmalı.",
+    "error_password_title": "Geçersiz şifre",
+    "error_password_body": "Şifre 10 ile 72 UTF-8 bayt arasında olmalı.",
+    "error_failed_title": "Giriş yapılamadı",
+    "error_failed_body": "Lütfen tekrar dene.",
+    "back_home": "Ana sayfa",
+    "signin_description": "Antrenmanlarına, gelişimine ve sohbetlerine devam etmek için giriş yap.",
+    "signup_eyebrow": "HESABINI OLUŞTUR",
+    "signup_description": "MotionMeet'e katıl; antrenmanını, gelişimini ve çevreni tek yerde topla.",
+    "signing_in": "Giriş yapılıyor…",
+    "creating_account": "Hesap oluşturuluyor…",
+    "new_here": "MotionMeet'te yeni misin?",
+    "create_an_account": "Hesap oluştur",
+    "already_member": "Zaten üye misin?",
+    "show_password": "Şifreyi göster",
+    "hide_password": "Şifreyi gizle",
+    "error_signin_failed": "Giriş yapamadık. Lütfen bilgilerini kontrol et.",
+    "error_signup_failed": "Hesabını oluşturamadık. Lütfen bilgilerini gözden geçir.",
+    "error_credentials": "E-posta adresini ve şifreni gir.",
+    "hero_chip": "ANTRENMANIN, BAĞLANTIDA",
+    "hero_title": "Emeğin ve arkasındaki insanlar için tek bir yer.",
+    "hero_subtitle": "Seansı planla, gelişimi kaydet ve ivmeyi topluluğuna taşı.",
+    "hero_card_label": "BUGÜN · ÜST VÜCUT",
+    "hero_card_title": "İvmeyi kur.",
+    "hero_toast_title": "Maya rekorunu alkışladı",
+    "hero_toast_body": "Seriyi bozma 🔥",
+    "hero_footer": "Çalış, takip et, bağlan."
   },
   "stories": {
     "viewers": "Görüntüleyenler",
@@ -782,5 +837,36 @@
     "intro": "MotionMeet aşağıdaki projelerin açık verilerini kullanır. Lisansları bu bildirimlerin gösterilmesini gerektirir.",
     "locations_title": "Yer verisi",
     "locations_body": "Konum seçicide kullanılan ülke, bölge ve şehir adları, Open Database License (ODbL) v1.0 ile lisanslanan Countries States Cities Database'den gelir."
+  },
+  "story": {
+    "done": "Bitti",
+    "align": "Hizalama",
+    "text_background": "Metin arka planı",
+    "add_text": "Metin ekle",
+    "add_location": "Konum ekle",
+    "location_placeholder": "Bir yer yaz",
+    "location_manual_hint": "Yakında yer bulunamadı — yer adını kendin yazabilirsin.",
+    "change_media": "Fotoğrafı değiştir",
+    "drag_to_delete": "Silmek için sürükle",
+    "delete": "Hikayeyi sil",
+    "delete_failed": "Hikaye silinemedi",
+    "previous": "Önceki hikaye",
+    "next": "Sonraki hikaye",
+    "reply_placeholder": "Mesaj gönder...",
+    "reply_sent": "Yanıtın gönderildi",
+    "reply_failed": "Yanıt gönderilemedi",
+    "send_reply": "Gönder",
+    "react": "Beğen",
+    "send_message": "Mesaj gönder"
+  },
+  "explore": {
+    "search_placeholder": "Ara",
+    "search_hint": "Aramak için en az iki harf yaz.",
+    "no_results": "Sonuç bulunamadı",
+    "no_results_hint": "Kullanıcı adını ya da ismi kontrol et.",
+    "empty": "Henüz keşfedilecek bir şey yok",
+    "empty_hint": "İlk görseli sen paylaş ya da birilerini takip et.",
+    "open_post": "Gönderiyi aç",
+    "post_title": "Gönderi"
   }
 }

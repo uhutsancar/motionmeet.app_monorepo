@@ -11,6 +11,7 @@ import Typography from "@mui/material/Typography";
 import { alpha } from "@mui/material/styles";
 import { Link } from "react-router";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import motionmeetLogo from "~/assets/motionmeet_logo.svg";
 
 interface AuthShellProps {
@@ -20,7 +21,10 @@ interface AuthShellProps {
   children: ReactNode;
 }
 
-const AuthShell = ({ eyebrow, title, description, children }: AuthShellProps) => (
+const AuthShell = ({ eyebrow, title, description, children }: AuthShellProps) => {
+  const { t } = useTranslation();
+
+  return (
   <Box
     sx={{
       minHeight: "100dvh",
@@ -53,21 +57,21 @@ const AuthShell = ({ eyebrow, title, description, children }: AuthShellProps) =>
             MotionMeet
           </Typography>
           <Typography sx={{ color: "rgba(255,255,255,.42)", fontSize: 9, fontWeight: 800, letterSpacing: ".14em" }}>
-            MOVE WITH PURPOSE
+            {t("auth.tagline")}
           </Typography>
         </Box>
       </Stack>
 
       <Box sx={{ position: "relative", zIndex: 1, my: 6 }}>
         <Chip
-          label="YOUR TRAINING, CONNECTED"
+          label={t("auth.hero_chip")}
           sx={{ mb: 3, color: "#C8F768", bgcolor: "rgba(200,247,104,.08)", border: "1px solid rgba(200,247,104,.16)", letterSpacing: ".1em", fontSize: 10 }}
         />
         <Typography variant="h2" sx={{ maxWidth: 610, color: "#F8FAF7", fontSize: { lg: 48, xl: 58 }, lineHeight: 1.02 }}>
-          One place for the work and the people behind it.
+          {t("auth.hero_title")}
         </Typography>
         <Typography sx={{ mt: 2.5, maxWidth: 540, color: "rgba(255,255,255,.6)", fontSize: 16.5, lineHeight: 1.7 }}>
-          Plan the session, capture the progress and carry the momentum into your community.
+          {t("auth.hero_subtitle")}
         </Typography>
 
         <Box sx={{ position: "relative", mt: 5, minHeight: 260, maxWidth: 570 }}>
@@ -86,8 +90,8 @@ const AuthShell = ({ eyebrow, title, description, children }: AuthShellProps) =>
           >
             <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
               <Box>
-                <Typography sx={{ color: "rgba(255,255,255,.42)", fontSize: 10, fontWeight: 800, letterSpacing: ".11em" }}>TODAY · UPPER BODY</Typography>
-                <Typography sx={{ mt: 0.5, fontFamily: '"Manrope", sans-serif', fontWeight: 800, fontSize: 22 }}>Build the momentum.</Typography>
+                <Typography sx={{ color: "rgba(255,255,255,.42)", fontSize: 10, fontWeight: 800, letterSpacing: ".11em" }}>{t("auth.hero_card_label")}</Typography>
+                <Typography sx={{ mt: 0.5, fontFamily: '"Manrope", sans-serif', fontWeight: 800, fontSize: 22 }}>{t("auth.hero_card_title")}</Typography>
               </Box>
               <Box sx={{ display: "grid", placeItems: "center", width: 38, height: 38, borderRadius: 3, bgcolor: "#C8F768", color: "#12182A" }}>
                 <AutoGraphRounded fontSize="small" />
@@ -130,8 +134,8 @@ const AuthShell = ({ eyebrow, title, description, children }: AuthShellProps) =>
                 <GroupsRounded fontSize="small" />
               </Box>
               <Box>
-                <Typography sx={{ fontSize: 11.5, fontWeight: 900 }}>Maya cheered your PR</Typography>
-                <Typography sx={{ color: "#8C94A2", fontSize: 10.5 }}>Keep the streak alive 🔥</Typography>
+                <Typography sx={{ fontSize: 11.5, fontWeight: 900 }}>{t("auth.hero_toast_title")}</Typography>
+                <Typography sx={{ color: "#8C94A2", fontSize: 10.5 }}>{t("auth.hero_toast_body")}</Typography>
               </Box>
             </Stack>
           </Paper>
@@ -139,7 +143,7 @@ const AuthShell = ({ eyebrow, title, description, children }: AuthShellProps) =>
       </Box>
 
       <Typography sx={{ position: "relative", zIndex: 1, color: "rgba(255,255,255,.38)", fontSize: 11.5 }}>
-        © {new Date().getFullYear()} MotionMeet · Train, track and connect.
+        © {new Date().getFullYear()} MotionMeet · {t("auth.hero_footer")}
       </Typography>
     </Box>
 
@@ -174,7 +178,7 @@ const AuthShell = ({ eyebrow, title, description, children }: AuthShellProps) =>
             sx={{ color: "text.secondary", borderRadius: 2.5, py: 0.75, pr: 1.25, gap: 0.75, fontSize: 13, fontWeight: 800 }}
           >
             <ArrowBackRounded sx={{ fontSize: 18 }} />
-            Back home
+            {t("auth.back_home")}
           </ButtonBase>
           <Stack component={Link} to="/" direction="row" spacing={0.8} sx={{ display: { lg: "none" }, alignItems: "center", color: "inherit", textDecoration: "none" }}>
             <Box component="img" src={motionmeetLogo} alt="" sx={{ width: 34, height: 34 }} />
@@ -207,7 +211,8 @@ const AuthShell = ({ eyebrow, title, description, children }: AuthShellProps) =>
         </Paper>
       </Box>
     </Box>
-  </Box>
-);
+    </Box>
+  );
+};
 
 export default AuthShell;

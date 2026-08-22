@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect } from 'react';
 
 import {
   DarkTheme as NavigationDarkTheme,
@@ -10,18 +10,17 @@ import type { MaterialTopTabBarProps } from '@react-navigation/material-top-tabs
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
-import { Text, View, useWindowDimensions } from 'react-native';
-import { TouchableRipple } from 'react-native-paper';
+import { Image, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useSocket } from '../hooks/useSocket';
+import { useAppSelector } from '../store/hooks';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAuthContext } from '../context/AuthProvider';
-import { getUserConversations } from '../api/endpoints';
 import type { Message } from '@motionmeet/shared';
 
 import Feed from '../pages/Feed';
+import Explore from '../pages/Explore';
 import Routines from '../pages/Routines';
 import Exercises from '../pages/Exercises';
 import Profile from '../pages/Profile';
@@ -70,13 +69,6 @@ const loadLicenses = () => require('../pages/LicensesScreen').default;
 const Tab = createMaterialTopTabNavigator();
 const Stack = createNativeStackNavigator();
 
-/* ─── Messages Stack ─────────────────────────────────────────────────────────── */
-const MessagesStack = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="MessagesList" component={Messages} />
-  </Stack.Navigator>
-);
-
 /* ─── Profile Stack ──────────────────────────────────────────────────────────── */
 const ProfileStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -111,6 +103,9 @@ const MainStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="Tabs" component={TabNavigator} />
     <Stack.Screen name="Profile" component={Profile} />
+    {/* Messages left the tab bar: it is opened from the feed header now, the
+        same place the activity bell lives. */}
+    <Stack.Screen name="Messages" component={Messages} />
     <Stack.Screen name="ProfileEdit" getComponent={loadProfileEdit} />
     <Stack.Screen name="Settings" getComponent={loadSettings} />
     <Stack.Screen name="Statistics" getComponent={loadStatistics} />
@@ -145,48 +140,38 @@ const MainStack = () => (
 );
 
 /* ─── Tab Navigator ──────────────────────────────────────────────────────────── */
+/**
+ * The five places the app opens into.
+ *
+ * Messages used to sit here; it moved next to the activity bell in the feed
+ * header, and Keşfet took its place so browsing the community is one tap from
+ * anywhere rather than an option inside a menu.
+ */
+const TABS = [
+  { name: 'Home', icon: 'home' },
+  { name: 'ExploreTab', icon: 'search' },
+  { name: 'Routines', icon: 'fitness' },
+  { name: 'Exercises', icon: 'barbell' },
+  { name: 'ProfileTab', icon: 'person' },
+] as const;
+
 const TabNavigator = () => {
   const { theme } = useTheme();
   const { t } = useTranslation();
   const { socket } = useSocket();
-  const { getToken } = useAuthContext();
   const insets = useSafeAreaInsets();
   const { fontScale } = useWindowDimensions();
-  const tabBarBaseHeight = fontScale > 1.5 ? 72 : fontScale > 1.2 ? 66 : 60;
-  const [unreadMessages, setUnreadMessages] = useState(0);
-  const messagesTabFocusedRef = useRef(false);
+  const profilePicture = useAppSelector((state) => state.user.value?.profile_picture);
 
-  useEffect(() => {
-    let active = true;
-    const initializeUnread = async () => {
-      try {
-        const token = await getToken();
-        if (!token) return;
-        const data = await getUserConversations(token);
-        if (active && data.success) {
-          setUnreadMessages(
-            (data.conversations || []).reduce(
-              (total, conversation) => total + Number(conversation.unreadCount || 0),
-              0,
-            ),
-          );
-        }
-      } catch {
-        // Navigation remains available if the badge cannot be initialized.
-      }
-    };
-    void initializeUnread();
-    return () => {
-      active = false;
-    };
-  }, [getToken]);
+  // Fixed height so the pill indicator never jumps; only the safe-area padding
+  // below the row changes from device to device.
+  const barHeight = fontScale > 1.4 ? 66 : 60;
 
-  // Listen for new messages globally to show badge
+  // A new message still raises a toast from anywhere in the app. The unread
+  // count itself belongs to the feed header now, which is where it is shown.
   useEffect(() => {
     if (!socket) return;
-    const onMsg = async (msg: Message) => {
-      if (messagesTabFocusedRef.current) return;
-      setUnreadMessages(prev => prev + 1);
+    const onMessage = async (message: Message) => {
       try {
         const stored = await AsyncStorage.getItem('@mm_notification_prefs');
         const preferences: { newMessage?: boolean } = stored ? JSON.parse(stored) : {};
@@ -196,146 +181,133 @@ const TabNavigator = () => {
       }
       Toast.show({
         type: 'info',
-        text1: (typeof msg.from_user_id === 'object' ? msg.from_user_id.full_name : '') || t('notifications.new_message', 'Yeni Mesaj'),
-        text2: msg?.text || t('notifications.you_have_message', 'Size yeni bir mesaj geldi.'),
+        text1:
+          (typeof message.from_user_id === 'object' ? message.from_user_id.full_name : '') ||
+          t('notifications.new_message', 'Yeni Mesaj'),
+        text2: message?.text || t('notifications.you_have_message', 'Size yeni bir mesaj geldi.'),
         position: 'top',
         topOffset: 60,
         visibilityTime: 4000,
       });
     };
-    socket.on('message_received', onMsg);
+    socket.on('message_received', onMessage);
     return () => {
-      socket.off('message_received', onMsg);
+      socket.off('message_received', onMessage);
     };
   }, [socket, t]);
 
-  const iconForRoute = useCallback((name: string, focused: boolean): React.ComponentProps<typeof Ionicons>['name'] => {
-    const map: Record<string, React.ComponentProps<typeof Ionicons>['name']> = {
-      Home:        focused ? 'home'              : 'home-outline',
-      Routines:    focused ? 'fitness'           : 'fitness-outline',
-      // The dumbbell reads as the app's training mark, so it stays filled in
-      // both states instead of thinning out to an outline.
-      Exercises:   'barbell',
-      MessagesTab: focused ? 'chatbubbles'       : 'chatbubbles-outline',
-      ProfileTab:  focused ? 'person-circle'     : 'person-circle-outline',
-      SettingsTab: focused ? 'settings'          : 'settings-outline',
-    };
-    return map[name] || 'ellipse-outline';
-  }, []);
+  const renderTabBar = useCallback(
+    (props: MaterialTopTabBarProps) => {
+      const { state, descriptors, navigation } = props;
+      return (
+        <View
+          style={{
+            backgroundColor: theme.surface,
+            borderTopLeftRadius: 22,
+            borderTopRightRadius: 22,
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: theme.border,
+            paddingBottom: Math.max(insets.bottom, 8),
+            // A lifted edge rather than a hard seam against the content above.
+            shadowColor: theme.shadow,
+            shadowOpacity: 0.18,
+            shadowRadius: 16,
+            shadowOffset: { width: 0, height: -4 },
+            elevation: 14,
+          }}
+        >
+          <View style={{ flexDirection: 'row', height: barHeight, alignItems: 'center' }}>
+            {state.routes.map((route, index) => {
+              const focused = state.index === index;
+              const { options } = descriptors[route.key];
+              const label =
+                typeof options.tabBarLabel === 'string' ? options.tabBarLabel : route.name;
+              const base = TABS.find((entry) => entry.name === route.name)?.icon ?? 'ellipse';
+              const iconName = (focused
+                ? base
+                : base + '-outline') as React.ComponentProps<typeof Ionicons>['name'];
+              const isProfile = route.name === 'ProfileTab';
+              const avatar = typeof profilePicture === 'string' ? profilePicture.trim() : '';
 
-  // The pager owns the swipe, so the bar is rendered by hand to keep the exact
-  // five-tab look the app already had instead of the material tab strip.
-  const renderTabBar = useCallback((props: MaterialTopTabBarProps) => {
-    const { state, descriptors, navigation } = props;
-    return (
-      <View
-        style={{
-          flexDirection: 'row',
-          backgroundColor: theme.surface,
-          borderTopWidth: 1,
-          borderTopColor: theme.border,
-          height: tabBarBaseHeight + insets.bottom,
-          paddingTop: 5,
-          paddingBottom: Math.max(insets.bottom, 5),
-        }}
-      >
-        {state.routes.map((route, index) => {
-          const focused = state.index === index;
-          const { options } = descriptors[route.key];
-          const label = typeof options.tabBarLabel === 'string' ? options.tabBarLabel : route.name;
-          const iconName = iconForRoute(route.name, focused);
-          const iconSize = iconName === 'barbell' ? 26 : 22;
-          const color = focused ? theme.primary : theme.textMuted;
-          const showBadge = route.name === 'MessagesTab' && unreadMessages > 0;
-
-          return (
-            <TouchableRipple
-              key={route.key}
-              onPress={() => {
-                if (route.name === 'MessagesTab') setUnreadMessages(0);
-                const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-                if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
-              }}
-              accessibilityRole="button"
-              accessibilityState={{ selected: focused }}
-              accessibilityLabel={label}
-              style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
-              borderless
-            >
-              <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-                <View
-                  style={{
-                    width: 42,
-                    height: 30,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    borderTopWidth: focused ? 2 : 0,
-                    borderTopColor: focused ? theme.primary : 'transparent',
+              return (
+                <Pressable
+                  key={route.key}
+                  onPress={() => {
+                    const event = navigation.emit({
+                      type: 'tabPress',
+                      target: route.key,
+                      canPreventDefault: true,
+                    });
+                    if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
                   }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: focused }}
+                  accessibilityLabel={label}
+                  style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
                 >
-                  <Ionicons name={iconName} size={iconSize} color={color} />
-                  {showBadge && (
-                    <View
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        right: 2,
-                        backgroundColor: theme.danger,
-                        borderRadius: 7,
-                        minWidth: 15,
-                        height: 15,
-                        paddingHorizontal: 3,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        borderWidth: 1.5,
-                        borderColor: theme.surface,
-                      }}
-                    >
-                      <Text style={{ color: '#FFFFFF', fontSize: 8, fontWeight: '900' }}>
-                        {unreadMessages > 9 ? '9+' : unreadMessages}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                <Text
-                  numberOfLines={1}
-                  style={{ color, fontSize: 10, fontWeight: '700', marginTop: 2 }}
-                >
-                  {label}
-                </Text>
-              </View>
-            </TouchableRipple>
-          );
-        })}
-      </View>
-    );
-  }, [iconForRoute, insets.bottom, tabBarBaseHeight, theme, unreadMessages]);
+                  <View
+                    style={{
+                      minWidth: 54,
+                      height: 34,
+                      paddingHorizontal: 14,
+                      borderRadius: 17,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: focused ? theme.primarySoft : 'transparent',
+                    }}
+                  >
+                    {isProfile && avatar ? (
+                      <Image
+                        source={{ uri: avatar }}
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: 12,
+                          borderWidth: focused ? 2 : 0,
+                          borderColor: theme.primary,
+                        }}
+                      />
+                    ) : (
+                      <Ionicons
+                        name={iconName}
+                        size={route.name === 'Exercises' ? 24 : 22}
+                        color={focused ? theme.primary : theme.textMuted}
+                      />
+                    )}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      );
+    },
+    [barHeight, insets.bottom, profilePicture, theme],
+  );
 
   return (
     <Tab.Navigator
       tabBar={renderTabBar}
       tabBarPosition="bottom"
-      // Screens are kept mounted while swiping so the pager stays smooth, but
-      // only the ones that have been visited are built.
+      // Screens stay mounted while swiping so the pager is smooth, but only the
+      // ones that have been visited are built.
       screenOptions={{ lazy: true, swipeEnabled: true }}
     >
-      <Tab.Screen name="Home" component={Feed} options={{ tabBarLabel: t('tabs.feed', 'Keşfet') }} />
-      <Tab.Screen name="Routines" component={Routines} options={{ tabBarLabel: t('tabs.routines', 'Rutinler') }} />
-      <Tab.Screen name="Exercises" component={Exercises} options={{ tabBarLabel: t('tabs.exercises', 'Egzersiz') }} />
+      <Tab.Screen name="Home" component={Feed} options={{ tabBarLabel: t('tabs.home', 'Ana Sayfa') }} />
       <Tab.Screen
-        name="MessagesTab"
-        component={MessagesStack}
-        options={{ tabBarLabel: t('tabs.messages', 'Mesajlar') }}
-        listeners={{
-          focus: () => {
-            messagesTabFocusedRef.current = true;
-            setUnreadMessages(0);
-          },
-          blur: () => {
-            messagesTabFocusedRef.current = false;
-          },
-          tabPress: () => setUnreadMessages(0),
-        }}
+        name="ExploreTab"
+        component={Explore}
+        options={{ tabBarLabel: t('tabs.explore', 'Keşfet') }}
+      />
+      <Tab.Screen
+        name="Routines"
+        component={Routines}
+        options={{ tabBarLabel: t('tabs.routines', 'Antrenman') }}
+      />
+      <Tab.Screen
+        name="Exercises"
+        component={Exercises}
+        options={{ tabBarLabel: t('tabs.exercises', 'Egzersizler') }}
       />
       <Tab.Screen
         name="ProfileTab"

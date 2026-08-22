@@ -1,262 +1,257 @@
-import React, { useState, memo, useMemo } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 // expo-image's native view fails to instantiate on some Android devices
 // ("Couldn't create view of type ExpoImageViewWrapper"), which leaves avatars
 // blank, so the story bubbles stay on React Native's Image.
-import { Image, ScrollView, StyleSheet } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
-import StoryViewer from './StoryViewer';
-import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useAppSelector } from '../store/hooks';
+import StoryViewer from './StoryViewer';
+import StoryRing from './story/StoryRing';
 import type { PublicUser, Story } from '@motionmeet/shared';
+import type { NavigationLike } from '../navigation/types';
 
-interface StoriesBarProps { onAddStory: () => void }
-interface StoryGroup { user: PublicUser; stories: Story[] }
+interface StoriesBarProps {
+  onAddStory: () => void;
+  navigation?: NavigationLike;
+  /** Lets the feed refresh the rail after the author deletes a story. */
+  onStoryDeleted?: () => void;
+}
 
-const StoriesBar = ({ onAddStory }: StoriesBarProps) => {
+interface StoryGroup {
+  user: PublicUser;
+  stories: Story[];
+}
+
+const byOldestFirst = (left: Story, right: Story): number =>
+  new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+
+/**
+ * The rail of story bubbles above the feed.
+ *
+ * The author's own bubble is the first one and it is the only one they get:
+ * everything they have posted in the last day lives inside "Hikayem", and the
+ * plus badge on it adds another. Their stories are never repeated as a separate
+ * bubble further down the rail.
+ */
+const StoriesBar = ({ onAddStory, navigation, onStoryDeleted }: StoriesBarProps) => {
   const { stories } = useAppSelector((state) => state.stories);
   const user = useAppSelector((state) => state.user.value);
   const { t } = useTranslation();
   const { theme } = useTheme();
   const { isNarrow } = useResponsiveLayout();
+
   // Small phones keep the bubbles from touching; wide phones avoid huge gaps.
-  const ringSize = isNarrow ? 58 : 66;
-  const avatarSize = ringSize - 8;
+  const ringSize = isNarrow ? 62 : 70;
+  const avatarSize = ringSize - 9;
 
-  const styles = useMemo(() => StyleSheet.create({
-    container: {
-      backgroundColor: theme.background,
-      paddingVertical: 10,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: theme.border,
-    },
-    scrollContent: {
-      paddingHorizontal: 14,
-      gap: 14,
-      alignItems: 'flex-start',
-    },
-    storyContainer: {
-      alignItems: 'center',
-      width: ringSize + 8,
-      borderRadius: 12,
-    },
-    createStoryRing: {
-      width: ringSize,
-      height: ringSize,
-      borderRadius: ringSize / 2,
-      justifyContent: 'center',
-      alignItems: 'center',
-      position: 'relative',
-      marginBottom: 6,
-      backgroundColor: 'transparent'
-    },
-    storyRing: {
-      width: ringSize,
-      height: ringSize,
-      borderRadius: ringSize / 2,
-      borderWidth: 2,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 6,
-      padding: 2,
-      position: 'relative',
-      backgroundColor: 'transparent'
-    },
-    avatar: {
-      width: avatarSize,
-      height: avatarSize,
-      borderRadius: avatarSize / 2,
-      borderWidth: 2,
-      borderColor: theme.background,
-    },
-    placeholderAvatar: {
-      backgroundColor: theme.surface,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    placeholderText: {
-      color: theme.text,
-      fontSize: 24,
-      fontWeight: 'bold',
-    },
-    addButton: {
-      position: 'absolute',
-      bottom: 0,
-      right: 0,
-      width: 22,
-      height: 22,
-      borderRadius: 11,
-      backgroundColor: theme.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 2,
-      borderColor: theme.background,
-    },
-    countBadge: {
-      position: 'absolute',
-      top: -4,
-      right: -4,
-      minWidth: 18,
-      height: 18,
-      borderRadius: 9,
-      paddingHorizontal: 4,
-      backgroundColor: theme.secondary,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 1.5,
-      borderColor: theme.background,
-    },
-    countText: {
-      color: '#fff',
-      fontSize: 10,
-      fontWeight: 'bold',
-    },
-    usernameText: {
-      fontSize: 11,
-      lineHeight: 14,
-      color: theme.textMuted,
-      textAlign: 'center',
-      width: '100%',
-      paddingHorizontal: 2,
-    },
-  }), [avatarSize, ringSize, theme]);
-
-  // viewerStories: all stories of selected user, in chronological order
   const [viewerStories, setViewerStories] = useState<Story[]>([]);
   const [viewerVisible, setViewerVisible] = useState(false);
-  const userProfilePicture =
-    typeof user?.profile_picture === 'string'
-      ? user.profile_picture.trim()
-      : '';
 
-  // Group stories by user — keep all stories per user, show 1 bubble per user
-  const groupedByUser = useMemo<StoryGroup[]>(() => {
+  const { ownStories, otherGroups } = useMemo(() => {
     const valid = stories.filter(
       (story): story is Story & { user: PublicUser } =>
         Boolean(story?._id && story.user && typeof story.user === 'object'),
     );
-    const map: Record<string, Story[]> = {};
+
+    const mine: Story[] = [];
+    const byUser = new Map<string, Story[]>();
     for (const story of valid) {
-      const uid = story.user._id;
-      if (!map[uid]) map[uid] = [];
-      map[uid].push(story);
-    }
-    // Sort each user's stories chronologically
-    for (const uid of Object.keys(map)) {
-      map[uid].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-    }
-    // Return array of { user, stories }, keep insertion order (most recent post first)
-    const userOrder: StoryGroup[] = [];
-    const seen = new Set<string>();
-    for (const story of [...valid].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())) {
-      if (!seen.has(story.user._id)) {
-        seen.add(story.user._id);
-        userOrder.push({ user: story.user, stories: map[story.user._id] });
+      if (user?._id && story.user._id === user._id) {
+        mine.push(story);
+        continue;
       }
+      const bucket = byUser.get(story.user._id);
+      if (bucket) bucket.push(story);
+      else byUser.set(story.user._id, [story]);
     }
-    return userOrder;
-  }, [stories]);
 
-  const handleStoryPress = (userStories: Story[]) => {
-    setViewerStories(userStories);
+    mine.sort(byOldestFirst);
+    for (const bucket of byUser.values()) bucket.sort(byOldestFirst);
+
+    // Rail order follows who posted most recently, while each bubble plays
+    // that person's stories oldest first.
+    const groups: StoryGroup[] = [];
+    const seen = new Set<string>();
+    for (const story of [...valid].sort(
+      (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+    )) {
+      if (user?._id && story.user._id === user._id) continue;
+      if (seen.has(story.user._id)) continue;
+      seen.add(story.user._id);
+      groups.push({ user: story.user, stories: byUser.get(story.user._id) ?? [] });
+    }
+
+    return { ownStories: mine, otherGroups: groups };
+  }, [stories, user?._id]);
+
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        container: {
+          backgroundColor: theme.background,
+          paddingVertical: 12,
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: theme.border,
+        },
+        scrollContent: {
+          paddingHorizontal: 14,
+          gap: 14,
+          alignItems: 'flex-start',
+        },
+        bubble: {
+          alignItems: 'center',
+          width: ringSize + 8,
+        },
+        ring: {
+          width: ringSize,
+          height: ringSize,
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: 6,
+        },
+        avatar: {
+          width: avatarSize,
+          height: avatarSize,
+          borderRadius: avatarSize / 2,
+          borderWidth: 2.5,
+          borderColor: theme.background,
+        },
+        avatarFallback: {
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: theme.surfaceLight,
+        },
+        avatarLetter: {
+          color: theme.text,
+          fontSize: avatarSize * 0.4,
+          fontWeight: '800',
+        },
+        addBadge: {
+          position: 'absolute',
+          right: 0,
+          bottom: 0,
+          width: 22,
+          height: 22,
+          borderRadius: 11,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: theme.primary,
+          borderWidth: 2.5,
+          borderColor: theme.background,
+        },
+        label: {
+          fontSize: 11,
+          lineHeight: 14,
+          color: theme.textMuted,
+          textAlign: 'center',
+          width: '100%',
+          paddingHorizontal: 2,
+        },
+        labelOwn: {
+          color: theme.text,
+          fontWeight: '700',
+        },
+      }),
+    [avatarSize, ringSize, theme],
+  );
+
+  const openStories = useCallback((group: Story[]) => {
+    if (!group.length) return;
+    setViewerStories(group);
     setViewerVisible(true);
-  };
+  }, []);
 
-  const handleClose = () => {
+  const closeViewer = useCallback(() => {
     setViewerVisible(false);
     setViewerStories([]);
-  };
+  }, []);
+
+  const renderAvatar = (picture: string, fallback: string) =>
+    picture ? (
+      <Image source={{ uri: picture }} style={styles.avatar} />
+    ) : (
+      <View style={[styles.avatar, styles.avatarFallback]}>
+        <Text style={styles.avatarLetter}>{fallback}</Text>
+      </View>
+    );
+
+  const ownPicture = typeof user?.profile_picture === 'string' ? user.profile_picture.trim() : '';
+  const hasOwnStories = ownStories.length > 0;
 
   return (
     <>
-      <Surface elevation={0} style={styles.container}>
+      <View style={styles.container}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          {/* Create Story Button */}
-          <TouchableRipple
-            style={styles.storyContainer}
-            onPress={onAddStory}
-            borderless
+          {/* Own bubble: opens what is already posted, the badge adds more. */}
+          <Pressable
+            style={styles.bubble}
+            onPress={() => (hasOwnStories ? openStories(ownStories) : onAddStory())}
+            accessibilityRole="button"
+            accessibilityLabel={t('feed.your_story', 'Hikayem')}
           >
-            <Surface elevation={0} style={{ backgroundColor: 'transparent', alignItems: 'center' }}>
-              <Surface elevation={0} style={styles.createStoryRing}>
-                {userProfilePicture ? (
-                  <Image
-                    source={{ uri: userProfilePicture }}
-                    style={styles.avatar}
-                  />
-                ) : (
-                  <Surface elevation={0} style={[styles.avatar, styles.placeholderAvatar]}>
-                    <Text style={styles.placeholderText}>
-                      {user?.full_name?.charAt(0).toUpperCase() || 'U'}
-                    </Text>
-                  </Surface>
-                )}
-                <Surface elevation={0} style={styles.addButton}>
-                  <Ionicons name="add" size={16} color="#fff" />
-                </Surface>
-              </Surface>
-              <Text style={styles.usernameText} numberOfLines={1}>
-                {t('feed.your_story', 'Hikayem')}
-              </Text>
-            </Surface>
-          </TouchableRipple>
-
-          {/* One bubble per user, contains all their stories */}
-          {groupedByUser.map(({ user: storyUser, stories: userStories }) => {
-            const storyProfilePicture =
-              typeof storyUser.profile_picture === 'string'
-                ? storyUser.profile_picture.trim()
-                : '';
-            return (
-              <TouchableRipple
-                key={storyUser._id}
-                style={styles.storyContainer}
-                onPress={() => handleStoryPress(userStories)}
-                borderless
+            <View style={styles.ring}>
+              {hasOwnStories && <StoryRing size={ringSize} />}
+              {renderAvatar(ownPicture, user?.full_name?.charAt(0)?.toUpperCase() || 'U')}
+              <Pressable
+                onPress={onAddStory}
+                hitSlop={8}
+                style={styles.addBadge}
+                accessibilityRole="button"
+                accessibilityLabel={t('feed.create_story', 'Hikaye olustur')}
               >
-                <Surface elevation={0} style={{ backgroundColor: 'transparent', alignItems: 'center' }}>
-                  <Surface elevation={0} style={[styles.storyRing, { borderColor: theme.primary }]}>
-                    {storyProfilePicture ? (
-                      <Image
-                        source={{ uri: storyProfilePicture }}
-                        style={styles.avatar}
-                      />
-                    ) : (
-                      <Surface elevation={0} style={[styles.avatar, styles.placeholderAvatar]}>
-                        <Text style={styles.placeholderText}>
-                          {storyUser?.full_name?.charAt(0)?.toUpperCase() || 'U'}
-                        </Text>
-                      </Surface>
-                    )}
-                    {/* Story count badge if > 1 */}
-                    {userStories.length > 1 && (
-                      <Surface elevation={0} style={styles.countBadge}>
-                        <Text style={styles.countText}>{userStories.length}</Text>
-                      </Surface>
-                    )}
-                  </Surface>
-                  <Text style={styles.usernameText} numberOfLines={1}>
-                    {storyUser.full_name?.split(' ')[0] || storyUser.username}
-                  </Text>
-                </Surface>
-              </TouchableRipple>
+                <Ionicons name="add" size={15} color="#FFFFFF" />
+              </Pressable>
+            </View>
+            <Text style={[styles.label, styles.labelOwn]} numberOfLines={1}>
+              {t('feed.your_story', 'Hikayem')}
+            </Text>
+          </Pressable>
+
+          {otherGroups.map(({ user: storyUser, stories: userStories }) => {
+            const picture =
+              typeof storyUser.profile_picture === 'string' ? storyUser.profile_picture.trim() : '';
+            return (
+              <Pressable
+                key={storyUser._id}
+                style={styles.bubble}
+                onPress={() => openStories(userStories)}
+                accessibilityRole="button"
+                accessibilityLabel={storyUser.full_name || storyUser.username}
+              >
+                <View style={styles.ring}>
+                  <StoryRing size={ringSize} />
+                  {renderAvatar(
+                    picture,
+                    (storyUser.full_name || storyUser.username || '?').charAt(0).toUpperCase(),
+                  )}
+                </View>
+                <Text style={styles.label} numberOfLines={1}>
+                  {storyUser.full_name?.split(' ')[0] || storyUser.username}
+                </Text>
+              </Pressable>
             );
           })}
         </ScrollView>
-      </Surface>
+      </View>
 
-      {/* Multi-story viewer */}
       <StoryViewer
         visible={viewerVisible}
         stories={viewerStories}
         startIndex={0}
-        onClose={handleClose}
+        navigation={navigation}
+        onClose={closeViewer}
+        onDeleted={() => {
+          closeViewer();
+          onStoryDeleted?.();
+        }}
       />
     </>
   );

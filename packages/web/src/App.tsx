@@ -27,6 +27,7 @@ const Features = lazy(() => import("./pages/Features"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const About = lazy(() => import("./pages/About"));
 const Feed = lazy(() => import("./pages/Feed"));
+const Explore = lazy(() => import("./pages/Explore"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Routines = lazy(() => import("./pages/Routines"));
 const Exercises = lazy(() => import("./pages/Exercises"));
@@ -159,6 +160,7 @@ const AppContent = () => {
 
           <Route element={user ? <Layout unreadCount={unreadCount} /> : <Navigate to="/login" replace />}>
             <Route path="/feed" element={<Feed />} />
+            <Route path="/explore" element={<Explore />} />
             <Route path="/messages" element={<Messages />} />
             <Route path="/messages/:userId" element={<Messages />} />
             <Route path="/statistics" element={<Statistics />} />
