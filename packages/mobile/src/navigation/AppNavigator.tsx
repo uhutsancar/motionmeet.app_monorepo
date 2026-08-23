@@ -63,6 +63,7 @@ const loadLeaderboard = () => require('../pages/LeaderboardScreen').default;
 const loadLocationPicker = () => require('../pages/LocationPickerScreen').default;
 const loadLocationSettings = () => require('../pages/LocationSettingsScreen').default;
 const loadNearby = () => require('../pages/NearbyScreen').default;
+const loadSearch = () => require('../pages/SearchScreen').default;
 const loadLicenses = () => require('../pages/LicensesScreen').default;
 /* eslint-enable @typescript-eslint/no-require-imports */
 
@@ -106,6 +107,9 @@ const MainStack = () => (
     {/* Messages left the tab bar: it is opened from the feed header now, the
         same place the activity bell lives. */}
     <Stack.Screen name="Messages" component={Messages} />
+    {/* Search is a place of its own, pushed from the field on Keşfet, so the
+        grid is not rebuilt on every keystroke and Cancel returns to it. */}
+    <Stack.Screen name="SearchScreen" getComponent={loadSearch} />
     <Stack.Screen name="ProfileEdit" getComponent={loadProfileEdit} />
     <Stack.Screen name="Settings" getComponent={loadSettings} />
     <Stack.Screen name="Statistics" getComponent={loadStatistics} />
@@ -163,9 +167,10 @@ const TabNavigator = () => {
   const { fontScale } = useWindowDimensions();
   const profilePicture = useAppSelector((state) => state.user.value?.profile_picture);
 
-  // Fixed height so the pill indicator never jumps; only the safe-area padding
-  // below the row changes from device to device.
-  const barHeight = fontScale > 1.4 ? 66 : 60;
+  // One height on every device. The row itself never changes size — only the
+  // safe-area padding underneath it does — so the bar sits at the same place on
+  // a gesture-bar phone, a button-bar phone and a tablet.
+  const barHeight = fontScale > 1.4 ? 60 : 52;
 
   // A new message still raises a toast from anywhere in the app. The unread
   // count itself belongs to the feed header now, which is where it is shown.
@@ -200,20 +205,16 @@ const TabNavigator = () => {
     (props: MaterialTopTabBarProps) => {
       const { state, descriptors, navigation } = props;
       return (
+        // Flat, edge to edge, one hairline against the content above and
+        // nothing else: no rounded shelf, no floating shadow, no pill behind
+        // the icon. The whole bar is the same ground as the screen it belongs
+        // to, which is what makes it disappear until it is looked at.
         <View
           style={{
             backgroundColor: theme.surface,
-            borderTopLeftRadius: 22,
-            borderTopRightRadius: 22,
             borderTopWidth: StyleSheet.hairlineWidth,
             borderTopColor: theme.border,
-            paddingBottom: Math.max(insets.bottom, 8),
-            // A lifted edge rather than a hard seam against the content above.
-            shadowColor: theme.shadow,
-            shadowOpacity: 0.18,
-            shadowRadius: 16,
-            shadowOffset: { width: 0, height: -4 },
-            elevation: 14,
+            paddingBottom: Math.max(insets.bottom, 6),
           }}
         >
           <View style={{ flexDirection: 'row', height: barHeight, alignItems: 'center' }}>
@@ -243,38 +244,32 @@ const TabNavigator = () => {
                   accessibilityRole="button"
                   accessibilityState={{ selected: focused }}
                   accessibilityLabel={label}
-                  style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+                  // The whole column is the target, so the tap area is a
+                  // fifth of the screen rather than the glyph itself.
+                  style={{ flex: 1, height: '100%', alignItems: 'center', justifyContent: 'center' }}
                 >
-                  <View
-                    style={{
-                      minWidth: 54,
-                      height: 34,
-                      paddingHorizontal: 14,
-                      borderRadius: 17,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: focused ? theme.primarySoft : 'transparent',
-                    }}
-                  >
-                    {isProfile && avatar ? (
-                      <Image
-                        source={{ uri: avatar }}
-                        style={{
-                          width: 24,
-                          height: 24,
-                          borderRadius: 12,
-                          borderWidth: focused ? 2 : 0,
-                          borderColor: theme.primary,
-                        }}
-                      />
-                    ) : (
-                      <Ionicons
-                        name={iconName}
-                        size={route.name === 'Exercises' ? 24 : 22}
-                        color={focused ? theme.primary : theme.textMuted}
-                      />
-                    )}
-                  </View>
+                  {isProfile && avatar ? (
+                    <Image
+                      source={{ uri: avatar }}
+                      style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: 13,
+                        // The ring is the selected state for the avatar, the
+                        // way the filled glyph is for the others. It is always
+                        // drawn so the avatar never changes size between tabs.
+                        borderWidth: 1.5,
+                        borderColor: focused ? theme.text : 'transparent',
+                      }}
+                    />
+                  ) : (
+                    <Ionicons
+                      name={iconName}
+                      size={26}
+                      // Monochrome: weight, not hue, says which tab is open.
+                      color={focused ? theme.text : theme.textMuted}
+                    />
+                  )}
                 </Pressable>
               );
             })}

@@ -61,15 +61,44 @@ export const getStoriesForUser = async (userId: string, pagination: Pagination):
   // stories carry no counter, so nothing leaks between accounts.
   const ownIds = selected.filter((row) => row.user_id === userId).map((row) => row.id);
   if (ownIds.length) {
-    const counts = await database
-      .selectFrom("story_views")
-      .select((expression) => ["story_id", expression.fn.countAll<number>().as("total")])
-      .where("story_id", "in", ownIds)
-      .groupBy("story_id")
-      .execute();
+    const [counts, likeCounts] = await Promise.all([
+      database
+        .selectFrom("story_views")
+        .select((expression) => ["story_id", expression.fn.countAll<number>().as("total")])
+        .where("story_id", "in", ownIds)
+        .groupBy("story_id")
+        .execute(),
+      database
+        .selectFrom("story_likes")
+        .select((expression) => ["story_id", expression.fn.countAll<number>().as("total")])
+        .where("story_id", "in", ownIds)
+        .groupBy("story_id")
+        .execute(),
+    ]);
     const byStory = new Map(counts.map((row) => [row.story_id, Number(row.total)]));
+    const likesByStory = new Map(likeCounts.map((row) => [row.story_id, Number(row.total)]));
     for (const item of items) {
-      if (ownIds.includes(item.id)) item.view_count = byStory.get(item.id) ?? 0;
+      if (ownIds.includes(item.id)) {
+        item.view_count = byStory.get(item.id) ?? 0;
+        item.like_count = likesByStory.get(item.id) ?? 0;
+      }
+    }
+  }
+
+  // The heart has to open already filled on a story this member reacted to, so
+  // the state travels with the rail rather than costing a request per story
+  // once the viewer is open.
+  const otherIds = selected.filter((row) => row.user_id !== userId).map((row) => row.id);
+  if (otherIds.length) {
+    const liked = await database
+      .selectFrom("story_likes")
+      .select("story_id")
+      .where("user_id", "=", userId)
+      .where("story_id", "in", otherIds)
+      .execute();
+    const likedIds = new Set(liked.map((row) => row.story_id));
+    for (const item of items) {
+      if (likedIds.has(item.id)) item.liked = true;
     }
   }
 
@@ -120,11 +149,60 @@ export const getStoryViewers = async (storyId: string, limit = 100): Promise<Sto
     .orderBy("story_views.created_at", "desc")
     .limit(Math.min(Math.max(limit, 1), 200))
     .execute();
+  // Who reacted is part of the same answer, so the author sees a heart on the
+  // rows that left one instead of the list saying only that they looked.
+  const likes = rows.length
+    ? await database.selectFrom("story_likes").select("user_id").where("story_id", "=", storyId).execute()
+    : [];
+  const likedBy = new Set(likes.map((row) => row.user_id));
   return rows.map((row) => ({
     user: publicUser(row.id, row.full_name, row.username, row.profile_picture_url),
     viewedAt: toIsoString(row.viewed_at) ?? new Date(0).toISOString(),
+    liked: likedBy.has(row.id),
   }));
 };
+
+/**
+ * Adds or removes this member's reaction to a story.
+ *
+ * Idempotent in both directions: liking twice leaves one row, unliking a story
+ * that was never liked is a no-op. The return says whether the state actually
+ * changed, so the caller only writes an activity row on a real new like.
+ */
+export const setStoryLike = async (
+  storyId: string,
+  userId: string,
+  liked: boolean,
+): Promise<{ liked: boolean; changed: boolean }> => {
+  if (liked) {
+    const inserted = await database
+      .insertInto("story_likes")
+      .values({ story_id: storyId, user_id: userId })
+      .onConflict((conflict) => conflict.columns(["story_id", "user_id"]).doNothing())
+      .returning("story_id")
+      .executeTakeFirst();
+    return { liked: true, changed: Boolean(inserted) };
+  }
+  const removed = await database
+    .deleteFrom("story_likes")
+    .where("story_id", "=", storyId)
+    .where("user_id", "=", userId)
+    .returning("story_id")
+    .executeTakeFirst();
+  return { liked: false, changed: Boolean(removed) };
+};
+
+/** How many people reacted to a story. Callers must verify the requester owns it. */
+export const countStoryLikes = async (storyId: string): Promise<number> =>
+  Number(
+    (
+      await database
+        .selectFrom("story_likes")
+        .select((expression) => expression.fn.countAll<number>().as("total"))
+        .where("story_id", "=", storyId)
+        .executeTakeFirst()
+    )?.total ?? 0,
+  );
 
 export const getStoryById = async (storyId: string): Promise<StoryAccess | null> => {
   const row = await database.selectFrom("stories").select(["id", "user_id", "media_url", "media_key"]).where("id", "=", storyId).executeTakeFirst();
@@ -134,5 +212,6 @@ export const getStoryById = async (storyId: string): Promise<StoryAccess | null>
 export const deleteStoryById = async (story: StoryAccess): Promise<void> => withTransaction(async (transaction) => {
   const key = story.media_key || extractS3Key(story.media_url); if (key) await queueMediaDeletions([key], { transaction });
   await transaction.deleteFrom("story_views").where("story_id", "=", story.id).execute();
+  await transaction.deleteFrom("story_likes").where("story_id", "=", story.id).execute();
   await transaction.deleteFrom("stories").where("id", "=", story.id).execute();
 });

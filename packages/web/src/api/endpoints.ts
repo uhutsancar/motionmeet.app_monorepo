@@ -555,6 +555,26 @@ export const getStoryViewers = async (storyId: string, token: Token): Promise<St
   return data;
 };
 
+/**
+ * Reacts to a story, or takes the reaction back.
+ *
+ * The heart used to type "❤️" into the reply box and send it as a direct
+ * message, which put a reaction in the author's inbox and gave no way to undo
+ * it. This writes a like and notifies the author instead.
+ */
+export const setStoryLike = async (
+  storyId: string,
+  liked: boolean,
+  token: Token,
+): Promise<BasicResponse & { liked?: boolean }> => {
+  const url = API_ROUTES.story.like(storyId);
+  const config = { headers: { Authorization: `Bearer ${token}` } };
+  const { data } = liked
+    ? await api.post<BasicResponse & { liked?: boolean }>(url, {}, config)
+    : await api.delete<BasicResponse & { liked?: boolean }>(url, config);
+  return data;
+};
+
 // WORKOUT
 export const getWorkoutStats = async (period: "week" | "month" | "calendar_month" | "year", token: Token): Promise<WorkoutStats & BasicResponse> => {
   const { data } = await api.get<WorkoutStats & BasicResponse>(API_ROUTES.workout.stats, {

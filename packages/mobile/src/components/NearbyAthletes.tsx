@@ -20,8 +20,9 @@ import type { NavigationOnlyProps } from '../navigation/types';
  *
  * It only ever reads what the backend already stored. Asking for a GPS fix here
  * would fire the OS permission prompt at someone who opened the app to read
- * their feed, so the section simply stays hidden until the member has turned
- * Nearby on from its own screen, where the ask is explained.
+ * their feed, so until Nearby has been turned on from its own screen — where
+ * the ask is explained — the section carries a single line pointing there
+ * rather than a rail of people it cannot see.
  */
 const NEARBY_FEED_LIMIT = 12;
 
@@ -31,12 +32,23 @@ const NEARBY_FEED_LIMIT = 12;
  * proximity query - every time it comes back into view.
  */
 const CACHE_TTL_MS = 60_000;
-/** Keyed by account so a sign-out never leaves one member's list on another's feed. */
-let cache: { at: number; userId: string; users: NearbyUser[] } | null = null;
+/**
+ * Why the rail has nothing in it.
+ *
+ * `off` covers both a member who has never turned Nearby on and a fix that has
+ * gone stale — from the feed's point of view they are the same thing: there is
+ * nobody to show and the answer is one tap away on the Nearby screen.
+ */
+type NearbyState = 'loading' | 'off' | 'ready';
 
-const cachedFor = (userId: string | undefined): NearbyUser[] | null =>
+/** Keyed by account so a sign-out never leaves one member's list on another's feed. */
+let cache: { at: number; userId: string; users: NearbyUser[]; state: NearbyState } | null = null;
+
+const cachedFor = (
+  userId: string | undefined,
+): { users: NearbyUser[]; state: NearbyState } | null =>
   userId && cache && cache.userId === userId && Date.now() - cache.at < CACHE_TTL_MS
-    ? cache.users
+    ? { users: cache.users, state: cache.state }
     : null;
 
 const NearbyAthletes = ({ navigation }: NavigationOnlyProps) => {
@@ -45,13 +57,16 @@ const NearbyAthletes = ({ navigation }: NavigationOnlyProps) => {
   const { usableWidth } = useResponsiveLayout();
   const { getToken } = useAuthContext();
   const currentUserId = useAppSelector((state) => state.user.value?._id);
-  const [users, setUsers] = useState<NearbyUser[]>(() => cachedFor(currentUserId) ?? []);
+  const initial = cachedFor(currentUserId);
+  const [users, setUsers] = useState<NearbyUser[]>(initial?.users ?? []);
+  const [state, setState] = useState<NearbyState>(initial?.state ?? 'loading');
 
   const load = useCallback(async () => {
     if (!currentUserId) return;
     const cached = cachedFor(currentUserId);
     if (cached) {
-      setUsers(cached);
+      setUsers(cached.users);
+      setState(cached.state);
       return;
     }
     try {
@@ -59,14 +74,18 @@ const NearbyAthletes = ({ navigation }: NavigationOnlyProps) => {
       if (!token) return;
       const settings = await getNearbySettings(token);
       // A stale fix would put people in front of a distance that is no longer
-      // true, so the section waits for the member to refresh it on Nearby.
-      const found = !settings.success || !settings.settings?.enabled || settings.settings.stale
-        ? []
-        : (await getNearbyUsers(token, NEARBY_FEED_LIMIT)).users ?? [];
-      cache = { at: Date.now(), userId: currentUserId, users: found };
+      // true, so the rail waits for the member to refresh it on Nearby.
+      const available = settings.success
+        && Boolean(settings.settings?.enabled)
+        && !settings.settings?.stale;
+      const found = available ? (await getNearbyUsers(token, NEARBY_FEED_LIMIT)).users ?? [] : [];
+      const nextState: NearbyState = available ? 'ready' : 'off';
+      cache = { at: Date.now(), userId: currentUserId, users: found, state: nextState };
       setUsers(found);
+      setState(nextState);
     } catch (error) {
       logHandledError('load-feed-nearby-athletes', error);
+      setState('off');
     }
   }, [currentUserId, getToken]);
 
@@ -74,7 +93,11 @@ const NearbyAthletes = ({ navigation }: NavigationOnlyProps) => {
     void load();
   }, [load]);
 
-  if (users.length === 0) return null;
+  // Nothing at all until the first answer is in, so the feed does not flash a
+  // section that is about to disappear.
+  if (state === 'loading') return null;
+  // With Nearby on and genuinely nobody around, there is nothing to say.
+  if (state === 'ready' && users.length === 0) return null;
 
   const cardWidth = feedCarouselCardWidth(usableWidth);
 
@@ -97,22 +120,39 @@ const NearbyAthletes = ({ navigation }: NavigationOnlyProps) => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {users.map((user) => (
-          <UserCard
-            key={user._id}
-            user={user}
-            width={cardWidth}
-            badge={t(BAND_LABELS[user.distanceBand].key, BAND_LABELS[user.distanceBand].fallback)}
-            caption={user.approximateArea || user.location || ''}
-            onPress={() => navigation.navigate('Profile', { userId: user._id })}
-          />
-        ))}
-      </ScrollView>
+      {/* Turned off, the section is one line of text rather than a card: it is
+          still its own place on the feed, named the same as everywhere else,
+          without pretending to hold people it cannot see. */}
+      {state === 'off' ? (
+        <TouchableOpacity
+          activeOpacity={0.72}
+          accessibilityRole="button"
+          onPress={() => navigation.navigate('NearbyScreen')}
+          style={styles.offRow}
+        >
+          <Text style={{ color: theme.textMuted, fontSize: 13, flexShrink: 1 }} numberOfLines={2}>
+            {t('nearby.off_body', 'Yakınında antrenman yapan sporcuları görmek için aç.')}
+          </Text>
+          <Ionicons name="chevron-forward" size={15} color={theme.textMuted} />
+        </TouchableOpacity>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {users.map((user) => (
+            <UserCard
+              key={user._id}
+              user={user}
+              width={cardWidth}
+              badge={t(BAND_LABELS[user.distanceBand].key, BAND_LABELS[user.distanceBand].fallback)}
+              caption={user.approximateArea || user.location || ''}
+              onPress={() => navigation.navigate('Profile', { userId: user._id })}
+            />
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 };
@@ -140,6 +180,12 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   seeAll: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: 2 },
+  offRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: FEED_GUTTER,
+  },
   // Padding lives on the content, not the ScrollView, so the row still scrolls
   // edge to edge while the first card lines up with the posts above it.
   scrollContent: {

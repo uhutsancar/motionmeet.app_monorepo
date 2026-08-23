@@ -714,7 +714,8 @@
     "decline": "Delete",
     "empty_title": "No notifications yet",
     "empty_body": "Follow requests and likes will show up here.",
-    "settings_hint": "Follow requests, likes and comments"
+    "settings_hint": "Follow requests, likes and comments",
+    "story_like": "{{name}} liked your story"
   },
   "connections": {
     "eyebrow": "YOUR NETWORK",
@@ -857,7 +858,9 @@
     "reply_failed": "The reply could not be sent",
     "send_reply": "Send",
     "react": "Like",
-    "send_message": "Send message"
+    "send_message": "Send message",
+    "like_failed": "The reaction could not be saved",
+    "unreact": "Remove reaction"
   },
   "explore": {
     "search_placeholder": "Search",

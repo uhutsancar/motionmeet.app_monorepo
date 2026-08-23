@@ -31,6 +31,7 @@ const ICONS: Record<NotificationType, { Icon: LucideIcon; tone: string }> = {
   follow: { Icon: UserCheck, tone: "primary.main" },
   post_like: { Icon: Heart, tone: "error.main" },
   post_comment: { Icon: MessageCircle, tone: "text.secondary" },
+  story_like: { Icon: Heart, tone: "error.main" },
 };
 
 /**
@@ -96,6 +97,8 @@ const Activity = () => {
         return t("activity.post_like", "{{name}} liked your post", { name });
       case "post_comment":
         return t("activity.post_comment", "{{name}} commented on your post", { name });
+      case "story_like":
+        return t("activity.story_like", "{{name}} liked your story", { name });
       default:
         return name;
     }

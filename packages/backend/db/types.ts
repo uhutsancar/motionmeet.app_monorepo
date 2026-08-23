@@ -338,6 +338,13 @@ export interface StoryViewTable {
   created_at: GeneratedTimestamp;
 }
 
+/** One row per (story, member). Its presence *is* the like. */
+export interface StoryLikeTable {
+  story_id: string;
+  user_id: string;
+  created_at: GeneratedTimestamp;
+}
+
 export interface UserFollowTable {
   follower_id: string;
   followee_id: string;
@@ -363,7 +370,8 @@ export type NotificationType =
   | "follow_request_accepted"
   | "follow"
   | "post_like"
-  | "post_comment";
+  | "post_comment"
+  | "story_like";
 
 export interface NotificationTable {
   id: Generated<string>;
@@ -373,6 +381,8 @@ export interface NotificationTable {
   actor_id: string;
   type: NotificationType;
   post_id: string | null;
+  /** Set on story_like; the row is cascaded away when the story expires. */
+  story_id: string | null;
   read_at: NullableTimestamp;
   created_at: GeneratedTimestamp;
   updated_at: GeneratedTimestamp;
@@ -532,6 +542,7 @@ export interface Database {
   post_comments: PostCommentTable;
   stories: StoryTable;
   story_views: StoryViewTable;
+  story_likes: StoryLikeTable;
   body_measurements: BodyMeasurementTable;
   user_follows: UserFollowTable;
   follow_requests: FollowRequestTable;

@@ -255,7 +255,8 @@
         "confirm": "Confirm",
         "decline": "Delete",
         "empty_title": "No notifications yet",
-        "empty_body": "Follow requests and likes will show up here."
+        "empty_body": "Follow requests and likes will show up here.",
+        "story_like": "{{name}} liked your story"
     },
     "profile": {
         "workouts": "Workouts",
@@ -813,7 +814,9 @@
         "reply_failed": "The reply could not be sent",
         "send_reply": "Send",
         "react": "Like",
-        "send_message": "Send message"
+        "send_message": "Send message",
+        "like_failed": "Reaction could not be saved",
+        "unreact": "Remove reaction"
     },
     "explore": {
         "search_placeholder": "Search",
@@ -824,5 +827,11 @@
         "empty_hint": "Share the first photo, or follow a few people.",
         "open_post": "Open post",
         "post_title": "Post"
+    },
+    "search": {
+        "recent": "Recent",
+        "clear_all": "Clear all",
+        "remove_recent": "Remove search",
+        "start_hint": "Search athletes by name or username."
     }
 }

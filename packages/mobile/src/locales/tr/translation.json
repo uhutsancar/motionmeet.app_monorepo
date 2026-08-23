@@ -255,7 +255,8 @@
         "confirm": "Onayla",
         "decline": "Sil",
         "empty_title": "Henüz bildirim yok",
-        "empty_body": "Takip istekleri ve beğeniler burada görünecek."
+        "empty_body": "Takip istekleri ve beğeniler burada görünecek.",
+        "story_like": "{{name}} hikayeni beğendi"
     },
     "profile": {
         "workouts": "Antrenmanlar",
@@ -813,7 +814,9 @@
         "reply_failed": "Yanıt gönderilemedi",
         "send_reply": "Gönder",
         "react": "Beğen",
-        "send_message": "Mesaj gönder"
+        "send_message": "Mesaj gönder",
+        "like_failed": "Beğeni kaydedilemedi",
+        "unreact": "Beğeniyi geri al"
     },
     "explore": {
         "search_placeholder": "Ara",
@@ -824,5 +827,11 @@
         "empty_hint": "İlk görseli sen paylaş ya da birilerini takip et.",
         "open_post": "Gönderiyi aç",
         "post_title": "Gönderi"
+    },
+    "search": {
+        "recent": "Son aramalar",
+        "clear_all": "Tümünü temizle",
+        "remove_recent": "Aramayı kaldır",
+        "start_hint": "Sporcuları isim ya da kullanıcı adıyla ara."
     }
 }

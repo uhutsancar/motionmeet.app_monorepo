@@ -9,6 +9,7 @@ import * as locationsAndProximity from "./migrations/006_locations_and_proximity
 import * as followRequestsAndNotifications from "./migrations/007_follow_requests_and_notifications.js";
 import * as storyOverlays from "./migrations/008_story_overlays.js";
 import * as userSearchIndexes from "./migrations/009_user_search_indexes.js";
+import * as storyLikes from "./migrations/010_story_likes.js";
 
 const migrationProvider: MigrationProvider = {
   async getMigrations() {
@@ -22,6 +23,7 @@ const migrationProvider: MigrationProvider = {
       "007_follow_requests_and_notifications": followRequestsAndNotifications,
       "008_story_overlays": storyOverlays,
       "009_user_search_indexes": userSearchIndexes,
+      "010_story_likes": storyLikes,
     };
   },
 };

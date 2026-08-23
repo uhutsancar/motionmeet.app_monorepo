@@ -180,15 +180,42 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
       const author: PublicUser | null = typeof post.user === 'object' ? post.user : null;
       return Boolean(post._id && author?._id);
     });
-    // Both carousels hide themselves when they have nothing to show, so they can
-    // be slotted in unconditionally once there is a feed to break up.
-    return [
-      ...validPosts.slice(0, 2).map((post): FeedRow => ({ type: 'post', item: post })),
-      ...(validPosts.length ? [{ type: 'suggested', id: 'suggested' } as FeedRow] : []),
-      ...validPosts.slice(2, 5).map((post): FeedRow => ({ type: 'post', item: post })),
-      ...(validPosts.length ? [{ type: 'nearby', id: 'nearby' } as FeedRow] : []),
-      ...validPosts.slice(5).map((post): FeedRow => ({ type: 'post', item: post })),
+    if (!validPosts.length) return [];
+
+    /*
+     * Two people carousels, never next to each other.
+     *
+     * Both rails used to be spliced in at fixed offsets - suggested after the
+     * second post, nearby after the fifth - which only reads as two sections on
+     * an account whose feed is long enough. With three posts the slice between
+     * them came back empty and the two rails landed back to back, which is the
+     * one arrangement that makes them look like one confused block.
+     *
+     * Suggested keeps its place near the top, because finding people to follow
+     * is what a thin feed needs. Nearby waits until there is a real run of posts
+     * after it, and drops to the bottom of the list when there is not - below
+     * the posts either way, and always with something between the two.
+     */
+    const asRow = (post: Post): FeedRow => ({ type: 'post', item: post });
+    const suggestedAfter = Math.min(2, validPosts.length);
+    const nearbyAfter = 6;
+    const rows: FeedRow[] = [
+      ...validPosts.slice(0, suggestedAfter).map(asRow),
+      { type: 'suggested', id: 'suggested' },
     ];
+    if (validPosts.length > nearbyAfter) {
+      rows.push(
+        ...validPosts.slice(suggestedAfter, nearbyAfter).map(asRow),
+        { type: 'nearby', id: 'nearby' },
+        ...validPosts.slice(nearbyAfter).map(asRow),
+      );
+    } else {
+      rows.push(
+        ...validPosts.slice(suggestedAfter).map(asRow),
+        { type: 'nearby', id: 'nearby' },
+      );
+    }
+    return rows;
   }, [posts]);
 
   const renderItem: ListRenderItem<FeedRow> = useCallback(({ item: row }) => {

@@ -1,5 +1,14 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { FlatList, StatusBar, RefreshControl, StyleSheet, type ListRenderItem } from 'react-native';
+import {
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StatusBar,
+  StyleSheet,
+  TextInput,
+  View,
+  type ListRenderItem,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthContext } from "../context/AuthProvider";
 import { useTranslation } from 'react-i18next';
@@ -9,7 +18,7 @@ import { setConnections } from '../features/connections/connectionsSlice';
 import { getUserConnections, getUserConversations } from '../api/endpoints';
 import dayjs, { setDayjsLocale } from '../utils/dayjs';
 
-import { Appbar, Avatar, Text, Searchbar, TouchableRipple, Badge, Surface } from 'react-native-paper';
+import { ActivityIndicator, Avatar, Text, TouchableRipple } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { MESSAGE_ICON } from '../config/icons';
 import { logHandledError } from '../utils/feedback';
@@ -24,6 +33,9 @@ interface ConversationItem {
   unread: number;
   isNew?: boolean;
 }
+
+/** Instagram's inbox avatar: big enough to recognise, small enough for a list. */
+const AVATAR_SIZE = 56;
 
 const entityId = (entity: PublicUser | string): string =>
   typeof entity === 'string' ? entity : entity._id;
@@ -272,49 +284,62 @@ const Messages = ({ navigation }: NavigationOnlyProps) => {
     return [...filtered, ...connConvs];
   }, [conversations, connections, searchQuery]);
 
+  /**
+   * One conversation, edge to edge.
+   *
+   * The row used to be a bordered card inset from both sides, which turned the
+   * inbox into a column of boxes with the screen showing through between them.
+   * It is a plain row now: avatar, name, and one line that carries the message
+   * and its age together, the way every inbox people already use reads.
+   */
   const renderConversation: ListRenderItem<ConversationItem> = ({ item: conv }) => {
     const isOnline = onlineUsers.has(conv.user?._id);
     const hasUnread = (conv.unread || 0) > 0;
-    const msgText = conv.lastMessage?.text || (conv.lastMessage?.message_type === 'image' ? '📷 Fotoğraf' : '');
+    const msgText = conv.lastMessage?.text
+      || (conv.lastMessage?.message_type === 'image' ? `📷 ${t('common.photo', 'Fotoğraf')}` : '');
     const timeLabel = conv.lastMessage?.createdAt ? dayjs(conv.lastMessage.createdAt).fromNow() : '';
+    const preview = conv.isNew
+      ? t('messages.start_new_chat', 'Start a new chat')
+      : (msgText || t('messages.no_message', 'No message yet'));
 
     return (
-      <TouchableRipple style={s.convRow} onPress={() => handleOpen(conv)}>
-        <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-          <Surface elevation={0} style={s.avatarContainer}>
+      <TouchableRipple
+        style={s.convRow}
+        onPress={() => handleOpen(conv)}
+        accessibilityRole="button"
+        accessibilityLabel={conv.user?.full_name || conv.user?.username}
+      >
+        <View style={s.convRowInner}>
+          <View style={s.avatarContainer}>
             {conv.user?.profile_picture
-              ? <Avatar.Image source={{ uri: conv.user.profile_picture }} size={52} />
-              : <Avatar.Text label={conv.user?.full_name?.charAt(0)?.toUpperCase() || '?'} size={52} style={{ backgroundColor: theme.primary }} />
+              ? <Avatar.Image source={{ uri: conv.user.profile_picture }} size={AVATAR_SIZE} />
+              : <Avatar.Text
+                  label={(conv.user?.full_name || conv.user?.username || '?').charAt(0).toUpperCase()}
+                  size={AVATAR_SIZE}
+                  style={{ backgroundColor: theme.primarySoft }}
+                  labelStyle={{ color: theme.primary, fontWeight: '800' }}
+                />
             }
-            {isOnline && <Badge size={13} style={s.onlineDot} />}
-          </Surface>
+            {isOnline && <View style={s.onlineDot} />}
+          </View>
 
-          <Surface elevation={0} style={s.convContent}>
-            <Surface elevation={0} style={s.convTop}>
-              <Text variant="titleMedium" style={[s.convName, hasUnread && { color: theme.text, fontWeight: '700' }]} numberOfLines={1}>
-                {conv.user?.full_name || conv.user?.username}
-              </Text>
-              <Text
-                variant="labelSmall"
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.7}
-                style={s.convTime}
-              >
-                {timeLabel}
-              </Text>
-            </Surface>
-            <Text variant="bodyMedium" style={[s.convPreview, hasUnread && { color: theme.text, fontWeight: '500' }]} numberOfLines={1}>
-              {conv.isNew ? t('messages.start_new_chat', 'Start a new chat') : (msgText || t('messages.no_message', 'No message yet'))}
+          <View style={s.convContent}>
+            <Text
+              numberOfLines={1}
+              style={[s.convName, hasUnread && s.convNameUnread]}
+            >
+              {conv.user?.full_name || conv.user?.username}
             </Text>
-          </Surface>
+            {/* Message and age share one line: two lines of grey under every
+                name is what made the list feel twice as tall as it needed. */}
+            <Text numberOfLines={1} style={[s.convPreview, hasUnread && s.convPreviewUnread]}>
+              {preview}
+              {timeLabel ? <Text style={s.convTime}>{`  ·  ${timeLabel}`}</Text> : null}
+            </Text>
+          </View>
 
-          {hasUnread && (
-            <Surface elevation={0} style={s.unreadBadge}>
-              <Badge size={10} style={{ backgroundColor: theme.primary }} />
-            </Surface>
-          )}
-        </Surface>
+          {hasUnread ? <View style={s.unreadDot} /> : null}
+        </View>
       </TouchableRipple>
     );
   };
@@ -323,53 +348,89 @@ const Messages = ({ navigation }: NavigationOnlyProps) => {
     <SafeAreaView style={s.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      <Appbar.Header style={s.header} statusBarHeight={0}>
-        {/* Messages is pushed from the feed header now rather than being a tab,
-            so it needs its own way back. */}
-        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
-        <Appbar.Content title={t('messages.title', 'Messages')} titleStyle={s.headerTitle} />
-        <Appbar.Action icon="square-edit-outline" onPress={handleNewChat} color={theme.primary} />
-      </Appbar.Header>
+      {/* A plain header rather than Appbar: its Content block centres a title
+          against whatever happens to be on either side, which is what left the
+          name off-centre once an icon was added on one side only. */}
+      <View style={s.header}>
+        <Pressable
+          onPress={() => navigation.goBack()}
+          hitSlop={10}
+          style={s.headerButton}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back', 'Geri')}
+        >
+          <Ionicons name="chevron-back" size={26} color={theme.text} />
+        </Pressable>
+        <Text numberOfLines={1} style={s.headerTitle}>
+          {t('messages.title', 'Messages')}
+        </Text>
+        <Pressable
+          onPress={handleNewChat}
+          hitSlop={10}
+          style={s.headerButton}
+          accessibilityRole="button"
+          accessibilityLabel={t('messages.start_new_chat', 'Yeni sohbet')}
+        >
+          <Ionicons name="create-outline" size={24} color={theme.text} />
+        </Pressable>
+      </View>
 
-      <Surface elevation={0} style={s.searchContainer}>
-        <Searchbar
-          placeholder={t('messages.search', 'Search conversations')}
-          onChangeText={setSearchQuery}
-          value={searchQuery}
-          style={s.searchBar}
-          inputStyle={{ color: theme.text, minHeight: 0 }}
-          iconColor={theme.textMuted}
-          placeholderTextColor={theme.textMuted}
-          elevation={0}
-          theme={{ colors: { background: theme.surface } }}
-        />
-      </Surface>
+      {/* The search field is the only inset thing on the screen; the people
+          below it run the full width. */}
+      <View style={s.searchContainer}>
+        <View style={s.searchField}>
+          <Ionicons name="search" size={17} color={theme.textMuted} />
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder={t('messages.search', 'Search conversations')}
+            placeholderTextColor={theme.textMuted}
+            style={s.searchInput}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            accessibilityLabel={t('messages.search', 'Search conversations')}
+          />
+          {searchQuery.length > 0 && (
+            <Pressable
+              onPress={() => setSearchQuery('')}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.clear', 'Temizle')}
+            >
+              <Ionicons name="close-circle" size={17} color={theme.textMuted} />
+            </Pressable>
+          )}
+        </View>
+      </View>
 
       <FlatList
         data={displayedConvs}
         renderItem={renderConversation}
         keyExtractor={(item, i) => item.user?._id || String(i)}
         showsVerticalScrollIndicator={false}
-        style={{ width: '100%', maxWidth: 720, alignSelf: 'center' }}
-        contentContainerStyle={{ paddingTop: 4, paddingBottom: 24 }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        style={s.list}
+        contentContainerStyle={{ paddingTop: 2, paddingBottom: 24 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
         onEndReached={searchQuery ? loadMoreConnections : loadMoreConversations}
         onEndReachedThreshold={0.35}
         ListFooterComponent={
           (searchQuery ? loadingMoreConnections : loadingMore) ? (
-            <Surface elevation={0} style={{ paddingVertical: 18 }}>
-              <Text style={{ color: theme.textMuted, textAlign: 'center' }}>
-                {t('common.loading', 'Loading…')}
-              </Text>
-            </Surface>
+            <ActivityIndicator color={theme.primary} style={{ marginVertical: 18 }} />
           ) : null
         }
         ListEmptyComponent={
-          <Surface elevation={0} style={s.emptyState}>
-            <Ionicons name={MESSAGE_ICON} size={28} color={theme.textMuted} />
-            <Text variant="titleMedium" style={s.emptyTitle}>{t('messages.no_messages', 'No messages yet')}</Text>
-            <Text variant="bodyMedium" style={s.emptySubtitle}>{t('messages.connect_hint', 'Connect with athletes to start chatting')}</Text>
-          </Surface>
+          loading ? (
+            <ActivityIndicator color={theme.primary} style={{ marginTop: 48 }} />
+          ) : (
+            <View style={s.emptyState}>
+              <Ionicons name={MESSAGE_ICON} size={30} color={theme.textMuted} />
+              <Text style={s.emptyTitle}>{t('messages.no_messages', 'No messages yet')}</Text>
+              <Text style={s.emptySubtitle}>{t('messages.connect_hint', 'Connect with athletes to start chatting')}</Text>
+            </View>
+          )
         }
       />
     </SafeAreaView>
@@ -379,47 +440,60 @@ const Messages = ({ navigation }: NavigationOnlyProps) => {
 const getStyles = (theme: MotionTheme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
   header: {
-    backgroundColor: theme.surface,
-    elevation: 0,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  headerTitle: { fontSize: 23, fontWeight: '800', color: theme.text },
-  searchContainer: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 14, marginBottom: 8, backgroundColor: 'transparent' },
-  searchBar: {
-    backgroundColor: theme.surface, borderRadius: 10, borderWidth: 1, borderColor: theme.border,
-    height: 46,
-  },
-  convRow: {
-    paddingHorizontal: 16, paddingVertical: 12,
-    marginHorizontal: 16,
-    borderBottomWidth: 1, borderBottomColor: theme.border,
-    backgroundColor: theme.surface,
-  },
-  avatarContainer: { position: 'relative', marginRight: 12 },
-  onlineDot: {
-    position: 'absolute', bottom: 1, right: 1,
-    backgroundColor: theme.success, borderWidth: 2, borderColor: theme.surface,
-  },
-  convContent: { flex: 1, minWidth: 0, marginRight: 8, justifyContent: 'center' },
-  convTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  convName: { fontWeight: '600', color: theme.textMuted, flex: 1, marginRight: 8 },
-  convTime: { color: theme.textMuted, flexShrink: 1, maxWidth: '42%', textAlign: 'right' },
-  convPreview: { color: theme.textMuted },
-  unreadBadge: { justifyContent: 'center', alignItems: 'center' },
-  emptyState: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    padding: 24,
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: 12,
-    backgroundColor: theme.surface,
+    height: 52,
+    paddingHorizontal: 6,
   },
-  emptyTitle: { fontWeight: '700', color: theme.text, marginTop: 8 },
-  emptySubtitle: { color: theme.textMuted, textAlign: 'center', maxWidth: 220 },
+  // Both sides reserve the same width, so the title is centred by geometry
+  // rather than by whatever is placed beside it.
+  headerButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: {
+    flex: 1,
+    minWidth: 0,
+    textAlign: 'center',
+    color: theme.text,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  searchContainer: { paddingHorizontal: 14, paddingTop: 2, paddingBottom: 10 },
+  searchField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    height: 40,
+    paddingHorizontal: 13,
+    borderRadius: 12,
+    backgroundColor: theme.surfaceLight,
+  },
+  searchInput: { flex: 1, minWidth: 0, color: theme.text, fontSize: 15, padding: 0 },
+  list: { flex: 1, width: '100%', maxWidth: 720, alignSelf: 'center' },
+  // No card, no border, no side margin: the row is the full width of the list
+  // and the only inset is the text gutter.
+  convRow: { paddingHorizontal: 14, paddingVertical: 9 },
+  convRowInner: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  avatarContainer: { position: 'relative' },
+  onlineDot: {
+    position: 'absolute',
+    bottom: 1,
+    right: 1,
+    width: 13,
+    height: 13,
+    borderRadius: 7,
+    backgroundColor: theme.success,
+    borderWidth: 2,
+    borderColor: theme.background,
+  },
+  convContent: { flex: 1, minWidth: 0, gap: 3 },
+  convName: { color: theme.text, fontSize: 15, fontWeight: '600' },
+  convNameUnread: { fontWeight: '800' },
+  convPreview: { color: theme.textMuted, fontSize: 13.5 },
+  convPreviewUnread: { color: theme.text, fontWeight: '600' },
+  convTime: { color: theme.textMuted, fontSize: 13.5, fontWeight: '400' },
+  unreadDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: theme.primary },
+  emptyState: { alignItems: 'center', gap: 6, paddingTop: 70, paddingHorizontal: 40 },
+  emptyTitle: { color: theme.text, fontSize: 15, fontWeight: '700', marginTop: 8 },
+  emptySubtitle: { color: theme.textMuted, fontSize: 13, textAlign: 'center', lineHeight: 19 },
 });
 
 export default Messages;

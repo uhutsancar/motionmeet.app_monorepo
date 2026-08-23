@@ -144,10 +144,35 @@ const ActiveWorkoutScreen = ({ navigation, route }: ActiveWorkoutProps) => {
   const totalSets = exercises.reduce((t, ex) => t + ex.sets.filter(s => s.done).length, 0);
 
   // ── Set Operations ────────────────────────────────────────────────
+  /**
+   * Adds a set that already carries the numbers from the one above it.
+   *
+   * A second set of an exercise is almost always the same weight for the same
+   * reps as the first, so an empty row meant retyping both fields every time.
+   * The new row copies the last set that has anything in it, and falls back to
+   * what was logged for this exercise last session when the athlete has not
+   * filled anything in yet. Either is a starting point to correct, not a
+   * commitment: the set still has to be ticked to count.
+   */
   const addSet = (exIndex: number) => {
-    const newEx = [...exercises];
-    newEx[exIndex].sets.push({ reps: '', weight: '', done: false, setType: 'normal' });
-    setExercises(newEx);
+    setExercises((current) => current.map((exercise, index) => {
+      if (index !== exIndex) return exercise;
+      const lastFilled = [...exercise.sets].reverse().find((set) => set.weight || set.reps);
+      const previous = previousSets[exercise.id]?.[exercise.sets.length];
+      const seed = {
+        weight: lastFilled?.weight || (previous?.weight ? String(previous.weight) : ''),
+        reps: lastFilled?.reps || (previous?.reps ? String(previous.reps) : ''),
+      };
+      return {
+        ...exercise,
+        sets: [
+          ...exercise.sets,
+          // `done` is deliberately false: a copied number is a suggestion, and
+          // ticking it is what turns it into a logged set.
+          { ...seed, done: false, setType: 'normal' as const },
+        ],
+      };
+    }));
   };
 
   const toggleSet = (exIndex: number, setIndex: number) => {

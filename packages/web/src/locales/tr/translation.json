@@ -714,7 +714,8 @@
     "decline": "Sil",
     "empty_title": "Henüz bildirim yok",
     "empty_body": "Takip istekleri ve beğeniler burada görünecek.",
-    "settings_hint": "Takip istekleri, beğeniler ve yorumlar"
+    "settings_hint": "Takip istekleri, beğeniler ve yorumlar",
+    "story_like": "{{name}} hikayeni beğendi"
   },
   "connections": {
     "eyebrow": "AĞIN",
@@ -857,7 +858,9 @@
     "reply_failed": "Yanıt gönderilemedi",
     "send_reply": "Gönder",
     "react": "Beğen",
-    "send_message": "Mesaj gönder"
+    "send_message": "Mesaj gönder",
+    "like_failed": "Beğeni kaydedilemedi",
+    "unreact": "Beğeniyi geri al"
   },
   "explore": {
     "search_placeholder": "Ara",

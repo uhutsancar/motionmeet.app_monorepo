@@ -11,6 +11,7 @@ import ChevronRightRounded from "@mui/icons-material/ChevronRightRounded";
 import CloseRounded from "@mui/icons-material/CloseRounded";
 import DeleteOutlineRounded from "@mui/icons-material/DeleteOutlineRounded";
 import FavoriteBorderRounded from "@mui/icons-material/FavoriteBorderRounded";
+import FavoriteRounded from "@mui/icons-material/FavoriteRounded";
 import KeyboardArrowUpRounded from "@mui/icons-material/KeyboardArrowUpRounded";
 import SendRounded from "@mui/icons-material/SendRounded";
 import dayjs from "../utils/dayjs";
@@ -18,7 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import toast from "react-hot-toast";
-import { deleteStory, getStoryViewers, markStoryViewed, sendMessage } from "~/api/endpoints";
+import { deleteStory, getStoryViewers, markStoryViewed, sendMessage, setStoryLike } from "~/api/endpoints";
 import { useAppSelector } from "~/app/hooks";
 import { useAuthContext } from "~/context/AuthProvider";
 import StoryOverlayLayer from "./story/StoryOverlayLayer";
@@ -58,6 +59,13 @@ const StoryViewer = ({ stories, open, onClose, onDeleted }: StoryViewerProps) =>
   const [replyFocused, setReplyFocused] = useState(false);
   const [sending, setSending] = useState(false);
   const [frameWidth, setFrameWidth] = useState(360);
+  /**
+   * Reactions changed since the rail was fetched, keyed by story id. Every
+   * story arrives already carrying whether this member liked it, so this only
+   * holds an override for one they have tapped.
+   */
+  const [likeOverrides, setLikeOverrides] = useState<Record<string, boolean>>({});
+  const [likeBusy, setLikeBusy] = useState(false);
 
   const frameRef = useRef<HTMLDivElement>(null);
   const recordedViews = useRef<Set<string>>(new Set());
@@ -66,6 +74,8 @@ const StoryViewer = ({ stories, open, onClose, onDeleted }: StoryViewerProps) =>
   const author = story && typeof story.user !== "string" ? story.user : null;
   const authorId = author?._id ?? (typeof story?.user === "string" ? story.user : undefined);
   const isOwnStory = Boolean(authorId && authorId === currentUserId);
+  const storyId = story?._id ?? "";
+  const liked = likeOverrides[storyId] ?? Boolean(story?.liked);
   const paused = viewersOpen || replyFocused || sending;
   const overlays = useMemo(() => (Array.isArray(story?.overlays) ? story.overlays : []), [story]);
 
@@ -163,14 +173,35 @@ const StoryViewer = ({ stories, open, onClose, onDeleted }: StoryViewerProps) =>
   };
 
   /**
-   * Replies to the story as a direct message.
+   * Reacts to the story, or takes the reaction back.
    *
-   * The heart passes its emoji straight in rather than typing it into the box:
-   * a reaction is one tap in every story app, and making it a two-step edit
-   * would be the odd behaviour here.
+   * The heart used to append "❤️" to the reply box and send it as a message,
+   * so a reaction landed in the author's inbox and could not be undone. It is a
+   * like now: one tap fills it and reaches the author through their activity
+   * list, another tap clears it, and the conversation is left alone. The icon
+   * flips first and rolls back if the request fails.
    */
-  const sendReply = async (override?: string) => {
-    const text = (override ?? reply).trim();
+  const toggleLike = useCallback(async () => {
+    if (!storyId || likeBusy || isOwnStory) return;
+    const next = !liked;
+    setLikeOverrides((current) => ({ ...current, [storyId]: next }));
+    setLikeBusy(true);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Authentication required");
+      const result = await setStoryLike(storyId, next, token);
+      if (!result.success) throw new Error(result.message);
+    } catch {
+      setLikeOverrides((current) => ({ ...current, [storyId]: !next }));
+      toast.error(t("story.like_failed", "The reaction could not be saved"));
+    } finally {
+      setLikeBusy(false);
+    }
+  }, [getToken, isOwnStory, liked, likeBusy, storyId, t]);
+
+  /** Replies to the story as a direct message. */
+  const sendReply = async () => {
+    const text = reply.trim();
     if (!text || !authorId || sending) return;
     setSending(true);
     try {
@@ -178,7 +209,7 @@ const StoryViewer = ({ stories, open, onClose, onDeleted }: StoryViewerProps) =>
       if (!token) return;
       const result = await sendMessage({ to_user_id: authorId, text }, token);
       if (result.success) {
-        if (!override) setReply("");
+        setReply("");
         toast.success(t("story.reply_sent", "Reply sent"));
       } else {
         toast.error(t("story.reply_failed", "The reply could not be sent"));
@@ -395,11 +426,13 @@ const StoryViewer = ({ stories, open, onClose, onDeleted }: StoryViewerProps) =>
               ) : (
                 <>
                   <IconButton
-                    onClick={() => setReply((current) => `${current}❤️`)}
-                    aria-label={t("story.react", "Like")}
-                    sx={{ color: "common.white" }}
+                    onClick={() => void toggleLike()}
+                    disabled={likeBusy}
+                    aria-pressed={liked}
+                    aria-label={liked ? t("story.unreact", "Remove reaction") : t("story.react", "Like")}
+                    sx={{ color: liked ? "#FF3B5C" : "common.white" }}
                   >
-                    <FavoriteBorderRounded />
+                    {liked ? <FavoriteRounded /> : <FavoriteBorderRounded />}
                   </IconButton>
                   <IconButton
                     onClick={() => {

@@ -4,6 +4,7 @@ import type { RequestHandler } from "express";
 import { isOptionalString, isUuid } from "../utils/validation.js";
 import { hasValidMediaSignature } from "../utils/mediaValidation.js";
 import * as storyService from "../services/storyService.js";
+import * as notificationService from "../services/notificationService.js";
 import { canViewStoriesOf } from "../services/accessControlService.js";
 import {
   discardReservedUploads,
@@ -217,6 +218,49 @@ export const getStoryViewers: RequestHandler = async (req, res, next) => {
     const viewers = await storyService.getStoryViewers(storyId);
 
     return res.json({ success: true, viewers });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * Reacts to a story, or takes the reaction back.
+ *
+ * A heart used to be posted into the author's inbox as a direct message, which
+ * is why one tap could not be undone and why reactions were mixed in with
+ * replies. It writes a like row and an activity row instead: tapping again
+ * removes both sides of the state, and the conversation is left alone.
+ */
+export const setStoryLike: RequestHandler = async (req, res, next) => {
+  try {
+    const { storyId } = req.params;
+    if (!isUuid(storyId)) {
+      return res.status(400).json({ success: false, message: "Invalid story id" });
+    }
+
+    const story = await storyService.getStoryById(storyId);
+    if (!story) return res.status(404).json({ success: false, message: "Story not found" });
+    // Ids are guessable in principle, so the audience is re-checked rather than
+    // trusting that the client only ever posts ids it was handed.
+    if (!(await canViewStoriesOf(req.userId, story.user))) {
+      return res.status(403).json({ success: false, message: "Story is not accessible" });
+    }
+
+    const liked = req.method !== "DELETE";
+    const result = await storyService.setStoryLike(storyId, req.userId, liked);
+
+    if (result.changed && liked) {
+      // Best-effort, and outside the write: the like is already durable, and a
+      // delivery hiccup must not undo it.
+      void notificationService.recordAndPublish({
+        userId: story.user,
+        actorId: req.userId,
+        type: "story_like",
+        storyId,
+      });
+    }
+
+    return res.json({ success: true, liked: result.liked });
   } catch (error) {
     return next(error);
   }

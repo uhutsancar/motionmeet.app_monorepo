@@ -370,6 +370,24 @@ export const getStoryViewers = async (storyId: string, token: Token): Promise<St
   return data;
 };
 
+/**
+ * Reacts to a story, or takes the reaction back.
+ *
+ * The heart used to post a "❤️" direct message, which is why it could not be
+ * undone and why it landed in the inbox. This writes a like and notifies the
+ * author instead, so tapping again removes it.
+ */
+export const setStoryLike = async (
+  storyId: string,
+  liked: boolean,
+  token: Token,
+): Promise<BasicResponse & { liked?: boolean }> => {
+  const url = API_ROUTES.story.like(storyId);
+  const config = { headers: { Authorization: `Bearer ${token}` } };
+  const { data } = liked ? await api.post(url, {}, config) : await api.delete(url, config);
+  return data;
+};
+
 // ============= MEASUREMENT APIs =============
 export interface SaveMeasurementPayload extends BodyMeasurementValues {
   /** Calendar day as YYYY-MM-DD; the backend upserts on this day. */
@@ -703,6 +721,7 @@ export default {
   deleteStory,
   markStoryViewed,
   getStoryViewers,
+  setStoryLike,
 
   // Measurement
   getMeasurements,

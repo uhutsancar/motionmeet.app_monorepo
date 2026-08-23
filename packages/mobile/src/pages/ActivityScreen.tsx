@@ -24,6 +24,7 @@ const ICONS: Record<Notification['type'], { name: keyof typeof Ionicons.glyphMap
   follow: { name: 'person', tone: 'primary' },
   post_like: { name: 'heart', tone: 'like' },
   post_comment: { name: 'chatbubble', tone: 'muted' },
+  story_like: { name: 'heart', tone: 'like' },
 };
 
 /**
@@ -88,6 +89,8 @@ const ActivityScreen = ({ navigation }: NavigationOnlyProps) => {
         return t('activity.post_like', '{{name}} gönderini beğendi', { name });
       case 'post_comment':
         return t('activity.post_comment', '{{name}} gönderine yorum yaptı', { name });
+      case 'story_like':
+        return t('activity.story_like', '{{name}} hikayeni beğendi', { name });
       default:
         return name;
     }

@@ -56,7 +56,7 @@ const Connections = ({ navigation, route }: ConnectionsProps) => {
   const { getToken } = useAuthContext();
   const { t } = useTranslation();
   const { theme, isDark } = useTheme();
-  const { horizontalPadding, isNarrow } = useResponsiveLayout();
+  const { horizontalPadding } = useResponsiveLayout();
   // Opened straight on the followers/following list when the profile counters
   // are tapped, otherwise on the first tab.
   const requestedSection = route?.params?.section;
@@ -333,53 +333,10 @@ const Connections = ({ navigation, route }: ConnectionsProps) => {
         />
       </Appbar.Header>
 
-      {/* Stats row. It must keep its natural height: squeezed by the list below
-          it, the counter cards collapse into an empty grey strip. */}
-      <View
-        style={{
-          width: '100%',
-          maxWidth: 720,
-          alignSelf: 'center',
-          flexDirection: 'row',
-          flexWrap: 'wrap',
-          flexShrink: 0,
-          paddingHorizontal: horizontalPadding,
-          paddingVertical: 10,
-          gap: 8,
-        }}
-      >
-        {TABS.map((tab) => (
-          <Surface
-            key={tab.key}
-            style={{
-              width: isNarrow ? '48%' : undefined,
-              flex: isNarrow ? undefined : 1,
-              flexGrow: 1,
-              minWidth: isNarrow ? 0 : 120,
-              borderRadius: 12,
-              backgroundColor: theme.surface,
-              alignItems: 'center',
-              padding: 10,
-            }}
-            elevation={1}
-          >
-            <Text variant="titleMedium" style={{ color: theme.primary, fontWeight: '800' }}>
-              {pages[tab.key].loaded
-                ? `${pages[tab.key].items.length}${pages[tab.key].nextCursor ? '+' : ''}`
-                : '—'}
-            </Text>
-            <Text
-              variant="labelSmall"
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.75}
-              style={{ color: theme.textMuted, textAlign: 'center' }}
-            >
-              {t(tab.labelKey, tab.fallback)}
-            </Text>
-          </Surface>
-        ))}
-      </View>
+      {/* The counter cards that used to sit here are gone. Only the tab that
+          has been opened knows its own count, so four of the five read "—" and
+          the row showed up as an empty grey strip under the title. The chips
+          below already say where you are. */}
 
       {/* Tab chips */}
       <ScrollView

@@ -4,8 +4,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Image,
   Keyboard,
+  KeyboardAvoidingView,
   Modal,
   PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,7 +21,7 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import dayjs from '../utils/dayjs';
 import { useAuthContext } from '../context/AuthProvider';
-import { deleteStory, getStoryViewers, markStoryViewed, sendMessage } from '../api/endpoints';
+import { deleteStory, getStoryViewers, markStoryViewed, sendMessage, setStoryLike } from '../api/endpoints';
 import { logHandledError, showError, showSuccess } from '../utils/feedback';
 import { useAppSelector } from '../store/hooks';
 import { useStoryFrame } from '../hooks/useStoryFrame';
@@ -31,6 +33,35 @@ import type { NavigationLike } from '../navigation/types';
 /** How long a photo stays on screen before the viewer advances. */
 const STORY_DURATION = 5000;
 const PROGRESS_TICK = 50;
+
+/**
+ * The keyboard events are watched only to know *whether* one is up.
+ *
+ * How far to lift the composer is left to KeyboardAvoidingView, which measures
+ * its own frame against the keyboard's `screenY`. The reported `height` is not
+ * reliable: on a phone tested here it came back 48pt short of the real
+ * keyboard - the suggestion strip was not counted - and the composer sat behind
+ * it, which is the exact bug this was meant to fix.
+ */
+const KEYBOARD_SHOW_EVENT = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+const KEYBOARD_HIDE_EVENT = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+/**
+ * How far the reply row is held off the bottom edge when the keyboard is down.
+ *
+ * Comfortably clears Android's gesture strip, which is where a smaller gutter
+ * had been putting the heart and the send button.
+ */
+const COMPOSER_BOTTOM_GUTTER = 28;
+
+/**
+ * Below this, a reported keyboard is not one that covers anything.
+ *
+ * A floating or split IME still fires `keyboardDidShow`, with a height of a few
+ * points. Treating that as "the keyboard is up" dropped the composer's gutter,
+ * which is exactly where Android's gesture strip then ate the taps.
+ */
+const KEYBOARD_COVERS_SCREEN_ABOVE = 80;
 
 interface StoryVideoProps {
   source: string;
@@ -108,6 +139,14 @@ const StoryViewer = ({
   const [reply, setReply] = useState('');
   const [replyFocused, setReplyFocused] = useState(false);
   const [sendingReply, setSendingReply] = useState(false);
+  const [keyboardUp, setKeyboardUp] = useState(false);
+  /**
+   * Reactions this session has changed, keyed by story id. The server answer is
+   * what seeded each story, so this only ever holds an override for a story the
+   * viewer has tapped since the rail was fetched.
+   */
+  const [likeOverrides, setLikeOverrides] = useState<Record<string, boolean>>({});
+  const [likeBusy, setLikeBusy] = useState(false);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const currentIndexRef = useRef(startIndex);
@@ -119,6 +158,9 @@ const StoryViewer = ({
     currentStory && typeof currentStory.user === 'object' ? currentStory.user : null;
   const storyOwnerId = storyUser?._id ?? (typeof currentStory?.user === 'string' ? currentStory.user : '');
   const isOwnStory = Boolean(currentUser?._id && storyOwnerId === currentUser._id);
+  const storyId = currentStory?._id ?? '';
+  const liked = likeOverrides[storyId] ?? Boolean(currentStory?.liked);
+
   const paused = viewersOpen || replyFocused || heldDown || sendingReply;
 
   const clearTimer = useCallback(() => {
@@ -176,6 +218,29 @@ const StoryViewer = ({
     setViewersOpen(false);
     setReply('');
   }, [clearTimer, startIndex, stories.length, visible]);
+
+  /**
+   * The composer is lifted by hand rather than by KeyboardAvoidingView.
+   *
+   * This viewer lives in a translucent full-screen Modal, and neither platform
+   * resizes that window when the keyboard opens: the reply bar stayed pinned to
+   * the bottom of the screen, behind the keyboard, so nothing that was typed
+   * was ever visible.
+   */
+  useEffect(() => {
+    if (!visible) {
+      setKeyboardUp(false);
+      return undefined;
+    }
+    const onShow = Keyboard.addListener(KEYBOARD_SHOW_EVENT, (event) => {
+      setKeyboardUp((event.endCoordinates?.height ?? 0) > KEYBOARD_COVERS_SCREEN_ABOVE);
+    });
+    const onHide = Keyboard.addListener(KEYBOARD_HIDE_EVENT, () => setKeyboardUp(false));
+    return () => {
+      onShow.remove();
+      onHide.remove();
+    };
+  }, [visible]);
 
   // Opening someone else's story counts as a view exactly once per session.
   useEffect(() => {
@@ -266,14 +331,36 @@ const StoryViewer = ({
   }, [closeViewer, navigation, storyOwnerId, storyUser]);
 
   /**
-   * Replies to the story as a direct message.
+   * Reacts to the story, or takes the reaction back.
    *
-   * The heart passes its emoji straight in rather than typing it into the box:
-   * a reaction is one tap in every story app, and making it a two-step edit
-   * would be the odd behaviour here.
+   * The heart used to send "❤️" as a direct message, which put a reaction in
+   * the author's inbox and left no way to undo it. It is a like now: one tap
+   * fills it and tells the author through their activity list, another tap
+   * clears it, and the conversation is never touched. The icon flips first and
+   * is rolled back if the request fails, so the tap never feels laggy.
    */
-  const sendReply = async (override?: string) => {
-    const text = (override ?? reply).trim();
+  const toggleLike = useCallback(async () => {
+    if (!storyId || likeBusy || isOwnStory) return;
+    const next = !liked;
+    setLikeOverrides((current) => ({ ...current, [storyId]: next }));
+    setLikeBusy(true);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error('Authentication required');
+      const result = await setStoryLike(storyId, next, token);
+      if (!result.success) throw new Error(result.message || 'Story like failed');
+    } catch (error) {
+      logHandledError('story-like', error);
+      setLikeOverrides((current) => ({ ...current, [storyId]: !next }));
+      showError(t('common.error', 'Hata'), t('story.like_failed', 'Beğeni kaydedilemedi'));
+    } finally {
+      setLikeBusy(false);
+    }
+  }, [getToken, isOwnStory, liked, likeBusy, storyId, t]);
+
+  /** Replies to the story as a direct message. */
+  const sendReply = async () => {
+    const text = reply.trim();
     if (!text || !storyOwnerId || sendingReply) return;
     try {
       setSendingReply(true);
@@ -281,7 +368,7 @@ const StoryViewer = ({
       if (!token) return;
       const result = await sendMessage({ to_user_id: storyOwnerId, text }, token);
       if (result.success) {
-        if (!override) setReply('');
+        setReply('');
         Keyboard.dismiss();
         showSuccess(t('common.success'), t('story.reply_sent', 'Yanitin gonderildi'));
       } else {
@@ -408,21 +495,25 @@ const StoryViewer = ({
         <View style={styles.tapAreas} pointerEvents="box-none" {...swipeResponder.panHandlers}>
           <Pressable
             style={styles.tapLeft}
-            onPress={goPrev}
+            onPress={() => (replyFocused ? Keyboard.dismiss() : goPrev())}
             onLongPress={() => setHeldDown(true)}
             onPressOut={() => setHeldDown(false)}
             delayLongPress={220}
             accessibilityRole="button"
-            accessibilityLabel={t('story.previous', 'Onceki hikaye')}
+            accessibilityLabel={
+              replyFocused ? t('common.close', 'Kapat') : t('story.previous', 'Onceki hikaye')
+            }
           />
           <Pressable
             style={styles.tapRight}
-            onPress={goNext}
+            onPress={() => (replyFocused ? Keyboard.dismiss() : goNext())}
             onLongPress={() => setHeldDown(true)}
             onPressOut={() => setHeldDown(false)}
             delayLongPress={220}
             accessibilityRole="button"
-            accessibilityLabel={t('story.next', 'Sonraki hikaye')}
+            accessibilityLabel={
+              replyFocused ? t('common.close', 'Kapat') : t('story.next', 'Sonraki hikaye')
+            }
           />
         </View>
 
@@ -484,71 +575,120 @@ const StoryViewer = ({
             accessibilityLabel={t('feed.story_viewers', 'Goruntuleyenler')}
           >
             <Ionicons name="chevron-up" size={18} color="#FFFFFF" />
-            <Text style={styles.viewersHandleText}>
-              {typeof currentStory.view_count === 'number'
-                ? `${currentStory.view_count} ${t('feed.story_views_count', 'goruntulenme')}`
-                : t('feed.swipe_up_viewers', 'Goruntuleyenler icin yukari kaydir')}
-            </Text>
+            <View style={styles.viewersHandleRow}>
+              <Text style={styles.viewersHandleText}>
+                {typeof currentStory.view_count === 'number'
+                  ? `${currentStory.view_count} ${t('feed.story_views_count', 'goruntulenme')}`
+                  : t('feed.swipe_up_viewers', 'Goruntuleyenler icin yukari kaydir')}
+              </Text>
+              {(currentStory.like_count ?? 0) > 0 && (
+                <>
+                  <Ionicons name="heart" size={13} color="#FF3B5C" />
+                  <Text style={styles.viewersHandleText}>{currentStory.like_count}</Text>
+                </>
+              )}
+            </View>
           </Pressable>
         )}
 
+        {/* Typing dims the story rather than hiding it, so the frame behind the
+            composer stays readable.
+
+            It is deliberately not touchable. As a full-screen Pressable it also
+            covered the heart and the send button and swallowed their taps, even
+            though both are drawn above it - so dismissing the keyboard is
+            handled by the tap zones underneath instead, which are already the
+            thing a tap on the story lands on. */}
+        {!viewersOpen && !isOwnStory && replyFocused && (
+          <View style={styles.composerScrim} pointerEvents="none" />
+        )}
+
         {!viewersOpen && !isOwnStory && (
-          <View
-            style={[styles.replyBar, { paddingBottom: Math.max(insets.bottom, 12) }]}
+          <KeyboardAvoidingView
+            style={styles.replyDock}
+            behavior="padding"
             pointerEvents="box-none"
           >
-            <View style={styles.replyField}>
-              <TextInput
-                value={reply}
-                onChangeText={setReply}
-                onFocus={() => setReplyFocused(true)}
-                onBlur={() => setReplyFocused(false)}
-                placeholder={t('story.reply_placeholder', 'Mesaj gonder...')}
-                placeholderTextColor="rgba(255,255,255,0.65)"
-                style={styles.replyInput}
-                maxLength={500}
-                returnKeyType="send"
-                onSubmitEditing={() => void sendReply()}
-                editable={!sendingReply}
-              />
-            </View>
+            <View
+              style={[
+                styles.replyBar,
+                {
+                  /*
+                   * The floor is not decorative. This viewer lives in a
+                   * full-screen Modal, and that window reports no safe-area inset
+                   * of its own - so a 12pt gutter put the heart and the send
+                   * button inside Android's bottom gesture strip, where the
+                   * system takes the touch and the buttons never fire at all.
+                   * With the keyboard up it covers that strip itself, so the
+                   * smaller gutter is safe there.
+                   */
+                  paddingBottom: keyboardUp ? 10 : Math.max(insets.bottom, COMPOSER_BOTTOM_GUTTER),
+                },
+              ]}
+              pointerEvents="box-none"
+            >
+              <View style={[styles.replyField, replyFocused && styles.replyFieldActive]}>
+                <TextInput
+                  value={reply}
+                  onChangeText={setReply}
+                  onFocus={() => setReplyFocused(true)}
+                  onBlur={() => setReplyFocused(false)}
+                  placeholder={t('story.reply_placeholder', 'Mesaj gonder...')}
+                  placeholderTextColor="rgba(255,255,255,0.65)"
+                  style={styles.replyInput}
+                  maxLength={500}
+                  multiline
+                  returnKeyType="send"
+                  onSubmitEditing={() => void sendReply()}
+                  editable={!sendingReply}
+                  keyboardAppearance="dark"
+                />
+              </View>
 
-            {reply.trim().length > 0 ? (
-              <Pressable
-                onPress={() => void sendReply()}
-                disabled={sendingReply}
-                style={styles.replyAction}
-                accessibilityRole="button"
-                accessibilityLabel={t('story.send_reply', 'Gonder')}
-              >
-                {sendingReply ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <Ionicons name="paper-plane" size={22} color="#FFFFFF" />
-                )}
-              </Pressable>
-            ) : (
-              <>
+              {reply.trim().length > 0 ? (
                 <Pressable
-                  onPress={() => void sendReply('❤️')}
+                  onPress={() => void sendReply()}
                   disabled={sendingReply}
                   style={styles.replyAction}
                   accessibilityRole="button"
-                  accessibilityLabel={t('story.react', 'Begen')}
+                  accessibilityLabel={t('story.send_reply', 'Gonder')}
                 >
-                  <Ionicons name="heart-outline" size={25} color="#FFFFFF" />
+                  {sendingReply ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <Ionicons name="paper-plane" size={22} color="#FFFFFF" />
+                  )}
                 </Pressable>
-                <Pressable
-                  onPress={openChat}
-                  style={styles.replyAction}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('story.send_message', 'Mesaj gonder')}
-                >
-                  <Ionicons name={MESSAGE_ICON} size={23} color="#FFFFFF" />
-                </Pressable>
-              </>
-            )}
-          </View>
+              ) : (
+                <>
+                  <Pressable
+                    onPress={() => void toggleLike()}
+                    disabled={likeBusy}
+                    style={styles.replyAction}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: liked }}
+                    accessibilityLabel={
+                      liked ? t('story.unreact', 'Begeniyi geri al') : t('story.react', 'Begen')
+                    }
+                  >
+                    <Ionicons
+                      name={liked ? 'heart' : 'heart-outline'}
+                      size={25}
+                      color={liked ? '#FF3B5C' : '#FFFFFF'}
+                    />
+                  </Pressable>
+                  <Pressable
+                    onPress={openChat}
+                    style={styles.replyAction}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('story.send_message', 'Mesaj gonder')}
+                  >
+                    <Ionicons name={MESSAGE_ICON} size={23} color="#FFFFFF" />
+                  </Pressable>
+                </>
+              )}
+            </View>
+          </KeyboardAvoidingView>
         )}
 
         {/* Audience sheet — deliberately over two thirds of the screen so the
@@ -623,6 +763,9 @@ const StoryViewer = ({
                             @{entry.user.username} · {dayjs(entry.viewedAt).fromNow()}
                           </Text>
                         </View>
+                        {entry.liked && (
+                          <Ionicons name="heart" size={16} color="#FF3B5C" />
+                        )}
                         <Ionicons name="chevron-forward" size={17} color="rgba(255,255,255,0.35)" />
                       </Pressable>
                     );
@@ -750,37 +893,62 @@ const styles = StyleSheet.create({
     gap: 2,
     zIndex: 25,
   },
+  viewersHandleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
   viewersHandleText: {
     color: '#FFFFFF',
     fontSize: 12.5,
     fontWeight: '700',
   },
-  replyBar: {
+  composerScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    // Above the story, below everything that can be tapped.
+    zIndex: 15,
+  },
+  // The dock is pinned to the bottom and is what the keyboard pushes up; the
+  // row inside it only lays its controls out.
+  replyDock: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
+    zIndex: 26,
+    elevation: 26,
+  },
+  replyBar: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: 6,
     paddingHorizontal: 12,
     paddingTop: 10,
-    zIndex: 25,
   },
   replyField: {
     flex: 1,
     minWidth: 0,
-    height: 46,
+    minHeight: 46,
     justifyContent: 'center',
     paddingHorizontal: 18,
+    paddingVertical: 6,
     borderRadius: 23,
     borderWidth: 1.2,
     borderColor: 'rgba(255,255,255,0.6)',
   },
+  // While typing the field gets a ground of its own, so white text over a
+  // bright photo is still legible.
+  replyFieldActive: {
+    borderColor: '#FFFFFF',
+    backgroundColor: 'rgba(20,20,24,0.72)',
+  },
   replyInput: {
     color: '#FFFFFF',
     fontSize: 14.5,
+    maxHeight: 96,
     padding: 0,
+    ...Platform.select({ android: { textAlignVertical: 'center' as const } }),
   },
   replyAction: {
     width: 44,

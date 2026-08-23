@@ -25,7 +25,8 @@ export type NotificationType =
   | "follow_request_accepted"
   | "follow"
   | "post_like"
-  | "post_comment";
+  | "post_comment"
+  | "story_like";
 
 export interface Notification extends Timestamped {
   id: EntityId;
@@ -35,6 +36,8 @@ export interface Notification extends Timestamped {
   read: boolean;
   /** Present on post_like / post_comment so the row can deep-link. */
   postId: EntityId | null;
+  /** Present on story_like. A story expires, so the row may outlive its target. */
+  storyId: EntityId | null;
   /**
    * Only set on `follow_request` rows, and only while the request is still
    * pending, so the row can offer Confirm/Delete inline.

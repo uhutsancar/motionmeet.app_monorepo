@@ -14,6 +14,7 @@ interface NotificationInput {
   actorId: string;
   type: NotificationType;
   postId?: string | null;
+  storyId?: string | null;
 }
 
 const MAX_PAGE = 50;
@@ -38,11 +39,12 @@ export const recordNotification = async (
       actor_id: input.actorId,
       type: input.type,
       post_id: input.postId ?? null,
+      story_id: input.storyId ?? null,
       read_at: null,
     })
     .onConflict((conflict) =>
       conflict
-        .columns(["user_id", "actor_id", "type", "post_id"])
+        .columns(["user_id", "actor_id", "type", "post_id", "story_id"])
         .doUpdateSet({ created_at: new Date(), read_at: null }),
     )
     .returningAll()
@@ -96,6 +98,7 @@ const hydrate = async (rows: Array<Row<"notifications">>, recipientId: string): 
     actor: actorById.get(row.actor_id) ?? null,
     read: row.read_at !== null,
     postId: row.post_id,
+    storyId: row.story_id,
     actionable: row.type === "follow_request" && stillPending.has(row.actor_id),
     payload: {},
     createdAt: toIsoString(row.created_at) ?? new Date(0).toISOString(),

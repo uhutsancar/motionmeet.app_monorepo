@@ -3,6 +3,7 @@ import {
   FlatList,
   Image,
   Alert,
+  Pressable,
   Platform,
   StatusBar,
   StyleSheet,
@@ -11,6 +12,7 @@ import {
   type ListRenderItem,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets, type EdgeInsets } from 'react-native-safe-area-context';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthContext } from "../context/AuthProvider";
 import { useTranslation } from 'react-i18next';
@@ -33,7 +35,7 @@ import {
 } from '../features/messages/messagesSlice';
 import dayjs from '../utils/dayjs';
 
-import { Appbar, Avatar, Text, IconButton, Surface, ActivityIndicator, Badge, useTheme as usePaperTheme, TouchableRipple } from 'react-native-paper';
+import { Avatar, Text, IconButton, Surface, ActivityIndicator, useTheme as usePaperTheme, TouchableRipple } from 'react-native-paper';
 import { getUserFacingError, showError } from '../utils/feedback';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { KeyboardResponsiveView } from '../components/KeyboardAwareScrollView';
@@ -549,31 +551,45 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
     <SafeAreaView style={s.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      <Appbar.Header style={s.header} statusBarHeight={0}>
-        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
-        <Surface elevation={0} style={s.headerAvContainer}>
-          {user.profile_picture
-            ? <Avatar.Image source={{ uri: user.profile_picture }} size={40} />
-            : <Avatar.Text label={user.full_name?.charAt(0) || '?'} size={40} style={{ backgroundColor: theme.primary }} />
-          }
-          {isOnline && <Badge size={12} style={s.onlineDot} />}
-        </Surface>
-        <Appbar.Content 
-          title={user.full_name} 
-          titleStyle={s.headerName} 
-          subtitle={
-            <Surface elevation={0} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <View style={[s.statusDot, { backgroundColor: isOnline ? '#22c55e' : '#94a3b8' }]} />
-              <Text style={s.headerStatus}>
-                {isOnline ? t('status.online') : t('status.offline')}
-              </Text>
-            </Surface>
-          }
-        />
-        {/* No socket badge here: whether the transport is up is not something a
-            member acts on, and the row under the name already says whether the
-            other person is online. */}
-      </Appbar.Header>
+      {/* A plain row rather than Appbar.Header.
+          Appbar.Content lays its title out against whatever sits on either
+          side of it, so with a back button and an avatar on the left and
+          nothing on the right the name drifted off centre while its subtitle
+          lined up against a different edge again. Here the avatar and the name
+          are one group that starts where the back button ends, which is also
+          where every messaging app people already use puts them. */}
+      <View style={s.header}>
+        <Pressable
+          onPress={() => navigation.goBack()}
+          hitSlop={10}
+          style={s.headerBack}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back', 'Geri')}
+        >
+          <Ionicons name="chevron-back" size={26} color={theme.text} />
+        </Pressable>
+
+        <View style={s.headerIdentity}>
+          <View style={s.headerAvContainer}>
+            {user.profile_picture
+              ? <Avatar.Image source={{ uri: user.profile_picture }} size={38} />
+              : <Avatar.Text
+                  label={(user.full_name || user.username || '?').charAt(0).toUpperCase()}
+                  size={38}
+                  style={{ backgroundColor: theme.primarySoft }}
+                  labelStyle={{ color: theme.primary, fontWeight: '800' }}
+                />
+            }
+            {isOnline && <View style={s.onlineDot} />}
+          </View>
+          <View style={s.headerText}>
+            <Text numberOfLines={1} style={s.headerName}>{user.full_name || user.username}</Text>
+            <Text numberOfLines={1} style={s.headerStatus}>
+              {isOnline ? t('status.online') : t('status.offline')}
+            </Text>
+          </View>
+        </View>
+      </View>
 
       <KeyboardResponsiveView
         style={{ flex: 1 }}
@@ -676,16 +692,25 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
 const getStyles = (theme: MotionTheme, _paperTheme: MD3Theme, _insets: EdgeInsets) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
   header: {
-    backgroundColor: theme.surface,
-    elevation: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 56,
+    paddingRight: 12,
+    backgroundColor: theme.background,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.border,
   },
-  headerAvContainer: { position: 'relative', marginRight: 12 },
+  headerBack: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
+  // Avatar and name travel together, so the two lines share one left edge.
+  headerIdentity: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerAvContainer: { position: 'relative' },
+  headerText: { flex: 1, minWidth: 0 },
   onlineDot: {
     position: 'absolute', bottom: 0, right: 0,
-    backgroundColor: '#22c55e', borderColor: theme.surface, borderWidth: 2,
+    width: 12, height: 12, borderRadius: 6,
+    backgroundColor: theme.success, borderColor: theme.background, borderWidth: 2,
   },
-  statusDot: { width: 6, height: 6, borderRadius: 3 },
-  headerName: { fontSize: 17, fontWeight: '800', color: theme.text, letterSpacing: -0.5 },
+  headerName: { fontSize: 16, fontWeight: '800', color: theme.text, letterSpacing: -0.3 },
   headerStatus: { fontSize: 12, color: theme.textMuted, marginTop: 1, fontWeight: '500' },
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   messageList: { width: '100%', maxWidth: MESSAGE_LIST_MAX_WIDTH, alignSelf: 'center' },

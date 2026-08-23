@@ -61,10 +61,16 @@ export interface Story extends Timestamped, IdempotentRequest {
   expiresAt: string;
   /** Only populated for the author's own stories. */
   view_count?: number;
+  /** Whether the requesting member has liked this story. */
+  liked?: boolean;
+  /** Only populated for the author's own stories. */
+  like_count?: number;
 }
 
 /** One viewer of a story, newest first. Author-only data. */
 export interface StoryViewer {
   user: PublicUser;
   viewedAt: string;
+  /** Whether this viewer also reacted to the story. */
+  liked?: boolean;
 }
