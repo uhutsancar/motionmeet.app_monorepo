@@ -1,6 +1,7 @@
 import type { Story, StoryOverlay, StoryViewer } from "@motionmeet/shared";
 import { sql } from "kysely";
 import { database, withTransaction } from "../configs/database.js";
+import { markDone, wasDone } from "../configs/redis.js";
 import { publicUser } from "../repositories/postRepository.js";
 import { toIsoString } from "../repositories/entities.js";
 import type { Pagination } from "../utils/pagination.js";
@@ -76,14 +77,37 @@ export const getStoriesForUser = async (userId: string, pagination: Pagination):
 };
 
 /**
+ * Stories live 24 hours, so a receipt remembered for six of them bounds the work
+ * a viewer can cause to four opens per story however often they swipe back.
+ */
+const VIEW_RECEIPT_TTL_SECONDS = 6 * 60 * 60;
+const viewReceiptKey = (storyId: string, viewerId: string): string => `story-view:${storyId}:${viewerId}`;
+
+/**
+ * Whether this viewer's receipt for this story has already been written.
+ *
+ * Reopening a story re-posts the view, and the row is unique on
+ * `(story_id, user_id)` - so the repeat spends a story read, the three-query
+ * audience check and an insert to reach a row that already exists. Swiping a
+ * rail of twenty stories twice was 240 queries for 20 rows.
+ */
+export const storyViewAlreadyRecorded = (storyId: string, viewerId: string): Promise<boolean> =>
+  wasDone(viewReceiptKey(storyId, viewerId));
+
+/**
  * Records that a user opened a story. Authors are not counted as viewers of
  * their own stories, and repeat opens keep the first view timestamp.
+ *
+ * The caller has already loaded and authorised the story, so its author is
+ * passed in rather than looked up again.
  */
-export const recordStoryView = async (storyId: string, viewerId: string): Promise<void> => {
-  const story = await database.selectFrom("stories").select(["id", "user_id"]).where("id", "=", storyId).executeTakeFirst();
-  if (!story || story.user_id === viewerId) return;
+export const recordStoryView = async (storyId: string, viewerId: string, authorId: string): Promise<void> => {
+  if (authorId === viewerId) return;
   await database.insertInto("story_views").values({ story_id: storyId, user_id: viewerId })
     .onConflict((conflict) => conflict.columns(["story_id", "user_id"]).doNothing()).execute();
+  // Only after the row is durable, so a failed authorisation or a failed insert
+  // never suppresses the retry that would have recorded it.
+  await markDone(viewReceiptKey(storyId, viewerId), VIEW_RECEIPT_TTL_SECONDS);
 };
 
 /** Viewers of a story, newest first. Callers must verify the requester owns it. */

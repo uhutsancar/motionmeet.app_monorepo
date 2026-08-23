@@ -13,6 +13,16 @@ const pool = new Pool({
   idleTimeoutMillis: environment.databaseIdleTimeoutMs,
   allowExitOnIdle: environment.nodeEnv !== "production",
   application_name: "motionmeet-api",
+  // A query with no ceiling holds its pool slot for as long as it runs, so a
+  // single pathological plan can starve every other request on the instance.
+  // `statement_timeout` is the server-side cap and `query_timeout` the
+  // client-side one; both are needed, because the server cannot end a query
+  // that is stalled on the network rather than on CPU.
+  statement_timeout: environment.databaseStatementTimeoutMs,
+  query_timeout: environment.databaseStatementTimeoutMs,
+  // Long-lived pooled connections otherwise die silently behind a load balancer
+  // or NAT idle timeout and surface as a failed request rather than a reconnect.
+  keepAlive: true,
 });
 
 pool.on("error", (error: Error) => {
@@ -24,6 +34,28 @@ export const database = new Kysely<Database>({
   log(event) {
     if (event.level === "error") logger.error("database_query_failed", safeErrorMetadata(event.error));
   },
+});
+
+/**
+ * A separate, short-lived connection for work that is legitimately slow.
+ *
+ * The request pool caps every statement at `statement_timeout`, which is what
+ * keeps one bad plan from starving an instance. Schema migrations and dataset
+ * imports run long by design - an index build over a large table is minutes,
+ * not milliseconds - so they get their own pool with no cap rather than being
+ * killed halfway through by a limit meant for HTTP traffic.
+ *
+ * Callers must `destroy()` what they create.
+ */
+export const createMaintenanceDatabase = (): Kysely<Database> => new Kysely<Database>({
+  dialect: new PostgresDialect({
+    pool: new Pool({
+      connectionString: environment.databaseUrl,
+      max: 1,
+      connectionTimeoutMillis: environment.databaseConnectionTimeoutMs,
+      application_name: "motionmeet-maintenance",
+    }),
+  }),
 });
 
 let databaseReady = false;

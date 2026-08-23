@@ -1,6 +1,5 @@
 import React, { useState, useRef, memo, useMemo } from 'react';
 import {
-  Image,
   Alert,
   TextInput,
   FlatList,
@@ -13,6 +12,11 @@ import {
   type ViewStyle,
   type ViewToken,
 } from 'react-native';
+// expo-image, not React Native's Image: the feed is the one screen where a
+// member scrolls past dozens of remote photographs, and this one recycles
+// views, keeps a memory and a disk cache, and fades a placeholder in rather
+// than flashing an empty box on every cell that comes back into the window.
+import { Image } from 'expo-image';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useAuthContext } from "../context/AuthProvider";
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -28,6 +32,7 @@ import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import { getUserFacingError, logHandledError, showError } from '../utils/feedback';
 import {
   CONTENT_LIMITS,
+  mediaVariantUrl,
   type Comment,
   type Exercise,
   type Post,
@@ -623,9 +628,12 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
       if (!item.url) return null;
       return (
         <Image
-          source={{ uri: item.url }}
+          source={{ uri: mediaVariantUrl(item.url, 'feed') }}
           style={s.carouselSlide}
-          resizeMode="cover"
+          contentFit="cover"
+          transition={120}
+          cachePolicy="memory-disk"
+          recyclingKey={item.url}
           accessibilityLabel={post.content || t('feed.post', 'Post')}
         />
       );
@@ -648,7 +656,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
                <Surface elevation={0} key={idx} style={s.workoutSlideItem}>
                  <Surface elevation={0} style={s.workoutSlideIcon}>
                    {typeof ex.exerciseId === 'object' && ((ex.exerciseId as Exercise).imageUrl || (ex.exerciseId as Exercise).gifUrl) ? (
-                     <Image source={{ uri: (ex.exerciseId as Exercise).imageUrl || (ex.exerciseId as Exercise).gifUrl }} style={{ width: '100%', height: '100%', borderRadius: 10 }} resizeMode="cover" />
+                     <Image source={{ uri: mediaVariantUrl((ex.exerciseId as Exercise).imageUrl || (ex.exerciseId as Exercise).gifUrl, 'thumb') }} style={{ width: '100%', height: '100%', borderRadius: 10 }} contentFit="cover" cachePolicy="memory-disk" />
                    ) : (
                      <Ionicons name="barbell" size={24} color={theme.text} />
                    )}
@@ -679,7 +687,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
         <TouchableRipple style={s.userInfoLeft} onPress={() => onUserPress?.(postUser._id)} accessibilityLabel={postUser.full_name}>
           <Surface elevation={0} style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', backgroundColor: 'transparent' }}>
             {postProfilePicture ? (
-              <Image source={{ uri: postProfilePicture }} style={s.avatar} />
+              <Image source={{ uri: mediaVariantUrl(postProfilePicture, 'avatar') }} style={s.avatar} contentFit="cover" cachePolicy="memory-disk" recyclingKey={postUser._id} />
             ) : (
               <Surface elevation={0} style={[s.avatar, s.avatarPlaceholder]}>
                 <Text style={s.avatarPlaceholderText}>
@@ -848,7 +856,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
               style={s.commentItem}
             >
               {normalizeUri(comment.user?.profile_picture) ? (
-                <Image source={{ uri: normalizeUri(comment.user?.profile_picture) }} style={s.commentAvatar} />
+                <Image source={{ uri: mediaVariantUrl(normalizeUri(comment.user?.profile_picture), 'avatar') }} style={s.commentAvatar} contentFit="cover" cachePolicy="memory-disk" />
               ) : (
                 <Surface elevation={0} style={[s.commentAvatar, s.avatarPlaceholder]}>
                   <Text style={[s.avatarPlaceholderText, { fontSize: 12 }]}>

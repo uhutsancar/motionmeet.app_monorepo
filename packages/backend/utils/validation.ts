@@ -39,3 +39,10 @@ export const isExerciseList = (value: unknown, { allowEmpty = false }: { allowEm
     });
   });
 };
+
+/**
+ * Escapes the LIKE wildcards, so a search for "%" matches the literal character
+ * instead of scanning the whole table. Used by every text search that builds a
+ * pattern out of member input - people search and location search both do.
+ */
+export const escapeLikePattern = (value: string): string => value.replace(/[\\%_]/g, "\\$&");

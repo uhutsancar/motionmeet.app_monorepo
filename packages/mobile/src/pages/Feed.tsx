@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   RefreshControl,
@@ -170,19 +170,26 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
     navigation.navigate('Profile', { userId });
   }, [navigation]);
 
-  const validPosts = posts.filter((post) => {
-    const author: PublicUser | null = typeof post.user === 'object' ? post.user : null;
-    return Boolean(post._id && author?._id);
-  });
-  // Both carousels hide themselves when they have nothing to show, so they can
-  // be slotted in unconditionally once there is a feed to break up.
-  const listData: FeedRow[] = [
-    ...validPosts.slice(0, 2).map((post): FeedRow => ({ type: 'post', item: post })),
-    ...(validPosts.length ? [{ type: 'suggested', id: 'suggested' } as FeedRow] : []),
-    ...validPosts.slice(2, 5).map((post): FeedRow => ({ type: 'post', item: post })),
-    ...(validPosts.length ? [{ type: 'nearby', id: 'nearby' } as FeedRow] : []),
-    ...validPosts.slice(5).map((post): FeedRow => ({ type: 'post', item: post })),
-  ];
+  // Memoised on `posts` alone. Rebuilt inline, this array was a new object on
+  // every render of the screen - and the screen re-renders whenever the socket
+  // moves the bell badge, whenever the feed picker opens, whenever a pull to
+  // refresh starts. Each of those handed `FlatList` a `data` prop it had never
+  // seen and made it re-diff the whole list for a change to the header.
+  const listData = useMemo<FeedRow[]>(() => {
+    const validPosts = posts.filter((post) => {
+      const author: PublicUser | null = typeof post.user === 'object' ? post.user : null;
+      return Boolean(post._id && author?._id);
+    });
+    // Both carousels hide themselves when they have nothing to show, so they can
+    // be slotted in unconditionally once there is a feed to break up.
+    return [
+      ...validPosts.slice(0, 2).map((post): FeedRow => ({ type: 'post', item: post })),
+      ...(validPosts.length ? [{ type: 'suggested', id: 'suggested' } as FeedRow] : []),
+      ...validPosts.slice(2, 5).map((post): FeedRow => ({ type: 'post', item: post })),
+      ...(validPosts.length ? [{ type: 'nearby', id: 'nearby' } as FeedRow] : []),
+      ...validPosts.slice(5).map((post): FeedRow => ({ type: 'post', item: post })),
+    ];
+  }, [posts]);
 
   const renderItem: ListRenderItem<FeedRow> = useCallback(({ item: row }) => {
     if (row.type === 'suggested') return <SuggestedAthletes navigation={navigation} />;

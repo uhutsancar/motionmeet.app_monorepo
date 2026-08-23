@@ -1,7 +1,9 @@
 import type { Response } from "express";
 import { sql } from "kysely";
 import { database, withTransaction } from "../configs/database.js";
-import { invalidateCachePrefix } from "../configs/redis.js";
+import { invalidateCacheOwners } from "../configs/redis.js";
+import { exerciseListOwner } from "./exerciseService.js";
+import { feedCacheOwner, profileCacheOwner } from "./feedCache.js";
 import { queueMediaDeletions } from "./mediaDeletionService.js";
 
 const writeChunk = async (response: Response, chunk: string): Promise<void> => {
@@ -67,5 +69,9 @@ export const deleteAccountData = async (userId: string): Promise<boolean> => {
     await transaction.deleteFrom("conversations").where("id", "in", transaction.selectFrom("conversation_participants").select("conversation_id").where("user_id", "=", userId)).execute();
     await transaction.deleteFrom("users").where("id", "=", userId).execute();
   });
-  await Promise.all([invalidateCachePrefix(`profile:${userId}:`), invalidateCachePrefix("feed:"), invalidateCachePrefix("exercises:list:")]); return true;
+  // The account is gone, so only its own cached surfaces need dropping: its
+  // profile, its feed pages and its exercise list (custom exercises went with
+  // the cascade). Everyone else's copies age out on their own TTL.
+  await invalidateCacheOwners(profileCacheOwner(userId), feedCacheOwner(userId), exerciseListOwner(userId));
+  return true;
 };

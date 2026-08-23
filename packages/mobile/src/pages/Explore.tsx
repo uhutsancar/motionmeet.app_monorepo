@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
-  Image,
   Keyboard,
   Pressable,
   RefreshControl,
@@ -11,6 +10,9 @@ import {
   useWindowDimensions,
   type ListRenderItem,
 } from 'react-native';
+// expo-image: these rows scroll past many remote avatars, and it recycles
+// views and keeps a memory + disk cache where React Native's Image does not.
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActivityIndicator, Text } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -20,7 +22,7 @@ import { useTheme } from '../context/ThemeContext';
 import { discoverUsers, getPosts } from '../api/endpoints';
 import { logHandledError } from '../utils/feedback';
 import PostViewerModal from '../components/PostViewerModal';
-import type { Post, PublicUser } from '@motionmeet/shared';
+import { mediaVariantUrl, type Post, type PublicUser } from '@motionmeet/shared';
 import type { NavigationOnlyProps } from '../navigation/types';
 
 /** Instagram's grid, and the one people already know how to read. */
@@ -225,7 +227,7 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
           accessibilityRole="button"
           accessibilityLabel={item.content || t('explore.open_post', 'Gonderiyi ac')}
         >
-          <Image source={{ uri: media.url }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          <Image source={{ uri: mediaVariantUrl(media.url, 'thumb') }} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" recyclingKey={item._id} transition={100} />
           {media.isVideo && (
             <Ionicons name="play" size={17} color="#FFFFFF" style={styles.tileBadge} />
           )}
@@ -253,7 +255,7 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
           accessibilityLabel={item.full_name || item.username}
         >
           {picture ? (
-            <Image source={{ uri: picture }} style={styles.resultAvatar} />
+            <Image source={{ uri: mediaVariantUrl(picture, 'avatar') }} style={styles.resultAvatar} contentFit="cover" cachePolicy="memory-disk" />
           ) : (
             <View style={[styles.resultAvatar, styles.resultAvatarFallback]}>
               <Text style={styles.resultAvatarLetter}>

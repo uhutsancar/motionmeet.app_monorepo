@@ -15,9 +15,9 @@ import {
   Typography,
 } from "@mui/material";
 import { Dumbbell, Heart, Lock, MessageCircle, Send, Share2, Users } from "lucide-react";
-import moment from "moment";
+import dayjs, { setDayjsLocale } from "../utils/dayjs";
 import axios from "axios";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
@@ -27,6 +27,8 @@ import FollowButton from "~/components/FollowButton";
 import {
   API_ROUTES,
   CONTENT_LIMITS,
+  mediaSrcSet,
+  mediaVariantUrl,
   type ApiFailure,
   type Comment,
   type Post,
@@ -88,7 +90,7 @@ const PostCard = ({ post }: PostCardProps) => {
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    moment.locale(i18n.language.startsWith("tr") ? "tr" : "en");
+    setDayjsLocale(i18n.language);
   }, [i18n.language]);
 
   if (typeof post.user === "string") return null;
@@ -242,7 +244,7 @@ const PostCard = ({ post }: PostCardProps) => {
       <Stack direction="row" spacing={1} sx={{ px: { xs: 1.75, sm: 2.5 }, pt: { xs: 1.75, sm: 2.25 }, alignItems: "center" }}>
         <ButtonBase onClick={() => navigate(`/profile/${author._id}`)} sx={{ flex: 1, minWidth: 0, borderRadius: 2, justifyContent: "flex-start", textAlign: "left" }}>
           <Stack direction="row" spacing={1.5} sx={{ minWidth: 0, alignItems: "center" }}>
-            <Avatar src={author.profile_picture || undefined} alt={author.full_name} sx={{ width: 44, height: 44, border: 1, borderColor: "divider" }}>
+            <Avatar src={mediaVariantUrl(author.profile_picture, "avatar") || undefined} alt={author.full_name} sx={{ width: 44, height: 44, border: 1, borderColor: "divider" }}>
               {author.full_name?.charAt(0)}
             </Avatar>
             <Stack sx={{ minWidth: 0 }}>
@@ -253,7 +255,7 @@ const PostCard = ({ post }: PostCardProps) => {
               </Stack>
               <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
                 <Typography variant="caption" color="text.secondary">
-                  @{author.username} · {moment(post.createdAt).fromNow()}
+                  @{author.username} · {dayjs(post.createdAt).fromNow()}
                 </Typography>
                 {post.visibility === "private" && (
                   <Chip icon={<Lock size={12} />} label={t("feed.only_you", "Only you")} size="small" sx={{ height: 21, fontSize: 10 }} />
@@ -331,7 +333,16 @@ const PostCard = ({ post }: PostCardProps) => {
                 {item.type === "video" ? (
                   <Box component="video" src={item.url} controls preload="metadata" playsInline sx={{ width: "100%", height: "100%", objectFit: "contain" }} />
                 ) : item.type === "image" ? (
-                  <Box component="img" src={item.url} alt={`Slide ${index + 1}`} loading="lazy" decoding="async" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <Box
+                    component="img"
+                    src={mediaVariantUrl(item.url, "feed")}
+                    srcSet={mediaSrcSet(item.url, "feed") || undefined}
+                    sizes="(max-width: 720px) 100vw, 720px"
+                    alt={`Slide ${index + 1}`}
+                    loading="lazy"
+                    decoding="async"
+                    sx={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
                 ) : (
                   <Stack spacing={2.5} sx={{ height: "100%", px: 3, justifyContent: "center" }}>
                     {item.data.exercises.slice(0, 4).map((exercise, exerciseIndex) => {
@@ -403,7 +414,7 @@ const PostCard = ({ post }: PostCardProps) => {
             {comments.length > 0 ? (
               comments.map((comment, index) => (
                 <Stack key={comment._id || `${comment.user?._id}-${comment.createdAt}-${index}`} direction="row" spacing={1.25} sx={{ alignItems: "flex-start" }}>
-                  <Avatar src={comment.user?.profile_picture || undefined} alt={comment.user?.full_name} sx={{ width: 32, height: 32 }}>
+                  <Avatar src={mediaVariantUrl(comment.user?.profile_picture, "avatar") || undefined} alt={comment.user?.full_name} sx={{ width: 32, height: 32 }}>
                     {comment.user?.full_name?.charAt(0)}
                   </Avatar>
                   <Stack sx={{ minWidth: 0, flex: 1 }}>
@@ -416,7 +427,7 @@ const PostCard = ({ post }: PostCardProps) => {
                       </Typography>
                     </Paper>
                     <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, ml: 1 }}>
-                      {moment(comment.createdAt).fromNow()}
+                      {dayjs(comment.createdAt).fromNow()}
                     </Typography>
                   </Stack>
                 </Stack>
@@ -452,4 +463,10 @@ const PostCard = ({ post }: PostCardProps) => {
   );
 };
 
-export default PostCard;
+/**
+ * Memoised because the feed renders these in a plain `map`: without it, one
+ * like anywhere in `state.posts` re-rendered every card on the page. Posts come
+ * out of the store as stable objects, so the default shallow comparison is
+ * enough - a card re-renders exactly when its own post changes.
+ */
+export default memo(PostCard);

@@ -21,7 +21,7 @@ import { useTranslation } from "react-i18next";
 import { useAuthContext } from "../context/AuthProvider";
 import CustomExerciseModal from "../components/CustomExerciseModal";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import moment from "moment";
+import dayjs from "../utils/dayjs";
 import { useMuscleGroups } from "../hooks/useMuscleGroups";
 import { useEquipment } from "../hooks/useEquipment";
 import { getExercises, getExerciseStats } from "../services/exerciseService";
@@ -294,7 +294,7 @@ const Exercises = () => {
                                 content={({ active, payload }) => (
                                   active && payload?.length ? (
                                     <Paper elevation={3} sx={{ p: 1.5, border: 1, borderColor: "divider" }}>
-                                      <Typography variant="caption" color="text.secondary">{moment(payload[0].payload.date).format("MMM DD, YYYY")}</Typography>
+                                      <Typography variant="caption" color="text.secondary">{dayjs(payload[0].payload.date).format("MMM DD, YYYY")}</Typography>
                                       <Typography variant="body2" color="primary.main" sx={{ fontWeight: 800 }}>{payload[0].value} kg</Typography>
                                     </Paper>
                                   ) : null
@@ -332,7 +332,7 @@ const Exercises = () => {
                         <Paper key={`${session.workoutId}-${session.performedAt}`} variant="outlined" sx={{ p: 2 }}>
                           <Typography variant="body2" noWrap sx={{ fontWeight: 800 }}>{session.workoutName}</Typography>
                           <Typography variant="caption" color="text.secondary">
-                            {moment(session.performedAt).format("D MMM YYYY, HH:mm")}
+                            {dayjs(session.performedAt).format("D MMM YYYY, HH:mm")}
                           </Typography>
                           <Stack spacing={0.5} sx={{ mt: 1.25 }}>
                             {session.sets.map((set) => (

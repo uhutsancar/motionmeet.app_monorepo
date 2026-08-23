@@ -1,11 +1,14 @@
 import React from 'react';
-import { Image, View } from 'react-native';
+import { View } from 'react-native';
+// expo-image: these rows scroll past many remote avatars, and it recycles
+// views and keeps a memory + disk cache where React Native's Image does not.
+import { Image } from 'expo-image';
 import { ActivityIndicator, Surface, Text, TouchableRipple } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useFollowAction } from '../hooks/useFollowAction';
-import type { PublicUser } from '@motionmeet/shared';
+import { mediaVariantUrl, type PublicUser } from '@motionmeet/shared';
 
 interface SuggestedUser extends PublicUser {
   isFollowing?: boolean;
@@ -59,8 +62,11 @@ const UserCard = ({ user, onPress, width = 220, badge, caption }: UserCardProps)
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         {user.profile_picture ? (
           <Image
-            source={{ uri: user.profile_picture }}
+            source={{ uri: mediaVariantUrl(user.profile_picture, 'avatar') }}
             style={{ width: 46, height: 46, borderRadius: 23 }}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            recyclingKey={user._id}
           />
         ) : (
           <View

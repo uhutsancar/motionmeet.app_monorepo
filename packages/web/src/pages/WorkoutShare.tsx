@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Share, CheckCircle2, X } from 'lucide-react';
-import moment from 'moment';
+import dayjs from '../utils/dayjs';
 import { Box, Typography, IconButton, Button, Stack, Paper, Chip } from '@mui/material';
 import toast from 'react-hot-toast';
 import type { Workout } from '@motionmeet/shared';
@@ -82,7 +82,7 @@ const WorkoutCompleteShare = () => {
 
                         <Typography variant="h5" fontWeight="900" mb={1}>{workout?.name}</Typography>
                         <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 2, mb: 4 }}>
-                            {moment(workout?.endTime).format('DD MMM YYYY')}
+                            {dayjs(workout?.endTime).format('DD MMM YYYY')}
                         </Typography>
 
                         <Stack direction="row" spacing={2} sx={{ width: '100%', mb: 4 }}>

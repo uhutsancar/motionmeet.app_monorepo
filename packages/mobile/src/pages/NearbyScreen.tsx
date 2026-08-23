@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, RefreshControl, StatusBar, View } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, StatusBar, View } from 'react-native';
+// expo-image: these rows scroll past many remote avatars, and it recycles
+// views and keeps a memory + disk cache where React Native's Image does not.
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Appbar, Divider, Surface, Switch, Text, TouchableRipple } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
-import type { NearbyScope, NearbySettings, NearbyUser } from '@motionmeet/shared';
-import { NEARBY_SCOPES } from '@motionmeet/shared';
+import { NEARBY_SCOPES, mediaVariantUrl, type NearbyScope, type NearbySettings, type NearbyUser } from '@motionmeet/shared';
 import { useAuthContext } from '../context/AuthProvider';
 import { useTheme } from '../context/ThemeContext';
 import { BAND_LABELS, SCOPE_LABELS } from '../config/nearbyLabels';
@@ -204,7 +206,7 @@ const NearbyScreen = ({ navigation }: NavigationOnlyProps) => {
     <TouchableRipple onPress={() => navigation.navigate('Profile', { userId: item._id })}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 }}>
         {item.profile_picture ? (
-          <Image source={{ uri: item.profile_picture }} style={{ width: 46, height: 46, borderRadius: 23 }} />
+          <Image source={{ uri: mediaVariantUrl(item.profile_picture, 'avatar') }} style={{ width: 46, height: 46, borderRadius: 23 }} contentFit="cover" cachePolicy="memory-disk" recyclingKey={item._id} />
         ) : (
           <View style={{ width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.primarySoft }}>
             <Text style={{ color: theme.primary, fontSize: 17, fontWeight: '800' }}>

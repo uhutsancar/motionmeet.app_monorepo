@@ -11,7 +11,7 @@ import Typography from "@mui/material/Typography";
 import { alpha } from "@mui/material/styles";
 import SettingsOutlined from "@mui/icons-material/SettingsOutlined";
 import { Bell, Check, Heart, MessageCircle, UserPlus, UserCheck, type LucideIcon } from "lucide-react";
-import moment from "moment";
+import dayjs, { setDayjsLocale } from "../utils/dayjs";
 import { useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
@@ -45,7 +45,7 @@ const Activity = () => {
   const { items, nextCursor, loading, loadingMore, respondingTo } = useAppSelector((state) => state.notifications);
 
   useEffect(() => {
-    moment.locale(i18n.language.startsWith("tr") ? "tr" : "en");
+    setDayjsLocale(i18n.language);
   }, [i18n.language]);
 
   const load = useCallback(async (cursor?: string | null) => {
@@ -163,7 +163,7 @@ const Activity = () => {
                     {describe(item)}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {moment(item.createdAt).fromNow()}
+                    {dayjs(item.createdAt).fromNow()}
                   </Typography>
                   {item.actionable && actorId && (
                     <Stack direction="row" spacing={1} sx={{ mt: 1.25, flexWrap: "wrap" }}>

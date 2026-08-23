@@ -28,6 +28,7 @@ let redisSubscriber: Client | null = null;
 let redisInitialization: Promise<{ client: Client; publisher: Client; subscriber: Client } | null> | null = null;
 let redisReachedReady = false;
 const localLimits = new Map<string, LocalLimit>();
+const LOCAL_LIMIT_SWEEP_SIZE = 1_000;
 
 /**
  * Startup waits for the first connection attempt, so an unreachable Redis must
@@ -221,30 +222,84 @@ class AdaptiveRateLimitStore implements Store {
 
 export const createRateLimitStore = (prefix: string): Store => new AdaptiveRateLimitStore(prefix);
 
+const CACHE_PREFIX = "motionmeet:v1:";
+
 export const getCachedJson = async <T>(key: string): Promise<T | null> => {
   const client = getRedisClient();
   if (!client) return null;
-  try { const raw = await client.get(`motionmeet:v1:${key}`); return raw ? JSON.parse(raw) as T : null; }
+  try { const raw = await client.get(`${CACHE_PREFIX}${key}`); return raw ? JSON.parse(raw) as T : null; }
   catch { return null; }
 };
 
 export const setCachedJson = async (key: string, value: unknown, ttlSeconds: number): Promise<void> => {
   const client = getRedisClient();
   if (!client) return;
-  try { await client.set(`motionmeet:v1:${key}`, JSON.stringify(value), { EX: ttlSeconds }); } catch { /* cache is optional */ }
+  try { await client.set(`${CACHE_PREFIX}${key}`, JSON.stringify(value), { EX: ttlSeconds }); } catch { /* cache is optional */ }
 };
 
-export const invalidateCachePrefix = async (prefix: string): Promise<void> => {
+/**
+ * Owner-addressed cache.
+ *
+ * Everything that used to be invalidated by prefix now lives as a field inside
+ * one hash per owner - one member's feed, one profile, one member's exercise
+ * list. Dropping it is a single `DEL`, which is what makes a write cheap.
+ *
+ * The prefix scan this replaced was neither: Redis applies `MATCH` *after*
+ * walking a key, so every `SCAN ... MATCH feed:*` toured the entire keyspace,
+ * and it ran on nine hot write paths - every like, comment, post, follow and
+ * profile update in the system. A like storm on one post therefore swept every
+ * member's cached feed and sent all of them back to PostgreSQL at once.
+ *
+ * `maxFields` keeps one owner from accumulating a cursor's worth of fields
+ * faster than the TTL clears them; past the cap the hash is rebuilt rather than
+ * grown.
+ */
+const ownerKey = (owner: string): string => `${CACHE_PREFIX}${owner}`;
+
+export const getCachedField = async <T>(owner: string, field: string): Promise<T | null> => {
+  const client = getRedisClient();
+  if (!client) return null;
+  try { const raw = await client.hGet(ownerKey(owner), field); return raw ? JSON.parse(raw) as T : null; }
+  catch { return null; }
+};
+
+export const setCachedField = async (owner: string, field: string, value: unknown, ttlSeconds: number, maxFields = 64): Promise<void> => {
   const client = getRedisClient();
   if (!client) return;
+  const key = ownerKey(owner);
   try {
-    let cursor = "0";
-    do {
-      const result = await client.scan(cursor, { MATCH: `motionmeet:v1:${prefix}*`, COUNT: 200 });
-      cursor = result.cursor;
-      if (result.keys.length) await client.del(result.keys);
-    } while (cursor !== "0");
+    if (await client.hLen(key) >= maxFields) await client.del(key);
+    await client.multi().hSet(key, field, JSON.stringify(value)).expire(key, ttlSeconds).exec();
   } catch { /* cache is optional */ }
+};
+
+/** O(1) invalidation: one `DEL` per owner, no keyspace walk. */
+export const invalidateCacheOwners = async (...owners: string[]): Promise<void> => {
+  const client = getRedisClient();
+  if (!client || !owners.length) return;
+  try { await client.del(owners.map(ownerKey)); } catch { /* cache is optional */ }
+};
+
+/**
+ * Remembers that a piece of work has already been done, so a repeat of it can
+ * be skipped rather than redone to the same effect.
+ *
+ * Without Redis `wasDone` is always false, so the caller falls through to
+ * whatever durable guard it already has (a unique index, an `ON CONFLICT DO
+ * NOTHING`). This is an optimisation, never the thing that makes an operation
+ * correct.
+ */
+export const wasDone = async (key: string): Promise<boolean> => {
+  const client = getRedisClient();
+  if (!client) return false;
+  try { return Boolean(await client.exists(`${CACHE_PREFIX}done:${key}`)); }
+  catch { return false; }
+};
+
+export const markDone = async (key: string, ttlSeconds: number): Promise<void> => {
+  const client = getRedisClient();
+  if (!client) return;
+  try { await client.set(`${CACHE_PREFIX}done:${key}`, "1", { EX: ttlSeconds }); } catch { /* cache is optional */ }
 };
 
 export const runWithRedisLock = async (name: string, ttlSeconds: number, task: () => Promise<void>): Promise<boolean> => {
@@ -266,6 +321,12 @@ export const consumeDistributedLimit = async (key: string, limit: number, window
   const client = getRedisClient();
   if (!client) {
     const now = Date.now();
+    // The fallback map has no expiry of its own, so an instance running without
+    // Redis would otherwise hold one entry per key it has ever seen. Expired
+    // entries are swept whenever the map grows past the sweep threshold.
+    if (localLimits.size >= LOCAL_LIMIT_SWEEP_SIZE) {
+      for (const [entryKey, entry] of localLimits) if (entry.expiresAt <= now) localLimits.delete(entryKey);
+    }
     const current = localLimits.get(key);
     const entry = !current || current.expiresAt <= now ? { count: 0, expiresAt: now + windowSeconds * 1000 } : current;
     entry.count += 1;

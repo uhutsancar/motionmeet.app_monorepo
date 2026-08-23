@@ -13,7 +13,7 @@ import DeleteOutlineRounded from "@mui/icons-material/DeleteOutlineRounded";
 import FavoriteBorderRounded from "@mui/icons-material/FavoriteBorderRounded";
 import KeyboardArrowUpRounded from "@mui/icons-material/KeyboardArrowUpRounded";
 import SendRounded from "@mui/icons-material/SendRounded";
-import moment from "moment";
+import dayjs from "../utils/dayjs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
@@ -314,7 +314,7 @@ const StoryViewer = ({ stories, open, onClose, onDeleted }: StoryViewerProps) =>
                   {author?.full_name || author?.username || "MotionMeet"}
                 </Typography>
                 <Typography sx={{ color: "rgba(255,255,255,.75)", fontSize: 12 }}>
-                  {moment(story.createdAt).fromNow()}
+                  {dayjs(story.createdAt).fromNow()}
                 </Typography>
               </Box>
             </Stack>
@@ -459,7 +459,7 @@ const StoryViewer = ({ stories, open, onClose, onDeleted }: StoryViewerProps) =>
                     {entry.user.full_name}
                   </Typography>
                   <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
-                    @{entry.user.username} · {moment(entry.viewedAt).fromNow()}
+                    @{entry.user.username} · {dayjs(entry.viewedAt).fromNow()}
                   </Typography>
                 </Box>
                 <ChevronRightRounded fontSize="small" color="disabled" />

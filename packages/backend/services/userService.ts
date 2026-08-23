@@ -1,7 +1,8 @@
 import { sql } from "kysely";
 import type { PublicUser, UserProfile } from "@motionmeet/shared";
 import { database, withTransaction } from "../configs/database.js";
-import { getCachedJson, invalidateCachePrefix, setCachedJson } from "../configs/redis.js";
+import { getCachedField, setCachedField } from "../configs/redis.js";
+import { PROFILE_CACHE_TTL_SECONDS, invalidateMember, profileCacheOwner } from "./feedCache.js";
 import type { Row } from "../db/types.js";
 import { serializeUser, toIsoString, type InternalUser } from "../repositories/entities.js";
 import { evaluateMessagePermission } from "./accessControlService.js";
@@ -12,7 +13,7 @@ import { hydratePostInteractions } from "./postInteractionService.js";
 import { commitReservedUploads } from "./mediaUploadService.js";
 import { queueMediaDeletions } from "./mediaDeletionService.js";
 import { extractS3Key } from "../utils/s3Utils.js";
-import { isUserId } from "../utils/validation.js";
+import { escapeLikePattern, isUserId } from "../utils/validation.js";
 import type { Pagination } from "../utils/pagination.js";
 
 const MAX_RELATIONSHIPS = 10_000;
@@ -20,7 +21,6 @@ const brief = (row: { id: string; full_name: string; username: string; profile_p
 // Search and suggestion lists reach people the member has no relationship with,
 // so anything short of a public profile location is withheld there.
 const summary = (row: { id: string; full_name: string; username: string; profile_picture_url: string; bio: string; location: string; location_visibility: string; followers_count: number; following_count: number; connections_count: number }) => ({ ...brief(row), bio: row.bio, location: row.location_visibility === "public" ? row.location : "", followers_count: row.followers_count, following_count: row.following_count, connections_count: row.connections_count });
-export const withRelationshipCounts = <T>(user: T): T => user;
 
 /**
  * Stamps each row in a people list with both directions of the follow graph in
@@ -41,8 +41,6 @@ export const getUserByIdWithPassword = async (userId: string): Promise<InternalU
   const row = await database.selectFrom("users").selectAll().where("id", "=", userId).executeTakeFirst();
   return row ? serializeUser(row, null, true) : null;
 };
-export const getUserForProfileUpdate = getUserByIdWithPassword;
-export const userExists = async (userId: string): Promise<boolean> => Boolean(await database.selectFrom("users").select("id").where("id", "=", userId).executeTakeFirst());
 export const checkUsernameTaken = async (username: string, excludeUserId: string): Promise<boolean> => Boolean(await database.selectFrom("users").select("id").where("username", "=", username).where("id", "!=", excludeUserId).executeTakeFirst());
 
 interface UserUpdate { [key: string]: unknown }
@@ -85,16 +83,32 @@ export const updateUser = async (userId: string, input: UserUpdate, { reservatio
       await transaction.insertInto("outbox_events").values({ legacy_mongo_id: null, type: "user.profile.updated", aggregate_id: userId, payload, status: "pending", attempts: 0, next_attempt_at: new Date(), claim_token: null, claim_until: null, last_error: "" }).execute();
     }
   });
-  await Promise.all([invalidateCachePrefix(`profile:${userId}:`), invalidateCachePrefix("feed:")]);
+  await invalidateMember(userId);
   return getUserById(userId);
 };
 
+/**
+ * People search.
+ *
+ * Matched against `lower(username::text)` and `lower(full_name)` rather than
+ * with `ILIKE` on the columns themselves, so the query lines up exactly with
+ * the trigram indexes migration 009 builds over those two expressions. `ILIKE`
+ * on the raw columns could use no index at all and scanned the whole table.
+ *
+ * The term is escaped before it becomes a pattern: a member searching for `%`
+ * would otherwise match every account in the system.
+ */
 export const searchUsers = async (input: string, excludeUserId: string) => {
   const term = input.trim().toLowerCase(); if (!term) return [];
+  const escaped = escapeLikePattern(term);
+  const prefix = `${escaped}%`;
   const rows = await database.selectFrom("users").select(["id", "full_name", "username", "profile_picture_url", "bio", "location", "location_visibility", "followers_count", "following_count", "connections_count"])
     .where("id", "!=", excludeUserId).where("privacy_show_in_search", "=", true)
-    .where((expression) => expression.or([expression("username", "ilike", `${term}%`), expression("full_name", "ilike", `%${term}%`)]))
-    .orderBy(sql`case when username ilike ${`${term}%`} then 0 else 1 end`).orderBy("followers_count", "desc").limit(20).execute();
+    .where((expression) => expression.or([
+      sql<boolean>`lower(users.username::text) like ${prefix}`,
+      sql<boolean>`lower(users.full_name) like ${`%${escaped}%`}`,
+    ]))
+    .orderBy(sql`case when lower(users.username::text) like ${prefix} then 0 else 1 end`).orderBy("followers_count", "desc").limit(20).execute();
   return withRelationships(rows.map(summary), excludeUserId);
 };
 
@@ -111,7 +125,6 @@ export const validateTargetUser = async (requesterId: string, targetId: unknown,
 export { requestFollow, acceptFollowRequest, declineFollowRequest, cancelFollowRequest, getRelationshipState } from "./relationshipService.js";
 export const unfollowUser = (userId: string, targetId: string): Promise<void> => unfollow(userId, targetId);
 
-export const checkRecentConnectionRequests = async (userId: string): Promise<number> => Number((await database.selectFrom("connections").select((expression) => expression.fn.countAll<number>().as("count")).where("from_user_id", "=", userId).where("created_at", ">", new Date(Date.now() - 86_400_000)).executeTakeFirst())?.count ?? 0);
 export const getConnectionBetweenUsers = async (left: string, right: string) => {
   const row = await database.selectFrom("connections").selectAll().where("pair_key", "=", [left, right].sort().join(":")).executeTakeFirst();
   return row ? { id: row.id, _id: row.id, from_user_id: row.from_user_id, to_user_id: row.to_user_id, status: row.status, createdAt: toIsoString(row.created_at), updatedAt: toIsoString(row.updated_at) } : null;
@@ -185,10 +198,22 @@ export const removeConnection = async (userId: string, targetId: string): Promis
   return true;
 });
 
+/**
+ * Cached per viewer, because what a profile shows depends on who is looking:
+ * a private account's posts, its location label and its message button all
+ * differ by relationship. Mixing viewers into one entry would be a privacy bug,
+ * so the viewer is part of the field rather than dropped for a better hit rate.
+ *
+ * All of a profile's entries live under one owner key, so an edit or a follow
+ * drops them for every viewer at once with a single `DEL`.
+ */
 export const getUserProfileAndPosts = async (profileId: string, requesterId: string, pagination: Pagination) => {
-  const cacheKey = `profile:${profileId}:${requesterId}:${pagination.cursor?.date.toISOString() ?? "first"}:${pagination.cursor?.id ?? ""}:${pagination.limit}`;
-  const cached = await getCachedJson<Awaited<ReturnType<typeof buildProfileAndPosts>>>(cacheKey); if (cached) return cached;
-  const result = await buildProfileAndPosts(profileId, requesterId, pagination); if (result) await setCachedJson(cacheKey, result, 60); return result;
+  const owner = profileCacheOwner(profileId);
+  const field = `${requesterId}:${pagination.cursor?.date.toISOString() ?? "first"}:${pagination.cursor?.id ?? ""}:${pagination.limit}`;
+  const cached = await getCachedField<Awaited<ReturnType<typeof buildProfileAndPosts>>>(owner, field); if (cached) return cached;
+  const result = await buildProfileAndPosts(profileId, requesterId, pagination);
+  if (result) await setCachedField(owner, field, result, PROFILE_CACHE_TTL_SECONDS);
+  return result;
 };
 
 /**

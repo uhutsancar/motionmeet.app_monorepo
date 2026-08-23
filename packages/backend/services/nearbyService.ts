@@ -7,7 +7,7 @@ import type {
 } from "@motionmeet/shared";
 import { DISTANCE_VISIBILITIES, NEARBY_SCOPES, NEARBY_SCOPE_METERS } from "@motionmeet/shared";
 import { database } from "../configs/database.js";
-import { getCachedJson, invalidateCachePrefix, setCachedJson } from "../configs/redis.js";
+import { getCachedField, invalidateCacheOwners, setCachedField } from "../configs/redis.js";
 import { distanceMeters, withinRadius } from "./locationGeometry.js";
 import { describeCity, findNearestCity } from "./locationService.js";
 import { getRelationshipMap } from "./relationshipService.js";
@@ -163,9 +163,8 @@ export const deletePosition = async (userId: string): Promise<void> => {
   await invalidateNearbyResults(userId);
 };
 
-const invalidateNearbyResults = async (userId: string): Promise<void> => {
-  await invalidateCachePrefix(`nearby:${userId}:`);
-};
+const nearbyOwner = (userId: string): string => `nearby:${userId}`;
+const invalidateNearbyResults = (userId: string): Promise<void> => invalidateCacheOwners(nearbyOwner(userId));
 
 export interface NearbyListResult {
   users: NearbyUser[];
@@ -208,8 +207,9 @@ export const listNearbyUsers = async (userId: string, requestedLimit = 20): Prom
   if (isStale(own.location_updated_at)) return { users: [], settings, reason: "stale_fix" };
 
   const limit = Math.min(Math.max(requestedLimit, 1), MAX_RESULTS);
-  const cacheKey = `nearby:${userId}:${own.scope}:${limit}:${new Date(own.location_updated_at).getTime()}`;
-  const cached = await getCachedJson<NearbyUser[]>(cacheKey);
+  const owner = nearbyOwner(userId);
+  const field = `${own.scope}:${limit}:${new Date(own.location_updated_at).getTime()}`;
+  const cached = await getCachedField<NearbyUser[]>(owner, field);
   if (cached) return { users: cached, settings, reason: cached.length ? null : "no_results" };
 
   const freshAfter = new Date(Date.now() - FIX_VALIDITY_MS);
@@ -268,6 +268,6 @@ export const listNearbyUsers = async (userId: string, requestedLimit = 20): Prom
     ...(relationships.get(row.id) ?? { isFollowing: false, isFollowedBy: false, requestSent: false, requestReceived: false }),
   }));
 
-  await setCachedJson(cacheKey, users, RESULTS_CACHE_SECONDS);
+  await setCachedField(owner, field, users, RESULTS_CACHE_SECONDS);
   return { users, settings, reason: users.length ? null : "no_results" };
 };

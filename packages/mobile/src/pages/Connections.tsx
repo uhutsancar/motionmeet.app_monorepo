@@ -1,5 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, FlatList, Image, RefreshControl, ScrollView, StatusBar, StyleSheet, View } from 'react-native';
+import { Alert, FlatList, RefreshControl, ScrollView, StatusBar, StyleSheet, View } from 'react-native';
+// expo-image: these rows scroll past many remote avatars, and it recycles
+// views and keeps a memory + disk cache where React Native's Image does not.
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActivityIndicator, Appbar, Button, Chip, Divider, Surface, Text, TouchableRipple } from 'react-native-paper';
 import { useAuthContext } from "../context/AuthProvider";
@@ -21,7 +24,7 @@ import { AVATAR } from '../config/layout';
 import { setRelationship } from '../features/relationships/relationshipsSlice';
 import { getUserFacingError, showError } from '../utils/feedback';
 import { useAppDispatch } from '../store/hooks';
-import type { PublicUser } from '@motionmeet/shared';
+import { mediaVariantUrl, type PublicUser } from '@motionmeet/shared';
 import type { NavigationOnlyProps, RouteLike } from '../navigation/types';
 
 type ConnectionTabKey = typeof TABS[number]['key'];
@@ -206,8 +209,11 @@ const Connections = ({ navigation, route }: ConnectionsProps) => {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         {user.profile_picture ? (
           <Image
-            source={{ uri: user.profile_picture }}
+            source={{ uri: mediaVariantUrl(user.profile_picture, 'avatar') }}
             style={{ width: AVATAR.medium, height: AVATAR.medium, borderRadius: AVATAR.medium / 2 }}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            recyclingKey={user._id}
             accessibilityLabel={user.full_name}
           />
         ) : (

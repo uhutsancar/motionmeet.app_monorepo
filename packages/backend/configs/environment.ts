@@ -12,6 +12,7 @@ export interface Environment {
   databasePoolMax: number;
   databaseConnectionTimeoutMs: number;
   databaseIdleTimeoutMs: number;
+  databaseStatementTimeoutMs: number;
   mediaUploadsEnabled: boolean;
   emailEnabled: boolean;
   scheduledJobsEnabled: boolean;
@@ -123,6 +124,9 @@ export const loadEnvironment = (): Environment => {
     databasePoolMax: integerValue("DATABASE_POOL_MAX", nodeEnv === "production" ? 30 : 10, 1, 200),
     databaseConnectionTimeoutMs: integerValue("DATABASE_CONNECTION_TIMEOUT_MS", 10_000, 500, 60_000),
     databaseIdleTimeoutMs: integerValue("DATABASE_IDLE_TIMEOUT_MS", 30_000, 1_000, 300_000),
+    // Every endpoint in this API answers in tens of milliseconds when it is
+    // healthy; 15 seconds is a runaway, not a slow page.
+    databaseStatementTimeoutMs: integerValue("DATABASE_STATEMENT_TIMEOUT_MS", 15_000, 1_000, 120_000),
     mediaUploadsEnabled,
     emailEnabled,
     scheduledJobsEnabled: booleanValue("RUN_SCHEDULED_JOBS", true),

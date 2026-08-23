@@ -3,8 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuthContext } from "../context/AuthProvider";
 import { useSocket } from '../hooks/useSocket';
 import { Send, Search, ArrowLeft, Check, CheckCheck, X, Trash2 } from 'lucide-react';
-import moment from 'moment';
-import 'moment/locale/tr';
+import dayjs, { setDayjsLocale } from '../utils/dayjs';
 import toast from 'react-hot-toast';
 import { useNavigate, useParams } from 'react-router';
 
@@ -199,7 +198,7 @@ const WebMessages = () => {
   }, [getToken, socketRef]);
 
   useEffect(() => {
-    moment.locale(i18n.language.startsWith('tr') ? 'tr' : 'en');
+    setDayjsLocale(i18n.language);
   }, [i18n.language]);
 
   useEffect(() => {
@@ -538,7 +537,7 @@ const WebMessages = () => {
                       primary={
                         <Stack direction="row" sx={{ justifyContent: "space-between",  alignItems: "center" }} mb={0.5}>
                           <Typography variant="body2" fontWeight={hasUnread ? 700 : 500} noWrap>{conv.partner?.full_name || conv.partner?.username}</Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11, ml: 1, flexShrink: 0 }}>{conv.lastMessage?.createdAt ? moment(conv.lastMessage.createdAt).fromNow() : ''}</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11, ml: 1, flexShrink: 0 }}>{conv.lastMessage?.createdAt ? dayjs(conv.lastMessage.createdAt).fromNow() : ''}</Typography>
                         </Stack>
                       }
                       secondary={
@@ -635,7 +634,7 @@ const WebMessages = () => {
                           <Trash2 size={14} />
                         </IconButton>
                       )}
-                      <Typography variant="caption" sx={{ fontSize: 10, color: 'text.secondary' }}>{moment(msg.createdAt).format('HH:mm')}</Typography>
+                      <Typography variant="caption" sx={{ fontSize: 10, color: 'text.secondary' }}>{dayjs(msg.createdAt).format('HH:mm')}</Typography>
                       {mine && (msg.seen ? <CheckCheck size={12} color="#60a5fa" /> : <Check size={12} color="var(--mui-palette-text-disabled)" />)}
                     </Stack>
                   </Box>

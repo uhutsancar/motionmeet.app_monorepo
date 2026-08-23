@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   MIN_QUERY_LENGTH,
-  escapeLikePattern,
   formatAreaLabel,
   formatLocationLabel,
   normalizeLocationName,
   normalizeLocationQuery,
 } from "../utils/locationText.js";
+import { escapeLikePattern } from "../utils/validation.js";
 
 test("Turkish letters fold to the ASCII a member is likely to type", () => {
   assert.equal(normalizeLocationName("Nilüfer"), "nilufer");

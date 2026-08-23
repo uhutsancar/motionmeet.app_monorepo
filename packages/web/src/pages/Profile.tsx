@@ -16,7 +16,7 @@ import {
   useTheme,
 } from "@mui/material";
 import { Calendar as CalendarIcon, Dumbbell, LineChart, Lock, MapPin, Ruler, Send as MessageIcon, Share2, Target, TrendingUp, Trophy } from "lucide-react";
-import moment from "moment";
+import dayjs, { setDayjsLocale } from "../utils/dayjs";
 import axios from "axios";
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
@@ -73,7 +73,7 @@ const Profile = () => {
   const followingCount = user?.following_count ?? 0;
 
   useEffect(() => {
-    moment.locale(i18n.language.startsWith("tr") ? "tr" : "en");
+    setDayjsLocale(i18n.language);
   }, [i18n.language]);
 
   useEffect(() => {
@@ -186,19 +186,19 @@ const Profile = () => {
   };
 
   useEffect(() => {
-    const weeks: Array<{ start: moment.Moment; end: moment.Moment; name: string; amt: number }> = [];
+    const weeks: Array<{ start: dayjs.Dayjs; end: dayjs.Dayjs; name: string; amt: number }> = [];
     for (let index = 5; index >= 0; index -= 1) {
-      const startOfWeek = moment().subtract(index, "weeks").startOf("isoWeek");
+      const startOfWeek = dayjs().subtract(index, "weeks").startOf("isoWeek");
       weeks.push({
         start: startOfWeek,
-        end: moment(startOfWeek).endOf("isoWeek"),
+        end: dayjs(startOfWeek).endOf("isoWeek"),
         name: startOfWeek.format("MMM DD"),
         amt: 0,
       });
     }
 
     visibleWorkouts.forEach((workout) => {
-      const workoutDate = moment(workout.startTime);
+      const workoutDate = dayjs(workout.startTime);
       const week = weeks.find((item) => workoutDate.isBetween(item.start, item.end));
       if (!week) return;
 
@@ -541,7 +541,7 @@ const Profile = () => {
                           {t("profile.history")}
                         </Typography>
                         <Typography variant="caption" sx={{ fontWeight: 700 }}>
-                          {moment(workout.startTime).format("MMM DD, YYYY")}
+                          {dayjs(workout.startTime).format("MMM DD, YYYY")}
                         </Typography>
                       </Stack>
                     </Stack>

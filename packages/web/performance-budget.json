@@ -1,5 +1,6 @@
 {
-  "initialJsGzipBytes": 276480,
-  "initialCssGzipBytes": 81920,
-  "maxJsChunkGzipBytes": 204800
+  "_comment": "Gzip ceilings for the production bundle, enforced by scripts/check-web-performance.mjs on `pnpm --filter @motionmeet/web test`. Tightened after socket.io-client moved behind a dynamic import and moment was replaced with dayjs, so the space those freed cannot be silently spent again. Raise a number only with a measurement and a reason.",
+  "initialJsGzipBytes": 268288,
+  "initialCssGzipBytes": 20480,
+  "maxJsChunkGzipBytes": 194560
 }

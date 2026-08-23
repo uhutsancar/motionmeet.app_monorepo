@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Image, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+// expo-image: these rows scroll past many remote avatars, and it recycles
+// views and keeps a memory + disk cache where React Native's Image does not.
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { MESSAGE_ICON_PAPER } from '../config/icons';
@@ -25,8 +28,7 @@ import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { AVATAR, CARD, EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
 import { API_URL } from '../config/environment';
 import { useAppSelector } from '../store/hooks';
-import { resolvePublicMediaUrl } from '@motionmeet/shared';
-import type { UserProfile, Workout } from '@motionmeet/shared';
+import { mediaVariantUrl, resolvePublicMediaUrl, type UserProfile, type Workout } from '@motionmeet/shared';
 import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation/native';
 
 type ProfileStatTab = 'duration' | 'volume' | 'reps';
@@ -235,7 +237,7 @@ const Profile = ({ route, navigation }: ProfileProps) => {
         >
           <View style={{ height: 92, backgroundColor: theme.primarySoft }}>
             {user?.cover_photo ? (
-              <Image source={{ uri: user.cover_photo }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+              <Image source={{ uri: mediaVariantUrl(user.cover_photo, 'detail') }} style={{ width: '100%', height: '100%' }} contentFit="cover" cachePolicy="memory-disk" />
             ) : (
               <View style={{ flex: 1, backgroundColor: theme.primarySoft }} />
             )}
@@ -679,9 +681,10 @@ const Profile = ({ route, navigation }: ProfileProps) => {
                 >
                   {artwork ? (
                     <Image
-                      source={{ uri: artwork }}
+                      source={{ uri: mediaVariantUrl(artwork, 'thumb') }}
                       style={{ width: '100%', height: '100%' }}
-                      resizeMode="cover"
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
                     />
                   ) : (
                     <Ionicons name="barbell-outline" size={20} color={theme.primary} />

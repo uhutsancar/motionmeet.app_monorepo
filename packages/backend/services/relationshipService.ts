@@ -1,6 +1,6 @@
 import type { RelationshipState } from "@motionmeet/shared";
 import { database, withTransaction } from "../configs/database.js";
-import { invalidateCachePrefix } from "../configs/redis.js";
+import { invalidateMember } from "./feedCache.js";
 import { emitToUser } from "../realtime/socketRegistry.js";
 import { logger, safeErrorMetadata } from "../utils/logger.js";
 import * as notificationService from "./notificationService.js";
@@ -113,13 +113,12 @@ const notifyRelationshipChange = async (leftId: string, rightId: string): Promis
   }
 };
 
-const invalidateFor = async (leftId: string, rightId: string): Promise<void> => {
-  await Promise.all([
-    invalidateCachePrefix(`profile:${leftId}:`),
-    invalidateCachePrefix(`profile:${rightId}:`),
-    invalidateCachePrefix("feed:"),
-  ]);
-};
+/**
+ * A follow changes what both sides see: the follower's home feed gains or loses
+ * an account, and each profile's Follow button and counts move for every viewer.
+ * Both members are dropped; nobody else's feed is touched.
+ */
+const invalidateFor = (leftId: string, rightId: string): Promise<void> => invalidateMember(leftId, rightId);
 
 /**
  * Follows someone, the way Instagram does it: an open account is followed on

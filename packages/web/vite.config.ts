@@ -35,9 +35,12 @@ export default defineConfig(({ mode }) => {
   server: {
     host: '0.0.0.0',
     port: 5173,
-    watch: {
-      usePolling: true,
-    }
+    // Polling was on unconditionally, which makes the dev server stat the whole
+    // source tree on a timer - expensive on a spinning disk, and paid for the
+    // entire session. Native file events are the default now; set
+    // VITE_WATCH_POLLING=true if you are editing over a network share or inside
+    // a container bind mount, where those events do not arrive.
+    watch: env.VITE_WATCH_POLLING === 'true' ? { usePolling: true } : undefined,
   },
 
   build: {
@@ -56,7 +59,13 @@ export default defineConfig(({ mode }) => {
             || dependency.startsWith('@emotion/')
           ) return 'vendor-core'
           if (dependency.startsWith('@reduxjs/') || ['react-redux', 'redux', 'redux-thunk', 'reselect', 'immer'].includes(dependency)) return 'vendor-state'
-          if (dependency === 'axios' || dependency.includes('socket.io') || dependency.includes('engine.io') || dependency === '@socket.io/component-emitter') return 'vendor-network'
+          // socket.io is deliberately NOT grouped with axios. A manual chunk is
+          // emitted as one unit, so putting the realtime client next to the HTTP
+          // client - which every screen imports - pinned ~88 KB of engine.io into
+          // the entry graph and had the landing page preload it. Leaving it
+          // unassigned lets Rollup follow the dynamic import in SocketProvider
+          // and give it its own chunk, fetched only once somebody signs in.
+          if (dependency === 'axios') return 'vendor-network'
           return undefined
         },
       },

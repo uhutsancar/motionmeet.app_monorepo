@@ -85,7 +85,11 @@ export const getChatMessagesList = async (userId: string, recipientId: string, p
   if (pagination.cursor) query = query.where((expression) => expression.or([expression("created_at", "<", pagination.cursor!.date), expression.and([expression("created_at", "=", pagination.cursor!.date), expression("id", "<", pagination.cursor!.id)])]));
   const rows = await query.orderBy("created_at", "desc").orderBy("id", "desc").limit(pagination.limit + 1).execute();
   const hasMore = rows.length > pagination.limit; const selected = hasMore ? rows.slice(0, pagination.limit) : rows; const last = selected.at(-1);
-  const items = (await hydrateMessages(selected)).reverse(); await markMessagesSeen(userId, recipientId);
+  // Only opening the conversation marks it read. Paging further back is
+  // scrolling through history that was already seen, and running the seen
+  // transaction again for each of those pages is a write per scroll.
+  const items = (await hydrateMessages(selected)).reverse();
+  if (!pagination.cursor) await markMessagesSeen(userId, recipientId);
   return { items, nextCursor: hasMore && last ? Buffer.from(JSON.stringify({ date: new Date(last.created_at).toISOString(), id: last.id })).toString("base64url") : null };
 };
 

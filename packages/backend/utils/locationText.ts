@@ -61,9 +61,6 @@ export const normalizeLocationQuery = (value: unknown): string | null => {
   return normalized.length >= MIN_QUERY_LENGTH ? normalized : null;
 };
 
-/** Escapes the LIKE wildcards so a query of "%" cannot scan the whole table. */
-export const escapeLikePattern = (value: string): string => value.replace(/[\\%_]/g, "\\$&");
-
 /**
  * Builds the label shown on a profile. The backend is the only writer, so a
  * client can never inject its own text into someone else's profile card.

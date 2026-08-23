@@ -33,12 +33,6 @@ export const parsePagination = (query: QueryInput = {}, { defaultLimit = DEFAULT
   return { cursor, limit, rawCursor };
 };
 
-// Retained as an API-compatible description for unit callers. PostgreSQL services
-// apply this pair as `(created_at, id) < (cursor.date, cursor.id)`.
-export const cursorFilter = (cursor: PageCursor | null, field = "createdAt"): Record<string, unknown> => cursor ? {
-  $or: [{ [field]: { $lt: cursor.date } }, { [field]: cursor.date, _id: { $lt: cursor.id } }],
-} : {};
-
 interface CursorDocument { _id?: unknown; id?: unknown }
 export const createCursor = (document: CursorDocument, field = "createdAt"): string | null => {
   const record = document as Record<string, unknown>;
@@ -48,11 +42,4 @@ export const createCursor = (document: CursorDocument, field = "createdAt"): str
   const date = new Date(value as string | number | Date);
   if (Number.isNaN(date.getTime())) return null;
   return Buffer.from(JSON.stringify({ date: date.toISOString(), id })).toString("base64url");
-};
-
-export const pageFromDocuments = <T extends CursorDocument>(documents: T[], limit: number, field = "createdAt"): { items: T[]; nextCursor: string | null } => {
-  const hasMore = documents.length > limit;
-  const items = hasMore ? documents.slice(0, limit) : documents;
-  const last = items.at(-1);
-  return { items, nextCursor: hasMore && last ? createCursor(last, field) : null };
 };

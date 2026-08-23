@@ -9,7 +9,7 @@ import {
   Typography,
 } from "@mui/material";
 import { Send as MessageIcon } from "lucide-react";
-import moment from "moment";
+import dayjs from "../utils/dayjs";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
@@ -167,7 +167,7 @@ const RecentMessages = () => {
                       color="text.secondary"
                       sx={{ flexShrink: 0 }}
                     >
-                      {moment(lastMessage.createdAt).fromNow(true)}
+                      {dayjs(lastMessage.createdAt).fromNow(true)}
                     </Typography>
                   </Stack>
                   <Typography variant="caption" color="text.secondary" noWrap>

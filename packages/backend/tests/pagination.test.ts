@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cursorFilter, createCursor, pageFromDocuments, parsePagination } from "../utils/pagination.js";
+import { createCursor, parsePagination } from "../utils/pagination.js";
 
 const UUIDS = [
   "11111111-1111-4111-8111-111111111111",
@@ -17,20 +17,14 @@ test("pagination clamps limits and rejects malformed cursors", () => {
 test("PostgreSQL UUID pagination cursor round-trips the final row", () => {
   const date = new Date("2026-07-24T10:00:00.000Z");
   const rows = UUIDS.map((id, offset) => ({ id, createdAt: new Date(date.getTime() - offset * 1000) }));
-  const page = pageFromDocuments(rows, 2);
-  assert.equal(page.items.length, 2);
-  assert.ok(page.nextCursor);
-  const parsed = parsePagination({ cursor: page.nextCursor });
+  // What a paged endpoint hands back: a cursor built from the last row it
+  // returned, which the next request must decode to exactly that row.
+  const nextCursor = createCursor(rows[1]);
+  assert.ok(nextCursor);
+  const parsed = parsePagination({ cursor: nextCursor });
   assert.ok(parsed.cursor);
   assert.equal(parsed.cursor.date.toISOString(), rows[1].createdAt.toISOString());
   assert.equal(parsed.cursor.id, rows[1].id);
-  assert.deepEqual(cursorFilter(parsed.cursor), {
-    $or: [
-      { createdAt: { $lt: parsed.cursor.date } },
-      { createdAt: parsed.cursor.date, _id: { $lt: parsed.cursor.id } },
-    ],
-  });
-  assert.equal(createCursor(rows[1]), page.nextCursor);
 });
 
 test("pagination rejects non-UUID legacy identifiers", () => {

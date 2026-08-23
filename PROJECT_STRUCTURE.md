@@ -1,13 +1,30 @@
 # MotionMeet — kapsamlı proje yapısı ve mimari referansı
 
-> Son kaynak incelemesi: 7 Ağustos 2026
+> Son kaynak incelemesi: 23 Ağustos 2026
 >
 > Repository türü: pnpm workspace + Turborepo monorepo
 >
 > Ana amaç: antrenman takibi ile sosyal fitness deneyimini web ve mobil istemcilerde aynı API sözleşmesi üzerinden sunmak
 >
-> Bu sürümdeki en büyük ekleme: profil konumu ve yakındakiler özellikleri. İkisinin
-> neden ayrı tutulduğu ve nasıl çalıştığı **14A** bölümünde anlatılır.
+> Bu sürümdeki en büyük eklemeler:
+>
+> - **Tek marka kaynağı.** Launcher ikonu, splash, favicon ve uygulama içi logo
+>   artık iki SVG dosyasından üretilir; ikinci bir logo varlığı repository'de
+>   bulunmaz. **13A** bölümü.
+> - **Hikâye sisteminin yeniden yazımı.** Konumlanabilir metin/konum katmanları,
+>   galeri-önce akış, sürükle-bırak silme ve iki istemcide birebir aynı
+>   yerleşim. **14B** bölümü.
+> - **Keşfet sekmesi ve kişi arama.** **14C** bölümü.
+> - **Yeni mobil navigasyon.** Mesajlar sekmeden çıkıp feed başlığına taşındı.
+>   **12.3** bölümü.
+> - **Performans ve ölçeklenme sertleştirmesi.** Cache invalidation prefix
+>   taramasından owner-addressed hash'e geçti ve artık yalnız yazan üyenin
+>   cache'ini düşürüyor; feed miss'i single-flight ile korunuyor; kişi araması
+>   indekslendi; medya CDN'den ekran boyutunda isteniyor. **8.1**, **8.3**,
+>   **7.6**, **9.6** bölümleri ve `docs/PERFORMANCE_AUDIT.md`.
+>
+> Bir önceki sürümün büyük eklemesi olan profil konumu ve yakındakiler
+> özellikleri **14A** bölümünde anlatılır.
 
 Bu belge MotionMeet repository'sine ilk kez bakan bir geliştiricinin projenin ne
 yaptığını, hangi parçanın neden var olduğunu, verinin nerede tutulduğunu, bir
@@ -31,7 +48,12 @@ TypeScript bir uygulamadır. Kullanıcılar:
 - metin, görsel, video veya antrenman bağlantılı gönderi paylaşabilir;
 - gönderileri beğenebilir, yorumlayabilir ve görünürlük kurallarına göre feed
   görüntüleyebilir;
-- 24 saatlik hikâyeler oluşturabilir ve görüntüleyebilir;
+- 24 saatlik hikâyeler oluşturabilir: galeriden bir görsel/video seçer, üzerine
+  taşınabilir, ölçeklenebilir ve döndürülebilir metin ile konum etiketi
+  yerleştirir, kimlerin görüntülediğini görür, başkalarının hikâyesine doğrudan
+  mesajla yanıt verir;
+- Keşfet sekmesinde topluluğun görselli gönderilerini üç sütunlu bir ızgarada
+  gezebilir ve kullanıcı adına ya da ada göre kişi arayabilir;
 - kullanıcıları takip edebilir, bağlantı isteği gönderebilir ve kabul edebilir;
 - gerçek zamanlı mesajlaşabilir, yazıyor ve çevrim içi durumlarını görebilir;
 - plan özellikleri ve kotalarına göre ürün yeteneklerini kullanabilir;
@@ -98,8 +120,13 @@ Temel mimari kararı şudur:
 ```text
 motionmeet.app_monorepo/
 ├─ .github/workflows/ci.yml       # GitHub Actions doğrulama hattı
+├─ brand/                         # Marka işaretinin TEK kaynağı (iki SVG + README)
+│  ├─ motionmeet-mark.svg         # Yuvarlatılmış kare zeminli tam işaret
+│  └─ motionmeet-glyph.svg        # Zeminsiz glif (maskeleyen platformlar için)
 ├─ docs/                          # DB, production, OpenAPI, lisans ve responsive notları
-│  └─ LICENSES.md                 # Konum ve egzersiz veri setlerinin lisans yükümlülükleri
+│  ├─ LICENSES.md                 # Konum ve egzersiz veri setlerinin lisans yükümlülükleri
+│  ├─ PERFORMANCE_AUDIT.md        # Ölçülmüş darboğaz denetimi ve yapılan optimizasyonlar
+│  └─ mobile-qa-apk.md            # Yerel backend'e bakan sideload APK tarifi
 ├─ exercises-dataset-main/        # Yerel/ignore edilen egzersiz veri snapshot'ı
 ├─ packages/
 │  ├─ backend/                    # Express + Socket.IO + PostgreSQL uygulaması
@@ -107,7 +134,9 @@ motionmeet.app_monorepo/
 │  ├─ mobile/                     # Expo/React Native uygulaması
 │  └─ shared/                     # Ortak route, limit ve TypeScript sözleşmeleri
 ├─ patches/                       # pnpm patchedDependencies yamaları
-├─ scripts/local-network.mjs      # LAN IP tespiti ve üç servisi yerelde başlatma
+├─ scripts/
+│  ├─ local-network.mjs           # LAN IP tespiti ve üç servisi yerelde başlatma
+│  └─ generate-brand-assets.mjs   # brand/*.svg -> bütün platform rasterleri
 ├─ tools/database-migration/      # MongoDB -> PostgreSQL offline taşıma aracı
 ├─ docker-compose.yml             # Development stack
 ├─ docker-compose.test.yml        # İzole PostgreSQL integration-test servisi
@@ -132,9 +161,13 @@ motionmeet.app_monorepo/
 | `turbo.json` | Paketler arası görev sırası. `build` üst bağımlılıkları önce derler; `dev` persistent ve cache dışıdır. |
 | `tsconfig.json` | `strict: true`, `allowJs: false`, ES2022 ve bundler çözümleme temeli. Backend kendi config'inde NodeNext emit yapar. |
 | `docs/openapi.yaml` | HTTP API'nin belgelenen dış sözleşmesi; runtime gerçeğinin son kaynağı yine route/controller kodudur. |
+| `docs/PERFORMANCE_AUDIT.md` | Ölçülmüş performans denetimi: darboğazlar, kanıtları, yapılan optimizasyonlar ve önce/sonra sayıları. Bu belge mimariyi anlatır, o belge o mimarinin nerede ne kadar hızlı olduğunu ölçer. |
 | `.dockerignore` | Dependency, secret, build çıktısı ve lisansı netleşmemiş exercise dataset'ini Docker context dışında bırakır. |
 | `.gitignore` | `.env*`, dependency, build, Expo ve mobil `dist-*` artifact'lerini takip dışı bırakır; izin verilen environment örnekleri istisnadır. |
 | `patches/minimatch@3.1.5.patch` | `brace-expansion` CommonJS/export biçimiyle uyumluluk sağlar. |
+| `brand/` | Marka işaretinin tek kaynağı. Uygulamaların gönderdiği her ikon buradan türetilir; elle düzenlenmiş bir PNG repository'de bulunmaz. Ayrıntı: **13A**. |
+| `scripts/generate-brand-assets.mjs` | `pnpm brand`. İki SVG'den Android launcher/adaptive/splash ikonlarını, web favicon setini, apple-touch ikonunu ve web logosunu üretir. |
+| `docs/mobile-qa-apk.md` | Fiziksel cihazda yerel backend'e bakan release APK üretme tarifi; `EXPO_PUBLIC_*` değerlerinin neden `.env.local`'a yazılması gerektiğini de açıklar. |
 
 ## 4. Teknoloji matrisi
 
@@ -148,9 +181,10 @@ motionmeet.app_monorepo/
 | Geçici altyapı | Redis 7.4, Redis rate-limit store, Socket.IO Redis adapter |
 | Medya | AWS SDK v3 S3, multipart upload, presigned PUT, ImageKit URL dönüşümü |
 | E-posta | Nodemailer 9, Brevo SMTP relay (`smtp-relay.brevo.com:587`) |
-| Web | React 19.2, React Router 8, Vite 7, MUI 7, Emotion, Redux Toolkit 2, Axios, Recharts, i18next, Socket.IO client |
+| Web | React 19.2, React Router 8, Vite 7, MUI 7, Emotion, Redux Toolkit 2, Axios, Recharts, dayjs, i18next, Socket.IO client (dinamik import) |
 | Mobile | Expo SDK 54, React Native 0.81.5, React 19.1, React Navigation 7, React Native Paper 5, SecureStore, AsyncStorage, Expo Image/Video/ImagePicker/Location/Localization |
 | Production web | Multi-stage Vite build + unprivileged Nginx Alpine |
+| Marka varlıkları | Kaynak SVG + `sharp` 0.35 (yalnız kök devDependency; build-time raster üretimi, runtime'da kullanılmaz) |
 | Test/kalite | ESLint 9, strict TypeScript, Node test runner üzerinden `tsx --test`, Docker PostgreSQL integration testi, pnpm audit |
 
 ## 5. Workspace bağımlılık ve build modeli
@@ -190,9 +224,11 @@ packages/backend/
 ├─ routes/        # Express endpoint tanımları ve endpoint bazlı limiter'lar
 ├─ scripts/       # Migration, seed, admin promote ve exercise S3 upload görevleri
 ├─ services/      # Transaction ve domain kuralları
+│                 #   feedCache.ts = cache invalidation politikasının tek sahibi (8.1)
 ├─ tests/         # Unit/contract/concurrency testleri
 ├─ types/         # Express request genişletmeleri
 ├─ utils/         # Token, doğrulama, pagination, medya, plan ve metrik yardımcıları
+│                 #   singleFlight.ts = cache miss'i tek sorguya indirger (8.3)
 ├─ workers/       # Cron tabanlı bakım ve durable job tüketicileri
 └─ server.ts      # Composition root ve process yaşam döngüsü
 ```
@@ -204,6 +240,10 @@ packages/backend/
 1. Environment yüklenir ve zorunlu değerler doğrulanır.
 2. PostgreSQL pool üzerinden `select 1` ile bağlantı kurulur.
 3. `RUN_MIGRATIONS=false` değilse Kysely migration'ları son sürüme taşınır.
+   Migration'lar istek havuzunu değil `createMaintenanceDatabase()` ile açılan
+   ayrı, tek bağlantılı ve `statement_timeout`'suz bir havuzu kullanır: büyük bir
+   tabloda index oluşturmak istek trafiği için konmuş 15 saniyelik tavanın çok
+   üstünde sürer ve yarıda kesilmesi yavaş bir boot'tan kötüdür.
 4. Beklenen tablo/migration contract'ı kontrol edilir.
 5. Free/Pro/Premium planları, kas grupları ve ekipman lookup kayıtları idempotent
    biçimde bootstrap edilir.
@@ -250,7 +290,7 @@ status'a çevrilir; PostgreSQL unique violation `409`, bilinmeyen server hatalar
 | Auth | `POST /api/auth/register`, `/login`, `/refresh`, `/logout`, `/forgot-password`, `/reset-password`; `GET /me` | Hesap, access/refresh session ve parola yenileme. |
 | User | `GET /api/user/data`, `/privacy`, `/export`, `/connections`, `/recent-messages`, `/suggested`; `PATCH /privacy`; `POST /update`, `/discover`, `/follow`, `/unfollow`, `/connect`, `/accept`, `/profiles`; `DELETE /account`, `/connection` | Profil, privacy, sosyal grafik, data export ve hesap silme. |
 | Post | `POST /api/post/add`, `/like`, `/comment/add`, `/delete`; `GET /feed`, `/:postId/comments`; `PUT /:postId/like`; `DELETE /:postId/like`, `/:postId`, `/delete/:postId` | Feed, gönderi, medya, like/comment ve geriye uyumlu alias'lar. |
-| Story | `POST /api/story/create`; `GET /api/story/get`; `DELETE /api/story/delete/:storyId` | 24 saatlik içerik ve görüntüleme durumu. |
+| Story | `POST /api/story/create`; `GET /api/story/get`; `DELETE /api/story/delete/:storyId`; `POST /api/story/:storyId/view`; `GET /api/story/:storyId/viewers` | 24 saatlik içerik, üstüne yerleştirilen metin/konum katmanları (`overlays`), görüntüleme makbuzu ve yalnız yazarına açık izleyici listesi. Ayrıntı: **14B**. |
 | Message | `POST /api/message/send`, `/get`, `/seen`; `GET /conversations`, `/recent`; `DELETE /delete/:messageId` | HTTP mesaj fallback'i, conversation, unread/seen ve silme. |
 | Workout | `GET/POST /api/workout`, `GET /api/workout/stats` | Antrenman yazma, geçmiş ve aggregate istatistikler. |
 | Routine | `GET/POST /api/routine`, `PUT/DELETE /api/routine/:id` | Kullanıcı rutinleri ve plan kotası. |
@@ -344,8 +384,16 @@ değişimi şu an API/admin uygulama mantığıyla yapılır.
 - **Post:** operation ID ile retry-safe oluşturma, görünürlük kontrolü, workout
   sahipliği, media reservation commit'i ve günlük kota aynı domain akışındadır.
 - **Like/comment:** composite key ile duplicate like engellenir; like/comment
-  sayaçları edge kaydıyla aynı transaction'da değişir.
+  sayaçları edge kaydıyla aynı transaction'da değişir. Post satırı **kilitlenmez**
+  (`FOR UPDATE` yok): duplicate'i zaten `post_likes` composite primary key
+  engelliyor ve sayaç atomik bir delta, dolayısıyla satır kilidi yalnız popüler
+  bir gönderiye gelen like'ları sıraya sokardı. Sayaç `UPDATE ... RETURNING` ile
+  aynı statement'ta okunur. Bildirim satırı transaction'dan sonra kalıcı olarak
+  yazılır, ama **yayını** HTTP yanıtını bekletmez — satır zaten kalıcıdır ve
+  alıcının açık soketi olmayabilir.
 - **Story:** expiry, visibility, view edge ve medya lifecycle birlikte yönetilir.
+  Görüntüleme makbuzu Redis'te 6 saat hatırlanır (**8.2**), böylece aynı hikâyeyi
+  yeniden açmak ne satır okur ne yetki sorgusu yapar ne de insert dener.
 - **Follow/connection:** self-edge ve duplicate pair engellenir; iki kullanıcıya
   ait sayaçlar aynı transaction'da güncellenir. Connection request ayrıca
   durable outbox event üretir.
@@ -402,8 +450,14 @@ Server -> client olayları:
 
 Mesajlar önce PostgreSQL'e durable olarak yazılır, sonra ilgili user room'larına
 emit edilir. Socket mesaj limiti kullanıcı başına dakikada 30, typing limiti
-dakikada 60'tır. Mesajlaşma privacy/plan izni 30 saniyelik socket-local cache ile
-tekrar sorgu maliyetini azaltır.
+dakikada 60'tır.
+
+Mesajlaşma privacy/plan izni 30 saniyelik socket-local bir cache'in arkasındadır
+ve bu cache **hem mesaj hem typing yolunda** kullanılır (`mayMessage()`). Gönderen
+kaydı handshake'te yüklenir ve 5 dakikada bir tazelenir; tazelendiğinde izin
+cache'i temizlenir, böylece bir plan veya rol değişikliği uzun ömürlü bir sokete
+de ulaşır. Bu ayrım önemli: aksi hâlde her `send_message` olayı kullanıcıyı
+planıyla yeniden yükleyip izni sıfırdan hesaplardı.
 
 Redis adapter hazırsa farklı backend instance'larındaki odalar birbirine pub/sub
 ile ulaşır. Redis yoksa aynı instance içindeki Socket.IO çalışır ancak çoklu
@@ -525,7 +579,7 @@ kayıtlar silinmez, `is_active = false` yapılır.
 | `post_media` | En fazla dört sıralı medya; URL, S3 key, tür, MIME, byte/ölçü/süre metadata'sı. |
 | `post_likes` | Duplicate like'ı engelleyen `(post_id, user_id)` composite PK. |
 | `post_comments` | Kullanıcı yorumu ve cursor sırası. |
-| `stories` | Text/image/video içerik, media key/URL, arka plan ve `expires_at`. |
+| `stories` | Text/image/video içerik, media key/URL, arka plan, `expires_at` ve **`overlays jsonb`** (hikâyenin üstüne yerleştirilen metin/konum katmanları; kare oranına göre normalize edilmiş konumlar). |
 | `story_views` | Story-kullanıcı unique view edge'i. |
 
 #### Sosyal grafik ve mesajlaşma
@@ -606,7 +660,11 @@ Bazı alanlar performans için bilinçli denormalized tutulur:
   metadata'sı için range check'leri.
 - Feed/profile/workout/message/comment/story cursor'ları için
   `(owner/filter, created_at veya start_time, id)` composite index'leri.
-- User discovery için username + full name üzerinde GIN text-search index'i.
+- Kişi araması için eşleşme biçimine göre iki ayrı indeks: `username` öneki için
+  `lower(username::text) text_pattern_ops` b-tree, `full_name` içinde geçen ifade
+  için `lower(full_name) gin_trgm_ops` trigram GIN. İkisi de yalnız
+  `privacy_show_in_search` satırlarını kapsayan partial indekslerdir ve sorgu tam
+  olarak bu ifadeleri kullanır. Ayrıntı ve ölçüm: migration `009`, **14C.3**.
 - Exercise prefix/filter/custom-owner index'leri.
 - Follow/connection yönleri ve conversation participants için ters erişim
   index'leri.
@@ -643,6 +701,32 @@ Bazı alanlar performans için bilinçli denormalized tutulur:
    `pg_available_extensions` üzerinden `CREATE EXTENSION`'dan **önce** kontrol
    edilir — migrator her migration'ı transaction'a sardığı için başarısız bir
    `CREATE EXTENSION` bütün migration'ı düşürürdü ve try/catch bunu kurtaramaz.
+7. `007_follow_requests_and_notifications`: takip etmeyi istek/onay el sıkışmasına
+   çevirir. `follow_requests` yalnız bekleyen istekleri tutar; onaylanan istek
+   `user_follows` içine taşınıp silinir, böylece "A B'yi takip ediyor mu"
+   sorusunun tek cevabı yine `user_follows` olur. Ayrıca `notifications` tablosu
+   ve `posts.discover_rank` stored generated kolonu gelir: etkileşim logaritmik
+   sayıda günlük tazelik değerindedir, bu sayede Keşfet tüm tabloyu sıralamadan
+   popülerliğe göre ilerleyebilir.
+8. `008_story_overlays`: `stories` tablosuna `overlays jsonb NOT NULL DEFAULT
+   '[]'` kolonu ekler. Çocuk tablo değil jsonb seçilmesinin nedeni, katmanların
+   yalnızca tek bir hikâyeye ait tam bir liste olarak okunup yazılması ve
+   hikâyelerin bir gün sonra silinmesidir; ayrı tablo, hiçbir yerde ihtiyaç
+   duyulmayan join ve cascade maliyeti getirirdi. `DEFAULT '[]'` sayesinde
+   migration'dan önce yazılmış her hikâye backfill gerektirmeden "katman yok"
+   olarak okunur.
+9. `009_user_search_indexes`: kişi aramasını indeksli hâle getirir.
+   `users_search_idx` düşürülür — `to_tsvector` üzerine kurulu bir GIN indeksiydi
+   ve uygulama hiçbir yerde full-text sorgu yapmadığı için hiçbir zaman
+   kullanılmadı, yalnızca her yazımda maliyet üretti. Yerine eşleşme biçimine
+   göre iki indeks gelir: `username` prefix'i için
+   `users_username_prefix_idx` (B-tree, `lower(username::text) text_pattern_ops`,
+   006'daki konum indeksleriyle aynı desen), `full_name` içinde geçen ifade için
+   `users_full_name_trgm_idx` (GIN, `gin_trgm_ops`) — baştaki joker karakteri
+   B-tree'nin hiç karşılayamadığı durum budur. İkisi de `WHERE
+   privacy_show_in_search` ile partial'dır, çünkü sorgu bu koşulu her zaman
+   taşır. 200.000 satırda ölçüm: substring araması 128 ms → 5,2 ms, prefix
+   araması 169 ms → 0,05 ms.
 
 Migration komutu:
 
@@ -660,7 +744,31 @@ Redis'in dört görevi vardır:
 
 1. **Cache:** feed 30 sn, profile 60 sn, exercise list 300 sn, exercise detail
    900 sn gibi kısa TTL'li JSON cache'leri. Key prefix'i `motionmeet:v1:`.
-   Konum özellikleri de bu katmanı kullanır:
+
+   Feed, profil, yakındakiler ve egzersiz kataloğu **owner-addressed hash**
+   olarak tutulur: bir sahibin bütün varyantları (sayfa, cursor, izleyici, filtre)
+   tek bir hash'in field'larıdır, dolayısıyla geçersiz kılmak tek bir `DEL`'dir.
+   Ayrıntı: **8.1**.
+
+   - `feed:{userId}`, field `{mode}:{cursor}:{limit}` — 30 sn.
+   - `profile:{profileId}`, field `{viewerId}:{cursor}:{limit}` — 60 sn.
+     **İzleyici field'da kalır ve kalmalıdır:** bir profilin gösterdiği gönderiler,
+     konum etiketi ve mesaj düğmesi ilişkiye göre değişir, izleyicileri tek girdide
+     birleştirmek gizlilik hatası olurdu. Kazanç, bir profilin bütün izleyici
+     kopyalarının tek `DEL` ile düşmesidir.
+   - `exercises:list:shared` / `exercises:detail:shared` — 300/900 sn. Katalog
+     sorgusu `is_custom = false OR created_by = <üye>` olduğu için, custom
+     egzersizi olmayan herkes için **birebir aynıdır** — yani neredeyse herkes
+     için. Kullanıcı başına anahtarlamak 1.325 satırlık ortak kataloğun her üyeye
+     ayrı bir kopyasını çıkarıyordu. Custom egzersizi olan üye kendi owner'ını
+     (`exercises:list:{userId}`) alır; hangisinin geçerli olduğu, yalnız o üye
+     custom egzersiz yazdığında tazelenen cache'lenmiş bir boolean'dır
+     (`exercises:custom-owner`).
+
+   Bir owner hash'inin field sayısı üst sınırlıdır; cursor çeşitliliği TTL'den
+   hızlı büyürse hash yeniden kurulur, sınırsız şişmez.
+
+   Konum özellikleri düz key kullanır:
    - `loc:search:{locale}:{country}:{limit}:{query}` — 600 sn. Konum arama her
      tuş vuruşunda tetiklenebildiği için en yüksek getirili cache burasıdır;
      popüler sorgular 150k satırlık şehir tablosuna hiç inmez.
@@ -671,9 +779,9 @@ Redis'in dört görevi vardır:
      **Bilinçli olarak PostgreSQL'de tutulmaz:** cache temizliğinde kaybolması
      sorun değildir ve kullanıcının gezdiği yerlerin izini tutan bir tablo
      daha az olur.
-   - `nearby:{userId}:{scope}:{limit}:{fixTs}` — 45 sn. Yakındakiler sonucu.
-     Key'de fix zaman damgası bulunduğu için yeni konum yazımı otomatik olarak
-     yeni bir key üretir.
+   - `nearby:{userId}` hash'i, field `{scope}:{limit}:{fixTs}` — 45 sn.
+     Yakındakiler sonucu. Field'da fix zaman damgası bulunduğu için yeni konum
+     yazımı otomatik olarak yeni bir girdi üretir.
 2. **Rate limit:** global, auth, account, media presign, custom exercise,
    `location-search`, `nearby-position` ve `nearby-list` limiter'ları. Prefix
    `motionmeet:rate-limit:*`.
@@ -681,9 +789,44 @@ Redis'in dört görevi vardır:
    yayını.
 4. **Koordinasyon:** cron lease'leri ve socket message/typing sayaçları.
 
-Write işlemleri ilgili cache prefix'lerini invalidate eder. Prefix silme `SCAN`
-ile 200'lük gruplar halinde yapılır; production Redis'i bloklayacak `KEYS`
-kullanılmaz.
+### 8.1 Cache invalidation politikası
+
+Tek kural: **bir write yalnızca onu yapan üyenin cache'ini düşürür.**
+
+`services/feedCache.ts` bu politikanın tek sahibidir; `invalidateOwnFeed`,
+`invalidateProfile` ve `invalidateMember` dışında hiçbir servis feed veya profil
+cache'ini kendi başına silmez.
+
+Bu daraltma bilinçlidir. Önceki davranış her like, comment, gönderi, takip ve
+profil güncellemesinde **bütün** üyelerin feed cache'ini siliyor ve bunu
+`SCAN ... MATCH` ile keyspace'in tamamını gezerek yapıyordu — yani popüler bir
+gönderi tüm nüfusu kalıcı cache miss'te tutabiliyordu. Kendi yazdığını anında
+görmesi gereken tek kişi eylemi yapandır: kendi gönderisi feed'in başında, kendi
+beğenisi `liked_by_me`'de, kendi takibi `author_followed_by_me`'de. Herkes için
+değişen şey bir sayacın bir artmasıdır ve onu 30 saniyelik TTL zaten taşır.
+Başkalarının cache'indeki yazar snapshot'ı ayrıca `user.profile.updated` outbox
+event'iyle tazelenir.
+
+`KEYS` hiçbir yerde kullanılmaz; prefix `SCAN` de artık kullanılmaz.
+
+### 8.2 Tekrar eden işi atlama
+
+`wasDone` / `markDone` (`motionmeet:v1:done:*`), tekrarı aynı sonuca varacak bir
+işi atlamak için kullanılır. Bugünkü tek kullanıcısı hikâye görüntüleme
+makbuzudur: makbuz yalnızca satır kalıcı olduktan **sonra** yazılır, böylece
+başarısız bir yetkilendirme veya insert sonraki denemeyi bastırmaz. Redis yoksa
+`wasDone` her zaman `false` döner ve çağıran kendi kalıcı garantisine
+(`ON CONFLICT DO NOTHING`) düşer — bu bir optimizasyondur, doğruluğun kaynağı
+değildir.
+
+### 8.3 Cache stampede
+
+Feed cache miss'i `utils/singleFlight.ts` ile sarılıdır: aynı anahtar için
+bekleyen bütün istekler tek bir çalıştırmayı paylaşır. Process-local'dir;
+dağıtık lock her miss'e bir Redis round-trip ekler ve N instance ile fan-in
+zaten "istek başına bir sorgu"dan "instance başına bir sorgu"ya iner.
+
+### 8.4 Degraded mode ve production gereklilikleri
 
 Redis opsiyoneldir. Bağlantı yoksa:
 
@@ -692,7 +835,11 @@ Redis opsiyoneldir. Bağlantı yoksa:
 - socket limitleri process-local Map'e düşer;
 - cron lock görevi doğrudan çalıştırır;
 - Socket.IO yalnız aynı instance içinde realtime yayın yapar;
-- PostgreSQL'deki kalıcı veri ve durable job'lar kaybolmaz.
+- PostgreSQL'deki kalıcı veri ve durable job'lar kaybolmaz;
+- `wasDone` her zaman `false` döner, yani tekrarlanan iş atlanmaz ama yanlış da
+  yapılmaz (**8.2**);
+- `singleFlight` çalışmaya devam eder — process-local olduğu için Redis'e
+  bağımlı değildir (**8.3**).
 
 Production'da `rediss://`, kullanıcı/parola ve TLS beklenir. Yalnız güvenilir özel
 self-hosted ağ için `ALLOW_INSECURE_REDIS_TLS=true` istisnası vardır.
@@ -781,6 +928,32 @@ Production seed öncesi medya lisansı ayrıca doğrulanmalı veya orijinal/lisa
 asset kullanılmalıdır. `CDN_URL` seed sırasında public exercise URL kökünü
 belirler.
 
+### 9.6 Teslim boyutları
+
+Medya **bir kez, tam çözünürlükte** saklanır; hangi boyutta indirileceğine
+görüntüleyen taraf karar verir. Bu kararın tek yeri `@motionmeet/shared`
+içindeki `mediaVariantUrl(url, variant)` ve `mediaSrcSet(url, variant)`
+yardımcılarıdır.
+
+| Varyant | Genişlik | Nerede |
+| --- | ---: | --- |
+| `avatar` | 128 px | Ad yanındaki profil fotoğrafı, yorum avatarı |
+| `thumb` | 320 px | Keşfet ızgarası, egzersiz küçük görseli |
+| `feed` | 720 px | Feed ve hikâye kartı, tam sütun genişliği |
+| `detail` | 1440 px | Tam ekran görüntüleyici, profil kapağı |
+
+`mediaVariantUrl`, genişliği saklanan URL'in **mevcut** `tr` parametresine ekler;
+backend'in seçtiği `q-auto` ve `f-webp` korunur. Video hiç dokunulmadan döner
+(yeniden boyutlandırma videoya uygulanmaz), ImageKit olmayan bir URL — göreli
+yol, boş string, farklı host — aynen döner, ve backend zaten bir genişlik
+seçmişse (avatar ve kapak için seçiyor) o genişlik değiştirilmez. Bu yüzden
+istemci, API'den ne geldiğine bakmadan koşulsuz uygulayabilir.
+
+Bunun neden gerektiği: saklanan post URL'i yalnızca `q-auto,f-webp` istiyordu,
+genişlik sınırı yoktu — yani 4000×3000 bir fotoğraf 400 px'lik bir feed kartına
+tam çözünürlükte iniyordu. API sözleşmesi değişmedi; istemciler sunucudan gelen
+aynı URL'i yeniden yazıyor.
+
 ## 10. E-posta altyapısı
 
 Nodemailer, Brevo SMTP relay üzerinde 587 portunu kullanır. Zorunlu credential'lar
@@ -806,6 +979,7 @@ packages/web/src/
 ├─ app/          # Redux store ve typed hook'lar
 ├─ assets/       # Import edilen statik görseller
 ├─ components/   # Feed/story/post/profile/routine ortak UI parçaları
+│  └─ story/     # Katman tipografisi ve salt-okunur katman render'ı (mobil ikizi)
 ├─ config/       # Vite environment URL çözümleme
 ├─ context/      # Auth, Socket ve Theme provider'ları
 ├─ features/     # User, connection ve message Redux slice'ları
@@ -814,6 +988,7 @@ packages/web/src/
 ├─ pages/        # Route seviyesindeki ekranlar
 ├─ services/     # Exercise/message/user domain API adaptörleri
 ├─ theme/        # MUI tema tanımı
+├─ utils/        # dayjs yapılandırması (plugin + locale); tarih her yerde buradan gelir
 ├─ App.tsx       # Lazy route haritası ve global realtime davranışı
 └─ main.tsx      # Provider composition root
 ```
@@ -822,13 +997,24 @@ Provider sırası: MUI styled engine/global layers -> Theme -> Auth ->
 BrowserRouter -> Redux -> App -> Socket. Route-level sayfalar `React.lazy` ve
 `Suspense` ile bölünür.
 
+`SocketProvider` `socket.io-client`'ı **dinamik import** ile yükler. Giriş
+yapılmadan hiçbir soket açılmıyor, ama statik bir import kütüphaneyi entry
+grafiğine sokuyor ve landing sayfası daha boyanmadan ~88 KB'ı preload ediyordu.
+Modül artık üyenin gerçekten bir oturumu olduğu anda yükleniyor; provider modül
+uçarken unmount olursa bağlantı hiç kurulmuyor.
+
+`PostCard` `memo`'ludur. Feed kartları düz bir `map` ile render edildiği için,
+memo olmadan `state.posts` içindeki tek bir beğeni bütün kartları yeniden
+render ediyordu.
+
 ### 11.2 Web route haritası
 
 - Public: `/`, `/login`, `/signup`, `/forgot-password`, `/reset-password`,
   `/features`, `/pricing`, `/about`.
 - Auth redirect alias'ları: `/sign-in`, `/sign-up`.
-- Authenticated layout: `/feed`, `/messages`, `/messages/:userId`, `/routines`,
-  `/exercises`, `/profile`, `/profile/:profileId`, `/settings`.
+- Authenticated layout: `/feed`, `/explore`, `/messages`, `/messages/:userId`,
+  `/routines`, `/exercises`, `/profile`, `/profile/:profileId`, `/settings`.
+  `/explore` üç sütunlu Keşfet ızgarası ve kişi aramasıdır; **14C**.
 - Workout/analytics: `/active-workout`, `/workout-summary`, `/workout-share`,
   `/statistics`, `/statistics/history`, `/statistics/records`,
   `/statistics/muscle-distribution`, `/statistics/monthly-report` ve alt detay
@@ -846,6 +1032,21 @@ store'a eklenir, kullanıcı messages route'unda değilse unread badge ve toast
 üretilir. Logout veya session kaybında kullanıcıya ait Redux state'i de tamamen
 başlangıç durumuna döndürülür.
 
+Dil seçimi `src/i18n.ts` içindedir ve iki aşamalıdır. Üye Ayarlar'dan bir dil
+seçtiyse tercih `localStorage`'a yazılır ve her açılışta o kullanılır. Seçim
+yoksa `navigator.languages` sırasıyla taranır, her giriş temel etiketine
+indirgenir (`tr-TR` -> `tr`) ve desteklenen ilk dil uygulanır. **Tespit edilen
+dil kaydedilmez**: yalnız Ayarlar'daki seçim bir karardır, dolayısıyla tarayıcı
+tercihi sonradan değişen bir üye uygulamanın bir kereliğine yaptığı tahmine
+mahkûm kalmaz. `initI18n` ilk boyamadan önce `main.tsx` tarafından beklenir,
+böylece sayfa İngilizce açılıp Türkçeye atlamaz; `document.documentElement.lang`
+da aynı anda güncellenir.
+
+Bunun sonucu, giriş ekranında dil seçici bulunmamasıdır. Dil seçimi uygulama
+içinde bir ayardır; formun önüne ikinci bir seçici koymak, giriş yapmayı dil
+seçmekle başlayan iki adımlı bir işe çevirirdi. Kayıt/giriş ekranlarının bütün
+metinleri `auth.*` anahtarları altında Türkçe ve İngilizce olarak tanımlıdır.
+
 `VITE_BASEURL` REST origin'ini, `VITE_SOCKET_URL` Socket origin'ini belirler.
 Development'ta sayfa `127.0.0.1`, API `localhost` gibi farklı loopback hostlarıyla
 açılmışsa refresh cookie'nin same-site kalması için host otomatik hizalanır.
@@ -860,9 +1061,25 @@ Vite production build:
 - Terser minification;
 - sourcemap yalnız `VITE_BUILD_SOURCEMAP=true` ise;
 - React/MUI, state ve network bağımlılıklarını ayrı manual chunk'lara ayırır;
+- **`socket.io` bilinçli olarak axios ile aynı manual chunk'ta değildir.** Bir
+  manual chunk tek parça olarak yayınlanır; realtime istemcisini her ekranın
+  import ettiği HTTP istemcisinin yanına koymak onu entry grafiğine sabitler ve
+  `SocketProvider`'daki dinamik import'u anlamsız kılardı. Atanmamış bırakılınca
+  Rollup dinamik import'u izleyip ona kendi chunk'ını verir;
 - chart bağımlılıklarını yalnız onları kullanan lazy route'ların import zincirinde
   tutar;
 - production artefaktında source map/secret ve gzip başlangıç bütçesini test eder.
+  Bütçeler `packages/web/performance-budget.json` içindedir ve
+  `scripts/check-web-performance.mjs` tarafından zorlanır. Bir sayıyı yükseltmek
+  ölçüm ve gerekçe ister; bütçenin amacı kazanılan alanın sessizce geri
+  harcanmasını engellemektir.
+
+Dev server dosya değişikliklerini **native olay** ile izler. Polling
+varsayılan olarak kapalıdır (`VITE_WATCH_POLLING=true` ile açılır): koşulsuz
+polling kaynak ağacını bir zamanlayıcıyla sürekli `stat`'lar, bu da yavaş diskte
+ve büyük ağaçta oturum boyunca ödenen bir maliyettir. Network share veya
+container bind mount üzerinde çalışırken native olaylar gelmediği için polling
+gerekir.
 
 Production Nginx:
 
@@ -870,10 +1087,19 @@ Production Nginx:
 - SPA fallback uygular;
 - `/api`, `/health` ve `/socket.io` isteklerini backend'e proxy eder;
 - account export için proxy buffering'i kapatır;
-- immutable asset'lere 1 yıl cache, HTML'e `no-store` uygular;
+- hash'li asset'lere `public, max-age=31536000, immutable`, HTML'e `no-store`
+  uygular. Bu politika bir `location` bloğunda değil, dosyanın başındaki `map`
+  içinde tanımlıdır: nginx'te bir location'a konan `add_header`, server
+  seviyesinden miras alınan **bütün** `add_header` direktiflerini düşürür ve CSP
+  dâhil güvenlik başlıkları o location için sessizce kaybolurdu;
 - CSP, HSTS, X-Frame-Options, nosniff, referrer ve permissions policy başlıkları
   ekler;
-- gzip açar ve Socket.IO upgrade header'larını iletir.
+- gzip'i `gzip_proxied any` ile açar — nginx varsayılan olarak proxy'lenmiş bir
+  yanıtı sıkıştırmaz, dolayısıyla bu direktif olmadan `/api/` altındaki bütün
+  JSON trafiği (feed, mesajlar, Keşfet: sıkışabilirliği en yüksek içerik) ham
+  gidiyordu. `gzip_min_length 1024` altında framing kazançtan pahalıdır,
+  `gzip_comp_level 5` JSON eğrisinin düzleştiği noktadır;
+- Socket.IO upgrade header'larını iletir.
 
 `vercel.json` statik SPA rewrite ve benzer güvenlik header'larını içerir; ayrı
 Vercel dağıtımında API/Socket origin'i external HTTPS/WSS olmalıdır.
@@ -889,7 +1115,9 @@ Vercel dağıtımında API/Socket origin'i external HTTPS/WSS olmalıdır.
 - Android `versionCode: 2`, iOS `buildNumber: 2`, uygulama sürümü `1.1.0`.
   Ayarlar ekranındaki sürüm satırı bu değeri `expo-constants` üzerinden okur,
   elle yazılmaz.
-- Portrait orientation, automatic light/dark UI, custom icon/splash.
+- Portrait orientation, automatic light/dark UI. İkon, adaptive icon, splash ve
+  web favicon'u `assets/` altında durur ama elle düzenlenmez: dördü de
+  `pnpm brand` tarafından `brand/*.svg`'den üretilir (**13A**).
 - iOS tablet desteği açık.
 - Android keyboard layout mode `resize`; uygulama backup'ı kapalı, legacy harici
   depolama izinleri engelli ve ImagePicker mikrofon izni kapalıdır.
@@ -927,18 +1155,46 @@ bütün Redux state'ini birlikte temizler. Native tokenlar iOS'ta
 
 Alt tab'lar:
 
-1. Home/Feed
-2. Routines
-3. Exercises
-4. Messages
-5. Profile
+| # | Route | Etiket | İkon |
+| ---: | --- | --- | --- |
+| 1 | `Home` | Ana Sayfa | `home` |
+| 2 | `ExploreTab` | Keşfet | `search` |
+| 3 | `Routines` | Antrenman | `fitness` |
+| 4 | `Exercises` | Egzersizler | `barbell` |
+| 5 | `ProfileTab` | Profil | üyenin avatarı, yoksa `person` |
+
+Tab bar `createMaterialTopTabNavigator` üzerine elle çizilir (`tabBarPosition:
+"bottom"`), çünkü pager'ın kaydırma davranışı isteniyor ama material şeridinin
+görünümü istenmiyor. Bar yüzeye oturmuş bir şerit değil, üstü yuvarlatılmış ve
+gölgeli bir yüzeydir; aktif sekme ikonun arkasındaki `primarySoft` hapla
+gösterilir. Etiket yazılmaz — beş dilde ve her font ölçeğinde taşmayan tek
+düzen budur; erişilebilirlik adı yine `tabBarLabel`'dan gelir. Yükseklik
+sabittir, yalnız altındaki safe-area dolgusu cihaza göre değişir, böylece hap
+göstergesi cihazdan cihaza zıplamaz.
+
+**Mesajlar sekmeden çıkarıldı.** Artık feed başlığının sağ üstünde, etkinlik
+zilinin yanında bir kâğıt uçak ikonudur ve `MainStack` içindeki `Messages`
+ekranını push eder. Gerekçe: mesajlar günün her anında bakılan bir yer değil,
+bildirimle tetiklenen bir yerdir; sekme yuvasını Keşfet'e bırakması hem
+Instagram'ın alışkanlığına hem de ekranın gerçek kullanımına daha yakındır.
+Okunmamış sayacı artık `useUnreadMessages` hook'undadır: bir kez
+`getUserConversations` ile tohumlanır, sonrasında Socket.IO `message_received`
+ile canlı kalır. Tab navigator yalnız global toast'u üretmeye devam eder.
+
+**Doğrudan mesaj ikonu tek yerden gelir.** `src/config/icons.ts` içindeki
+`MESSAGE_ICON` (Ionicons kâğıt uçak) ve react-native-paper bileşenleri için
+`MESSAGE_ICON_PAPER` sabitleri; feed başlığı, bağlantılar listesi, mesajlar boş
+durumu, profil "Mesaj" butonu ve hikâye yanıt çubuğu bunları kullanır. Daha önce
+aynı iş üç farklı ikonla (sohbet balonu, kâğıt uçak, zarf) çiziliyordu ve üç ayrı
+özellik gibi okunuyordu. Yorum ikonu bilinçli olarak konuşma balonu kalır —
+yorum ile doğrudan mesaj farklı şeylerdir.
 
 Root stack; ChatBox, profile edit, settings, connections, exercise detail,
 active workout, workout detail/summary, statistics, advanced statistics, muscle
 distribution, monthly report detayları, notifications, privacy, support,
 pricing, main exercise, leaderboard, konum seçici, konum ayarları, yakındakiler
-ve lisans ekranlarını açar. Messages badge başlangıçta conversation unread
-toplamından hesaplanır ve Socket.IO `message_received` ile canlı güncellenir.
+ve lisans ekranlarını açar. `Messages` de bu stack'tedir ve kendi geri
+butonuyla açılır.
 
 Konum ekranlarının giriş noktaları:
 
@@ -962,10 +1218,18 @@ navigation prop sözleşmelerini merkezileştirir.
   status/navigation bar ve güncel pencere yüksekliğini dikkate alır.
 - `useResponsiveLayout` cihaz genişliğinden değil kullanılabilir içerik
   genişliği ile font scale'den karar verir.
+- Hikâye yüzeyi pencere boyutuna değil, `useStoryFrame` ile **ölçülen** kare
+  boyutuna göre çalışır; oluşturucu ile görüntüleyici aynı kutuyu ölçtüğü için
+  katmanlar piksel piksel aynı yere düşer (**14B**).
 - Dar telefonlarda riskli grid tek sütun, yeterli genişlikte iki sütundur.
 - Global `AppToast` başarı/bilgi/hata mesajlarını gösterir; destructive kararlar
   native confirm dialog kullanır.
-- Türkçe ve İngilizce i18next kaynakları vardır.
+- Türkçe ve İngilizce i18next kaynakları vardır; giriş/kayıt ekranı dahil hiçbir
+  ekranda sabit İngilizce metin bırakılmaz. Cihaz dili `expo-localization` ile
+  okunur, seçim `AsyncStorage`'a yazılır.
+- Yatay kaydırılabilir sekmeler (egzersiz detayındaki Özet/Geçmiş/Talimatlar)
+  `SwipeablePager` üzerinden gelir. Bileşenin native ve `.web` olmak üzere iki
+  uygulaması vardır; gerekçesi 22. bölüm madde 19'dadır.
 - Light/dark React Native Paper temaları aynı ThemeContext üzerinden yönetilir.
 
 ### 12.5 Mobile environment ve bağlantı modları
@@ -979,17 +1243,32 @@ Development fallback:
 - iOS/web: `http://localhost:4000`
 
 Production bundle'da API URL zorunludur ve API/web origin'leri HTTPS olmalıdır.
-Fiziksel cihaz `localhost` ile bilgisayarı göremez. Normal Expo Go/LAN geliştirme
-için kök `dev:local:*` komutları aktif fiziksel IPv4 adresini otomatik enjekte
-eder. USB üzerinden özel local APK testinde ADB reverse kullanılabilir:
 
-```powershell
-adb -s <cihaz-serisi> reverse tcp:4000 tcp:4000
-adb -s <cihaz-serisi> reverse tcp:5173 tcp:5173
-```
+**Fiziksel cihaz `localhost` ile bilgisayarı göremez.** Bu, sessizce yanlış
+davranan bir durumdur: uygulama normal açılır, yalnız her istek düşer. Bu yüzden
+mobil dev komutlarının tamamı adres enjekte eden `scripts/local-network.mjs`
+üzerinden geçer; düz `expo start` artık kök script'lerinden çağrılmaz.
 
-ADB reverse eşleşmesi USB kopunca veya cihaz yeniden başlayınca tekrar kurulmalıdır.
-Release/store build ise gerçek public HTTPS backend/web origin'iyle üretilmelidir.
+| Komut | Taşıma | Enjekte edilen `EXPO_PUBLIC_API_URL` |
+| --- | --- | --- |
+| `pnpm dev:mobile` | LAN (sabitlenmiş) | `http://<lan-ip>:4000` |
+| `pnpm dev:mobile:usb` | USB (sabitlenmiş) | `http://127.0.0.1:4000` + otomatik `adb reverse` |
+| `pnpm dev:mobile:clean` | LAN + `expo start --clear` | `http://<lan-ip>:4000` |
+| `pnpm dev:local:mobile` | `auto` | Android cihaz takılıysa USB, değilse LAN |
+
+`dev:mobile` bilinçli olarak **LAN'a sabitlenmiştir**. Varsayılan `auto`, USB'de
+bir Android cihaz görürse `127.0.0.1`'e geçer; bu Android tarafında çalışır ama
+aynı anda Wi-Fi üzerinden Expo Go kullanan bir iPhone'u kopartır. LAN modunda
+üçü de (iPhone, Android telefon, emülatör) tek adresten çalışır. Taşıma
+`MOTIONMEET_MOBILE_TRANSPORT` ile veya script'in ikinci argümanıyla
+(`lan` / `usb` / `auto`) değiştirilebilir; argüman environment değişkenini ezer,
+böylece Windows'ta `cross-env` gerekmez.
+
+Backend `0.0.0.0` üzerinde dinlediği için LAN adresi ek bir ayar istemez. React
+Native `fetch` bir `Origin` başlığı göndermediğinden mobil istemci CORS
+allowlist'ine de takılmaz.
+
+Release/store build gerçek public HTTPS backend/web origin'iyle üretilmelidir.
 
 ### 12.5.1 Cihaz konumu
 
@@ -1025,6 +1304,17 @@ MIME türünü algılar, dosya uzantısını bu türle eşler, presign alır ve 
 PUT eder. Bu özellikle Android üreticilerinin yanlış/eksik MIME metadata
 döndürdüğü durumlarda backend signature rejection'ını önler.
 
+**Görüntüleme tarafında uzun listeler `expo-image` kullanır**, React Native'in
+`Image`'ı değil: `PostCard` (feed), `Explore` ızgarası, `UserCard`,
+`Connections`, `NearbyScreen` ve `Profile`. Bu ekranlar üyenin onlarca uzak
+görselin yanından kaydığı yerlerdir ve `expo-image` view'ları geri dönüştürür,
+bellek + disk cache tutar (`cachePolicy="memory-disk"`), `recyclingKey` ile
+hücre yeniden kullanıldığında yanlış görseli göstermez ve boş bir kutu yerine
+placeholder geçirir. Yeni bağımlılık değildir; `expo-image` zaten projedeydi.
+
+Her görsel URL'si `mediaVariantUrl` ile ekranda kaplayacağı boyutta istenir
+(**9.6**), yani feed kartı 720 px, ızgara 320 px, avatar 128 px indirir.
+
 ### 12.7 Metro ve native artifact notları
 
 `metro.config.js`, monorepo root ile native Gradle entry path uyuşmazlığını
@@ -1038,17 +1328,35 @@ konmaz.
 
 #### Yerel backend'e bakan sideload APK
 
-Fiziksel cihazda kendi makinemizdeki backend'e bağlanan bir release APK üretmek
-için:
+Tam tarif `docs/mobile-qa-apk.md` içindedir; buradaki özet nedenleri anlatır.
 
-```powershell
+`EXPO_PUBLIC_*` değerleri **`packages/mobile/.env.local`'a yazılmalıdır**.
+Gradle'ı çalıştıran kabuğa `export` etmek yetmez: değerler Metro'nun transform
+adımına ulaşmaz ve build, hiçbir şey verilmemiş gibi config guard'ında çöken bir
+bundle üretir. `.env.local` git dışıdır ve Expo tarafından okunur.
+
+```bash
+cat > packages/mobile/.env.local <<'EOF'
+EXPO_PUBLIC_API_URL=http://127.0.0.1:4000
+EXPO_PUBLIC_WEB_URL=http://127.0.0.1:5173
+EXPO_PUBLIC_ALLOW_INSECURE_LAN=true
+EOF
+
+cd packages/mobile/android && ./gradlew assembleRelease
+adb -s <cihaz> install -r app/build/outputs/apk/release/app-release.apk
 adb -s <cihaz> reverse tcp:4000 tcp:4000
-cd packages/mobile/android
-$env:EXPO_PUBLIC_API_URL       = 'http://127.0.0.1:4000'
-$env:EXPO_PUBLIC_WEB_URL       = 'http://127.0.0.1:5173'
-$env:EXPO_PUBLIC_ALLOW_INSECURE_LAN = 'true'
-./gradlew assembleRelease
 ```
+
+> **Origin değişince iki önbellek birden temizlenmelidir.** `EXPO_PUBLIC_*`
+> değerleri Babel tarafından bundle'a gömülür ve **ne Gradle ne Metro bunları
+> task girdisi sayar**. Değeri değiştirip yeniden derlemek sessizce eski
+> bundle'ı kullanır. Hem `createBundleReleaseJsAndAssets` çıktı klasörleri
+> (`android/app/build/generated/assets` ve `.../res`) hem `%TEMP%\metro-cache`
+> silinmeli, sonra bundle içinde
+> adresin gerçekten yer aldığı `grep` ile doğrulanmalıdır.
+
+> İşi bitince `.env.local` **silinmelidir**. Dosya dururken alınacak bir mağaza
+> build'i loopback'e bakar ve aşağıdaki guard'ların hepsinden geçer.
 
 `EXPO_PUBLIC_ALLOW_INSECURE_LAN`, `src/config/environment.ts` içindeki HTTPS
 zorunluluğunu yalnız loopback ve özel LAN adresleri için gevşetir; public bir
@@ -1125,6 +1433,12 @@ gruplar:
 - user, plan, privacy, role, connection ve follow tipleri;
 - exercise, set, workout, routine, stats ve personal record tipleri;
 - post, comment, media, story, message, conversation ve notification tipleri;
+- hikâye katmanı tipleri: `StoryOverlay`, `StoryOverlayKind`, `StoryOverlayFont`,
+  `StoryOverlayAlignment`, `StoryOverlayBackdrop` ve sabit listeleri
+  (`STORY_OVERLAY_FONTS`, `STORY_OVERLAY_ALIGNMENTS`, `STORY_OVERLAY_BACKDROPS`,
+  `STORY_OVERLAY_KINDS`) ile `STORY_OVERLAY_LIMITS`. Sunucu doğrulayıcısı ve iki
+  istemcinin render'ı aynı listeleri okur; yeni bir font eklemek tek yerde
+  yapılır (**14B**);
 - konum tipleri: `LocationSuggestion`, `ProfileLocation`, `NearbySettings`,
   `NearbyUser`, `DistanceBand`, `NearbyScope` ve bunların sabit listeleri
   (`NEARBY_SCOPES`, `NEARBY_SCOPE_METERS`, `DISTANCE_VISIBILITIES`,
@@ -1133,11 +1447,17 @@ gruplar:
 - `API_ROUTES` endpoint sabitleri;
 - auth/content/pagination limitleri;
 - privacy default'ları;
-- operation ID ve public media URL yardımcıları.
+- operation ID ve public media URL yardımcıları;
+- medya teslim boyutları: `MEDIA_WIDTHS`, `MediaVariant`, `mediaVariantUrl()` ve
+  `mediaSrcSet()`. Bir görselin hangi çözünürlükte indirileceği kararı burada,
+  tek yerde durur; web `srcSet` ile, mobil `expo-image` ile aynı fonksiyonu
+  çağırır (**9.6**).
 
 Önemli limitler:
 
 - yorum 1000, mesaj 2000, post 5000, story 2000 karakter;
+- hikâye başına en fazla 10 katman, katman metni 200 karakter, katman ölçeği
+  0.4–4 (`STORY_OVERLAY_LIMITS`);
 - post başına 4 medya;
 - routine adı 120, exercise adı shared istemci contract'ında 80 karakter;
 - varsayılan sayfa boyları feed/comment 30; exercise/message/conversation/routine/
@@ -1146,6 +1466,74 @@ gruplar:
 Shared paket DB tablosu veya server-only secret tipi yayınlamaz. Yeni endpoint
 veya response eklerken önce shared sözleşmesi, sonra backend ve iki istemci aynı
 değişiklik içinde güncellenmelidir.
+
+## 13A. Marka, logo ve ikon sistemi
+
+### 13A.1 Neden tek kaynak
+
+Marka işareti daha önce birbirinden bağımsız beş yerde yaşıyordu: mobil için
+1.5 MB'lık elle üretilmiş bir PNG, web için mor bir ok çizen `favicon.svg`,
+uygulama içi başlık için tamamen farklı bir gradyan çizen `MotionMark.tsx`, giriş
+ekranı için üçüncü bir `motionmeet_logo.svg` ve artık hiçbir yerden
+kullanılmayan bir dambıl SVG'si. Aynı ürünün platforma göre farklı bir işaret
+göstermesi bir varlık yönetimi hatası değil, marka hatasıdır.
+
+Artık kaynak iki dosyadır ve gönderilen her raster onlardan türetilir:
+
+| Dosya | İçerik | Nerede kullanılır |
+| --- | --- | --- |
+| `brand/motionmeet-mark.svg` | Yuvarlatılmış kare zemin + işaret | Platformun maskelemediği her yer: launcher ikonu, favicon, web logosu |
+| `brand/motionmeet-glyph.svg` | Zeminsiz işaret (şeffaf) | Zemini platformun kendisinin çizdiği yerler: Android adaptive icon foreground, splash plakası |
+
+İşaretin kendisi: ortak bir nabız çizgisinin üzerinde birbirine uzanan iki
+sporcu; siluet bir **M** okur. Sol figür macenta→mor, sağ figür mavi→mor, ortadaki
+nabız camgöbeği→mavi geçişlidir; zemin mor→lacivert bir köşegen gradyandır.
+
+### 13A.2 Üretim hattı
+
+```bash
+pnpm brand        # node scripts/generate-brand-assets.mjs
+```
+
+Script `sharp` ile şunları yazar:
+
+| Çıktı | Boyut | Nasıl üretilir |
+| --- | --- | --- |
+| `packages/mobile/assets/icon.png` | 1024 | Tam işaret |
+| `packages/mobile/assets/adaptive-icon.png` | 1024 | Glif, şeffaf zemin üzerinde **%62** ölçekte ortalanır |
+| `packages/mobile/assets/splash-icon.png` | 1024 | Glif, marka rengi plaka üzerinde %50 ölçekte |
+| `packages/mobile/assets/favicon.png` | 64 | Tam işaret |
+| `packages/web/public/favicon.svg` | vektör | Kaynağın kopyası |
+| `packages/web/public/favicon-32/192/512.png` | 32/192/512 | Tam işaret |
+| `packages/web/public/apple-touch-icon.png` | 180 | Tam işaret, marka rengine **flatten** edilir |
+| `packages/web/src/assets/motionmeet_logo.svg` | vektör | Kaynağın kopyası |
+
+Üç karar açıklama ister:
+
+- **Adaptive icon glifi kullanır ve %62'ye ölçeklenir.** Android adaptive
+  ikonları isteğe bağlı bir şekle maskeler ve yalnız ortadaki ~%66'nın görüneceği
+  garanti edilir. Tam kutucuğu foreground olarak vermek köşelerini kestirirdi.
+- **apple-touch-icon flatten edilir.** iOS, alfa kanalı taşıyan ana ekran
+  ikonlarını beyaz üzerine bindirir; şeffaflık bırakmak açık renkli bir çerçeve
+  üretirdi.
+- **`MotionMark.tsx` aynı geometriyi `react-native-svg` ile yeniden çizer.**
+  Uygulama başlığındaki işaret PNG olsaydı ölçek değiştiğinde bulanıklaşırdı.
+  Bunun bedeli, path'lerin `motionmeet-mark.svg` ile elle eşlenmesidir; ikisi
+  birlikte değişmelidir. Bileşen `variant="tile" | "glyph"` alır ve gradyan
+  id'lerini `useId` ile örnek başına benzersiz üretir — Android'de SVG gradyan
+  id'leri global olduğu için aynı ekranda iki işaret aksi hâlde sonuncunun
+  tanımını paylaşırdı.
+
+### 13A.3 Kurallar
+
+- `brand/*.svg` düzenlendiğinde `pnpm brand` çalıştırılır ve üretilen dosyalar
+  aynı commit'e girer.
+- `packages/*/assets` altındaki ikonlar elle düzenlenmez.
+- Repository'ye ikinci bir logo varlığı eklenmez. `motionmeet-icon-v2.png`,
+  `motionmeet_dambell.svg` ve `vite.svg` bu nedenle silinmiştir.
+- `app.json` ve `index.html` yalnız üretilen dosyaları işaret eder; `index.html`
+  ayrıca `site.webmanifest` ve `apple-touch-icon` bağlantılarını taşır, tema
+  rengi marka lacivertidir.
 
 ## 14. Eski MongoDB'den PostgreSQL'e migration aracı
 
@@ -1300,6 +1688,191 @@ mesafe `nearby`'ye, `hidden` seçtiyse `unknown`'a düşer.
 | `mobile/src/pages/LocationSettingsScreen.tsx` | İki konumun görünürlük ve silme kontrolleri. |
 | `mobile/src/pages/LicensesScreen.tsx` | Veri seti lisans bildirimleri. |
 
+## 14B. Hikâye (story) mimarisi
+
+Hikâyeler daha önce "renkli zemin üzerine yazı, ya da kırpılmamış bir görsel"
+seviyesindeydi. Bu sürümde iki istemcide de baştan yazıldılar. Bölüm, veri
+modelini, iki uçtaki akışı ve alınan kararların nedenlerini anlatır.
+
+### 14B.1 Katman (overlay) veri modeli
+
+Bir hikâyenin üstündeki her metin ya da konum etiketi bir **overlay**'dir.
+Sözleşme `packages/shared/src/types/story.ts` içindedir ve `stories.overlays`
+jsonb kolonunda saklanır.
+
+| Alan | Değerler | Not |
+| --- | --- | --- |
+| `id` | `o0`, `o1`, … | Sunucu tarafından yeniden üretilir |
+| `kind` | `text` \| `location` | |
+| `text` | ≤ 200 karakter | |
+| `x`, `y` | 0–1 | Katmanın **merkezinin** kareye oranı |
+| `scale` | 0.4–4 | Taban punto çarpanı |
+| `rotation` | −180…180 | Derece |
+| `font` | `classic` \| `modern` \| `neon` \| `typewriter` \| `strong` | |
+| `color` | `#RRGGBB` | |
+| `align` | `left` \| `center` \| `right` | |
+| `backdrop` | `none` \| `plate` \| `translucent` | `plate` dolu pil, metni koyu mürekkebe çevirir |
+
+**Konumların piksel değil oran olarak saklanması bu mimarinin can alıcı
+kararıdır.** 360 dp'lik bir telefonda yazının bırakıldığı yer, 448 dp'lik bir
+tablette ve tarayıcıda da resmin aynı noktasıdır. Punto da aynı mantıkla kare
+genişliğinden türetilir (`storyBaseFontSize`), sabit bir punto değildir.
+
+Bir hikâye en fazla 10 katman taşır.
+
+### 14B.2 Sunucu tarafı doğrulama
+
+`packages/backend/utils/storyOverlays.ts` istemciden gelen listeyi **yeniden
+türetir**, doğrulamakla yetinmez:
+
+- `x`, `y` `[0,1]`'e, `scale` limitlere, `rotation` `[-180,180]`'e clamp edilir —
+  böylece bir katman kadraj dışına park edilemez veya raporlama butonunu
+  örtecek kadar büyütülemez;
+- bilinmeyen enum değerleri varsayılana düşer;
+- renk yalnız düz altı haneli hex olabilir; bir style özniteliğine ulaşabilecek
+  hiçbir şey geçmez;
+- `id` istemciden alınmaz, indeksten yeniden üretilir;
+- şekli bozuk ya da limitleri aşan gövde `null` döner ve controller 400 verir —
+  yazarın yazdığı metinler sessizce düşürülmez.
+
+Multipart gövdelerde alan string olarak geldiği için parser JSON çözmeyi de
+dener. `tests/storyOverlays.test.ts` bu davranışların yedisini de kapsar.
+
+### 14B.3 Oluşturucu akışı
+
+Mobil `StoryComposer`, web `StoryComposer` — davranış aynıdır:
+
+1. **Açılış doğrudan galeridir.** Boş bir tuval yoktur; hikâye burada her zaman
+   çekilmiş bir görselden başlar. İlk seçim iptal edilirse oluşturucu kapanır.
+   Galeri her açılış için tam bir kez sunulur (`launchedRef`): taslağı izlemek,
+   yayınlama taslağı temizlediği için galeriyi çıkışta yeniden açardı.
+2. **Kare ekranın tamamıdır** ve görsel `cover` ile yerleşir; hiçbir cihazda yan
+   boşluk kalmaz. Ölçü pencereden değil, `useStoryFrame` ile kutunun kendisinden
+   okunur.
+3. **Araç rayı** sağ üsttedir: `Aa` (metin), konum, fotoğrafı değiştir.
+4. **Metin editörü** klavyenin açılmasına izin verilen tek yerdir. Font çipleri,
+   renk paleti, hizalama ve metin arka planı buradadır; metnin dışına dokunmak
+   yazılanı işler ve klavyeyi kapatır.
+5. **Katmanlar elle taşınır.** Mobilde `PanResponder` tek parmakla taşır, iki
+   parmakla ölçekler ve döndürür; webde pointer olayları taşır. Sürükleme
+   sırasında kadrajın altında bir çöp kutusu belirir, üzerine gelindiğinde
+   büyüyüp kırmızıya döner ve bırakıldığında katmanı siler.
+6. **Yayınlama** medyayı presigned PUT ile S3'e yükler, ardından `createStory`
+   çağrısına boş olmayan katmanları ekler.
+
+Arka plan renkleri kaldırıldı. Beş font ise font dosyası göndermeden, sistem
+ailesi + ağırlık/casing/tracking/glow ile kurulur; `storyTypography` modülünün
+mobil ve web ikizleri aynı değerleri taşır.
+
+### 14B.4 Görüntüleyici
+
+- Medya `cover` ile tam kadraj kaplar (`contain` bırakılan siyah bantlar
+  nedeniyle terk edildi).
+- Katmanlar oluşturucuyla **aynı** render bileşeninden geçer; önizleme ile
+  yayınlanan hikâye aynı resimdir.
+- Üstte hikâye başına bir ilerleme çubuğu; sol/sağ dokunma alanları; basılı
+  tutmak duraklatır.
+- Kadrajın üstüne bir şey açıldığında (izleyici paneli, yanıt kutusu, basılı
+  tutma) oynatma **duraklar**; kare, okunan veya yazılan şeyin altından kaymaz.
+- Başkasının hikâyesinde alt çubuk: mesaj kutusu, kalp ve kâğıt uçak. Kalp
+  emojiyi kutuya yazmaz, doğrudan DM olarak gönderir — tepki her hikâye
+  uygulamasında tek dokunuştur. Kâğıt uçak sohbeti açar.
+- Yazarın hikâyesinde alt çubuk yerine görüntülenme sayacı vardır; yukarı
+  kaydırmak ya da dokunmak izleyici panelini açar. Panel karenin **%72'sini**
+  kaplar; satırlara dokunmak ilgili profili açar. Başlıktaki çöp kutusu
+  hikâyeyi siler.
+- Görüntüleme makbuzu `(story_id, user_id)` üzerinde unique'tir, yani aynı
+  hikâyeyi yeniden açmak zaten var olan bir satıra varır. Bu yüzden makbuz
+  Redis'te 6 saat hatırlanır: bir rayı geri kaydırmak, hikâye okuması + üç
+  sorguluk izleyici kontrolü + insert yerine hiç iş yapmaz (**8.2**). Makbuz
+  yalnız satır kalıcı olduktan **sonra** yazılır, böylece başarısız bir
+  yetkilendirme sonraki denemeyi bastırmaz.
+
+### 14B.5 Hikâye rayı
+
+`StoriesBar` artık kullanıcıya göre gruplar ve **yazarın kendi hikâyeleri kendi
+balonunun içindedir**. Önceden "Hikayem" balonunun yanında yazarın kendisi ikinci
+bir balon olarak da listeleniyordu. Kendi balonu: hikâye varsa gradyan halka ve
+dokununca görüntüleyici, yoksa doğrudan oluşturucu; artı rozeti her hâlükârda
+yeni hikâye ekler. Halka, marka gradyanını taşıyan bir SVG çemberdir.
+
+### 14B.6 Dosya haritası
+
+| Katman | Mobil | Web |
+| --- | --- | --- |
+| Sözleşme | `packages/shared/src/types/story.ts` | aynı |
+| Doğrulama | `packages/backend/utils/storyOverlays.ts` | — |
+| Kalıcılık | `packages/backend/services/storyService.ts` | — |
+| Tipografi | `src/components/story/storyTypography.ts` | `src/components/story/storyTypography.ts` |
+| Katman render | `story/StoryOverlayView.tsx`, `StoryOverlayAnchor.tsx` | `story/StoryOverlayView.tsx`, `StoryOverlayLayer.tsx` |
+| Sürükleme | `story/StoryDraggableOverlay.tsx` | `StoryComposer.tsx` içinde pointer olayları |
+| Oluşturucu | `components/StoryComposer.tsx` | `components/StoryComposer.tsx` |
+| Görüntüleyici | `components/StoryViewer.tsx` | `components/StoryViewer.tsx` |
+| Ray | `components/StoriesBar.tsx` + `story/StoryRing.tsx` | `components/StoriesBar.tsx` |
+| Kare ölçümü | `hooks/useStoryFrame.ts` | `ResizeObserver` |
+
+### 14B.7 Bilinçli sınırlar
+
+- **Katmanlar görsele gömülmez.** Yayınlanan medya orijinal dosyadır; metin her
+  açılışta yeniden çizilir. Gömmek istemcide bir görüntü yakalama kütüphanesi
+  gerektirirdi; bunun bedeli, MotionMeet dışına paylaşılan bir ekran görüntüsünün
+  katmanları taşımaması değil — o zaten ekran görüntüsüdür — ileride bir "story
+  olarak indir" özelliği istenirse o zaman çözülmesi gerekmesidir.
+- **Yakın arkadaşlar, müzik, çıkartma ve efekt yoktur.** Ürün bunlara sahip
+  değil; taklit etmek yerine çalışmayan buton koyulmadı.
+- Metin dışı hikâyeler için `media_type: "text"` yolu okuma tarafında korunur —
+  eski hikâyeler açılmaya devam eder — ama oluşturucu artık üretmez.
+
+## 14C. Keşfet ve kişi arama
+
+### 14C.1 Ne olduğu
+
+Keşfet, topluluğun görselli gönderilerini üç sütunlu bir ızgarada gösteren ve
+üstünde kişi araması bulunan sekmedir. Mobilde `ExploreTab`, webde `/explore`.
+
+Feed'in içindeki "Ana Sayfa / Keşfet" açılır menüsü **kaldırılmadı**: o menü
+feed'in hangi gönderileri çektiğini seçer (`mode=following` ya da
+`mode=discover`) ve dikey kart akışı olarak kalır. Keşfet sekmesi ise ayrı bir
+gezinme yeridir ve ızgara olarak görünür. İkisi aynı adı taşır; bu bilinçli bir
+üründür ama isim çakışması **22. bölümde** bilinen bir pürüz olarak kayıtlıdır.
+
+### 14C.2 Izgara
+
+- Veri `GET /api/post/feed?mode=discover` üzerinden gelir; yeni endpoint
+  eklenmedi. Sıralamayı migration 007'nin `posts.discover_rank` stored generated
+  kolonu taşır.
+- **Yalnız görseli olan gönderiler ızgaraya girer.** Metin karolarından oluşan
+  bir duvar bozuk okunur; metin gönderileri feed'de keşfedilebilir kalır.
+- Karo, `media[0]` ya da eski `image_urls[0]`'dır; video ise oynat işareti,
+  birden çok görsel varsa çoklu işareti taşır.
+- Karoya dokunmak gönderiyi tam ekran açar ve **feed'in kendi `PostCard`'ını**
+  kullanır — beğenme, yorum ve takip davranışı Keşfet'ten gelindiğinde de
+  birebir aynıdır.
+- Mobilde ızgara ve arama sonuçları **ayrı `key` taşıyan iki FlatList**'tir.
+  Tek liste paylaşılsaydı aramaya geçerken `numColumns` değişirdi; React Native
+  bunu yeniden yerleşim olarak değil, sert bir invariant ihlali olarak ele alır
+  ve uygulama çöker. Bu, cihaz testinde yakalanan gerçek bir hataydı.
+
+### 14C.3 Kişi arama
+
+- `POST /api/user/discover` çağrılır; sunucu tarafı `lower(username::text) LIKE
+  'terim%'` veya `lower(full_name) LIKE '%terim%'` eşleşmesi yapar,
+  `privacy_show_in_search` kapalı hesapları eler, önce kullanıcı adı önekiyle
+  eşleşenleri sonra takipçi sayısına göre sıralar ve 20 satırla sınırlar.
+- Sorgu kolonlara `ILIKE` uygulamaz, **indeksin kurulu olduğu ifadeyle birebir
+  aynı** yazılır (migration `009`): `username` öneki `text_pattern_ops` b-tree'ye,
+  `full_name` içinde geçen ifade trigram GIN'e düşer. Önceki `ILIKE` biçimi
+  hiçbir indeksi kullanamıyordu — 200.000 satırda substring araması 128 ms,
+  önek araması 169 ms sürüyordu; şimdi 5,2 ms ve 0,05 ms.
+- Terim SQL'e gitmeden önce `escapeLikePattern` ile kaçırılır. Aksi hâlde `%`
+  arayan bir üye bütün tabloyu eşleştirebilirdi.
+- İstemci en az iki harf bekler ve 280 ms debounce uygular.
+- **Yarış koruması:** her aramaya artan bir sıra numarası verilir ve yalnız en
+  güncel isteğin sonucu listeye yazılır; "uh" için geç dönen bir cevap "uhut"
+  sonuçlarının üstüne binemez.
+- Satırda avatar, ad ve `@kullanıcıadı` birlikte gösterilir — aynı ada sahip iki
+  hesabı ayırt etmenin tek yolu budur. Satıra dokunmak profili açar.
+
 ## 15. Temel uçtan uca veri akışları
 
 ### 15.1 Kayıt ve login
@@ -1345,8 +1918,11 @@ Picker/File
  -> S3 HEAD + range signature kontrolü
  -> ImageKit URL
  -> posts + post_media + quota + reservation commit transaction
- -> feed cache invalidation
+ -> yalnız yazarın feed cache'i düşürülür (8.1)
 ```
+
+Takipçilerin feed'i burada dokunulmaz; 30 saniyelik TTL yeni gönderiyi zaten
+taşır. Anında görmesi gereken tek kişi paylaşandır.
 
 ### 15.4 Mesaj
 
@@ -1368,7 +1944,7 @@ Authenticated ve rate-limited delete request
  -> dış kullanıcı sayaçlarını düzelt
  -> ilgili conversation'ları ve user satırını sil
  -> FK cascade ile sahip olunan veriyi temizle
- -> cache prefix'lerini invalidate et
+ -> silinen hesabın kendi cache owner'ları düşürülür (feed, profil, egzersiz listesi)
  -> media worker S3 nesnelerini retry ederek siler
 ```
 
@@ -1402,6 +1978,37 @@ Yakındakiler ekranı açılır
  -> istemciye koordinat değil bant ve kaba bölge etiketi döner
 ```
 
+### 15.8 Katmanlı hikâye paylaşma
+
+```text
+Hikâye balonuna dokunulur
+ -> oluşturucu açılır ve doğrudan sistem galerisini sunar (boş tuval yok)
+ -> seçilen görsel/video kadrajı cover ile doldurur; kare onLayout ile ÖLÇÜLÜR
+ -> Aa: metin editörü (klavyenin açılmasına izin verilen tek yer)
+    font / renk / hizalama / metin arka planı seçilir, dışına dokunmak işler
+ -> katman parmakla taşınır, iki parmakla ölçeklenir ve döndürülür
+    alttaki çöp kutusuna bırakmak siler
+ -> paylaş: medya presigned PUT ile S3'e gider
+ -> POST /api/story/create { uploadedKey, overlays: [...] }
+ -> backend katmanları yeniden türetir (clamp + enum fallback + hex filtresi)
+ -> stories satırı; overlays jsonb; expires_at = now + 24 saat
+ -> ray tazelenir: hikâye yazarın KENDİ balonunun içine girer
+ -> görüntüleyici katmanları aynı render bileşeniyle, aynı oranlarla çizer
+```
+
+Görüntüleme tarafı:
+
+```text
+Başkasının hikâyesi açılır
+ -> POST /api/story/:storyId/view (oturum başına bir kez)
+ -> alt çubuk: mesaj kutusu + kalp + kâğıt uçak
+ -> kalp -> doğrudan DM olarak "❤️" gönderir
+Yazar kendi hikâyesini açar
+ -> yukarı kaydırma veya sayaç -> GET /api/story/:storyId/viewers
+ -> panel karenin %72'sini kaplar, satır -> profil
+ -> başlıktaki çöp kutusu -> DELETE /api/story/delete/:storyId
+```
+
 ## 16. Environment değişkenleri
 
 ### 16.1 Backend
@@ -1413,6 +2020,7 @@ Yakındakiler ekranı açılır
 | `DATABASE_URL` | Zorunlu PostgreSQL URL. Production'da TLS'li managed bağlantı önerilir. |
 | `DATABASE_POOL_MIN`, `DATABASE_POOL_MAX` | Pool boyutu; tüm replica toplamı DB kapasitesine göre hesaplanır. |
 | `DATABASE_CONNECTION_TIMEOUT_MS`, `DATABASE_IDLE_TIMEOUT_MS` | Pool timeout değerleri. |
+| `DATABASE_STATEMENT_TIMEOUT_MS` | İstek havuzundaki bir sorgunun üst sınırı; varsayılan 15.000. Tavansız bir sorgu çalıştığı sürece pool slotunu tutar ve tek bir kötü plan instance'ı aç bırakabilir. Migration ve dataset import'u bu havuzu kullanmaz (**6.2**). |
 | `REDIS_URL` | Opsiyonel; production'da authenticated `rediss://`. |
 | `ALLOW_INSECURE_REDIS_TLS` | Yalnız güvenilir private self-hosted istisna. |
 | `JWT_SECRET` | Zorunlu; production'da en az 32 karakter/random byte seviyesi. |
@@ -1440,6 +2048,7 @@ veya secret manager'da kalmalı, örnek dosyalara gerçek parola yazılmamalıd�
 | `VITE_BASEURL` | API origin; boşsa Nginx same-origin proxy. |
 | `VITE_SOCKET_URL` | Socket origin; boşsa API veya current origin. |
 | `VITE_BUILD_SOURCEMAP` | Production sourcemap üretimi. |
+| `VITE_WATCH_POLLING` | Yalnız dev server. Native dosya olaylarının gelmediği ortamlarda (network share, container bind mount) `true` yapılır; varsayılan kapalıdır. |
 
 Vite değişkenleri build-time'dır; secret içermemelidir.
 
@@ -1455,6 +2064,20 @@ Vite değişkenleri build-time'dır; secret içermemelidir.
 
 `EXPO_PUBLIC_*` değerleri secret değildir ve uygulama binary'sinden okunabilir.
 
+Bu değerler Babel tarafından bundle'a **gömülür** ve ne Gradle ne Metro onları
+task girdisi sayar. Bunun iki pratik sonucu vardır:
+
+1. Gradle'ı çalıştıran kabuğa `export` etmek yetmez; değer Metro'nun transform
+   adımına ulaşmaz. Güvenilir yer `packages/mobile/.env.local`'dır (git dışı,
+   Expo tarafından okunur). Dev komutlarında değerleri `scripts/local-network.mjs`
+   süreç ortamına enjekte eder ve Expo mevcut `process.env`'i ezmediği için bu yol
+   dosyadan öncelikli çalışır.
+2. Origin değiştirilip yeniden derlenirse eski bundle sessizce yeniden
+   kullanılır. Hem `createBundleReleaseJsAndAssets` çıktı klasörleri
+   (`android/app/build/generated/assets` ve `.../res`) hem `%TEMP%\metro-cache`
+   silinmelidir. Tarif ve doğrulama
+   `grep`'i `docs/mobile-qa-apk.md` içindedir.
+
 ### 16.4 LAN helper
 
 | Değişken | Amaç |
@@ -1463,6 +2086,13 @@ Vite değişkenleri build-time'dır; secret içermemelidir.
 | `MOTIONMEET_BACKEND_PORT` | Varsayılan 4000. |
 | `MOTIONMEET_WEB_PORT` | Varsayılan 5173. |
 | `MOTIONMEET_EXPO_PORT` | Varsayılan 8081. |
+| `MOTIONMEET_MOBILE_TRANSPORT` | `auto` (varsayılan), `lan` veya `usb`. Script'in **ikinci argümanı** bu değişkeni ezer. |
+
+Script argümanları: `node scripts/local-network.mjs <servis> [taşıma] [clear]`.
+`servis` = `all` \| `backend` \| `web` \| `mobile` \| `ip`; üçüncü argüman
+`clear` verilirse Expo `--clear` ile başlar. Argümanla taşıma sabitlemek,
+Windows'ta `cross-env` bağımlılığı olmadan package.json script'i yazabilmek
+içindir.
 
 ## 17. Yerel geliştirme
 
@@ -1494,7 +2124,11 @@ pnpm dev
 # Tek servis
 pnpm dev:backend
 pnpm dev:web
-pnpm dev:mobile
+
+# Mobil: hepsi API adresini otomatik enjekte eder (bkz. 12.5)
+pnpm dev:mobile          # LAN'a sabit - Expo Go, iOS + Android + emülatör
+pnpm dev:mobile:usb      # USB'ye sabit - adb reverse + 127.0.0.1
+pnpm dev:mobile:clean    # LAN + expo start --clear (bayat manifest/asset için)
 
 # Fiziksel Expo cihazı için otomatik LAN adresi
 pnpm local:ip
@@ -1503,7 +2137,10 @@ pnpm dev:local
 # Ayrı terminallerde LAN servisleri
 pnpm dev:local:backend
 pnpm dev:local:web
-pnpm dev:local:mobile
+pnpm dev:local:mobile    # taşıma "auto"
+
+# Marka rasterlerini kaynak SVG'lerden yeniden üret
+pnpm brand
 
 # Dünya ülke/bölge/şehir veri setini içeri al (bir kez; sürüm değişince tekrar)
 pnpm --filter @motionmeet/backend run import:locations
@@ -1592,11 +2229,18 @@ korunmalıdır.
 
 ### 19.1 Mevcut otomatik kontroller
 
-- Backend unit testleri: auth validation, environment validation, pagination,
-  security helpers, workout metrics ve DB contract.
+- Backend unit testleri (55 test): auth validation, environment validation,
+  pagination, security helpers, workout metrics, DB contract, hikâye katmanı
+  doğrulaması (`tests/storyOverlays.test.ts` — clamp, enum fallback, hex-renk
+  filtresi, id yeniden üretimi ve bozuk gövde reddi) ve cache stampede koruması
+  (`tests/singleFlight.test.ts` — 1.000 eşzamanlı çağrının tek çalıştırmaya
+  indiği, farklı anahtarların birbirini bloklamadığı, bir hatanın anahtarı
+  zehirlemediği).
 - PostgreSQL concurrency integration: retry idempotency, sayaç yarışları, quota,
   conversation uniqueness, analytics ve durable media deletion davranışı.
-- Shared contract testleri.
+- Shared contract testleri (11 test), medya varyant URL'lerinin davranışı dâhil:
+  mevcut `tr` dönüşümünün korunması, virgüllerin encode edilmemesi, videonun
+  yeniden boyutlandırılmaması ve ImageKit olmayan URL'lerin aynen dönmesi.
 - Web: lint, strict typecheck, production Vite build, public artefakt güvenlik
   taraması ve gzip başlangıç/chunk bütçesi.
 - Mobile: lint, strict typecheck, Expo export/build ve backup/permission config
@@ -1615,6 +2259,29 @@ privacy, workout, stats, routines, feed visibility, follow/connect, posts,
 stories, messages, media upload, export ve account deletion ayrı QA hesaplarıyla
 doğrulanmalıdır. S3 testinde presign, PUT, signature verify, public URL ve delete
 job tamamlanması birlikte kontrol edilmelidir.
+
+Hikâye, Keşfet ve marka için ek smoke listesi:
+
+- Hikâye balonuna dokunmak doğrudan galeriyi açıyor mu (araya bir tuval
+  girmemeli)?
+- Metin taşınıp bırakıldığı yerde kalıyor mu; alttaki çöp kutusuna bırakınca
+  siliniyor mu?
+- Yayınlanan hikâye, görüntüleyicide oluşturucudaki **tam** konumda mı açılıyor?
+- Aynı hikâye ikinci bir cihazda (farklı ekran oranı) aynı yerleşimi veriyor mu?
+- Kendi hikâyem rayda ikinci bir balon olarak da görünüyor mu (görünmemeli)?
+- Görüntüleyenler paneli karenin yarısından fazlasını kaplıyor mu; satıra
+  dokunmak profili açıyor mu?
+- Başkasının hikâyesinde kalp, kutuya emoji yazmak yerine doğrudan DM gönderiyor
+  mu?
+- Keşfet'te aramaya geçip geri dönmek uygulamayı çökertiyor mu (çökertmemeli —
+  `numColumns` regresyonu)?
+- Aramada iki harften kısa terim istek üretiyor mu (üretmemeli)?
+- Egzersiz detayındaki üç sekme parmakla kaydırılıyor mu; sekme şeridi kaydırmayı
+  takip ediyor mu?
+- Launcher ikonu, splash ve uygulama içi başlık işareti aynı mı?
+- Tarayıcı sekmesindeki favicon ve iOS ana ekran ikonu aynı işareti gösteriyor mu?
+- Tarayıcı dili Türkçe iken giriş ekranı Türkçe açılıyor mu; Ayarlar'dan İngilizce
+  seçildikten sonra tarayıcı dili değişse bile İngilizce kalıyor mu?
 
 Konum özellikleri için ek smoke listesi:
 
@@ -1676,6 +2343,15 @@ Yüksek maliyetli sorgular production benzeri veri üzerinde
 `EXPLAIN (ANALYZE, BUFFERS)` ile ölçülmelidir. Index ekleme ölçülen query planına
 dayanmalı, varsayımla yapılmamalıdır.
 
+Bu kuralın neden yazıldığına dair somut bir örnek `docs/PERFORMANCE_AUDIT.md`
+§A3'tedir: kişi araması için önce trigram indeksi kurulmuş, ölçüm planlayıcının
+önek sorgusunda onu seçmediğini göstermiş ve indeks `text_pattern_ops` b-tree ile
+değiştirilmiştir. Ölçülmeseydi yanlış indeks kalacaktı.
+
+Bu belge mimarinin **ne olduğunu** anlatır; `docs/PERFORMANCE_AUDIT.md` o
+mimarinin ölçülmüş darboğazlarını, yapılan optimizasyonları ve önce/sonra
+sayılarını kaydeder. Performansla ilgili bir soru varsa önce oraya bakılmalıdır.
+
 ## 22. Bilinen boşluklar ve teknik borçlar
 
 Bu bölüm mevcut kaynak durumunu dürüstçe kaydeder:
@@ -1732,8 +2408,43 @@ Bu bölüm mevcut kaynak durumunu dürüstçe kaydeder:
     yoluna geçer. Yükseltme sonrası `location_geometry_mode` log satırı
     `postgis` göstermelidir.
 
+16. **"Keşfet" adı iki yerde geçiyor.** Feed başlığındaki açılır menüde bir feed
+    modu, alt navigasyonda ise ayrı bir sekme aynı adı taşır. İkisi de ürün
+    sahibinin açık isteğiyle duruyor; menüdeki modun adı ileride ayrıştırılabilir
+    (örn. "Herkes"). Ayrıntı: **14C.1**.
+17. **Hikâye katmanları görsele gömülmüyor.** Yayınlanan medya orijinal dosyadır;
+    metin her açılışta yeniden çizilir. "Hikâyeyi indir/dışa aktar" gibi bir
+    özellik istenirse istemcide bir görüntü yakalama adımı gerekecek. Ayrıntı:
+    **14B.7**.
+18. **Hikâye yanıtı normal bir DM olarak gidiyor.** Hangi hikâyeye yanıt olduğu
+    mesajda taşınmıyor; alıcı bağlamı göremiyor. Bunun için `messages` üzerinde
+    bir `reply_to_story_id` alanı gerekir.
+19. **`react-native-pager-view` web'de çalışmıyor.** Kütüphane React Native'in
+    codegen iç modüllerini import ediyor ve `react-native-web` bunu çözemiyor.
+    Bu yüzden kütüphane tek bir dosyaya (`SwipeablePager.tsx`) hapsedildi ve
+    tarayıcı için sayfalanmış yatay `ScrollView` kullanan `SwipeablePager.web.tsx`
+    yazıldı. **Kütüphane başka hiçbir yerden doğrudan import edilmemelidir** —
+    grafiğe tek bir import girmesi bütün web bundle'ını düşürür.
+20. **Sideload APK checked-in debug keystore ile imzalanıyor.** `android/app/
+    build.gradle` içinde release buildType hâlâ `signingConfigs.debug`
+    kullanıyor. Mağaza dağıtımı için ayrı bir release keystore ve secret
+    yönetimi gerekir.
+21. **Runtime performans ölçümü yok.** p50/p95/p99 istek gecikmesi, cache
+    hit/miss oranı, event loop lag, pool doluluğu ve slow query eşiği
+    ölçülmüyor. Structured logging request süresini kaydediyor ama toplanmıyor.
+22. **Mobil `package.json` doğrudan import edilmeyen paketler taşıyor**
+    (`fbjs`, `styleq`, `invariant`, `merge-options`, `html-parse-stringify`,
+    `use-latest-callback`, `use-sync-external-store`, `socket.io-parser`,
+    `color`, `@callstack/react-theme-provider`). Büyük olasılıkla pnpm'in katı
+    `node_modules` yapısı altında Metro çözümlemesi için bilinçli eklenmişler;
+    kaldırılmadan önce temiz bir `pnpm install` ve iki platformda bundle
+    doğrulaması gerekir.
+
 Bu maddeler çalışan production path'i tarif eden bölümlerle karıştırılmamalı;
 teknik borç kapatıldığında hem kod hem bu belge birlikte güncellenmelidir.
+
+Mevcut performans denetimi, ölçülen darboğazlar ve yapılan optimizasyonlar
+`docs/PERFORMANCE_AUDIT.md` içindedir.
 
 ## 23. Yeni geliştirme eklerken izlenecek yol
 
@@ -1750,7 +2461,11 @@ Yeni bir domain özelliği eklerken önerilen sıra:
 6. Controller'ı yalnız HTTP doğrulama/adaptasyon ve doğru status code için kullan.
 7. Route'a limiter/auth/RBAC middleware'lerini açıkça bağla.
 8. Cache key ve invalidation kapsamını belirle; Redis yokken doğru PostgreSQL
-   fallback'ini koru.
+   fallback'ini koru. Yeni bir cache owner-addressed olmalı (**8.1**) ve
+   invalidation'ı `services/feedCache.ts` üzerinden geçmeli — servisler kendi
+   başlarına `del`/`scan` çağırmaz. Prefix taraması eklemek yasaktır: Redis
+   `MATCH`'i taramadan sonra uygular, yani her çağrı keyspace'in tamamını gezer.
+   Cache'lenen okuma pahalıysa miss'i `singleFlight` ile sar (**8.3**).
 9. Dış yan etki varsa outbox veya durable job kullan; DB transaction içinde S3/
    SMTP gibi remote çağrıya güvenme.
 10. Web ve mobile istemcilerini aynı shared sözleşmeye geçir.
@@ -1766,7 +2481,7 @@ Yeni bir domain özelliği eklerken önerilen sıra:
 | Bir endpoint gerçekten var mı? | `packages/backend/routes/*.ts`, ardından controller |
 | Domain kuralı/transaction nerede? | `packages/backend/services/*.ts` |
 | SQL satırı API tipine nasıl dönüşüyor? | `packages/backend/repositories/*.ts` |
-| DB'de hangi tablo/constraint/index var? | `db/migrations/001_*` … `006_*` ve `db/types.ts` |
+| DB'de hangi tablo/constraint/index var? | `db/migrations/001_*` … `009_*` ve `db/types.ts` |
 | Profil konumu ile yakındakiler arasındaki fark? | Bu belgenin 14A bölümü |
 | Konum araması neden bu sırayla dönüyor? | `services/locationService.ts` içindeki `searchLocations` |
 | Mesafe neden tam sayı değil de aralık? | `utils/distanceBands.ts` ve 14A.3 |
@@ -1776,8 +2491,22 @@ Yeni bir domain özelliği eklerken önerilen sıra:
 | Ortak API route ve tipler? | `packages/shared/src/index.ts`, `src/types/*` |
 | Web route'ları? | `packages/web/src/App.tsx` |
 | Mobile route/tab/stack? | `packages/mobile/src/navigation/*` |
+| Logo/ikon nereden geliyor, nasıl yenilenir? | `brand/README.md`, `scripts/generate-brand-assets.mjs`, bu belgenin 13A bölümü |
+| Hikâye katmanı sözleşmesi ve doğrulaması? | `packages/shared/src/types/story.ts`, `backend/utils/storyOverlays.ts`, 14B |
+| Hikâye neden her cihazda aynı yere düşüyor? | 14B.1 ve `mobile/src/hooks/useStoryFrame.ts` |
+| Keşfet ızgarası hangi endpoint'i kullanıyor? | `GET /api/post/feed?mode=discover`; 14C |
+| Kişi araması nasıl sıralanıyor? | `backend/services/userService.ts` içindeki `searchUsers`; 14C.3 |
+| Mesaj ikonu neden her yerde aynı? | `mobile/src/config/icons.ts`; 12.3 |
+| Giriş ekranının dili nasıl seçiliyor? | `packages/web/src/i18n.ts`; 11.3 |
+| Yerel backend'e bakan APK nasıl üretilir? | `docs/mobile-qa-apk.md`; 12.7 |
+| Web'de pager neden ayrı bir dosya? | `mobile/src/components/SwipeablePager.web.tsx`; 22. bölüm madde 19 |
 | Auth token davranışı? | Backend `utils/authTokens.ts`; web/mobile `AuthProvider.tsx` |
 | Redis fallback'i? | `packages/backend/configs/redis.ts` |
+| Bir write hangi cache'i düşürüyor? | `services/feedCache.ts`; 8.1 |
+| Cache miss'te neden tek sorgu gidiyor? | `utils/singleFlight.ts`; 8.3 |
+| Görsel neden bu boyutta iniyor? | `shared/src/types/media.ts` içindeki `mediaVariantUrl`; 9.6 |
+| Bir endpoint neden yavaş / neresi darboğaz? | `docs/PERFORMANCE_AUDIT.md` |
+| Web bundle bütçesi nerede tanımlı? | `packages/web/performance-budget.json`, `scripts/check-web-performance.mjs`; 11.4 |
 | S3 upload ve delete? | `services/mediaUploadService.ts`, `mediaDeletionService.ts`, `utils/s3Utils.ts` |
 | Cron/outbox? | `workers/cronJobs.ts`, `services/outboxService.ts` |
 | Eski veriyi nasıl taşırım? | `tools/database-migration` ve `docs/database.md` |

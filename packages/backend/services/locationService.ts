@@ -8,9 +8,11 @@ import type {
 } from "@motionmeet/shared";
 import { PROFILE_LOCATION_VISIBILITIES } from "@motionmeet/shared";
 import { database } from "../configs/database.js";
-import { getCachedJson, invalidateCachePrefix, setCachedJson } from "../configs/redis.js";
+import { getCachedJson, setCachedJson } from "../configs/redis.js";
+import { invalidateProfile } from "./feedCache.js";
 import { distanceMeters, withinRadius } from "./locationGeometry.js";
-import { escapeLikePattern, formatAreaLabel, formatLocationLabel, normalizeLocationQuery } from "../utils/locationText.js";
+import { formatAreaLabel, formatLocationLabel, normalizeLocationQuery } from "../utils/locationText.js";
+import { escapeLikePattern } from "../utils/validation.js";
 
 /**
  * Profile location: the coarse, member-chosen place shown on a profile.
@@ -405,7 +407,7 @@ export const saveProfileLocation = async (
     .where("id", "=", userId)
     .execute();
 
-  await Promise.all([invalidateCachePrefix(`profile:${userId}:`), rememberRecentSelection(userId, selection)]);
+  await Promise.all([invalidateProfile(userId), rememberRecentSelection(userId, selection)]);
   return getProfileLocation(userId);
 };
 
@@ -415,13 +417,13 @@ export const clearProfileLocation = async (userId: string): Promise<ProfileLocat
     .set({ location: "", location_country_id: null, location_state_id: null, location_city_id: null, location_source: "", location_selected_at: null })
     .where("id", "=", userId)
     .execute();
-  await invalidateCachePrefix(`profile:${userId}:`);
+  await invalidateProfile(userId);
   return getProfileLocation(userId);
 };
 
 export const updateProfileLocationVisibility = async (userId: string, visibility: ProfileLocationVisibility): Promise<ProfileLocation> => {
   await database.updateTable("users").set({ location_visibility: visibility }).where("id", "=", userId).execute();
-  await invalidateCachePrefix(`profile:${userId}:`);
+  await invalidateProfile(userId);
   return getProfileLocation(userId);
 };
 

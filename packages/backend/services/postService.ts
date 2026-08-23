@@ -1,7 +1,9 @@
 import type { Post, PostType, PostVisibility } from "@motionmeet/shared";
 import { sql } from "kysely";
 import { database, withTransaction } from "../configs/database.js";
-import { getCachedJson, invalidateCachePrefix, setCachedJson } from "../configs/redis.js";
+import { getCachedField, setCachedField } from "../configs/redis.js";
+import { singleFlight } from "../utils/singleFlight.js";
+import { FEED_CACHE_TTL_SECONDS, feedCacheOwner, invalidateOwnFeed } from "./feedCache.js";
 import { findHydratedPost, findPostAccessRecord, hydratePosts, type PostAccessRecord } from "../repositories/postRepository.js";
 import { canAccessPost as evaluatePostAccess } from "./accessControlService.js";
 import type { Pagination } from "../utils/pagination.js";
@@ -59,7 +61,7 @@ export const createPost = async (input: NewPostInput, { quotaLimit = -1, reserva
       if (!hydrated) throw new Error("Created post could not be loaded");
       return hydrated;
     });
-    await invalidateCachePrefix("feed:");
+    await invalidateOwnFeed(input.user);
     return post;
   } catch (error: unknown) {
     if (!isUniqueViolation(error)) throw error;
@@ -80,30 +82,39 @@ export const createPost = async (input: NewPostInput, { quotaLimit = -1, reserva
  */
 export const getFeedPostsForUser = async (userId: string, pagination: Pagination, mode: unknown = "discover"): Promise<{ items: Post[]; nextCursor: string | null }> => {
   const feedMode = mode === "following" ? "following" : "discover";
+  const owner = feedCacheOwner(userId);
   // Keyed on the raw cursor rather than its decoded parts: Keşfet paginates on
   // `(discover_rank, id)`, which does not decode into `pagination.cursor` at
   // all, so keying on the decoded date collapsed every discover page onto the
   // same entry and served page one forever.
-  const cacheKey = `feed:${userId}:${feedMode}:${pagination.rawCursor ?? "first"}:${pagination.limit}`;
-  const cached = await getCachedJson<{ items: Post[]; nextCursor: string | null }>(cacheKey);
+  const field = `${feedMode}:${pagination.rawCursor ?? "first"}:${pagination.limit}`;
+  const cached = await getCachedField<{ items: Post[]; nextCursor: string | null }>(owner, field);
   if (cached) return cached;
 
-  const rows = feedMode === "following"
-    ? await queryFollowingFeed(userId, pagination)
-    : await queryDiscoverFeed(userId, pagination);
+  // A miss under load must cost one query, not one per waiting request: the
+  // entry expiring while a thousand members are scrolling would otherwise send
+  // a thousand identical feed queries at PostgreSQL together.
+  return singleFlight(`${owner}:${field}`, async () => {
+    const fresh = await getCachedField<{ items: Post[]; nextCursor: string | null }>(owner, field);
+    if (fresh) return fresh;
 
-  const hasMore = rows.length > pagination.limit;
-  const selected = hasMore ? rows.slice(0, pagination.limit) : rows;
-  const hydrated = await hydratePostInteractions(await hydratePosts(selected), userId);
-  const last = selected.at(-1);
-  const nextCursor = hasMore && last
-    ? feedMode === "following"
-      ? encodeCursor({ date: new Date(last.created_at).toISOString(), id: last.id })
-      : encodeCursor({ rank: Number(last.discover_rank), id: last.id })
-    : null;
-  const result = { items: hydrated, nextCursor };
-  await setCachedJson(cacheKey, result, 30);
-  return result;
+    const rows = feedMode === "following"
+      ? await queryFollowingFeed(userId, pagination)
+      : await queryDiscoverFeed(userId, pagination);
+
+    const hasMore = rows.length > pagination.limit;
+    const selected = hasMore ? rows.slice(0, pagination.limit) : rows;
+    const hydrated = await hydratePostInteractions(await hydratePosts(selected), userId);
+    const last = selected.at(-1);
+    const nextCursor = hasMore && last
+      ? feedMode === "following"
+        ? encodeCursor({ date: new Date(last.created_at).toISOString(), id: last.id })
+        : encodeCursor({ rank: Number(last.discover_rank), id: last.id })
+      : null;
+    const result = { items: hydrated, nextCursor };
+    await setCachedField(owner, field, result, FEED_CACHE_TTL_SECONDS);
+    return result;
+  });
 };
 
 const encodeCursor = (value: Record<string, unknown>): string =>
@@ -190,5 +201,5 @@ export const deletePostById = async (post: PostAccessRecord): Promise<void> => {
     await deleteInteractionsForPost(post.id, { transaction });
     await transaction.deleteFrom("posts").where("id", "=", post.id).where("user_id", "=", post.user).execute();
   });
-  await invalidateCachePrefix("feed:");
+  await invalidateOwnFeed(post.user);
 };

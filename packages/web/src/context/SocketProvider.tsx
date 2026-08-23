@@ -1,6 +1,5 @@
 import { useAuthContext } from "../context/AuthProvider";
 import { useCallback, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
-import { io } from "socket.io-client";
 import { SocketContext, type MotionMeetSocket, type SocketContextValue } from "./socketContext";
 import { SOCKET_URL } from "~/config/env";
 import { createOperationId, type ServerToClientEvents } from "@motionmeet/shared";
@@ -15,11 +14,28 @@ export const SocketProvider = ({ children }: PropsWithChildren) => {
   const [connected, setConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(() => new Set());
 
+  /**
+   * `socket.io-client` is imported here rather than at the top of the file so it
+   * does not sit in the entry graph.
+   *
+   * Nothing before sign-in opens a socket, yet a static import put the client
+   * and engine.io - together about 88 KB - into a chunk the landing page
+   * preloaded before it had painted. Loading it at the point a member actually
+   * has a session moves that off the first visit entirely.
+   */
   useEffect(() => {
     if (!userId || !SOCKET_URL) return undefined;
 
     let active = true;
-    const connection = io(SOCKET_URL, {
+    let connection: MotionMeetSocket | null = null;
+
+    void (async () => {
+      const { io } = await import("socket.io-client");
+      // The provider can unmount, or the member sign out, while the module is
+      // still in flight - in which case there is nothing left to connect for.
+      if (!active) return;
+
+      connection = io(SOCKET_URL, {
         auth: async (callback) => {
           try {
             const token = await getToken();
@@ -33,9 +49,26 @@ export const SocketProvider = ({ children }: PropsWithChildren) => {
         reconnectionDelay: 1500,
       }) as MotionMeetSocket;
 
-    socketRef.current = connection;
-    setSocket(connection);
+      socketRef.current = connection;
+      setSocket(connection);
 
+      attachHandlers(connection);
+    })();
+
+    return () => {
+      active = false;
+      connection?.disconnect();
+      socketRef.current = null;
+      setSocket(null);
+      setConnected(false);
+      setOnlineUsers(new Set());
+    };
+  }, [getToken, userId]);
+
+  // Declared outside the effect only to keep it readable; it closes over nothing
+  // but React's own setState functions, which are stable for the life of the
+  // component.
+  function attachHandlers(connection: MotionMeetSocket): void {
     connection.on("connect", () => setConnected(true));
     connection.on("disconnect", () => setConnected(false));
     connection.on("connect_error", () => setConnected(false));
@@ -70,16 +103,7 @@ export const SocketProvider = ({ children }: PropsWithChildren) => {
       }));
       if (!payload.requestReceived) store.dispatch(followRequestResolved({ userId: payload.userId }));
     });
-
-    return () => {
-      active = false;
-      connection?.disconnect();
-      socketRef.current = null;
-      setSocket(null);
-      setConnected(false);
-      setOnlineUsers(new Set());
-    };
-  }, [getToken, userId]);
+  }
 
   const sendMessage = useCallback((toUserId: string, text: string, operationId?: string | null) => {
     if (!socketRef.current?.connected) return false;

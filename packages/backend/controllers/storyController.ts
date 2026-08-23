@@ -177,6 +177,13 @@ export const viewStory: RequestHandler = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Invalid story id" });
     }
 
+    // A receipt this viewer already wrote needs none of the work below: not the
+    // story read, not the three-query audience check, not the insert. Checking
+    // it first is what keeps swiping back through a rail free.
+    if (await storyService.storyViewAlreadyRecorded(storyId, req.userId)) {
+      return res.json({ success: true });
+    }
+
     // A story id is guessable in principle, so the audience is re-checked here
     // rather than trusting that the client only ever posts ids it was given.
     const story = await storyService.getStoryById(storyId);
@@ -185,7 +192,7 @@ export const viewStory: RequestHandler = async (req, res, next) => {
       return res.status(403).json({ success: false, message: "Story is not accessible" });
     }
 
-    await storyService.recordStoryView(storyId, req.userId);
+    await storyService.recordStoryView(storyId, req.userId, story.user);
 
     return res.json({ success: true });
   } catch (error) {

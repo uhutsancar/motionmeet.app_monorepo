@@ -125,7 +125,7 @@ export const updateUserData: RequestHandler = async (req, res, next) => {
     // record chosen through /api/user/location, so accepting a string on this
     // endpoint would reopen the free-text path the picker exists to close.
     const { username, bio, full_name, weight, height } = req.body || {};
-    const user = await userService.getUserForProfileUpdate(userId);
+    const user = await userService.getUserByIdWithPassword(userId);
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
     if (username !== undefined && (!isNonEmptyString(username, 30) || !/^[A-Za-z0-9._-]{3,30}$/.test(username.trim()))) {
@@ -252,7 +252,7 @@ export const discoverUsers: RequestHandler = async (req, res, next) => {
     }
 
     const users = await userService.searchUsers(input.trim(), req.userId);
-    return res.json({ success: true, users: users.map(userService.withRelationshipCounts) });
+    return res.json({ success: true, users });
   } catch (error) {
     return next(error);
   }
@@ -494,7 +494,7 @@ export const getSuggestedUsers: RequestHandler = async (req, res, next) => {
     const users = await userService.getSuggestedUsersList(req.userId);
     if (!users) return res.json({ success: false, message: "User not found" });
 
-    return res.json({ success: true, users: users.map(userService.withRelationshipCounts) });
+    return res.json({ success: true, users });
   } catch (error) {
     return next(error);
   }
