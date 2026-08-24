@@ -1,6 +1,6 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import { View, ScrollView, Alert } from 'react-native';
-import { ActivityIndicator, Appbar, Button, Card, Text } from 'react-native-paper';
+import { ActivityIndicator, Button, Card, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuthContext } from "../context/AuthProvider";
@@ -12,6 +12,7 @@ import { logHandledError } from '../utils/feedback';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import type { Plan } from '@motionmeet/shared';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
+import ScreenHeader from '../components/ScreenHeader';
 import type { NavigationOnlyProps } from '../navigation/types';
 
 interface PlanFeatureRow {
@@ -108,10 +109,10 @@ const PricingScreen = ({ navigation }: NavigationOnlyProps) => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
-      <Appbar.Header statusBarHeight={0} style={{ backgroundColor: theme.surface, elevation: 0 }}>
-        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
-        <Appbar.Content title={t('pricing_page.plans_title', 'Plans & Features')} titleStyle={{ color: theme.text, fontWeight: '700' }} />
-      </Appbar.Header>
+      <ScreenHeader
+        title={t('pricing_page.plans_title', 'Plans & Features')}
+        onBack={() => navigation.goBack()}
+      />
 
       <ScrollView
         contentContainerStyle={{

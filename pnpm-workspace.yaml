@@ -1,3 +1,20 @@
+# Windows: keep the store path short enough for the Android NDK toolchain.
+#
+# React Native's autolinking writes each library's generated C++ sources to
+# `<library>/android/build/generated/source/codegen/jni/...` and hands ninja the
+# absolute path. ninja uses the plain Win32 APIs, so it stops at 260 characters
+# whatever the OS long-path setting says — and pnpm's default layout
+# (`node_modules/.pnpm/<name>@<version>_<long hash>/node_modules/<name>/`)
+# spends more than 130 of those before the library folder even starts.
+#
+# A shorter store directory and a shorter hash segment buy back about 60
+# characters, which is the difference between a release APK linking and failing
+# with "Filename longer than 260 characters". The store stays inside the
+# workspace, so Metro's watch folders and Gradle's relative paths are
+# unaffected. Both settings are load-bearing for the Android build.
+virtualStoreDir: node_modules/.p
+virtualStoreDirMaxLength: 30
+
 packages:
   - "packages/*"
   - "tools/*"

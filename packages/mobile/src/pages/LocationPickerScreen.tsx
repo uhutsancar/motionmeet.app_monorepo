@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, View } from 'react-native';
+import { StyleSheet, ActivityIndicator, FlatList, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Appbar, Divider, Surface, Text, TextInput, TouchableRipple } from 'react-native-paper';
+import { Divider, Surface, Text, TextInput, TouchableRipple } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Localization from 'expo-localization';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +19,7 @@ import {
 import { fetchUser } from '../features/user/userSlice';
 import { useAppDispatch } from '../store/hooks';
 import { getUserFacingError, showError, showSuccess } from '../utils/feedback';
+import ScreenHeader from '../components/ScreenHeader';
 import type { NavigationScreenProps } from '../navigation/types';
 
 /**
@@ -260,13 +261,10 @@ const LocationPickerScreen = ({ navigation, route }: NavigationScreenProps<Locat
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right', 'bottom']}>
-      <Appbar.Header statusBarHeight={0} style={{ backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} disabled={saving} />
-        <Appbar.Content
-          title={t('location.picker_title', 'Choose location')}
-          titleStyle={{ color: theme.text, fontWeight: '800', fontSize: 19 }}
-        />
-      </Appbar.Header>
+      <ScreenHeader
+        title={t('location.picker_title', 'Choose location')}
+        onBack={saving ? undefined : () => navigation.goBack()}
+      />
 
       <View style={{ flex: 1, width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: horizontalPadding, paddingTop: 12 }}>
         <TextInput
@@ -291,7 +289,7 @@ const LocationPickerScreen = ({ navigation, route }: NavigationScreenProps<Locat
             style={{
               flexDirection: 'row', alignItems: 'center', gap: 11,
               paddingHorizontal: 14, paddingVertical: 13,
-              borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface,
+              borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border, backgroundColor: theme.surface,
             }}
           >
             <View style={{ width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: `${theme.primary}18` }}>
@@ -313,7 +311,7 @@ const LocationPickerScreen = ({ navigation, route }: NavigationScreenProps<Locat
             elevation={0}
             style={{
               marginTop: 12, padding: 14, borderRadius: 12, gap: 10,
-              borderWidth: 1, borderColor: `${theme.primary}55`, backgroundColor: theme.primarySoft,
+              borderWidth: StyleSheet.hairlineWidth, borderColor: `${theme.primary}55`, backgroundColor: theme.primarySoft,
             }}
           >
             <Text style={{ color: theme.text, fontSize: 12.5, fontWeight: '700' }}>
@@ -332,7 +330,7 @@ const LocationPickerScreen = ({ navigation, route }: NavigationScreenProps<Locat
               </TouchableRipple>
               <TouchableRipple
                 onPress={() => setProposal(null)}
-                style={{ flex: 1, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: theme.border }}
+                style={{ flex: 1, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border }}
               >
                 <Text style={{ color: theme.textSecondary, fontSize: 13, fontWeight: '800' }}>{t('common.cancel', 'Cancel')}</Text>
               </TouchableRipple>
@@ -348,7 +346,7 @@ const LocationPickerScreen = ({ navigation, route }: NavigationScreenProps<Locat
 
         <Surface
           elevation={0}
-          style={{ flex: 1, overflow: 'hidden', borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface }}
+          style={{ flex: 1, overflow: 'hidden', borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border, backgroundColor: theme.surface }}
         >
           <FlatList
             data={listed}

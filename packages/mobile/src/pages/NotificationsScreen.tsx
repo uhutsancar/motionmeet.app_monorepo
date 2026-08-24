@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { ScrollView, StatusBar, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import ScreenHeader from '../components/ScreenHeader';
 import { useTranslation } from 'react-i18next';
 import { useTheme, type MotionTheme } from '../context/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Appbar, Surface, Switch, Text, useTheme as usePaperTheme } from 'react-native-paper';
+import { Surface, Switch, Text, useTheme as usePaperTheme } from 'react-native-paper';
 import { logHandledError, showError } from '../utils/feedback';
 import type { MD3Theme } from 'react-native-paper';
 import type { NavigationOnlyProps } from '../navigation/types';
@@ -93,10 +94,10 @@ const NotificationsScreen = ({ navigation }: NavigationOnlyProps) => {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      <Appbar.Header style={styles.header} statusBarHeight={0}>
-        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
-        <Appbar.Content title={t('settings.notifications', 'Bildirimler')} titleStyle={styles.headerTitle} />
-      </Appbar.Header>
+      <ScreenHeader
+        title={t('settings.notifications', 'Bildirimler')}
+        onBack={() => navigation.goBack()}
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}

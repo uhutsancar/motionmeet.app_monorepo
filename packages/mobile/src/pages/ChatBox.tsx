@@ -39,6 +39,8 @@ import { Avatar, Text, IconButton, Surface, ActivityIndicator, useTheme as usePa
 import { getUserFacingError, showError } from '../utils/feedback';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { KeyboardResponsiveView } from '../components/KeyboardAwareScrollView';
+import MediaViewer from '../components/MediaViewer';
+import { ensureMediaLibraryPermission } from '../utils/permissions';
 import { CONTENT_LIMITS, createOperationId } from '@motionmeet/shared';
 import type { Message, PublicUser, UserProfile } from '@motionmeet/shared';
 import type { ImagePickerAsset } from 'expo-image-picker';
@@ -65,7 +67,15 @@ const MESSAGE_LIST_MAX_WIDTH = 720;
 const MESSAGE_LIST_PADDING = 12;
 /** Avatar column reserved on the partner's side, including its gutter. */
 const AVATAR_SLOT_WIDTH = 34;
-const MEDIA_BUBBLE_PADDING = 4;
+/**
+ * A photo in a conversation is not put in a frame.
+ *
+ * The bubble used to pad the picture and draw a border round it, which read as
+ * a card with a photo inside rather than as the photo itself. The picture now
+ * runs to the bubble's own rounded edge, and the timestamp floats over the
+ * corner of it the way every chat app does it.
+ */
+const MEDIA_BUBBLE_PADDING = 0;
 /** The composer grows to roughly five lines, then scrolls inside its pill. */
 const COMPOSER_MIN_HEIGHT = 42;
 const COMPOSER_MAX_HEIGHT = 124;
@@ -89,6 +99,7 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
   );
   const bubbleMaxWidth = Math.round((rowWidth - AVATAR_SLOT_WIDTH) * 0.92);
   const messageMediaWidth = Math.min(264, bubbleMaxWidth - MEDIA_BUBBLE_PADDING * 2);
+  const [viewerUri, setViewerUri] = useState<string | null>(null);
   const s = getStyles(theme, paperTheme, insets);
 
   const currentUser = useAppSelector((state) => state.user.value);
@@ -301,9 +312,16 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
   };
 
   const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      showError(t('common.error', 'Error'), t('feed.permission_required_media', 'We need permission to access your media'));
+    // Refusing once never disables the button: it asks again the next time, and
+    // only a permanent block sends the member to the OS settings instead.
+    const permission = await ensureMediaLibraryPermission();
+    if (!permission.granted) {
+      if (permission.outcome === 'denied') {
+        showError(
+          t('common.error', 'Error'),
+          t('feed.permission_required_media', 'We need permission to access your media'),
+        );
+      }
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -445,25 +463,53 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
             { maxWidth: bubbleMaxWidth },
             hasMedia ? s.bubbleMedia : s.bubblePlain,
             mine ? s.bubbleMine : s.bubbleTheirs,
+            // A photo is the message. It keeps the bubble's rounded corner but
+            // loses its outline, and with no caption to sit on it loses the
+            // plate behind it too.
+            hasMedia && s.bubbleMediaFrameless,
+            hasMedia && !msg.text && s.bubbleMediaBare,
           ]}
           onLongPress={mine ? () => handleDeleteMessage(msg._id) : undefined}
           rippleColor="rgba(0, 0, 0, .1)"
         >
           <View>
             {hasMedia && msg.media_url ? (
-              <Image
-                source={{ uri: msg.media_url }}
-                style={[
-                  s.msgImage,
-                  { width: messageMediaWidth, height: Math.round(messageMediaWidth * 0.82) },
-                ]}
-                resizeMode="cover"
-              />
+              <Pressable
+                onPress={() => setViewerUri(msg.media_url)}
+                accessibilityRole="imagebutton"
+                accessibilityLabel={t('common.photo', 'Fotoğraf')}
+              >
+                <Image
+                  source={{ uri: msg.media_url }}
+                  style={[
+                    s.msgImage,
+                    { width: messageMediaWidth, height: Math.round(messageMediaWidth * 0.82) },
+                  ]}
+                  resizeMode="cover"
+                />
+                {/* A picture with no caption carries its own stamp, so the
+                    bubble does not have to grow a strip underneath it just to
+                    hold the time. */}
+                {!msg.text && (
+                  <View style={s.mediaStamp}>
+                    <Text style={s.mediaStampText}>
+                      {dayjs(msg.createdAt).format('HH:mm')}
+                      {mine ? (msg.seen ? ' ✓✓' : ' ✓') : ''}
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
             ) : null}
             {/* Text and stamp share one wrapping row. A short message keeps the
                 stamp beside it on a single line; a long one pushes the stamp to
                 its own line, which is how the chat apps people know behave. */}
-            <View style={[s.bubbleBody, hasMedia && s.bubbleBodyWithMedia]}>
+            <View
+              style={[
+                s.bubbleBody,
+                hasMedia && s.bubbleBodyWithMedia,
+                hasMedia && !msg.text && s.bubbleBodyHidden,
+              ]}
+            >
               {msg.text ? (
                 <Text
                   style={[
@@ -685,6 +731,8 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
           </View>
         </Surface>
       </KeyboardResponsiveView>
+
+      <MediaViewer uri={viewerUri} onClose={() => setViewerUri(null)} />
     </SafeAreaView>
   );
 };
@@ -732,13 +780,15 @@ const getStyles = (theme: MotionTheme, _paperTheme: MD3Theme, _insets: EdgeInset
   },
   bubblePlain: { paddingHorizontal: 12, paddingVertical: 7 },
   bubbleMedia: { padding: MEDIA_BUBBLE_PADDING },
+  bubbleMediaFrameless: { borderWidth: 0, overflow: 'hidden' },
+  bubbleMediaBare: { backgroundColor: 'transparent', elevation: 0, shadowOpacity: 0 },
   bubbleMine: {
     backgroundColor: theme.primary,
     borderBottomRightRadius: 5,
   },
   bubbleTheirs: {
     backgroundColor: theme.surface,
-    borderWidth: 1, borderColor: theme.border,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
     borderBottomLeftRadius: 5,
   },
   // flexWrap keeps the stamp beside a short message and drops it below a long
@@ -749,11 +799,24 @@ const getStyles = (theme: MotionTheme, _paperTheme: MD3Theme, _insets: EdgeInset
     alignItems: 'flex-end',
     justifyContent: 'flex-end',
   },
-  bubbleBodyWithMedia: { paddingHorizontal: 6, paddingTop: 3, paddingBottom: 2 },
+  bubbleBodyWithMedia: { paddingHorizontal: 10, paddingTop: 5, paddingBottom: 4 },
+  bubbleBodyHidden: { display: 'none' },
   bubbleText: { flexShrink: 1, fontSize: 15.5, lineHeight: 21, fontWeight: '500' },
   bubbleTextWithMedia: { flexGrow: 1 },
   bubbleMeta: { fontSize: 10.5, lineHeight: 18, marginLeft: 8, fontWeight: '600' },
-  msgImage: { borderRadius: 14 },
+  msgImage: { borderRadius: 18 },
+  /* The stamp rides on the photo rather than under it, over a soft scrim so it
+     stays readable on a light picture without needing a bar of its own. */
+  mediaStamp: {
+    position: 'absolute',
+    right: 8,
+    bottom: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.42)',
+  },
+  mediaStampText: { color: '#FFFFFF', fontSize: 10.5, fontWeight: '700' },
   typingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.textMuted, marginHorizontal: 2 },
   imagePreview: {
     width: '100%', maxWidth: MESSAGE_LIST_MAX_WIDTH, alignSelf: 'center',
@@ -778,7 +841,7 @@ const getStyles = (theme: MotionTheme, _paperTheme: MD3Theme, _insets: EdgeInset
     minHeight: COMPOSER_MIN_HEIGHT + 4,
     paddingLeft: 2, paddingRight: 8,
     borderRadius: (COMPOSER_MIN_HEIGHT + 4) / 2,
-    borderWidth: 1, borderColor: theme.border,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
     backgroundColor: theme.background,
   },
   attachBtn: { width: 34, height: 34, margin: 0, marginBottom: 4, marginLeft: 2 },

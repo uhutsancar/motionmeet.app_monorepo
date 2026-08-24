@@ -12,9 +12,13 @@ import { createWorkout, createPost } from '../api/endpoints';
 import { uploadMedia } from '../api/mediaUpload';
 import dayjs from '../utils/dayjs';
 
-import { Appbar, Button, Surface, Text, TextInput, Divider, List, IconButton, ActivityIndicator } from 'react-native-paper';
+import { Button, Surface, Text, TextInput, Divider, List, IconButton, ActivityIndicator } from 'react-native-paper';
 import KeyboardAwareScrollView from '../components/KeyboardAwareScrollView';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import ScreenHeader from '../components/ScreenHeader';
+import WorkoutShareSheet from '../components/WorkoutShareSheet';
+import { WEB_URL } from '../config/environment';
+import { useAppSelector } from '../store/hooks';
 import {
   getUserFacingError,
   logHandledError,
@@ -22,7 +26,14 @@ import {
   showInfo,
   showSuccess,
 } from '../utils/feedback';
-import { CONTENT_LIMITS, createOperationId, type PostVisibility } from '@motionmeet/shared';
+import {
+  CONTENT_LIMITS,
+  buildPostShareUrl,
+  createOperationId,
+  workoutToShareCardData,
+  type PostVisibility,
+  type ShareCardData,
+} from '@motionmeet/shared';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation/native';
 import type { WorkoutSummaryData } from '../types/workoutDraft';
@@ -45,6 +56,7 @@ const WorkoutSummaryScreen = ({ navigation, route }: WorkoutSummaryProps) => {
   const styles = getStyles(theme);
   const { getToken } = useAuthContext();
   const { horizontalPadding, isNarrow } = useResponsiveLayout();
+  const currentUser = useAppSelector((state) => state.user.value);
 
   const routeParams = route.params as { workoutData?: WorkoutSummaryData } | undefined;
   const workoutData: WorkoutSummaryData = routeParams?.workoutData ?? {
@@ -60,6 +72,13 @@ const WorkoutSummaryScreen = ({ navigation, route }: WorkoutSummaryProps) => {
   const [mediaAsset, setMediaAsset] = useState<ImagePickerAsset | null>(null);
   const [visibility, setVisibility] = useState<PostVisibility>('public');
   const [saving, setSaving] = useState(false);
+  /* Filled in once the workout is on the server, which is what opens the share
+     sheet. Until then there is nothing to make a card of. */
+  const [shareCard, setShareCard] = useState<{
+    data: ShareCardData;
+    workoutId: string;
+    postId: string | null;
+  } | null>(null);
   const savedWorkoutIdRef = useRef<string | null>(null);
   const workoutOperationIdRef = useRef(createOperationId('workout'));
   const workoutPayloadRef = useRef<WorkoutRequest | null>(null);
@@ -173,6 +192,7 @@ const WorkoutSummaryScreen = ({ navigation, route }: WorkoutSummaryProps) => {
       }
 
       let postError: unknown = null;
+      let createdPostId: string | null = null;
 
       try {
         if (mediaAsset) {
@@ -193,6 +213,7 @@ const WorkoutSummaryScreen = ({ navigation, route }: WorkoutSummaryProps) => {
             uploadedKeys: [uploadedKey],
           }, freshToken);
           if (!postResponse.success) throw new Error(postResponse.message || 'Workout post could not be created');
+          createdPostId = postResponse.post?._id ?? null;
         } else {
           const postResponse = await createPost({
             operationId: postOperationIdRef.current,
@@ -202,6 +223,7 @@ const WorkoutSummaryScreen = ({ navigation, route }: WorkoutSummaryProps) => {
             workout: savedWorkoutId,
           }, freshToken);
           if (!postResponse.success) throw new Error(postResponse.message || 'Workout post could not be created');
+          createdPostId = postResponse.post?._id ?? null;
         }
       } catch (postErr) {
         postError = postErr;
@@ -221,13 +243,41 @@ const WorkoutSummaryScreen = ({ navigation, route }: WorkoutSummaryProps) => {
           { visibilityTime: 5200 },
         );
         return;
-      } else {
-        showSuccess(
-          t('common.success', 'Başarılı'),
-          t('workout.saved', 'Antrenman kaydedildi!'),
-        );
       }
-      navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });
+
+      showSuccess(t('common.success', 'Başarılı'), t('workout.saved', 'Antrenman kaydedildi!'));
+
+      /* A finished session is the moment someone wants to post about it, so the
+         card is offered here rather than being something to go and find later.
+         Leaving is one tap away; nothing is blocked behind it. */
+      setShareCard({
+        workoutId: savedWorkoutId,
+        postId: visibility === 'public' ? createdPostId : null,
+        data: workoutToShareCardData(
+          {
+            name: workoutData.name || t('workout.my_workout', 'Antrenmanım'),
+            startTime: new Date(Date.now() - (workoutData.duration || 0) * 1000).toISOString(),
+            durationMinutes: Math.round((workoutData.duration || 0) / 60),
+            volumeKg: workoutData.totalVolume || 0,
+            totalSets: workoutData.totalSets || 0,
+            exercises: (workoutData.exercises || []).map((exercise) => ({
+              exerciseName: exercise.name,
+              sets: exercise.sets ?? [],
+              // Carried through so the card can draw the kit each movement used
+              // and shade the body diagram with what the session worked.
+              equipment: exercise.equipment,
+              muscleGroup: exercise.muscleGroup,
+            })),
+          },
+          currentUser?.username || currentUser?.full_name || 'motionmeet',
+          {
+            duration: t('workout_summary.duration', 'Süre'),
+            volume: t('workout_summary.volume', 'Hacim'),
+            sets: t('workout_summary.sets', 'Set'),
+            untitled: t('workout.my_workout', 'Antrenmanım'),
+          },
+        ),
+      });
     } catch (error) {
       logHandledError('save-workout', error);
       showError(
@@ -264,17 +314,19 @@ const WorkoutSummaryScreen = ({ navigation, route }: WorkoutSummaryProps) => {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
-      <Appbar.Header style={styles.header} statusBarHeight={0}>
-        <Appbar.BackAction onPress={handleDiscard} disabled={saving} color={theme.text} />
-        <Appbar.Content title={t('workout.save_workout', 'Antrenmanı Kaydet')} titleStyle={styles.headerTitle} />
-        {saving ? (
-          <ActivityIndicator size="small" color={theme.primary} style={styles.activityIndicator} />
-        ) : (
-          <Button mode="contained" compact onPress={handleSave} style={styles.saveButton}>
-            {t('common.save', 'Kaydet')}
-          </Button>
-        )}
-      </Appbar.Header>
+      <ScreenHeader
+        title={t('workout.save_workout', 'Antrenmanı Kaydet')}
+        onBack={saving ? undefined : handleDiscard}
+        trailing={
+          saving ? (
+            <ActivityIndicator size="small" color={theme.primary} style={styles.activityIndicator} />
+          ) : (
+            <Button mode="contained" compact onPress={handleSave} style={styles.saveButton}>
+              {t('common.save', 'Kaydet')}
+            </Button>
+          )
+        }
+      />
 
         <KeyboardAwareScrollView
           contentContainerStyle={[
@@ -422,6 +474,17 @@ const WorkoutSummaryScreen = ({ navigation, route }: WorkoutSummaryProps) => {
           </Button>
 
         </KeyboardAwareScrollView>
+
+      <WorkoutShareSheet
+        visible={Boolean(shareCard)}
+        data={shareCard?.data ?? null}
+        workoutId={shareCard?.workoutId ?? null}
+        shareUrl={shareCard?.postId ? buildPostShareUrl(WEB_URL, shareCard.postId) : null}
+        onClose={() => {
+          setShareCard(null);
+          navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });
+        }}
+      />
     </SafeAreaView>
   );
 };

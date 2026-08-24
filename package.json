@@ -26,6 +26,7 @@
     "dev:mobile:clean": "node scripts/local-network.mjs mobile lan clear"
   },
   "devDependencies": {
+    "metro-runtime": "~0.83.3",
     "sharp": "^0.35.3",
     "turbo": "^2.5.0",
     "typescript": "^5.8.0"

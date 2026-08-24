@@ -250,6 +250,21 @@ export const getPosts = async (token: Token, cursor?: Cursor, mode: 'discover' |
   return data;
 };
 
+/**
+ * One post by id.
+ *
+ * What every link to a single post resolves through — an activity row, a share
+ * URL, a deep link back into the app. The server answers 404 for a post the
+ * viewer may not see just as it does for one that no longer exists, so nothing
+ * here needs to reason about visibility.
+ */
+export const getPost = async (postId: string, token: Token): Promise<PostResponse> => {
+  const { data } = await api.get(API_ROUTES.post.byId(postId), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
 export const createPost = async (postData: OperationPayload, token: Token): Promise<PostResponse> => {
   const request = withOperationId(postData, 'post');
   const { data } = await api.post(API_ROUTES.post.add, request.payload, {
@@ -702,6 +717,7 @@ export default {
   getUserConversations,
   
   // Post
+  getPost,
   getPosts,
   createPost,
   likePost,

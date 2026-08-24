@@ -466,7 +466,8 @@
     "volume": "Volume",
     "prs": "Records",
     "bpm": "Avg. bpm",
-    "more_exercises": "more exercises"
+    "more_exercises": "more exercises",
+    "link_copied": "Link copied"
   },
   "muscle_groups": {
     "chest": "Chest",
@@ -871,5 +872,27 @@
     "empty_hint": "Share the first photo, or follow a few people.",
     "open_post": "Open post",
     "post_title": "Post"
+  },
+  "post": {
+    "unavailable_title": "This post is no longer available",
+    "unavailable_body": "The link may have been removed, or the post is not public.",
+    "join": "Join MotionMeet",
+    "join_hint": "Meet athletes on MotionMeet and share your training."
+  },
+  "workout": {
+    "share_title": "Nice one!",
+    "share_subtitle": "Share your workout",
+    "share_download": "Download",
+    "share_copy_text": "Copy text",
+    "share_failed": "Sharing could not be completed.",
+    "share_text_copied": "Text copied",
+    "share_template_summary": "Summary",
+    "share_template_stats": "Stats",
+    "share_template_exercises": "Exercises",
+    "share_template_highlight": "Highlight",
+    "share_template_minimal": "Minimal"
+  },
+  "workout_share": {
+    "missing": "No workout to share."
   }
 }

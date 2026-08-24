@@ -31,6 +31,7 @@
     "expo": "^54.0.21",
     "expo-asset": "~12.0.13",
     "expo-auth-session": "^7.0.11",
+    "expo-clipboard": "~8.0.8",
     "expo-constants": "~18.0.13",
     "expo-file-system": "~19.0.23",
     "expo-font": "~14.0.12",
@@ -38,8 +39,10 @@
     "expo-image-picker": "^17.0.8",
     "expo-localization": "~17.0.8",
     "expo-location": "~19.0.8",
+    "expo-media-library": "~18.2.1",
     "expo-modules-core": "^3.0.30",
     "expo-secure-store": "~15.0.8",
+    "expo-sharing": "~14.0.8",
     "expo-status-bar": "~3.0.8",
     "expo-video": "~3.0.16",
     "expo-web-browser": "~15.0.8",
@@ -83,6 +86,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "globals": "^16.4.0",
     "jiti": "^2.7.0",
+    "metro-runtime": "~0.83.3",
     "typescript-eslint": "^8.65.0"
   },
   "private": true

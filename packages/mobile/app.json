@@ -14,7 +14,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0B0630"
+      "backgroundColor": "#0B1220"
     },
     "ios": {
       "supportsTablet": true,
@@ -26,14 +26,12 @@
       "versionCode": 2,
       "allowBackup": false,
       "blockedPermissions": [
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.ACCESS_BACKGROUND_LOCATION"
       ],
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0B0630"
+        "backgroundColor": "#0B1220"
       }
     },
     "web": {
@@ -59,7 +57,19 @@
           "isAndroidForegroundServiceEnabled": false
         }
       ],
-      "./plugins/withLoopbackCleartext"
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "MotionMeet only reads your photo library when you pick media to share.",
+          "savePhotosPermission": "MotionMeet saves a workout share card to your photos when you tap Download.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
+      "./plugins/withLoopbackCleartext",
+      "./plugins/withDefaultPermissionStrings",
+      "./plugins/withLegacyStoragePermissions",
+      "./plugins/withShortNativeBuildPath",
+      "./plugins/withMonorepoBundleRoot"
     ]
   }
 }

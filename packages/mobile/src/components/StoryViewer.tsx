@@ -2,9 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 // React Native's Image is used on purpose: expo-image's native view fails to
 // instantiate on some Android devices and would leave stories blank.
 import {
+  Animated,
+  Easing,
   Image,
   Keyboard,
-  KeyboardAvoidingView,
   Modal,
   PanResponder,
   Platform,
@@ -13,6 +14,7 @@ import {
   StyleSheet,
   TextInput,
   View,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { ActivityIndicator, Text } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -25,6 +27,7 @@ import { deleteStory, getStoryViewers, markStoryViewed, sendMessage, setStoryLik
 import { logHandledError, showError, showSuccess } from '../utils/feedback';
 import { useAppSelector } from '../store/hooks';
 import { useStoryFrame } from '../hooks/useStoryFrame';
+import { useKeyboardInset } from '../hooks/useKeyboardInset';
 import StoryOverlayAnchor from './story/StoryOverlayAnchor';
 import { MESSAGE_ICON } from '../config/icons';
 import type { PublicUser, Story, StoryViewer as StoryViewerEntry } from '@motionmeet/shared';
@@ -32,19 +35,10 @@ import type { NavigationLike } from '../navigation/types';
 
 /** How long a photo stays on screen before the viewer advances. */
 const STORY_DURATION = 5000;
-const PROGRESS_TICK = 50;
 
-/**
- * The keyboard events are watched only to know *whether* one is up.
- *
- * How far to lift the composer is left to KeyboardAvoidingView, which measures
- * its own frame against the keyboard's `screenY`. The reported `height` is not
- * reliable: on a phone tested here it came back 48pt short of the real
- * keyboard - the suggestion strip was not counted - and the composer sat behind
- * it, which is the exact bug this was meant to fix.
- */
-const KEYBOARD_SHOW_EVENT = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-const KEYBOARD_HIDE_EVENT = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+/** Gap between two progress segments, and the height of the bar itself. */
+const PROGRESS_GAP = 4;
+const PROGRESS_HEIGHT = 2.5;
 
 /**
  * How far the reply row is held off the bottom edge when the keyboard is down.
@@ -54,23 +48,31 @@ const KEYBOARD_HIDE_EVENT = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboa
  */
 const COMPOSER_BOTTOM_GUTTER = 28;
 
-/**
- * Below this, a reported keyboard is not one that covers anything.
- *
- * A floating or split IME still fires `keyboardDidShow`, with a height of a few
- * points. Treating that as "the keyboard is up" dropped the composer's gutter,
- * which is exactly where Android's gesture strip then ate the taps.
- */
-const KEYBOARD_COVERS_SCREEN_ABOVE = 80;
-
 interface StoryVideoProps {
   source: string;
   paused: boolean;
   onEnded: () => void;
+  /** Reports the clip's length once it is known, in milliseconds. */
+  onDuration: (durationMs: number) => void;
+}
+
+/** One person's stories, in the order they should play. */
+export interface StoryGroup {
+  stories: Story[];
 }
 
 interface StoryViewerProps {
   visible: boolean;
+  /**
+   * Every group the viewer may walk through, in rail order.
+   *
+   * Given these, reaching the end of one person's stories moves on to the next
+   * person rather than closing — which is what everyone expects, and what the
+   * viewer used to get wrong. `stories` is the single-group shorthand, still
+   * used where there is only ever one thing to show.
+   */
+  groups?: StoryGroup[];
+  startGroup?: number;
   stories?: Story[];
   startIndex?: number;
   onClose: () => void;
@@ -79,7 +81,7 @@ interface StoryViewerProps {
   onDeleted?: (storyId: string) => void;
 }
 
-const StoryVideo = ({ source, paused, onEnded }: StoryVideoProps) => {
+const StoryVideo = ({ source, paused, onEnded, onDuration }: StoryVideoProps) => {
   const player = useVideoPlayer(source, (instance) => {
     instance.loop = false;
     instance.play();
@@ -90,6 +92,15 @@ const StoryVideo = ({ source, paused, onEnded }: StoryVideoProps) => {
     return () => subscription.remove();
   }, [onEnded, player]);
 
+  // The progress bar has to know how long the clip runs before it can move at
+  // the clip's own speed rather than a photo's five seconds.
+  useEffect(() => {
+    const subscription = player.addListener('statusChange', ({ status }) => {
+      if (status === 'readyToPlay' && player.duration > 0) onDuration(player.duration * 1000);
+    });
+    return () => subscription.remove();
+  }, [onDuration, player]);
+
   useEffect(() => {
     if (paused) player.pause();
     else player.play();
@@ -99,9 +110,9 @@ const StoryVideo = ({ source, paused, onEnded }: StoryVideoProps) => {
     <VideoView
       player={player}
       style={StyleSheet.absoluteFill}
-      // Cover, not contain: a story fills the screen edge to edge on every
-      // aspect ratio rather than sitting inside letterbox bars.
-      contentFit="cover"
+      // Contain, for the same reason the photo path uses it: a story is shown
+      // whole, never cropped to the shape of whoever is watching it.
+      contentFit="contain"
       nativeControls={false}
       surfaceType="textureView"
       accessibilityLabel="Story video"
@@ -118,7 +129,9 @@ const StoryVideo = ({ source, paused, onEnded }: StoryVideoProps) => {
  */
 const StoryViewer = ({
   visible,
-  stories = [],
+  groups,
+  startGroup = 0,
+  stories,
   startIndex = 0,
   onClose,
   navigation,
@@ -127,19 +140,29 @@ const StoryViewer = ({
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { frameWidth, frameHeight, onFrameLayout } = useStoryFrame();
+  const keyboard = useKeyboardInset();
   const { getToken } = useAuthContext();
   const currentUser = useAppSelector((state) => state.user.value);
 
+  /* A single list and a set of groups are the same thing to everything below. */
+  const storyGroups = useMemo<StoryGroup[]>(
+    () => (groups?.length ? groups : [{ stories: stories ?? [] }]),
+    [groups, stories],
+  );
+
+  const [groupIndex, setGroupIndex] = useState(startGroup);
   const [currentIndex, setCurrentIndex] = useState(startIndex);
-  const [progress, setProgress] = useState(0);
   const [heldDown, setHeldDown] = useState(false);
+  /** Measured so the bar can be moved by a transform instead of a width. */
+  const [progressRowWidth, setProgressRowWidth] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
   const [viewersOpen, setViewersOpen] = useState(false);
   const [viewers, setViewers] = useState<StoryViewerEntry[]>([]);
   const [viewersLoading, setViewersLoading] = useState(false);
   const [reply, setReply] = useState('');
   const [replyFocused, setReplyFocused] = useState(false);
   const [sendingReply, setSendingReply] = useState(false);
-  const [keyboardUp, setKeyboardUp] = useState(false);
+
   /**
    * Reactions this session has changed, keyed by story id. The server answer is
    * what seeded each story, so this only ever holds an override for a story the
@@ -148,12 +171,36 @@ const StoryViewer = ({
   const [likeOverrides, setLikeOverrides] = useState<Record<string, boolean>>({});
   const [likeBusy, setLikeBusy] = useState(false);
 
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  /**
+   * How far the current segment has filled, 0 to 1.
+   *
+   * It is an animated value driven on the UI thread rather than a piece of
+   * React state ticked every 50ms. The old timer re-rendered the whole viewer
+   * twenty times a second, and the bar visibly stuttered and skipped whenever a
+   * frame was busy — the animation now runs natively and carries on smoothly
+   * even while JavaScript is doing something else.
+   */
+  const progress = useRef(new Animated.Value(0)).current;
+  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
+  /**
+   * How much of the segment on screen has already played.
+   *
+   * Kept as milliseconds against a segment key rather than read back off the
+   * animation: a natively driven value only reports its position asynchronously,
+   * so resuming from a stale reading made the bar jump.
+   */
+  const runRef = useRef({ key: '', elapsed: 0, startedAt: 0 });
   const currentIndexRef = useRef(startIndex);
+  const groupIndexRef = useRef(startGroup);
+  /* Read inside the navigation callbacks, which must not be rebuilt on every
+     story change or the running progress animation would restart with them. */
+  const groupsRef = useRef(storyGroups);
+  groupsRef.current = storyGroups;
   const closingRef = useRef(false);
   const recordedViewsRef = useRef<Set<string>>(new Set());
 
-  const currentStory = stories[currentIndex];
+  const activeStories = storyGroups[groupIndex]?.stories ?? [];
+  const currentStory = activeStories[currentIndex];
   const storyUser: PublicUser | null =
     currentStory && typeof currentStory.user === 'object' ? currentStory.user : null;
   const storyOwnerId = storyUser?._id ?? (typeof currentStory?.user === 'string' ? currentStory.user : '');
@@ -164,9 +211,16 @@ const StoryViewer = ({
   const paused = viewersOpen || replyFocused || heldDown || sendingReply;
 
   const clearTimer = useCallback(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = null;
+    animationRef.current?.stop();
+    animationRef.current = null;
   }, []);
+
+  /** Rewinds the bar for a segment that is about to start. */
+  const resetProgress = useCallback(() => {
+    clearTimer();
+    runRef.current = { key: '', elapsed: 0, startedAt: 0 };
+    progress.setValue(0);
+  }, [clearTimer, progress]);
 
   const closeViewer = useCallback(() => {
     if (closingRef.current) return;
@@ -179,30 +233,65 @@ const StoryViewer = ({
     onClose?.();
   }, [clearTimer, onClose]);
 
+  /** Moves to a story, crossing into the next or previous person if needed. */
+  const goTo = useCallback(
+    (nextGroup: number, nextStory: number) => {
+      groupIndexRef.current = nextGroup;
+      currentIndexRef.current = nextStory;
+      setGroupIndex(nextGroup);
+      setCurrentIndex(nextStory);
+      setVideoDuration(0);
+      resetProgress();
+    },
+    [resetProgress],
+  );
+
+  /**
+   * The end of one person's stories is the start of the next person's.
+   *
+   * Closing there instead — which is what this used to do — meant watching one
+   * friend's day and then being dropped back on the feed to tap the next
+   * bubble by hand. The viewer now runs to the end of the rail, and only the
+   * viewer decides when to leave.
+   */
   const goNext = useCallback(() => {
     if (!visible || closingRef.current) return;
     clearTimer();
-    const nextIndex = currentIndexRef.current + 1;
-    if (nextIndex < stories.length) {
-      currentIndexRef.current = nextIndex;
-      setCurrentIndex(nextIndex);
-      setProgress(0);
-    } else {
-      closeViewer();
+    const all = groupsRef.current;
+    const nextStory = currentIndexRef.current + 1;
+    if (nextStory < (all[groupIndexRef.current]?.stories.length ?? 0)) {
+      goTo(groupIndexRef.current, nextStory);
+      return;
     }
-  }, [clearTimer, closeViewer, stories.length, visible]);
+    // Skip anyone whose group came back empty rather than showing a blank frame.
+    for (let group = groupIndexRef.current + 1; group < all.length; group += 1) {
+      if (all[group]?.stories.length) {
+        goTo(group, 0);
+        return;
+      }
+    }
+    closeViewer();
+  }, [clearTimer, closeViewer, goTo, visible]);
 
   const goPrev = useCallback(() => {
     if (!visible || closingRef.current) return;
     clearTimer();
-    const previousIndex = currentIndexRef.current - 1;
-    if (previousIndex >= 0) {
-      currentIndexRef.current = previousIndex;
-      setCurrentIndex(previousIndex);
+    const all = groupsRef.current;
+    const previousStory = currentIndexRef.current - 1;
+    if (previousStory >= 0) {
+      goTo(groupIndexRef.current, previousStory);
+      return;
     }
-    // Tapping back on the first story restarts it rather than closing.
-    setProgress(0);
-  }, [clearTimer, visible]);
+    for (let group = groupIndexRef.current - 1; group >= 0; group -= 1) {
+      const length = all[group]?.stories.length ?? 0;
+      if (length) {
+        goTo(group, length - 1);
+        return;
+      }
+    }
+    // Tapping back on the very first story restarts it rather than closing.
+    resetProgress();
+  }, [clearTimer, goTo, resetProgress, visible]);
 
   // Reset when the viewer opens on a new group.
   useEffect(() => {
@@ -210,37 +299,20 @@ const StoryViewer = ({
       clearTimer();
       return;
     }
-    const initialIndex = Math.min(Math.max(startIndex, 0), Math.max(stories.length - 1, 0));
+    const initialGroup = Math.min(Math.max(startGroup, 0), Math.max(storyGroups.length - 1, 0));
+    const groupLength = storyGroups[initialGroup]?.stories.length ?? 0;
+    const initialIndex = Math.min(Math.max(startIndex, 0), Math.max(groupLength - 1, 0));
     closingRef.current = false;
+    groupIndexRef.current = initialGroup;
+    setGroupIndex(initialGroup);
     currentIndexRef.current = initialIndex;
     setCurrentIndex(initialIndex);
-    setProgress(0);
+    setVideoDuration(0);
+    resetProgress();
     setViewersOpen(false);
     setReply('');
-  }, [clearTimer, startIndex, stories.length, visible]);
-
-  /**
-   * The composer is lifted by hand rather than by KeyboardAvoidingView.
-   *
-   * This viewer lives in a translucent full-screen Modal, and neither platform
-   * resizes that window when the keyboard opens: the reply bar stayed pinned to
-   * the bottom of the screen, behind the keyboard, so nothing that was typed
-   * was ever visible.
-   */
-  useEffect(() => {
-    if (!visible) {
-      setKeyboardUp(false);
-      return undefined;
-    }
-    const onShow = Keyboard.addListener(KEYBOARD_SHOW_EVENT, (event) => {
-      setKeyboardUp((event.endCoordinates?.height ?? 0) > KEYBOARD_COVERS_SCREEN_ABOVE);
-    });
-    const onHide = Keyboard.addListener(KEYBOARD_HIDE_EVENT, () => setKeyboardUp(false));
-    return () => {
-      onShow.remove();
-      onHide.remove();
-    };
-  }, [visible]);
+    // Opening on a different group is a different viewing; the caller decides.
+  }, [clearTimer, resetProgress, startGroup, startIndex, storyGroups, visible]);
 
   // Opening someone else's story counts as a view exactly once per session.
   useEffect(() => {
@@ -257,28 +329,67 @@ const StoryViewer = ({
     })();
   }, [currentStory?._id, getToken, isOwnStory, visible]);
 
-  // Photo timer. Videos advance on their own `playToEnd`.
+  /**
+   * Runs the bar for the segment on screen.
+   *
+   * A photo gets a fixed five seconds; a video is timed against its own length,
+   * once the player has reported one. Pausing stops the animation where it is
+   * and banks the time already played, so holding a finger down and letting go
+   * resumes from the same place instead of restarting or jumping to the end.
+   * Videos still advance on their own `playToEnd`, which is the authority — the
+   * bar only has to agree with it.
+   */
   useEffect(() => {
     clearTimer();
-    if (!visible || paused || !currentStory || currentStory.media_type === 'video') return;
+    if (!visible || !currentStory) return undefined;
 
-    const step = 100 / (STORY_DURATION / PROGRESS_TICK);
-    intervalRef.current = setInterval(() => {
-      setProgress((previous) => {
-        const next = previous + step;
-        if (next >= 100) {
-          clearTimer();
-          // Advancing inside the tick would set state during another
-          // component's render, so it is deferred to the next frame.
-          setTimeout(goNext, 0);
-          return 100;
-        }
-        return next;
-      });
-    }, PROGRESS_TICK);
+    const isVideo = currentStory.media_type === 'video';
+    const total = isVideo ? videoDuration : STORY_DURATION;
+    // A video whose length is not known yet has nothing to run against.
+    if (total <= 0) return undefined;
 
-    return clearTimer;
-  }, [clearTimer, currentIndex, currentStory, goNext, paused, visible]);
+    const key = `${currentIndex}:${currentStory._id ?? ''}`;
+    if (runRef.current.key !== key) runRef.current = { key, elapsed: 0, startedAt: 0 };
+
+    if (paused) return undefined;
+
+    const elapsed = Math.min(runRef.current.elapsed, total);
+    const remaining = total - elapsed;
+    if (remaining <= 0) return undefined;
+
+    progress.setValue(elapsed / total);
+    runRef.current.startedAt = Date.now();
+
+    const animation = Animated.timing(progress, {
+      toValue: 1,
+      duration: remaining,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    });
+    animationRef.current = animation;
+    animation.start(({ finished }) => {
+      if (!finished) return;
+      // Videos are advanced by the player so the bar never overtakes the clip.
+      if (!isVideo) goNext();
+    });
+
+    return () => {
+      animation.stop();
+      if (animationRef.current === animation) animationRef.current = null;
+      if (runRef.current.key === key && runRef.current.startedAt) {
+        runRef.current.elapsed = Math.min(
+          total,
+          runRef.current.elapsed + (Date.now() - runRef.current.startedAt),
+        );
+        runRef.current.startedAt = 0;
+      }
+    };
+  }, [clearTimer, currentIndex, currentStory, goNext, paused, progress, videoDuration, visible]);
+
+  const onProgressRowLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width } = event.nativeEvent.layout;
+    setProgressRowWidth((current) => (Math.abs(current - width) < 1 ? current : width));
+  }, []);
 
   const openViewers = useCallback(async () => {
     const storyId = currentStory?._id;
@@ -298,15 +409,29 @@ const StoryViewer = ({
     }
   }, [currentStory?._id, getToken, isOwnStory]);
 
-  // The responder is built once, so it reads the latest handler from a ref.
+  // The responder is built once, so it reads the latest handlers from refs.
   const openViewersRef = useRef(openViewers);
   openViewersRef.current = openViewers;
+  const closeViewerRef = useRef(closeViewer);
+  closeViewerRef.current = closeViewer;
+
+  /**
+   * Vertical drags, in both directions.
+   *
+   * Up opens the audience list. Down leaves — which is the gesture everyone
+   * reaches for first, and until now did nothing at all, so the only way out
+   * was to find the small × in the corner.
+   */
   const swipeResponder = useMemo(
     () =>
       PanResponder.create({
         onMoveShouldSetPanResponderCapture: (_event, gesture) =>
-          gesture.dy < -12 && Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.2,
+          Math.abs(gesture.dy) > 12 && Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.2,
         onPanResponderRelease: (_event, gesture) => {
+          if (gesture.dy > 60 || gesture.vy > 0.6) {
+            closeViewerRef.current();
+            return;
+          }
           if (gesture.dy < -28 || gesture.vy < -0.5) void openViewersRef.current();
         },
         onPanResponderTerminationRequest: () => false,
@@ -412,6 +537,11 @@ const StoryViewer = ({
   // Comfortably over half the story, so the audience list is a list rather
   // than a strip peeking above the bottom edge.
   const viewersSheetHeight = Math.round(frameHeight * 0.72);
+  const segmentCount = Math.max(activeStories.length, 1);
+  const trackWidth =
+    progressRowWidth > 0
+      ? Math.max((progressRowWidth - PROGRESS_GAP * (segmentCount - 1)) / segmentCount, 0)
+      : 0;
 
   return (
     <Modal
@@ -430,9 +560,16 @@ const StoryViewer = ({
             <Image
               source={{ uri: mediaUrl }}
               style={StyleSheet.absoluteFill}
-              // Cover keeps the story full-bleed: no bars on the sides of a
-              // wide phone, none above and below a tall one.
-              resizeMode="cover"
+              /*
+               * Contain, not cover: nothing in a story may be cropped away.
+               *
+               * A phone is taller than the 9:16 a story is authored at — a 20:9
+               * screen is 22% narrower in proportion — so filling the frame cut
+               * a tenth off each side. On a photo that is a nuisance; on a
+               * share card it sliced the title in half, because the words start
+               * at the card's own margin and that margin is exactly what went.
+               */
+              resizeMode="contain"
               accessibilityLabel={displayName}
             />
           )}
@@ -442,6 +579,7 @@ const StoryViewer = ({
               source={mediaUrl}
               paused={paused}
               onEnded={goNext}
+              onDuration={setVideoDuration}
             />
           )}
           {/* Text-only stories predate the overlay composer and still render. */}
@@ -469,23 +607,39 @@ const StoryViewer = ({
           ))}
         </View>
 
-        {/* Progress bars — one per story in the group */}
-        <View style={[styles.progressRow, { top: Math.max(insets.top + 8, 16) }]} pointerEvents="none">
-          {stories.map((story, index) => (
+        {/* Progress bars — one per story in the group.
+
+            The filled part is slid into view by a transform rather than grown
+            by a width, because only a transform can be animated on the UI
+            thread: the bar keeps moving smoothly even when JavaScript is busy
+            loading the next picture. That needs a real pixel width, which is
+            what the row is measured for. */}
+        <View
+          style={[styles.progressRow, { top: Math.max(insets.top + 8, 16) }]}
+          pointerEvents="none"
+          onLayout={onProgressRowLayout}
+        >
+          {activeStories.map((story, index) => (
             <View key={story._id || index} style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  {
-                    width:
-                      index < currentIndex
-                        ? '100%'
-                        : index === currentIndex
-                          ? `${Math.min(progress, 100)}%`
-                          : '0%',
-                  },
-                ]}
-              />
+              {index < currentIndex && <View style={styles.progressFilled} />}
+              {index === currentIndex && trackWidth > 0 && (
+                <Animated.View
+                  style={[
+                    styles.progressFilled,
+                    {
+                      transform: [
+                        {
+                          translateX: progress.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [-trackWidth, 0],
+                            extrapolate: 'clamp',
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                />
+              )}
             </View>
           ))}
         </View>
@@ -604,25 +758,26 @@ const StoryViewer = ({
         )}
 
         {!viewersOpen && !isOwnStory && (
-          <KeyboardAvoidingView
-            style={styles.replyDock}
-            behavior="padding"
-            pointerEvents="box-none"
-          >
+          <View style={styles.replyDock} pointerEvents="box-none">
             <View
               style={[
                 styles.replyBar,
                 {
                   /*
-                   * The floor is not decorative. This viewer lives in a
-                   * full-screen Modal, and that window reports no safe-area inset
-                   * of its own - so a 12pt gutter put the heart and the send
-                   * button inside Android's bottom gesture strip, where the
-                   * system takes the touch and the buttons never fire at all.
-                   * With the keyboard up it covers that strip itself, so the
-                   * smaller gutter is safe there.
+                   * The reply row is lifted by the measured keyboard rather than
+                   * by KeyboardAvoidingView. Neither platform resizes the window
+                   * a full-screen Modal is drawn in, so the view had nothing to
+                   * avoid against and the row sat wherever the device happened to
+                   * put it — correct on some phones, far too low on others.
+                   *
+                   * With the keyboard down the floor is not decorative either:
+                   * this window reports no safe-area inset of its own, and a
+                   * 12pt gutter put the heart and the send button inside
+                   * Android's gesture strip, where the system takes the touch.
                    */
-                  paddingBottom: keyboardUp ? 10 : Math.max(insets.bottom, COMPOSER_BOTTOM_GUTTER),
+                  paddingBottom: keyboard.visible
+                    ? keyboard.height + 10
+                    : Math.max(insets.bottom, COMPOSER_BOTTOM_GUTTER),
                 },
               ]}
               pointerEvents="box-none"
@@ -688,7 +843,7 @@ const StoryViewer = ({
                 </>
               )}
             </View>
-          </KeyboardAvoidingView>
+          </View>
         )}
 
         {/* Audience sheet — deliberately over two thirds of the screen so the
@@ -808,18 +963,18 @@ const styles = StyleSheet.create({
     left: 8,
     right: 8,
     flexDirection: 'row',
-    gap: 4,
+    gap: PROGRESS_GAP,
     zIndex: 10,
   },
   progressTrack: {
     flex: 1,
-    height: 2.5,
+    height: PROGRESS_HEIGHT,
     borderRadius: 2,
     overflow: 'hidden',
     backgroundColor: 'rgba(255,255,255,0.35)',
   },
-  progressFill: {
-    height: '100%',
+  progressFilled: {
+    ...StyleSheet.absoluteFillObject,
     borderRadius: 2,
     backgroundColor: '#FFFFFF',
   },

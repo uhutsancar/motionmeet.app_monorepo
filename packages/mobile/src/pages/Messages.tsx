@@ -442,7 +442,7 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 52,
+    height: 48,
     paddingHorizontal: 6,
   },
   // Both sides reserve the same width, so the title is centred by geometry

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 // expo-image: these rows scroll past many remote avatars, and it recycles
 // views and keeps a memory + disk cache where React Native's Image does not.
 import { Image } from 'expo-image';
@@ -54,7 +54,7 @@ const UserCard = ({ user, onPress, width = 220, badge, caption }: UserCardProps)
         width,
         padding: 12,
         borderRadius: 12,
-        borderWidth: 1,
+        borderWidth: StyleSheet.hairlineWidth,
         borderColor: theme.border,
         backgroundColor: theme.surface,
       }}
@@ -151,7 +151,7 @@ const UserCard = ({ user, onPress, width = 220, badge, caption }: UserCardProps)
             alignItems: 'center',
             justifyContent: 'center',
             borderRadius: 9,
-            borderWidth: 1,
+            borderWidth: StyleSheet.hairlineWidth,
             borderColor: theme.border,
           }}
         >

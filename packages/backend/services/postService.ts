@@ -187,6 +187,28 @@ const parseRankCursor = (raw: string | null): { rank: number; id: string } | nul
 };
 
 export const getPostById = (postId: string): Promise<PostAccessRecord | null> => findPostAccessRecord(postId, true);
+
+/**
+ * One post, in the same shape the feed serves, for a viewer allowed to see it.
+ *
+ * Everything that links to a single post goes through here: the activity row
+ * that says someone liked your photo, a share link opened on the web, a deep
+ * link back into the app. The access check is the same one the feed and the
+ * comment endpoints use, so knowing a post's id is never enough on its own —
+ * a followers-only or private post stays unreadable to anyone the author has
+ * not let in, however they arrived at the URL.
+ */
+export const getVisiblePostForViewer = async (postId: string, viewerId: string): Promise<Post | null> => {
+  const access = await findPostAccessRecord(postId);
+  if (!access) return null;
+  if (!(await evaluatePostAccess({ user: access.user, visibility: access.visibility }, viewerId))) {
+    return null;
+  }
+  const post = await findHydratedPost(postId);
+  if (!post) return null;
+  const [hydrated] = await hydratePostInteractions([post], viewerId);
+  return hydrated ?? post;
+};
 export const getPostForLike = (postId: string): Promise<PostAccessRecord | null> => findPostAccessRecord(postId);
 export const getPostForComment = getPostForLike;
 export const toggleLikePost = togglePostLike;

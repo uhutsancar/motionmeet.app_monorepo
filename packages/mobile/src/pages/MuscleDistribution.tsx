@@ -111,7 +111,7 @@ const MuscleDistribution = ({ navigation }: NavigationOnlyProps) => {
             visible={showDropdown}
             onDismiss={() => setShowDropdown(false)}
             anchorPosition="bottom"
-            contentStyle={{ backgroundColor: theme.surface, borderRadius: 12, borderWidth: 1, borderColor: theme.border }}
+            contentStyle={{ backgroundColor: theme.surface, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border }}
             anchor={
               <TouchableOpacity
                 style={styles.dropdownBtn}
@@ -278,7 +278,7 @@ const getStyles = (theme: MotionTheme, chartAccent: string) => StyleSheet.create
     marginTop: 24,
     paddingTop: 18,
     borderRadius: 18,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.border,
     backgroundColor: theme.surface,
     overflow: 'hidden',
@@ -299,7 +299,7 @@ const getStyles = (theme: MotionTheme, chartAccent: string) => StyleSheet.create
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 18, rowGap: 12 },
   statSquare: {
     backgroundColor: theme.surface, borderRadius: 16,
-    paddingHorizontal: 16, paddingVertical: 20, borderWidth: 1, borderColor: theme.border
+    paddingHorizontal: 16, paddingVertical: 20, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border
   },
   statLabel: { fontSize: 15, color: theme.textMuted, fontWeight: '500', marginBottom: 12 },
   statLargeVal: { fontSize: 22, fontWeight: 'bold', color: theme.text, marginBottom: 4 },

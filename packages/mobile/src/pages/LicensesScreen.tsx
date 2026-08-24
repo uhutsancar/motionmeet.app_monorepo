@@ -1,7 +1,8 @@
 import React from 'react';
-import { Linking, ScrollView, StatusBar, View } from 'react-native';
+import { StyleSheet, Linking, ScrollView, StatusBar, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Appbar, Surface, Text, TouchableRipple } from 'react-native-paper';
+import { Surface, Text, TouchableRipple } from 'react-native-paper';
+import ScreenHeader from '../components/ScreenHeader';
 import { useTranslation } from 'react-i18next';
 import { LOCATION_DATASET_ATTRIBUTION } from '@motionmeet/shared';
 import { useTheme } from '../context/ThemeContext';
@@ -49,10 +50,7 @@ const LicensesScreen = ({ navigation }: NavigationOnlyProps) => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <Appbar.Header statusBarHeight={0} style={{ backgroundColor: theme.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
-        <Appbar.Content title={t('licenses.title', 'Data & licences')} titleStyle={{ color: theme.text, fontWeight: '800', fontSize: 20 }} />
-      </Appbar.Header>
+      <ScreenHeader title={t('licenses.title', 'Data & licences')} onBack={() => navigation.goBack()} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -66,7 +64,7 @@ const LicensesScreen = ({ navigation }: NavigationOnlyProps) => {
           <Surface
             key={notice.title}
             elevation={0}
-            style={{ padding: 15, borderRadius: 12, gap: 9, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface }}
+            style={{ padding: 15, borderRadius: 12, gap: 9, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border, backgroundColor: theme.surface }}
           >
             <Text style={{ color: theme.text, fontSize: 14.5, fontWeight: '800' }}>{notice.title}</Text>
             <Text style={{ color: theme.textSecondary, fontSize: 12.5, lineHeight: 18 }}>{notice.body}</Text>

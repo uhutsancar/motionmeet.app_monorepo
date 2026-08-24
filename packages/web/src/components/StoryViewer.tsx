@@ -35,7 +35,6 @@ interface StoryViewerProps {
 
 /** How long a photo stays on screen before the viewer advances. */
 const STORY_DURATION = 5000;
-const PROGRESS_TICK = 50;
 
 /**
  * The story viewer.
@@ -51,7 +50,6 @@ const StoryViewer = ({ stories, open, onClose, onDeleted }: StoryViewerProps) =>
   const currentUserId = useAppSelector((state) => state.user.value?._id);
 
   const [index, setIndex] = useState(0);
-  const [progress, setProgress] = useState(0);
   const [viewersOpen, setViewersOpen] = useState(false);
   const [viewers, setViewers] = useState<StoryViewerEntry[]>([]);
   const [viewersLoading, setViewersLoading] = useState(false);
@@ -82,7 +80,6 @@ const StoryViewer = ({ stories, open, onClose, onDeleted }: StoryViewerProps) =>
   useEffect(() => {
     if (open) {
       setIndex(0);
-      setProgress(0);
       setViewersOpen(false);
       setReply("");
     }
@@ -100,17 +97,13 @@ const StoryViewer = ({ stories, open, onClose, onDeleted }: StoryViewerProps) =>
 
   const goNext = useCallback(() => {
     setIndex((current) => {
-      if (current + 1 < stories.length) {
-        setProgress(0);
-        return current + 1;
-      }
+      if (current + 1 < stories.length) return current + 1;
       onClose();
       return current;
     });
   }, [onClose, stories.length]);
 
   const goPrev = useCallback(() => {
-    setProgress(0);
     setIndex((current) => Math.max(0, current - 1));
   }, []);
 
@@ -130,23 +123,16 @@ const StoryViewer = ({ stories, open, onClose, onDeleted }: StoryViewerProps) =>
     })();
   }, [getToken, isOwnStory, open, story?._id]);
 
-  // Photo timer. Videos advance on their own `ended` event.
-  useEffect(() => {
-    if (!open || paused || !story || story.media_type === "video") return undefined;
-
-    setProgress(0);
-    let elapsed = 0;
-    const interval = setInterval(() => {
-      elapsed += PROGRESS_TICK;
-      setProgress((elapsed / STORY_DURATION) * 100);
-      if (elapsed >= STORY_DURATION) {
-        clearInterval(interval);
-        goNext();
-      }
-    }, PROGRESS_TICK);
-
-    return () => clearInterval(interval);
-  }, [goNext, index, open, paused, story]);
+  /*
+   * The bar is run by CSS rather than by a timer.
+   *
+   * Ticking a piece of state twenty times a second re-rendered the whole viewer
+   * on every tick, and the bar stuttered whenever a frame was busy decoding the
+   * next photo. A keyframe animation runs on the compositor, costs no renders
+   * at all, and pauses exactly where it is by flipping `animation-play-state` —
+   * which is also what makes hold-to-pause resume from the same place instead
+   * of restarting.
+   */
 
   const openViewers = async () => {
     const storyId = story?._id;
@@ -300,11 +286,25 @@ const StoryViewer = ({ stories, open, onClose, onDeleted }: StoryViewerProps) =>
                 sx={{ flex: 1, height: 2.5, borderRadius: 1, overflow: "hidden", bgcolor: "rgba(255,255,255,.35)" }}
               >
                 <Box
+                  // Keyed on the story so a new segment restarts the animation
+                  // rather than continuing the previous one.
+                  key={`${entry._id || position}-fill`}
+                  onAnimationEnd={position === index ? goNext : undefined}
                   sx={{
                     height: "100%",
                     bgcolor: "common.white",
-                    width:
-                      position < index ? "100%" : position === index ? `${Math.min(progress, 100)}%` : "0%",
+                    transformOrigin: "left center",
+                    transform: position < index ? "scaleX(1)" : "scaleX(0)",
+                    ...(position === index && story?.media_type !== "video"
+                      ? {
+                          animation: `mmStoryProgress ${STORY_DURATION}ms linear forwards`,
+                          animationPlayState: paused ? "paused" : "running",
+                          "@keyframes mmStoryProgress": {
+                            from: { transform: "scaleX(0)" },
+                            to: { transform: "scaleX(1)" },
+                          },
+                        }
+                      : {}),
                   }}
                 />
               </Box>

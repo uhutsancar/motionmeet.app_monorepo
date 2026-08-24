@@ -10,7 +10,9 @@ import { useTranslation } from 'react-i18next';
 import { useAuthContext } from "../context/AuthProvider";
 import { setAuthToken } from '../api/client';
 import { createExercise } from '../api/endpoints';
-import { Appbar, Text, TextInput, Button, TouchableRipple, Surface } from 'react-native-paper';
+import { Text, TextInput, Button, TouchableRipple, Surface } from 'react-native-paper';
+import EquipmentAvatar from './EquipmentAvatar';
+import ScreenHeader from './ScreenHeader';
 import { useMuscleGroups } from '../hooks/useMuscleGroups';
 import { useEquipment } from '../hooks/useEquipment';
 import { BottomSheetModal } from './ResponsiveModal';
@@ -142,7 +144,7 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }: CustomExer
       justifyContent: 'space-between',
       alignItems: 'center',
       backgroundColor: theme.surface,
-      borderWidth: 1,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.border,
       borderRadius: 8,
       padding: 14,
@@ -152,7 +154,7 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }: CustomExer
     },
     optionsList: {
       backgroundColor: theme.surface,
-      borderWidth: 1,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.border,
       borderRadius: 8,
       marginTop: 4,
@@ -178,21 +180,24 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }: CustomExer
     >
         <Surface style={styles.modalContent} elevation={0}>
           
-          <Appbar.Header style={styles.header} statusBarHeight={0}>
-            <Appbar.Action icon="close" onPress={handleClose} disabled={saving} color={theme.text} />
-            <Appbar.Content title={t('exercises.new_exercise', 'Yeni Egzersiz')} titleStyle={styles.headerTitle} />
-            <Button 
-              mode="contained" 
-              onPress={handleSubmit} 
-              loading={saving} 
-              disabled={saving}
-              buttonColor={theme.primary}
-              style={{ borderRadius: 20, marginRight: 8 }}
-              labelStyle={{ fontSize: 14, fontWeight: 'bold' }}
-            >
-              {!saving && t('exercises.create', 'Oluştur')}
-            </Button>
-          </Appbar.Header>
+          <ScreenHeader
+            title={t('exercises.new_exercise', 'Yeni Egzersiz')}
+            backIcon="close"
+            onBack={saving ? undefined : handleClose}
+            trailing={
+              <Button
+                mode="contained"
+                onPress={handleSubmit}
+                loading={saving}
+                disabled={saving}
+                buttonColor={theme.primary}
+                style={{ borderRadius: 20 }}
+                labelStyle={{ fontSize: 14, fontWeight: 'bold' }}
+              >
+                {!saving && t('exercises.create', 'Oluştur')}
+              </Button>
+            }
+          />
 
           <KeyboardAwareScrollView
             avoidKeyboard
@@ -265,7 +270,8 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }: CustomExer
                 disabled={saving}
                 onPress={() => { setShowEquipment(!showEquipment); setShowMuscles(false); }}
               >
-                <Surface elevation={0} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', backgroundColor: 'transparent' }}>
+                <Surface elevation={0} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, width: '100%', backgroundColor: 'transparent' }}>
+                  {equipment ? <EquipmentAvatar code={equipment} size={30} selected /> : null}
                   <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, paddingRight: 8, color: equipment ? theme.text : theme.textMuted }}>
                     {equipment ? t(`equipment.${equipment}`, equipment) : t('exercises.select_equipment', 'Ekipman Seç')}
                   </Text>
@@ -281,7 +287,10 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }: CustomExer
                       style={[styles.optionItem, equipment === e && { backgroundColor: theme.primary + '20' }]} 
                       onPress={() => { setEquipment(e); setShowEquipment(false); }}
                     >
-                      <Surface elevation={0} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', backgroundColor: 'transparent' }}>
+                      <Surface elevation={0} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, width: '100%', backgroundColor: 'transparent' }}>
+                        {/* The name is still the label; the drawing beside it
+                            only makes the right row quicker to find. */}
+                        <EquipmentAvatar code={e} size={30} selected={equipment === e} />
                         <Text numberOfLines={2} style={{ flex: 1, minWidth: 0, paddingRight: 8, color: equipment === e ? theme.primary : theme.text, fontWeight: equipment === e ? 'bold' : 'normal' }}>
                           {t(`equipment.${e}`, equipmentListItems.find(eq => eq.code === e)?.name || e)}
                         </Text>

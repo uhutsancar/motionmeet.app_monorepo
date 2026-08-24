@@ -53,6 +53,7 @@ const Measurements = lazy(() => import("./pages/Measurements"));
 const Nearby = lazy(() => import("./pages/Nearby"));
 const LocationSettings = lazy(() => import("./pages/LocationSettings"));
 const Licenses = lazy(() => import("./pages/Licenses"));
+const PostPage = lazy(() => import("./pages/PostPage"));
 
 const PageLoader = () => (
   <Box sx={{ alignItems: "center", display: "flex", height: "100dvh", justifyContent: "center" }}>
@@ -157,6 +158,11 @@ const AppContent = () => {
           <Route path="/features" element={<Features />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/about" element={<About />} />
+          {/* A shared post link opens for anyone, signed in or not: the page
+              itself decides how much of the post the reader may see. It sits
+              outside the authenticated layout so a visitor is never bounced to
+              the login screen by a link a friend sent them. */}
+          <Route path="/post/:postId" element={<PostPage />} />
 
           <Route element={user ? <Layout unreadCount={unreadCount} /> : <Navigate to="/login" replace />}>
             <Route path="/feed" element={<Feed />} />

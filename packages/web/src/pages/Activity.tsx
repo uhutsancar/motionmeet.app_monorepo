@@ -38,6 +38,22 @@ const ICONS: Record<NotificationType, { Icon: LucideIcon; tone: string }> = {
  * The real activity list behind the bell. Notification *preferences* stay in
  * Settings; this page shows what actually happened.
  */
+/**
+ * Where a row leads.
+ *
+ * A notification that only ever opened the actor's profile is a dead end:
+ * "someone liked your photo" should open the photo. The post page handles a
+ * deleted or now-private target itself, so a stale row lands on a proper notice
+ * rather than a blank screen.
+ */
+const destinationFor = (notification: Notification): string | null => {
+  if ((notification.type === "post_like" || notification.type === "post_comment") && notification.postId) {
+    return `/post/${notification.postId}`;
+  }
+  const actorId = notification.actor?._id;
+  return actorId ? `/profile/${actorId}` : null;
+};
+
 const Activity = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -162,9 +178,17 @@ const Activity = () => {
                 </ButtonBase>
 
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body2" sx={{ lineHeight: 1.5 }}>
-                    {describe(item)}
-                  </Typography>
+                  <ButtonBase
+                    onClick={() => {
+                      const destination = destinationFor(item);
+                      if (destination) navigate(destination);
+                    }}
+                    sx={{ display: "block", textAlign: "left", width: "100%", borderRadius: 1 }}
+                  >
+                    <Typography variant="body2" sx={{ lineHeight: 1.5 }}>
+                      {describe(item)}
+                    </Typography>
+                  </ButtonBase>
                   <Typography variant="caption" color="text.secondary">
                     {dayjs(item.createdAt).fromNow()}
                   </Typography>

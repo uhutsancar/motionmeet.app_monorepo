@@ -18,6 +18,7 @@ import {
   type StoryOverlayAlignment,
   type StoryOverlayBackdrop,
 } from '@motionmeet/shared';
+import { useKeyboardInset } from '../../hooks/useKeyboardInset';
 import {
   STORY_FONTS,
   STORY_TEXT_COLORS,
@@ -32,6 +33,9 @@ interface StoryTextEditorProps {
   onCancel: () => void;
   onDone: (overlay: StoryOverlay) => void;
 }
+
+/** Which of the two option strips, if either, is currently open. */
+type OpenTray = 'none' | 'font' | 'color';
 
 const ALIGN_ICON: Record<StoryOverlayAlignment, React.ComponentProps<typeof Ionicons>['name']> = {
   left: 'menu-outline',
@@ -55,18 +59,25 @@ const NEXT_BACKDROP: Record<StoryOverlayBackdrop, StoryOverlayBackdrop> = {
  * The typing surface for one caption.
  *
  * It is deliberately the only place the keyboard is allowed to open: the
- * composer behind it never focuses an input, so a caption can be dragged around
- * without the keyboard jumping in. Tapping anywhere outside the text commits
- * what was typed and puts the keyboard away, which is the behaviour people
- * expect from a story editor.
+ * composer behind it never focuses an input, so a caption can be dragged
+ * around without the keyboard jumping in. Tapping anywhere outside the text
+ * commits what was typed and puts the keyboard away.
+ *
+ * The type and colour choices are folded away behind two small chips rather
+ * than laid out as two full rows of swatches. A row of five faces and a row of
+ * ten dots is a lot of furniture to look at while writing two words, and it ate
+ * the bottom third of the picture; one strip opens at a time, only when asked
+ * for, and closes again on the next choice.
  */
 const StoryTextEditor = ({ overlay, onCancel, onDone }: StoryTextEditorProps) => {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const keyboard = useKeyboardInset();
   const inputRef = useRef<TextInput>(null);
 
   const [draft, setDraft] = useState(overlay);
+  const [tray, setTray] = useState<OpenTray>('none');
   const font = storyFont(draft.font);
   const fontSize = storyBaseFontSize(width);
 
@@ -100,13 +111,23 @@ const StoryTextEditor = ({ overlay, onCancel, onDone }: StoryTextEditorProps) =>
         minWidth: width * 0.42,
       },
       draft.backdrop === 'plate'
-        ? { backgroundColor: draft.color, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }
+        ? { backgroundColor: draft.color, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 5 }
         : draft.backdrop === 'translucent'
-          ? { backgroundColor: 'rgba(0,0,0,0.42)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }
+          ? {
+              backgroundColor: 'rgba(0,0,0,0.42)',
+              borderRadius: 10,
+              paddingHorizontal: 12,
+              paddingVertical: 5,
+            }
           : null,
     ],
     [draft, font, fontSize, width],
   );
+
+  /* The caption sits above the keyboard rather than behind it. A modal window
+     is not resized by either platform when the IME opens, so the space it
+     takes has to be reserved here. */
+  const bottomInset = keyboard.visible ? keyboard.height : Math.max(insets.bottom, 10);
 
   return (
     <View style={styles.root}>
@@ -135,7 +156,9 @@ const StoryTextEditor = ({ overlay, onCancel, onDone }: StoryTextEditorProps) =>
         </Pressable>
 
         <Pressable
-          onPress={() => setDraft((current) => ({ ...current, backdrop: NEXT_BACKDROP[current.backdrop] }))}
+          onPress={() =>
+            setDraft((current) => ({ ...current, backdrop: NEXT_BACKDROP[current.backdrop] }))
+          }
           hitSlop={10}
           style={[styles.toolChip, draft.backdrop !== 'none' && styles.toolChipActive]}
           accessibilityRole="button"
@@ -155,7 +178,7 @@ const StoryTextEditor = ({ overlay, onCancel, onDone }: StoryTextEditorProps) =>
         </Pressable>
       </View>
 
-      <View style={styles.canvas} pointerEvents="box-none">
+      <View style={[styles.canvas, { paddingBottom: bottomInset + 70 }]} pointerEvents="box-none">
         <TextInput
           ref={inputRef}
           value={draft.text}
@@ -168,56 +191,99 @@ const StoryTextEditor = ({ overlay, onCancel, onDone }: StoryTextEditorProps) =>
           // Android needs this to keep the caret vertically centred on a
           // multiline field the way iOS does by default.
           textAlignVertical="center"
+          keyboardAppearance="dark"
           accessibilityLabel={t('story.add_text', 'Metin ekle')}
         />
       </View>
 
-      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 10) }]} pointerEvents="box-none">
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyboardShouldPersistTaps="always"
-          contentContainerStyle={styles.fontRow}
-        >
-          {STORY_FONTS.map((option) => {
-            const active = option.key === draft.font;
-            return (
-              <Pressable
-                key={option.key}
-                onPress={() => setDraft((current) => ({ ...current, font: option.key }))}
-                style={[styles.fontChip, active && styles.fontChipActive]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                accessibilityLabel={option.sample}
-              >
-                <Text
-                  numberOfLines={1}
-                  style={[option.style, { color: active ? '#101014' : '#FFFFFF', fontSize: 13 }]}
+      <View style={[styles.bottomBar, { paddingBottom: bottomInset }]} pointerEvents="box-none">
+        {tray === 'font' && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="always"
+            contentContainerStyle={styles.tray}
+          >
+            {STORY_FONTS.map((option) => {
+              const active = option.key === draft.font;
+              return (
+                <Pressable
+                  key={option.key}
+                  onPress={() => {
+                    setDraft((current) => ({ ...current, font: option.key }));
+                    setTray('none');
+                  }}
+                  style={[styles.fontChip, active && styles.fontChipActive]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={option.sample}
                 >
-                  {option.sample}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+                  <Text
+                    numberOfLines={1}
+                    style={[option.style, { color: active ? '#101014' : '#FFFFFF', fontSize: 13 }]}
+                  >
+                    {option.sample}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        )}
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyboardShouldPersistTaps="always"
-          contentContainerStyle={styles.colorRow}
-        >
-          {STORY_TEXT_COLORS.map((color) => (
-            <Pressable
-              key={color}
-              onPress={() => setDraft((current) => ({ ...current, color }))}
-              style={[styles.swatch, { backgroundColor: color }, draft.color === color && styles.swatchActive]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: draft.color === color }}
-              accessibilityLabel={color}
-            />
-          ))}
-        </ScrollView>
+        {tray === 'color' && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="always"
+            contentContainerStyle={styles.tray}
+          >
+            {STORY_TEXT_COLORS.map((color) => (
+              <Pressable
+                key={color}
+                onPress={() => {
+                  setDraft((current) => ({ ...current, color }));
+                  setTray('none');
+                }}
+                style={[styles.swatch, { backgroundColor: color }]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: draft.color === color }}
+                accessibilityLabel={color}
+              >
+                {draft.color === color && (
+                  <Ionicons
+                    name="checkmark"
+                    size={15}
+                    color={color === '#FFFFFF' ? '#101014' : '#FFFFFF'}
+                  />
+                )}
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
+
+        <View style={styles.controlRow}>
+          <Pressable
+            onPress={() => setTray((current) => (current === 'font' ? 'none' : 'font'))}
+            style={[styles.controlChip, tray === 'font' && styles.controlChipActive]}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: tray === 'font' }}
+            accessibilityLabel={t('story.font', 'Yazi stili')}
+          >
+            <Text style={[font.style, styles.controlChipLabel]} numberOfLines={1}>
+              {font.sample}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => setTray((current) => (current === 'color' ? 'none' : 'color'))}
+            style={[styles.colorButton, tray === 'color' && styles.colorButtonActive]}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: tray === 'color' }}
+            accessibilityLabel={t('story.text_color', 'Yazi rengi')}
+          >
+            <View style={[styles.colorDot, { backgroundColor: draft.color }]} />
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -239,6 +305,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 14,
     paddingBottom: 8,
+    zIndex: 2,
   },
   spacer: { flex: 1 },
   toolChip: {
@@ -270,13 +337,55 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   bottomBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    gap: 10,
     paddingTop: 6,
-    gap: 8,
   },
-  fontRow: {
-    paddingHorizontal: 12,
+  tray: {
+    paddingHorizontal: 14,
     gap: 8,
     alignItems: 'center',
+  },
+  controlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingBottom: 8,
+  },
+  controlChip: {
+    height: 34,
+    paddingHorizontal: 14,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  controlChipActive: {
+    backgroundColor: 'rgba(255,255,255,0.28)',
+  },
+  controlChipLabel: {
+    color: '#FFFFFF',
+    fontSize: 13,
+  },
+  colorButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  colorButtonActive: {
+    backgroundColor: 'rgba(255,255,255,0.28)',
+  },
+  colorDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
   },
   fontChip: {
     paddingHorizontal: 13,
@@ -289,22 +398,12 @@ const styles = StyleSheet.create({
   fontChipActive: {
     backgroundColor: '#FFFFFF',
   },
-  colorRow: {
-    paddingHorizontal: 12,
-    gap: 10,
-    alignItems: 'center',
-  },
   swatch: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.55)',
-  },
-  swatchActive: {
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-    transform: [{ scale: 1.14 }],
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

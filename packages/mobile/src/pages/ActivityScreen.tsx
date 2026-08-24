@@ -1,10 +1,10 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { FlatList, RefreshControl, StatusBar, StyleSheet, View, type ListRenderItem } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActivityIndicator, Appbar, Avatar, Button, Surface, Text, TouchableRipple } from 'react-native-paper';
+import { ActivityIndicator, Avatar, Button, Surface, Text, TouchableRipple } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
-import type { Notification } from '@motionmeet/shared';
+import type { Notification, Post, Story } from '@motionmeet/shared';
 import { useAuthContext } from '../context/AuthProvider';
 import { useTheme, type MotionTheme } from '../context/ThemeContext';
 import {
@@ -13,9 +13,13 @@ import {
   respondToFollowRequest,
 } from '../features/notifications/notificationsSlice';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
+import { getPost, getStories } from '../api/endpoints';
+import PostViewerModal from '../components/PostViewerModal';
+import ScreenHeader from '../components/ScreenHeader';
+import StoryViewer from '../components/StoryViewer';
 import { AVATAR } from '../config/layout';
 import dayjs, { setDayjsLocale } from '../utils/dayjs';
-import { logHandledError } from '../utils/feedback';
+import { logHandledError, showInfo } from '../utils/feedback';
 import type { NavigationOnlyProps } from '../navigation/types';
 
 const ICONS: Record<Notification['type'], { name: keyof typeof Ionicons.glyphMap; tone: 'primary' | 'like' | 'muted' }> = {
@@ -38,6 +42,11 @@ const ActivityScreen = ({ navigation }: NavigationOnlyProps) => {
   const dispatch = useAppDispatch();
   const { getToken } = useAuthContext();
   const { items, nextCursor, loading, loadingMore, respondingTo } = useAppSelector((state) => state.notifications);
+  const [openPost, setOpenPost] = useState<Post | null>(null);
+  const [openStories, setOpenStories] = useState<Story[] | null>(null);
+  const [openStoryIndex, setOpenStoryIndex] = useState(0);
+  /** The row whose target is being fetched, so only that row shows a spinner. */
+  const [openingId, setOpeningId] = useState<string | null>(null);
 
   setDayjsLocale(i18n.language);
 
@@ -76,6 +85,67 @@ const ActivityScreen = ({ navigation }: NavigationOnlyProps) => {
     }
   }, [dispatch, getToken]);
 
+  /**
+   * Opens whatever the row is actually about.
+   *
+   * A notification that only ever led to the actor's profile is a dead end:
+   * "someone liked your photo" should open the photo, and "someone liked your
+   * story" should open the story. Anything whose target has since been deleted
+   * — or a story that has expired, which is the normal case a day later — says
+   * so plainly instead of opening the wrong screen.
+   */
+  const openNotification = useCallback(async (notification: Notification) => {
+    const actorId = notification.actor?._id;
+    const goToActor = () => {
+      if (actorId) navigation.navigate('Profile', { userId: actorId });
+    };
+
+    if (notification.type === 'post_like' || notification.type === 'post_comment') {
+      if (!notification.postId) return goToActor();
+      setOpeningId(notification.id);
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const result = await getPost(notification.postId, token);
+        if (result.success && result.post) setOpenPost(result.post);
+        else showInfo(t('activity.title', 'Bildirimler'), t('activity.post_gone', 'Bu gönderi artık mevcut değil.'));
+      } catch (error) {
+        logHandledError('open-notification-post', error);
+        showInfo(t('activity.title', 'Bildirimler'), t('activity.post_gone', 'Bu gönderi artık mevcut değil.'));
+      } finally {
+        setOpeningId(null);
+      }
+      return;
+    }
+
+    if (notification.type === 'story_like') {
+      if (!notification.storyId) return goToActor();
+      setOpeningId(notification.id);
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const result = await getStories(token);
+        const mine = (result.stories || []).filter((story) => story._id === notification.storyId);
+        // A story lives for a day, so a like from yesterday routinely points at
+        // something that is no longer there.
+        if (!mine.length) {
+          showInfo(t('activity.title', 'Bildirimler'), t('activity.story_gone', 'Bu hikayenin süresi dolmuş.'));
+          return;
+        }
+        setOpenStories(mine);
+        setOpenStoryIndex(0);
+      } catch (error) {
+        logHandledError('open-notification-story', error);
+        showInfo(t('activity.title', 'Bildirimler'), t('activity.story_gone', 'Bu hikayenin süresi dolmuş.'));
+      } finally {
+        setOpeningId(null);
+      }
+      return;
+    }
+
+    goToActor();
+  }, [getToken, navigation, t]);
+
   const describe = (notification: Notification): string => {
     const name = notification.actor?.full_name || notification.actor?.username || t('activity.someone', 'Bir sporcu');
     switch (notification.type) {
@@ -103,7 +173,7 @@ const ActivityScreen = ({ navigation }: NavigationOnlyProps) => {
     const busy = actorId ? respondingTo.includes(actorId) : false;
     return (
       <TouchableRipple
-        onPress={() => { if (actorId) navigation.navigate('Profile', { userId: actorId }); }}
+        onPress={() => { void openNotification(item); }}
         style={[styles.row, !item.read && styles.rowUnread]}
       >
         <View style={styles.rowInner}>
@@ -147,7 +217,11 @@ const ActivityScreen = ({ navigation }: NavigationOnlyProps) => {
               </View>
             ) : null}
           </View>
-          <Ionicons name={icon.name} size={18} color={iconColor} style={styles.rowIcon} />
+          {openingId === item.id ? (
+            <ActivityIndicator size={16} color={theme.primary} style={styles.rowIcon} />
+          ) : (
+            <Ionicons name={icon.name} size={18} color={iconColor} style={styles.rowIcon} />
+          )}
         </View>
       </TouchableRipple>
     );
@@ -156,16 +230,18 @@ const ActivityScreen = ({ navigation }: NavigationOnlyProps) => {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <Appbar.Header style={styles.header} statusBarHeight={0}>
-        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
-        <Appbar.Content title={t('activity.title', 'Bildirimler')} titleStyle={styles.headerTitle} />
-        <Appbar.Action
-          icon="cog-outline"
-          color={theme.textMuted}
-          onPress={() => navigation.navigate('NotificationsScreen')}
-          accessibilityLabel={t('settings.notifications', 'Bildirim ayarları')}
-        />
-      </Appbar.Header>
+      <ScreenHeader
+        title={t('activity.title', 'Bildirimler')}
+        onBack={() => navigation.goBack()}
+        actions={[
+          {
+            icon: 'settings-outline',
+            onPress: () => navigation.navigate('NotificationsScreen'),
+            accessibilityLabel: t('settings.notifications', 'Bildirim ayarları'),
+            tint: theme.textMuted,
+          },
+        ]}
+      />
 
       <FlatList
         data={items}
@@ -188,14 +264,24 @@ const ActivityScreen = ({ navigation }: NavigationOnlyProps) => {
           )
         }
       />
+
+      <PostViewerModal post={openPost} navigation={navigation} onClose={() => setOpenPost(null)} />
+
+      {openStories ? (
+        <StoryViewer
+          visible
+          stories={openStories}
+          startIndex={openStoryIndex}
+          navigation={navigation}
+          onClose={() => setOpenStories(null)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 };
 
 const getStyles = (theme: MotionTheme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
-  header: { backgroundColor: theme.background, borderBottomWidth: 1, borderBottomColor: theme.border, elevation: 0 },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: theme.text },
   listContent: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingBottom: 32 },
   row: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
   rowUnread: { backgroundColor: theme.surface },
@@ -211,7 +297,7 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
   footer: { paddingVertical: 18 },
   empty: {
     marginHorizontal: 16, marginTop: 48, padding: 28, alignItems: 'center', borderRadius: 16,
-    borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border, backgroundColor: theme.surface,
   },
   emptyTitle: { color: theme.text, fontSize: 15, fontWeight: '700', marginTop: 10 },
   emptyBody: { color: theme.textMuted, fontSize: 12.5, lineHeight: 18, textAlign: 'center', marginTop: 4 },

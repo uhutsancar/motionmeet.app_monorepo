@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, StatusBar, View } from 'react-native';
+import { StyleSheet, ActivityIndicator, FlatList, RefreshControl, StatusBar, View } from 'react-native';
 // expo-image: these rows scroll past many remote avatars, and it recycles
 // views and keeps a memory + disk cache where React Native's Image does not.
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Appbar, Divider, Surface, Switch, Text, TouchableRipple } from 'react-native-paper';
+import { Divider, Surface, Switch, Text, TouchableRipple } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { NEARBY_SCOPES, mediaVariantUrl, type NearbyScope, type NearbySettings, type NearbyUser } from '@motionmeet/shared';
@@ -20,6 +20,7 @@ import {
   updateNearbySettings,
 } from '../api/endpoints';
 import { getUserFacingError, showError } from '../utils/feedback';
+import ScreenHeader from '../components/ScreenHeader';
 import type { NavigationOnlyProps } from '../navigation/types';
 
 /**
@@ -265,7 +266,7 @@ const NearbyScreen = ({ navigation }: NavigationOnlyProps) => {
     if (!notice) return null;
 
     return (
-      <Surface elevation={0} style={{ padding: 14, borderRadius: 12, gap: 8, borderWidth: 1, borderColor: `${theme.warning}55`, backgroundColor: `${theme.warning}14` }}>
+      <Surface elevation={0} style={{ padding: 14, borderRadius: 12, gap: 8, borderWidth: StyleSheet.hairlineWidth, borderColor: `${theme.warning}55`, backgroundColor: `${theme.warning}14` }}>
         <Text style={{ color: theme.text, fontSize: 13, fontWeight: '800' }}>{notice.title}</Text>
         <Text style={{ color: theme.textSecondary, fontSize: 12, lineHeight: 17 }}>{notice.body}</Text>
         {notice.action ? (
@@ -323,11 +324,17 @@ const NearbyScreen = ({ navigation }: NavigationOnlyProps) => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <Appbar.Header statusBarHeight={0} style={{ backgroundColor: theme.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
-        <Appbar.Content title={t('nearby.title', 'Nearby')} titleStyle={{ color: theme.text, fontWeight: '800', fontSize: 20 }} />
-        <Appbar.Action icon="cog-outline" color={theme.text} onPress={() => navigation.navigate('LocationSettingsScreen')} />
-      </Appbar.Header>
+      <ScreenHeader
+        title={t('nearby.title', 'Nearby')}
+        onBack={() => navigation.goBack()}
+        actions={[
+          {
+            icon: 'settings-outline',
+            onPress: () => navigation.navigate('LocationSettingsScreen'),
+            accessibilityLabel: t('location.settings_title', 'Konum ayarları'),
+          },
+        ]}
+      />
 
       <FlatList
         data={enabled ? users : []}
@@ -338,7 +345,7 @@ const NearbyScreen = ({ navigation }: NavigationOnlyProps) => {
         contentContainerStyle={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: horizontalPadding, paddingBottom: 28 }}
         ListHeaderComponent={(
           <View style={{ gap: 12, paddingTop: 12, paddingBottom: 14 }}>
-            <Surface elevation={0} style={{ padding: 14, borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface, gap: 10 }}>
+            <Surface elevation={0} style={{ padding: 14, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border, backgroundColor: theme.surface, gap: 10 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={{ color: theme.text, fontSize: 14.5, fontWeight: '800' }}>
@@ -378,7 +385,7 @@ const NearbyScreen = ({ navigation }: NavigationOnlyProps) => {
                         onPress={() => void changeScope(scope)}
                         style={{
                           paddingHorizontal: 13, height: 34, justifyContent: 'center', borderRadius: 17,
-                          borderWidth: 1,
+                          borderWidth: StyleSheet.hairlineWidth,
                           borderColor: active ? theme.primary : theme.border,
                           backgroundColor: active ? theme.primarySoft : theme.surface,
                         }}

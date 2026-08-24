@@ -1,10 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { StyleSheet, ScrollView, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
-  Appbar,
   Button,
   Divider,
   Surface,
@@ -15,6 +14,7 @@ import { useTheme, type MotionTheme } from '../context/ThemeContext';
 import { useAuthContext } from '../context/AuthProvider';
 import { getRoutines } from '../api/endpoints';
 import RoutineBuilderModal from '../components/RoutineBuilderModal';
+import ScreenHeader from '../components/ScreenHeader';
 import { logHandledError } from '../utils/feedback';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import type { Exercise, Routine } from '@motionmeet/shared';
@@ -34,7 +34,7 @@ const RoutineCard = ({ routine, theme, navigation }: RoutineCardProps) => {
         padding: 16,
         gap: 14,
         borderRadius: 12,
-        borderWidth: 1,
+        borderWidth: StyleSheet.hairlineWidth,
         borderColor: theme.border,
         backgroundColor: theme.surface,
       }}
@@ -136,21 +136,16 @@ const Routines = ({ navigation }: NavigationOnlyProps) => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
-      <Appbar.Header
-        statusBarHeight={0}
-        style={{
-          backgroundColor: theme.surface,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.border,
-          elevation: 0,
-        }}
-      >
-        <Appbar.Content
-          title={t('routines.title', 'Routines')}
-          titleStyle={{ color: theme.text, fontSize: 23, fontWeight: '800' }}
-        />
-        <Appbar.Action icon="plus" color={theme.text} onPress={() => setShowModal(true)} />
-      </Appbar.Header>
+      <ScreenHeader
+        title={t('routines.title', 'Routines')}
+        actions={[
+          {
+            icon: 'add',
+            onPress: () => setShowModal(true),
+            accessibilityLabel: t('routines.create', 'Rutin olustur'),
+          },
+        ]}
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -163,14 +158,17 @@ const Routines = ({ navigation }: NavigationOnlyProps) => {
           paddingBottom: 32,
         }}
       >
-        <View style={{ marginBottom: 16 }}>
-          <Text style={{ color: theme.text, fontSize: 22, lineHeight: 28, fontWeight: '800', letterSpacing: -0.4 }}>
-            {t('routines.ready_title', 'Ready to train?')}
-          </Text>
-          <Text style={{ color: theme.textSecondary, fontSize: 14, lineHeight: 20, marginTop: 4 }}>
-            {t('routines.ready_subtitle', 'Start a blank workout or continue with one of your plans.')}
-          </Text>
-        </View>
+        {/* One line, not a hero. The header above already names the screen. */}
+        <Text
+          style={{
+            color: theme.textSecondary,
+            fontSize: 13.5,
+            lineHeight: 19,
+            marginBottom: 14,
+          }}
+        >
+          {t('routines.ready_subtitle', 'Start a blank workout or continue with one of your plans.')}
+        </Text>
 
         <Surface
           elevation={0}
@@ -178,7 +176,7 @@ const Routines = ({ navigation }: NavigationOnlyProps) => {
             padding: 16,
             marginBottom: 12,
             borderRadius: 12,
-            borderWidth: 1,
+            borderWidth: StyleSheet.hairlineWidth,
             borderColor: theme.border,
             backgroundColor: theme.surface,
           }}
@@ -267,7 +265,7 @@ const Routines = ({ navigation }: NavigationOnlyProps) => {
               padding: 24,
               gap: 8,
               borderRadius: 12,
-              borderWidth: 1,
+              borderWidth: StyleSheet.hairlineWidth,
               borderColor: theme.border,
               backgroundColor: theme.surface,
             }}

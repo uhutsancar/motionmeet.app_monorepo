@@ -4,10 +4,12 @@ import {
   StatusBar,
   TouchableOpacity,
   View,
+  StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Appbar, Surface, Text } from 'react-native-paper';
+import { Surface, Text } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import ScreenHeader from '../components/ScreenHeader';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
@@ -82,21 +84,10 @@ const StatisticsMenu = ({ navigation }: NavigationOnlyProps) => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <Appbar.Header
-        statusBarHeight={0}
-        style={{
-          backgroundColor: theme.background,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.border,
-          elevation: 0,
-        }}
-      >
-        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
-        <Appbar.Content
-          title={t('statistics.title', 'Statistics')}
-          titleStyle={{ color: theme.text, fontSize: 20, fontWeight: '800' }}
-        />
-      </Appbar.Header>
+      <ScreenHeader
+        title={t('statistics.title', 'Statistics')}
+        onBack={() => navigation.goBack()}
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -114,7 +105,7 @@ const StatisticsMenu = ({ navigation }: NavigationOnlyProps) => {
           style={{
             padding: 18,
             borderRadius: 18,
-            borderWidth: 1,
+            borderWidth: StyleSheet.hairlineWidth,
             borderColor: theme.border,
             backgroundColor: theme.surface,
           }}
@@ -165,7 +156,7 @@ const StatisticsMenu = ({ navigation }: NavigationOnlyProps) => {
                 minHeight: 166,
                 padding: 15,
                 borderRadius: 16,
-                borderWidth: 1,
+                borderWidth: StyleSheet.hairlineWidth,
                 borderColor: theme.border,
                 backgroundColor: theme.surface,
               }}
@@ -207,7 +198,7 @@ const StatisticsMenu = ({ navigation }: NavigationOnlyProps) => {
           style={{
             overflow: 'hidden',
             borderRadius: 14,
-            borderWidth: 1,
+            borderWidth: StyleSheet.hairlineWidth,
             borderColor: theme.border,
             backgroundColor: theme.surface,
           }}

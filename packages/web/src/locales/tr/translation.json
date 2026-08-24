@@ -466,7 +466,8 @@
     "volume": "Hacim",
     "prs": "Rekorlar",
     "bpm": "Ort. bpm",
-    "more_exercises": "egzersiz daha"
+    "more_exercises": "egzersiz daha",
+    "link_copied": "Bağlantı kopyalandı"
   },
   "muscle_groups": {
     "chest": "Göğüs",
@@ -871,5 +872,27 @@
     "empty_hint": "İlk görseli sen paylaş ya da birilerini takip et.",
     "open_post": "Gönderiyi aç",
     "post_title": "Gönderi"
+  },
+  "post": {
+    "unavailable_title": "Bu gönderi artık mevcut değil",
+    "unavailable_body": "Bağlantı kaldırılmış olabilir ya da gönderi herkese açık değil.",
+    "join": "MotionMeet'e katıl",
+    "join_hint": "MotionMeet'te sporcularla buluş, antrenmanlarını paylaş."
+  },
+  "workout": {
+    "share_title": "Güzeldi!",
+    "share_subtitle": "Antrenmanını paylaş",
+    "share_download": "İndir",
+    "share_copy_text": "Metni kopyala",
+    "share_failed": "Paylaşım tamamlanamadı.",
+    "share_text_copied": "Metin kopyalandı",
+    "share_template_summary": "Özet",
+    "share_template_stats": "İstatistik",
+    "share_template_exercises": "Egzersizler",
+    "share_template_highlight": "Öne çıkan",
+    "share_template_minimal": "Sade"
+  },
+  "workout_share": {
+    "missing": "Paylaşılacak antrenman bulunamadı."
   }
 }

@@ -13,14 +13,19 @@ address baked in and no firewall rule needed.
 
 ## Build
 
-Put the origins in `packages/mobile/.env.local` — it is gitignored, and it is
-the only place Expo reliably picks them up. Exporting them in the shell that
-runs Gradle is **not** enough: they never reach the Metro transform, and the
-build then produces a bundle that crashes on the config guard as though nothing
-had been set.
+Put the origins in the **workspace root** `.env.local` — it is gitignored, and
+it is where the release bundler reads dotenv from, because `react.root` points
+at the workspace (see `plugins/withMonorepoBundleRoot.js`). A copy in
+`packages/mobile/.env.local` is ignored by the release build. Exporting the
+values in the shell that runs Gradle is **not** enough either: they never reach
+the Metro transform, and the build then produces a bundle that crashes on the
+config guard as though nothing had been set.
+
+Only `EXPO_PUBLIC_*` names are inlined, so nothing else in the file reaches the
+app.
 
 ```bash
-cat > packages/mobile/.env.local <<'EOF'
+cat > .env.local <<'EOF'
 EXPO_PUBLIC_API_URL=http://127.0.0.1:4000
 EXPO_PUBLIC_WEB_URL=http://127.0.0.1:5173
 EXPO_PUBLIC_ALLOW_INSECURE_LAN=true
@@ -30,6 +35,47 @@ cd packages/mobile/android && ./gradlew assembleRelease
 ```
 
 The APK lands in `app/build/outputs/apk/release/app-release.apk`.
+
+### On Windows
+
+Two extra things are needed, and both are handled by config plugins rather than
+by hand — `pnpm exec expo prebuild -p android` applies them:
+
+* **Paths have to stay under 260 characters**, in two places. ninja and CMake
+  both use the plain Win32 APIs and ignore the OS long-path switch, and neither
+  failure names a path: ninja says "Filename longer than 260 characters", CMake
+  says "manifest 'build.ninja' still dirty after 100 tries".
+  - CMake's object files are moved out of `node_modules` by
+    `plugins/withShortNativeBuildPath.js`, into `<drive>:/.mmbuild/cxx`
+    (`MOTIONMEET_BUILD_DIR` overrides it).
+  - A library's *generated* C++ sources cannot be moved: autolinking writes
+    their absolute paths into `Android-autolinking.cmake` as
+    `<library>/android/build/generated/…`. The workspace `.npmrc` shortens the
+    pnpm store instead — `virtual-store-dir=node_modules/.p` and
+    `virtual-store-dir-max-length=30`, worth about 60 characters. Both settings
+    are load-bearing for the Android build; changing them means re-checking
+    that a release APK still links.
+* **The bundler is told where the workspace is.** Gradle passes the entry file
+  relative to `react.root`, which defaults to the app package, while Metro
+  resolves against the workspace root — so a release build fails with "Unable to
+  resolve module ./index.ts" even though `expo export` bundles the same entry
+  without complaint. `plugins/withMonorepoBundleRoot.js` points `react.root` at
+  the workspace.
+
+`metro-runtime` is a direct devDependency of the workspace for the same family
+of reasons: the app uses dynamic `import()`, whose runtime helper Metro resolves
+from the *workspace* root, and pnpm does not expose a transitive dependency
+there.
+
+Check what landed before shipping, with `strings` — the bundle is Hermes
+bytecode, so a plain `grep` for the origin finds nothing either way:
+
+```bash
+python -c "print(open('packages/mobile/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle','rb').read().count(b'127.0.0.1:4000'))"
+```
+
+A zero means the origins did not reach the bundle and the APK will fail its
+config guard on launch.
 
 Delete `.env.local` when you are done. A store build made while it is present
 would be pointed at loopback and would pass every guard on the way out.

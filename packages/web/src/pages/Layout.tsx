@@ -38,17 +38,15 @@ const MobileNavigation = ({ unreadCount = 0 }: UnreadCountProps) => {
         display: { xs: "flex", md: "none" },
         flexShrink: 0,
         justifyContent: "space-around",
-        minHeight: 68,
+        minHeight: 60,
         mx: 1.25,
         mb: 1,
         px: 0.5,
         pb: "env(safe-area-inset-bottom)",
         bgcolor: (theme) => alpha(theme.palette.background.paper, 0.94),
         backdropFilter: "blur(18px)",
-        border: 1,
-        borderColor: "divider",
         borderRadius: 4,
-        boxShadow: 3,
+        boxShadow: 2,
         zIndex: (theme) => theme.zIndex.appBar,
       }}
     >
@@ -143,13 +141,13 @@ const Layout = ({ unreadCount = 0 }: UnreadCountProps) => {
             display: { xs: "flex", md: "none" },
             alignItems: "center",
             flexShrink: 0,
-            minHeight: 66,
-            px: 1.5,
+            // Compact, and with no rule beneath it: the page's own heading is
+            // right underneath, and two stacked bars is one too many.
+            minHeight: 54,
+            px: 1,
             pt: "env(safe-area-inset-top)",
-            bgcolor: (theme) => alpha(theme.palette.background.paper, 0.94),
+            bgcolor: (theme) => alpha(theme.palette.background.default, 0.94),
             backdropFilter: "blur(18px)",
-            borderBottom: 1,
-            borderColor: "divider",
             zIndex: (theme) => theme.zIndex.appBar,
           }}
         >
@@ -157,7 +155,7 @@ const Layout = ({ unreadCount = 0 }: UnreadCountProps) => {
             <MenuRounded />
           </IconButton>
           <Stack direction="row" spacing={1} sx={{ alignItems: "center", ml: 0.5, minWidth: 0 }}>
-            <Box component="img" src={motionmeetLogo} alt="" sx={{ width: 28, height: 28 }} />
+            <Box component="img" src={motionmeetLogo} alt="" sx={{ width: 24, height: 24 }} />
             <Typography variant="subtitle1" noWrap sx={{ fontFamily: '"Manrope", sans-serif' }}>
               {pageTitle}
             </Typography>

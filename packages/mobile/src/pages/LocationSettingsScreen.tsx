@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, ScrollView, StatusBar, View } from 'react-native';
+import { StyleSheet, Alert, ScrollView, StatusBar, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Appbar, Divider, Surface, Switch, Text, TouchableRipple } from 'react-native-paper';
+import { Divider, Surface, Switch, Text, TouchableRipple } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import type {
@@ -25,6 +25,7 @@ import {
 import { fetchUser } from '../features/user/userSlice';
 import { useAppDispatch } from '../store/hooks';
 import { getUserFacingError, showError, showSuccess } from '../utils/feedback';
+import ScreenHeader from '../components/ScreenHeader';
 import type { NavigationOnlyProps } from '../navigation/types';
 
 /**
@@ -45,7 +46,7 @@ const Section = ({ theme, title, children }: React.PropsWithChildren<{ theme: Mo
     <Text style={{ color: theme.textMuted, fontSize: 10.5, fontWeight: '900', letterSpacing: 1.1, marginLeft: 4 }}>
       {title.toUpperCase()}
     </Text>
-    <Surface elevation={0} style={{ overflow: 'hidden', borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface }}>
+    <Surface elevation={0} style={{ overflow: 'hidden', borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border, backgroundColor: theme.surface }}>
       {children}
     </Surface>
   </View>
@@ -76,7 +77,7 @@ const ChoiceRow = <T extends string>({ theme, disabled, label, description, opti
             onPress={() => onChange(option.value)}
             disabled={disabled}
             style={{
-              paddingHorizontal: 12, height: 33, justifyContent: 'center', borderRadius: 16, borderWidth: 1,
+              paddingHorizontal: 12, height: 33, justifyContent: 'center', borderRadius: 16, borderWidth: StyleSheet.hairlineWidth,
               borderColor: active ? theme.primary : theme.border,
               backgroundColor: active ? theme.primarySoft : 'transparent',
             }}
@@ -204,10 +205,7 @@ const LocationSettingsScreen = ({ navigation }: NavigationOnlyProps) => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <Appbar.Header statusBarHeight={0} style={{ backgroundColor: theme.surface, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
-        <Appbar.Content title={t('location.settings_title', 'Location')} titleStyle={{ color: theme.text, fontWeight: '800', fontSize: 20 }} />
-      </Appbar.Header>
+      <ScreenHeader title={t('location.settings_title', 'Location')} onBack={() => navigation.goBack()} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}

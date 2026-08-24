@@ -115,7 +115,7 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
   summaryRowNarrow: { flexDirection: 'column' },
   summaryCard: {
     flex: 1, backgroundColor: theme.surface, borderRadius: 16, padding: 16,
-    borderWidth: 1, borderColor: theme.border,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
   },
   summaryCardNarrow: { flex: 0, width: '100%' },
   summaryLabel: { fontSize: 13, color: theme.textMuted, marginBottom: 8, fontWeight: '500' },

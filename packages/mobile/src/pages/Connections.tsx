@@ -4,7 +4,7 @@ import { Alert, FlatList, RefreshControl, ScrollView, StatusBar, StyleSheet, Vie
 // views and keeps a memory + disk cache where React Native's Image does not.
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActivityIndicator, Appbar, Button, Chip, Divider, Surface, Text, TouchableRipple } from 'react-native-paper';
+import { ActivityIndicator, Button, Chip, Divider, Surface, Text, TouchableRipple } from 'react-native-paper';
 import { useAuthContext } from "../context/AuthProvider";
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { MESSAGE_ICON } from '../config/icons';
@@ -24,6 +24,7 @@ import { AVATAR } from '../config/layout';
 import { setRelationship } from '../features/relationships/relationshipsSlice';
 import { getUserFacingError, showError } from '../utils/feedback';
 import { useAppDispatch } from '../store/hooks';
+import ScreenHeader from '../components/ScreenHeader';
 import { mediaVariantUrl, type PublicUser } from '@motionmeet/shared';
 import type { NavigationOnlyProps, RouteLike } from '../navigation/types';
 
@@ -317,21 +318,19 @@ const Connections = ({ navigation, route }: ConnectionsProps) => {
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      <Appbar.Header statusBarHeight={0} style={{ backgroundColor: theme.surface, elevation: 0 }}>
-        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
-        <Appbar.Content
-          title={t('connections.title', 'Connections')}
-          titleStyle={{ color: theme.text, fontWeight: '700' }}
-        />
-        {/* Finding people is what this screen is for, so proximity discovery
-            belongs here rather than buried in settings. */}
-        <Appbar.Action
-          icon="map-marker-radius-outline"
-          color={theme.text}
-          accessibilityLabel={t('nearby.title', 'Nearby')}
-          onPress={() => navigation.navigate('NearbyScreen')}
-        />
-      </Appbar.Header>
+      <ScreenHeader
+        title={t('connections.title', 'Connections')}
+        onBack={() => navigation.goBack()}
+        actions={[
+          // Finding people is what this screen is for, so proximity discovery
+          // belongs here rather than buried in settings.
+          {
+            icon: 'location-outline',
+            onPress: () => navigation.navigate('NearbyScreen'),
+            accessibilityLabel: t('nearby.title', 'Nearby'),
+          },
+        ]}
+      />
 
       {/* The counter cards that used to sit here are gone. Only the tab that
           has been opened knows its own count, so four of the five read "—" and

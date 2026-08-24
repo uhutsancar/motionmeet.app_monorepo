@@ -111,7 +111,8 @@
         "empty_subtitle": "Add exercises as you train.",
         "quick_workout": "Quick workout",
         "no_routines_hint": "Create a repeatable plan for your next session.",
-        "create_failed": "Routine could not be created."
+        "create_failed": "Routine could not be created.",
+        "create": "Create routine"
     },
     "feed": {
         "discover": "Discover",
@@ -184,7 +185,9 @@
         "swipe_up_viewers": "Swipe up for viewers",
         "media_limit": "A post can contain at most 4 images.",
         "share_failed": "Could not share this post",
-        "story_create_failed": "Story could not be created."
+        "story_create_failed": "Story could not be created.",
+        "share_private_hint": "This post is not public, so it has no shareable link.",
+        "link_copied": "Link copied"
     },
     "exercises": {
         "search": "Search Exercises",
@@ -256,7 +259,9 @@
         "decline": "Delete",
         "empty_title": "No notifications yet",
         "empty_body": "Follow requests and likes will show up here.",
-        "story_like": "{{name}} liked your story"
+        "story_like": "{{name}} liked your story",
+        "post_gone": "This post is no longer available.",
+        "story_gone": "This story has expired."
     },
     "profile": {
         "workouts": "Workouts",
@@ -492,7 +497,19 @@
         "post_share_failed": "The workout was saved but the post could not be shared. You can try again later.",
         "leave_summary_title": "Leave without sharing",
         "leave_summary_saved": "The workout was saved but not shared. Do you want to leave this screen?",
-        "leave_without_sharing": "Leave without sharing"
+        "leave_without_sharing": "Leave without sharing",
+        "share_title": "Nice one!",
+        "share_subtitle": "Share your workout",
+        "share_stories": "Stories",
+        "share_more": "More",
+        "share_download": "Download",
+        "share_link": "Workout link",
+        "share_copy_text": "Copy text",
+        "share_failed": "Sharing could not be completed.",
+        "share_saved": "Saved to your gallery",
+        "share_text_copied": "Text copied",
+        "share_save_denied": "Gallery access is needed to save this.",
+        "share_story": "My MotionMeet story"
     },
     "workout_summary": {
         "save_workout": "Save Workout",
@@ -816,7 +833,9 @@
         "react": "Like",
         "send_message": "Send message",
         "like_failed": "Reaction could not be saved",
-        "unreact": "Remove reaction"
+        "unreact": "Remove reaction",
+        "font": "Text style",
+        "text_color": "Text colour"
     },
     "explore": {
         "search_placeholder": "Search",
@@ -833,5 +852,12 @@
         "clear_all": "Clear all",
         "remove_recent": "Remove search",
         "start_hint": "Search athletes by name or username."
+    },
+    "permissions": {
+        "title": "Permission needed",
+        "open_settings": "Open settings",
+        "media_blocked": "Photo access is turned off. Allow the photo library in settings to share media.",
+        "camera_blocked": "Camera access is turned off. Allow the camera in settings to take a photo.",
+        "location_blocked": "Location access is turned off. Allow location in settings to see who is nearby."
     }
 }

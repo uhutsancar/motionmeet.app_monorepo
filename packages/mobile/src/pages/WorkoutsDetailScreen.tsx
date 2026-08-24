@@ -5,8 +5,9 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme, type MotionTheme } from '../context/ThemeContext';
 import { BarChart } from 'react-native-chart-kit';
-import { Appbar, Surface, Text } from 'react-native-paper';
+import { Surface, Text } from 'react-native-paper';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import ScreenHeader from '../components/ScreenHeader';
 import type { BaseNavigationScreenProps, WorkoutStatsRouteParams } from '../navigation/types';
 
 const WorkoutsDetailScreen = ({ navigation, route }: BaseNavigationScreenProps) => {
@@ -36,10 +37,10 @@ const WorkoutsDetailScreen = ({ navigation, route }: BaseNavigationScreenProps) 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Header */}
-      <Appbar.Header style={styles.header} statusBarHeight={0}>
-        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
-        <Appbar.Content title={t('monthly_report.workouts_detail', 'Antrenmanlar Detayı')} titleStyle={styles.headerTitle} />
-      </Appbar.Header>
+      <ScreenHeader
+        title={t('monthly_report.workouts_detail', 'Antrenmanlar Detayı')}
+        onBack={() => navigation.goBack()}
+      />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingHorizontal: horizontalPadding }]}
@@ -113,7 +114,7 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
   summaryRowNarrow: { flexDirection: 'column' },
   summaryCard: {
     flex: 1, backgroundColor: theme.surface, borderRadius: 16, padding: 16,
-    borderWidth: 1, borderColor: theme.border, alignItems: 'flex-start',
+    borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border, alignItems: 'flex-start',
   },
   summaryCardNarrow: { flex: 0, width: '100%' },
   summaryLabel: { color: theme.textMuted, marginBottom: 8, fontWeight: '500' },

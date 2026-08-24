@@ -6,6 +6,7 @@ import * as Location from 'expo-location';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDeviceLocation } from '../../hooks/useDeviceLocation';
+import { useKeyboardInset } from '../../hooks/useKeyboardInset';
 import { logHandledError } from '../../utils/feedback';
 
 interface StoryLocationSheetProps {
@@ -26,14 +27,21 @@ const MAX_PLACE_LENGTH = 48;
 const StoryLocationSheet = ({ onCancel, onPick }: StoryLocationSheetProps) => {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { requestFix, busy } = useDeviceLocation();
+  const { requestFix, busy, openSettings } = useDeviceLocation();
+  const keyboard = useKeyboardInset();
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [query, setQuery] = useState('');
   const [resolved, setResolved] = useState(false);
 
+  /** Set when the OS will not ask for location again; the sheet then offers Settings. */
+  const [blocked, setBlocked] = useState(false);
+
   const loadNearbyPlaces = useCallback(async () => {
     try {
-      const { fix } = await requestFix();
+      const { fix, outcome } = await requestFix();
+      // A refusal only costs the suggestions — the place can still be typed —
+      // so nothing is disabled here. A permanent block is worth a way out.
+      if (outcome === 'blocked') setBlocked(true);
       if (!fix) return;
       const places = await Location.reverseGeocodeAsync({
         latitude: fix.latitude,
@@ -79,7 +87,16 @@ const StoryLocationSheet = ({ onCancel, onPick }: StoryLocationSheetProps) => {
         accessibilityLabel={t('common.close', 'Kapat')}
       />
 
-      <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 14) }]}>
+      {/* The sheet rides on top of the keyboard instead of being buried by it.
+          A full-screen modal window is not resized when the IME opens, so the
+          space it takes has to be reserved by hand — without this the place
+          field and every suggestion under it sat behind the keys. */}
+      <View
+        style={[
+          styles.sheet,
+          { paddingBottom: (keyboard.visible ? keyboard.height : Math.max(insets.bottom, 14)) + 4 },
+        ]}
+      >
         <View style={styles.grabber} />
         <Text style={styles.title}>{t('story.add_location', 'Konum ekle')}</Text>
 
@@ -122,9 +139,23 @@ const StoryLocationSheet = ({ onCancel, onPick }: StoryLocationSheetProps) => {
             ))}
           </View>
         ) : (
-          <Text style={styles.hint}>
-            {t('story.location_manual_hint', 'Yakindaki yerler bulunamadi, yer adini kendin yazabilirsin.')}
-          </Text>
+          <>
+            <Text style={styles.hint}>
+              {blocked
+                ? t('permissions.location_blocked', 'Konum erişimi kapalı. Yakındaki yerleri görmek için ayarlardan konum iznini açman gerekiyor.')
+                : t('story.location_manual_hint', 'Yakindaki yerler bulunamadi, yer adini kendin yazabilirsin.')}
+            </Text>
+            {blocked ? (
+              <Pressable
+                onPress={() => void openSettings()}
+                style={styles.settingsRow}
+                accessibilityRole="button"
+              >
+                <Ionicons name="settings-outline" size={17} color="#9757FB" />
+                <Text style={styles.addLabel}>{t('permissions.open_settings', 'Ayarları aç')}</Text>
+              </Pressable>
+            ) : null}
+          </>
         )}
       </View>
     </View>
@@ -198,6 +229,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14.5,
     fontWeight: '600',
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingBottom: 12,
   },
   hint: {
     color: 'rgba(255,255,255,0.55)',

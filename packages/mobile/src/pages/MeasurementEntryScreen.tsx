@@ -284,7 +284,7 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
     alignItems: 'center',
     backgroundColor: theme.surfaceLight,
     borderRadius: CARD.radius,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.border,
     paddingHorizontal: 6,
     paddingVertical: 8,

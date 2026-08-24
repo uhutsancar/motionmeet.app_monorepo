@@ -4,6 +4,12 @@ import { isOptionalString, isUuid } from "../utils/validation.js";
 import { hasValidMediaSignature } from "../utils/mediaValidation.js";
 import * as postService from "../services/postService.js";
 import { parsePagination } from "../utils/pagination.js";
+import { findPublicPost } from "../services/sharePageService.js";
+import {
+  isShareCardSize,
+  isShareCardTemplate,
+  renderPostShareCardPng,
+} from "../services/shareCardService.js";
 import {
   discardReservedUploads,
   resolveReservedUploads,
@@ -162,6 +168,86 @@ export const getFeedPost: RequestHandler = async (req, res, next) => {
       posts: page.items,
       nextCursor: page.nextCursor,
     });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * One post by id.
+ *
+ * Serves every link that points at a single post — an activity row, a share
+ * URL, a deep link — and answers 404 both when the post is gone and when the
+ * viewer is not allowed to see it, so the endpoint cannot be used to work out
+ * whether a private post exists.
+ */
+export const getPost: RequestHandler = async (req, res, next) => {
+  try {
+    const { postId } = req.params;
+    if (!isUuid(postId)) {
+      return res.status(400).json({ success: false, message: "Invalid post id" });
+    }
+
+    const post = await postService.getVisiblePostForViewer(postId, req.userId);
+    if (!post) return res.status(404).json({ success: false, message: "Post not found" });
+
+    return res.json({ success: true, post });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * One post, for a reader who is not signed in.
+ *
+ * The web client serves shared links itself, so it needs the same post the
+ * server-rendered preview page shows — under exactly the same two gates: the
+ * post is public and its author's account is public. Everything else is a 404,
+ * with the same body, so the endpoint cannot be walked to discover which post
+ * ids exist.
+ */
+export const getPublicPost: RequestHandler = async (req, res, next) => {
+  try {
+    const { postId } = req.params;
+    if (!isUuid(postId)) {
+      return res.status(404).json({ success: false, message: "Post not found" });
+    }
+
+    const entry = await findPublicPost(postId);
+    if (!entry) return res.status(404).json({ success: false, message: "Post not found" });
+
+    return res.json({ success: true, post: entry.post });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * The share card for a post, as a PNG.
+ *
+ * The picture the post carries with the workout's numbers laid over it — the
+ * arrangement people already recognise from other training apps. Access is the
+ * same check the post itself uses, so a card can never be rendered for a post
+ * the caller may not read.
+ */
+export const getPostShareCard: RequestHandler = async (req, res, next) => {
+  try {
+    const postId = req.params.postId;
+    if (!isUuid(postId)) {
+      return res.status(400).json({ success: false, message: "Invalid post id" });
+    }
+
+    const template = isShareCardTemplate(req.query.template) ? req.query.template : "summary";
+    const size = isShareCardSize(req.query.size) ? req.query.size : "story";
+
+    const png = await renderPostShareCardPng(postId, req.userId, template, size);
+    if (!png) return res.status(404).json({ success: false, message: "Post not found" });
+
+    return res
+      .status(200)
+      .set("Content-Type", "image/png")
+      .set("Cache-Control", "private, max-age=3600")
+      .send(png);
   } catch (error) {
     return next(error);
   }

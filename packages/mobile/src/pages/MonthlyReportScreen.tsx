@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Share, View, ScrollView } from 'react-native';
+import { StyleSheet, Share, View, ScrollView } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
@@ -8,11 +8,12 @@ import { BarChart } from 'react-native-chart-kit';
 import Svg, { Circle, Polygon, Line, Text as SvgText } from 'react-native-svg';
 import { getWorkoutStats } from '../api/endpoints';
 import { useAuthContext } from '../context/AuthProvider';
-import { Appbar, Text, Surface, TouchableRipple, ActivityIndicator, Divider, Chip } from 'react-native-paper';
+import { Text, Surface, TouchableRipple, ActivityIndicator, Divider, Chip } from 'react-native-paper';
 import { useMuscleGroups } from '../hooks/useMuscleGroups';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { CARD, gridItemWidth } from '../config/layout';
 import { logHandledError } from '../utils/feedback';
+import ScreenHeader from '../components/ScreenHeader';
 import type { WorkoutStats } from '@motionmeet/shared';
 import type { NavigationOnlyProps } from '../navigation/types';
 
@@ -176,16 +177,17 @@ const MonthlyReportScreen = ({ navigation }: NavigationOnlyProps) => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
-      <Appbar.Header statusBarHeight={0} style={{ backgroundColor: theme.background, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
-        <Appbar.Content title={monthName} titleStyle={{ fontWeight: '700', fontSize: 18, color: theme.text }} />
-        <Appbar.Action
-          icon="share-variant"
-          color={theme.text}
-          onPress={shareReport}
-          accessibilityLabel={t('monthly_report.share', 'Paylaş')}
-        />
-      </Appbar.Header>
+      <ScreenHeader
+        title={monthName}
+        onBack={() => navigation.goBack()}
+        actions={[
+          {
+            icon: 'share-outline',
+            onPress: shareReport,
+            accessibilityLabel: t('monthly_report.share', 'Paylaş'),
+          },
+        ]}
+      />
 
       <ScrollView contentContainerStyle={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
 
@@ -265,7 +267,7 @@ const MonthlyReportScreen = ({ navigation }: NavigationOnlyProps) => {
             <Surface
               key={card.key}
               elevation={0}
-              style={{ width: statCardWidth, backgroundColor: theme.surface, borderRadius: CARD.radius, paddingHorizontal: CARD.padding, paddingVertical: CARD.padding, borderWidth: 1, borderColor: theme.border, overflow: 'hidden', position: 'relative' }}
+              style={{ width: statCardWidth, backgroundColor: theme.surface, borderRadius: CARD.radius, paddingHorizontal: CARD.padding, paddingVertical: CARD.padding, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border, overflow: 'hidden', position: 'relative' }}
             >
                 <TouchableRipple onPress={() => navigation.navigate(card.screen, { statsData })} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1 }} borderless><View /></TouchableRipple>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
@@ -295,7 +297,7 @@ const MonthlyReportScreen = ({ navigation }: NavigationOnlyProps) => {
             marginHorizontal: horizontalPadding,
             padding: 16,
             borderRadius: 18,
-            borderWidth: 1,
+            borderWidth: StyleSheet.hairlineWidth,
             borderColor: theme.border,
             backgroundColor: theme.surface,
           }}

@@ -7,6 +7,9 @@ const palettes = {
     paper: "#FFFFFF",
     surfaceLight: "#F0F1EE",
     divider: "#E2E4DE",
+    // A second, much quieter rule for the outlines that only need to suggest an
+    // edge — cards and panels — as opposed to the ones that separate two rows.
+    dividerSoft: "rgba(23, 25, 31, 0.07)",
     textPrimary: "#17191F",
     textSecondary: "#646B78",
     textMuted: "#959BA7",
@@ -25,6 +28,7 @@ const palettes = {
     paper: "#15171B",
     surfaceLight: "#1D2025",
     divider: "#2B2F36",
+    dividerSoft: "rgba(255, 255, 255, 0.07)",
     textPrimary: "#F7F7F5",
     textSecondary: "#A8AFBA",
     textMuted: "#737B88",
@@ -141,15 +145,23 @@ export const createAppTheme = (mode: AppThemeMode) => {
       MuiPaper: {
         styleOverrides: {
           root: { backgroundImage: "none" },
-          rounded: { borderRadius: 14 },
+          rounded: { borderRadius: 16 },
+          /*
+           * An outlined panel gets the quiet rule, not the row separator.
+           * MUI's default draws every card at full divider contrast, and a
+           * screen of them reads as a grid of hard boxes; at this weight the
+           * edge is still there when you look for it and disappears when you
+           * are reading what is inside.
+           */
+          outlined: { border: `1px solid ${colors.dividerSoft}`, borderRadius: 16 },
         },
       },
       MuiCard: {
         styleOverrides: {
           root: {
             backgroundImage: "none",
-            border: `1px solid ${colors.divider}`,
-            borderRadius: 14,
+            border: `1px solid ${colors.dividerSoft}`,
+            borderRadius: 16,
             boxShadow: "none",
             transition: "transform 180ms cubic-bezier(.16,1,.3,1), border-color 180ms ease, box-shadow 180ms ease",
           },
@@ -170,7 +182,11 @@ export const createAppTheme = (mode: AppThemeMode) => {
               boxShadow: `0 0 0 4px ${focusRing}`,
             },
           },
-          notchedOutline: { borderColor: colors.divider },
+          /*
+           * The field is already a filled shape, so an outline round it as well
+           * is one border too many. The focus ring is what says "you are here".
+           */
+          notchedOutline: { borderColor: "transparent" },
         },
       },
       MuiIconButton: {
@@ -182,8 +198,8 @@ export const createAppTheme = (mode: AppThemeMode) => {
       MuiDialog: {
         styleOverrides: {
           paper: {
-            borderRadius: 16,
-            border: `1px solid ${colors.divider}`,
+            borderRadius: 20,
+            border: `1px solid ${colors.dividerSoft}`,
           },
         },
       },

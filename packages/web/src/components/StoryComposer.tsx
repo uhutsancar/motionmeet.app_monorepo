@@ -104,6 +104,8 @@ const StoryComposer = ({ open, onClose, onCreated }: StoryComposerProps) => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [overlays, setOverlays] = useState<StoryOverlay[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  /** Which of the two option strips, if either, is open under the caption. */
+  const [tray, setTray] = useState<"none" | "font" | "color">("none");
   const [locationOpen, setLocationOpen] = useState(false);
   const [locationDraft, setLocationDraft] = useState("");
   const [dragging, setDragging] = useState(false);
@@ -540,46 +542,94 @@ const StoryComposer = ({ open, onClose, onCreated }: StoryComposerProps) => {
                   />
                 </Box>
 
+                {/* One strip at a time, and only when it is asked for. Two
+                    permanent rows — five faces and ten dots — took the bottom
+                    third of the picture while someone was writing two words. */}
                 <Stack spacing={1.25} sx={{ p: 1.75 }}>
-                  <Stack direction="row" spacing={1} sx={{ overflowX: "auto" }} className="no-scrollbar">
-                    {STORY_FONTS.map((font) => (
-                      <Button
-                        key={font.key}
-                        size="small"
-                        onClick={() => updateOverlay(editing.id, { font: font.key })}
-                        sx={{
-                          flexShrink: 0,
-                          borderRadius: 16,
-                          color: editing.font === font.key ? "#101014" : "common.white",
-                          bgcolor: editing.font === font.key ? "common.white" : "rgba(255,255,255,.16)",
-                          "&:hover": { bgcolor: editing.font === font.key ? "common.white" : "rgba(255,255,255,.26)" },
-                          ...font.style,
-                        }}
-                      >
-                        {font.sample}
-                      </Button>
-                    ))}
-                  </Stack>
-                  <Stack direction="row" spacing={1.25} sx={{ overflowX: "auto" }} className="no-scrollbar">
-                    {STORY_TEXT_COLORS.map((color) => (
-                      <Box
-                        key={color}
-                        component="button"
-                        type="button"
-                        aria-label={color}
-                        onClick={() => updateOverlay(editing.id, { color })}
-                        sx={{
-                          flexShrink: 0,
-                          width: 28,
-                          height: 28,
-                          p: 0,
-                          borderRadius: "50%",
-                          cursor: "pointer",
-                          bgcolor: color,
-                          border: editing.color === color ? "3px solid #FFFFFF" : "2px solid rgba(255,255,255,.55)",
-                        }}
-                      />
-                    ))}
+                  {tray === "font" && (
+                    <Stack direction="row" spacing={1} sx={{ overflowX: "auto" }} className="no-scrollbar">
+                      {STORY_FONTS.map((font) => (
+                        <Button
+                          key={font.key}
+                          size="small"
+                          onClick={() => {
+                            updateOverlay(editing.id, { font: font.key });
+                            setTray("none");
+                          }}
+                          sx={{
+                            flexShrink: 0,
+                            borderRadius: 16,
+                            color: editing.font === font.key ? "#101014" : "common.white",
+                            bgcolor: editing.font === font.key ? "common.white" : "rgba(255,255,255,.16)",
+                            "&:hover": { bgcolor: editing.font === font.key ? "common.white" : "rgba(255,255,255,.26)" },
+                            ...font.style,
+                          }}
+                        >
+                          {font.sample}
+                        </Button>
+                      ))}
+                    </Stack>
+                  )}
+
+                  {tray === "color" && (
+                    <Stack direction="row" spacing={1.25} sx={{ overflowX: "auto" }} className="no-scrollbar">
+                      {STORY_TEXT_COLORS.map((color) => (
+                        <Box
+                          key={color}
+                          component="button"
+                          type="button"
+                          aria-label={color}
+                          onClick={() => {
+                            updateOverlay(editing.id, { color });
+                            setTray("none");
+                          }}
+                          sx={{
+                            flexShrink: 0,
+                            width: 28,
+                            height: 28,
+                            p: 0,
+                            borderRadius: "50%",
+                            cursor: "pointer",
+                            bgcolor: color,
+                            border: editing.color === color ? "3px solid #FFFFFF" : "none",
+                          }}
+                        />
+                      ))}
+                    </Stack>
+                  )}
+
+                  <Stack direction="row" spacing={1.25} sx={{ alignItems: "center" }}>
+                    <Button
+                      size="small"
+                      onClick={() => setTray((current) => (current === "font" ? "none" : "font"))}
+                      sx={{
+                        borderRadius: 16,
+                        color: "common.white",
+                        bgcolor: tray === "font" ? "rgba(255,255,255,.28)" : "rgba(255,255,255,.14)",
+                        "&:hover": { bgcolor: "rgba(255,255,255,.26)" },
+                      }}
+                    >
+                      {STORY_FONTS.find((font) => font.key === editing.font)?.sample ?? "Aa"}
+                    </Button>
+                    <Box
+                      component="button"
+                      type="button"
+                      aria-label={t("story.text_color", "Text colour")}
+                      onClick={() => setTray((current) => (current === "color" ? "none" : "color"))}
+                      sx={{
+                        width: 34,
+                        height: 34,
+                        p: 0,
+                        display: "grid",
+                        placeItems: "center",
+                        borderRadius: "50%",
+                        border: "none",
+                        cursor: "pointer",
+                        bgcolor: tray === "color" ? "rgba(255,255,255,.28)" : "rgba(255,255,255,.14)",
+                      }}
+                    >
+                      <Box sx={{ width: 18, height: 18, borderRadius: "50%", bgcolor: editing.color }} />
+                    </Box>
                   </Stack>
                 </Stack>
               </Box>

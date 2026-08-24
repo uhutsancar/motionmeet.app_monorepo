@@ -67,10 +67,26 @@ export const SocketProvider = ({ children }: PropsWithChildren) => {
     socketRef.current = client;
     setSocket(client);
 
-    const onConnect = () => setConnected(true);
+    /*
+     * A failed connection is reported once per outage, not once per retry.
+     *
+     * socket.io retries fifteen times, so a backend that is simply not running
+     * printed fifteen identical "timeout" lines and buried everything else in
+     * the log. The first failure is the informative one; the rest say the same
+     * thing. A successful connect re-arms the report, so the next real outage
+     * is still visible.
+     */
+    let outageReported = false;
+
+    const onConnect = () => {
+      outageReported = false;
+      setConnected(true);
+    };
     const onDisconnect = () => setConnected(false);
     const onConnectError = (error: Error) => {
       setConnected(false);
+      if (outageReported) return;
+      outageReported = true;
       logHandledError('connect-socket', error);
     };
     const onOnlineUsers = (userIds: string[]) => {

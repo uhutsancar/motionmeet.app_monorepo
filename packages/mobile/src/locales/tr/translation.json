@@ -111,7 +111,8 @@
         "empty_subtitle": "Antrenman sırasında egzersiz ekle.",
         "quick_workout": "Hızlı antrenman",
         "no_routines_hint": "Sonraki antrenmanın için tekrar kullanılabilir bir plan oluştur.",
-        "create_failed": "Rutin oluşturulamadı."
+        "create_failed": "Rutin oluşturulamadı.",
+        "create": "Rutin oluştur"
     },
     "feed": {
         "discover": "Keşfet",
@@ -184,7 +185,9 @@
         "swipe_up_viewers": "Görüntüleyenler için yukarı kaydır",
         "media_limit": "Bir gönderide en fazla 4 görsel olabilir.",
         "share_failed": "Gönderi paylaşılamadı",
-        "story_create_failed": "Hikaye oluşturulamadı."
+        "story_create_failed": "Hikaye oluşturulamadı.",
+        "share_private_hint": "Bu gönderi herkese açık olmadığı için bağlantı paylaşılamaz.",
+        "link_copied": "Bağlantı kopyalandı"
     },
     "exercises": {
         "search": "Egzersiz Ara",
@@ -256,7 +259,9 @@
         "decline": "Sil",
         "empty_title": "Henüz bildirim yok",
         "empty_body": "Takip istekleri ve beğeniler burada görünecek.",
-        "story_like": "{{name}} hikayeni beğendi"
+        "story_like": "{{name}} hikayeni beğendi",
+        "post_gone": "Bu gönderi artık mevcut değil.",
+        "story_gone": "Bu hikayenin süresi dolmuş."
     },
     "profile": {
         "workouts": "Antrenmanlar",
@@ -492,7 +497,19 @@
         "post_share_failed": "Antrenman kaydedildi ancak gönderi paylaşılamadı. Daha sonra tekrar deneyebilirsiniz.",
         "leave_summary_title": "Paylaşmadan çık",
         "leave_summary_saved": "Antrenman kaydedildi ancak gönderi paylaşılmadı. Bu ekrandan çıkmak istiyor musun?",
-        "leave_without_sharing": "Paylaşmadan çık"
+        "leave_without_sharing": "Paylaşmadan çık",
+        "share_title": "Güzeldi!",
+        "share_subtitle": "Antrenmanını paylaş",
+        "share_stories": "Hikayeler",
+        "share_more": "Daha fazla",
+        "share_download": "İndir",
+        "share_link": "Antrenman bağlantısı",
+        "share_copy_text": "Metni kopyala",
+        "share_failed": "Paylaşım tamamlanamadı.",
+        "share_saved": "Galeriye kaydedildi",
+        "share_text_copied": "Metin kopyalandı",
+        "share_save_denied": "Kaydetmek için galeri izni gerekiyor.",
+        "share_story": "MotionMeet hikayem"
     },
     "workout_summary": {
         "save_workout": "Antrenmanı Kaydet",
@@ -816,7 +833,9 @@
         "react": "Beğen",
         "send_message": "Mesaj gönder",
         "like_failed": "Beğeni kaydedilemedi",
-        "unreact": "Beğeniyi geri al"
+        "unreact": "Beğeniyi geri al",
+        "font": "Yazı stili",
+        "text_color": "Yazı rengi"
     },
     "explore": {
         "search_placeholder": "Ara",
@@ -833,5 +852,12 @@
         "clear_all": "Tümünü temizle",
         "remove_recent": "Aramayı kaldır",
         "start_hint": "Sporcuları isim ya da kullanıcı adıyla ara."
+    },
+    "permissions": {
+        "title": "İzin gerekli",
+        "open_settings": "Ayarları aç",
+        "media_blocked": "Fotoğraflarına erişim kapalı. Paylaşım yapabilmek için ayarlardan galeri iznini açman gerekiyor.",
+        "camera_blocked": "Kameraya erişim kapalı. Fotoğraf çekebilmek için ayarlardan kamera iznini açman gerekiyor.",
+        "location_blocked": "Konum erişimi kapalı. Yakındakileri görebilmek için ayarlardan konum iznini açman gerekiyor."
     }
 }

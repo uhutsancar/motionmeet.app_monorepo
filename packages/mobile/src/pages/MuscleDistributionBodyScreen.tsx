@@ -119,7 +119,7 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   gridItem: {
     backgroundColor: theme.surface, padding: 16, borderRadius: 20,
-    alignItems: 'center', borderWidth: 1, borderColor: theme.border,
+    alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
     shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 3
   },
   iconBox: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },

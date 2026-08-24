@@ -101,11 +101,24 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
     () =>
       StyleSheet.create({
         screen: { flex: 1, backgroundColor: theme.background },
+        nearbyButton: {
+          width: 40,
+          height: 40,
+          borderRadius: 20,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: theme.surfaceLight,
+        },
         searchRow: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 10,
           paddingHorizontal: 14,
           paddingVertical: 10,
         },
         searchField: {
+          flex: 1,
+          minWidth: 0,
           flexDirection: 'row',
           alignItems: 'center',
           gap: 8,
@@ -183,6 +196,18 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
         >
           <Ionicons name="search" size={17} color={theme.textMuted} />
           <Text style={styles.searchLabel}>{t('explore.search_placeholder', 'Ara')}</Text>
+        </Pressable>
+        {/* Meeting people is what this app is for, and finding the ones nearby
+            was three screens deep — inside Connections, or under a Location
+            heading in Settings. It belongs next to the search field, on the
+            screen people already open to look for someone. */}
+        <Pressable
+          style={styles.nearbyButton}
+          onPress={() => navigation.navigate('NearbyScreen')}
+          accessibilityRole="button"
+          accessibilityLabel={t('nearby.title', 'Yakındakiler')}
+        >
+          <Ionicons name="location-outline" size={19} color={theme.text} />
         </Pressable>
       </View>
 

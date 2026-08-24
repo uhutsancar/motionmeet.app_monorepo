@@ -75,15 +75,52 @@ export const getUserFacingError = (error: unknown, fallback?: string, messages: 
 
 type FeedbackOptions = Omit<ToastShowParams, 'type' | 'text1' | 'text2'>;
 
+/**
+ * How long a toast is left alone before another may replace it.
+ *
+ * The library shows one at a time, so two results landing together — "shared"
+ * immediately followed by "saved" — cut each other off mid-animation and read
+ * as one flickering box. This is the pause that lets the first one be read.
+ */
+const TOAST_SPACING_MS = 900;
+
+let lastShownAt = 0;
+let queuedTimer: ReturnType<typeof setTimeout> | undefined;
+
+const present = (params: ToastShowParams): void => {
+  lastShownAt = Date.now();
+  Toast.show(params);
+};
+
+/**
+ * Shows a toast, holding it back if one has only just appeared.
+ *
+ * Only the most recent pending toast is kept: when three things finish at once
+ * the member wants the outcome, not a queue of three boxes to sit through.
+ */
 const show = (type: 'success' | 'error' | 'info', title: string, message: string, options: FeedbackOptions = {}): void => {
-  Toast.show({
+  const params: ToastShowParams = {
     type,
     text1: title,
     text2: message,
     position: 'top',
     visibilityTime: options.visibilityTime || (type === 'error' ? 4600 : 3200),
     ...options,
-  });
+  };
+
+  const since = Date.now() - lastShownAt;
+  if (since >= TOAST_SPACING_MS) {
+    if (queuedTimer) clearTimeout(queuedTimer);
+    queuedTimer = undefined;
+    present(params);
+    return;
+  }
+
+  if (queuedTimer) clearTimeout(queuedTimer);
+  queuedTimer = setTimeout(() => {
+    queuedTimer = undefined;
+    present(params);
+  }, TOAST_SPACING_MS - since);
 };
 
 export const showSuccess = (title: string, message: string, options?: FeedbackOptions): void =>

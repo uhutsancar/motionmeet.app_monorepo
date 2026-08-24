@@ -14,8 +14,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const mark = await readFile(join(root, "brand/motionmeet-mark.svg"));
 const glyph = await readFile(join(root, "brand/motionmeet-glyph.svg"));
 
-/** Deep indigo behind the glyph — the same value the tile gradient ends on. */
-const BRAND_BACKGROUND = "#0B0630";
+/** The near-black the tile gradient sits in, used wherever the glyph needs a plate. */
+const BRAND_BACKGROUND = "#0B1220";
 
 const write = async (relativePath, buffer) => {
   const target = join(root, relativePath);

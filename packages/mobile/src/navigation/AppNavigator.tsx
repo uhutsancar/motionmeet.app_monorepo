@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { Image, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
+import { WEB_URL } from '../config/environment';
 import { useSocket } from '../hooks/useSocket';
 import { useAppSelector } from '../store/hooks';
 import Toast from 'react-native-toast-message';
@@ -65,6 +66,7 @@ const loadLocationSettings = () => require('../pages/LocationSettingsScreen').de
 const loadNearby = () => require('../pages/NearbyScreen').default;
 const loadSearch = () => require('../pages/SearchScreen').default;
 const loadLicenses = () => require('../pages/LicensesScreen').default;
+const loadPost = () => require('../pages/PostScreen').default;
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 const Tab = createMaterialTopTabNavigator();
@@ -110,6 +112,8 @@ const MainStack = () => (
     {/* Search is a place of its own, pushed from the field on Keşfet, so the
         grid is not rebuilt on every keystroke and Cancel returns to it. */}
     <Stack.Screen name="SearchScreen" getComponent={loadSearch} />
+    {/* Where a shared MotionMeet link lands once the app is installed. */}
+    <Stack.Screen name="PostScreen" getComponent={loadPost} />
     <Stack.Screen name="ProfileEdit" getComponent={loadProfileEdit} />
     <Stack.Screen name="Settings" getComponent={loadSettings} />
     <Stack.Screen name="Statistics" getComponent={loadStatistics} />
@@ -313,6 +317,24 @@ const TabNavigator = () => {
   );
 };
 
+/**
+ * How a link from outside the app turns into a screen.
+ *
+ * Both forms of the same address are accepted: the custom scheme, which is what
+ * the server's share page hands to an installed app, and the https URL that
+ * everyone actually pastes into a chat. Whichever arrives, `post/:postId`
+ * resolves to the post itself rather than dropping the reader on the feed.
+ */
+const linking = {
+  prefixes: ['motionmeet://', `${WEB_URL}/`],
+  config: {
+    screens: {
+      PostScreen: 'post/:postId',
+      Profile: 'profile/:userId',
+    },
+  },
+};
+
 /* ─── Root ───────────────────────────────────────────────────────────────────── */
 const AppNavigator = () => {
   const { theme, isDark } = useTheme();
@@ -331,7 +353,7 @@ const AppNavigator = () => {
   };
 
   return (
-    <NavigationContainer theme={navigationTheme}>
+    <NavigationContainer theme={navigationTheme} linking={linking}>
       <MainStack />
     </NavigationContainer>
   );

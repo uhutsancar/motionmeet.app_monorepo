@@ -8,7 +8,6 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { MESSAGE_ICON_PAPER } from '../config/icons';
 import {
   ActivityIndicator,
-  Appbar,
   Avatar,
   Button,
   Divider,
@@ -23,6 +22,7 @@ import { useTheme } from '../context/ThemeContext';
 import { setAuthToken } from '../api/client';
 import { logHandledError, showInfo } from '../utils/feedback';
 import { getUserProfile, getWorkouts } from '../api/endpoints';
+import ScreenHeader from '../components/ScreenHeader';
 import { useFollowAction } from '../hooks/useFollowAction';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { AVATAR, CARD, EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
@@ -199,24 +199,24 @@ const Profile = ({ route, navigation }: ProfileProps) => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
-      <Appbar.Header
-        statusBarHeight={0}
-        style={{
-          backgroundColor: theme.surface,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.border,
-          elevation: 0,
-        }}
-      >
-        {!isOwnProfile && <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />}
-        <Appbar.Content
-          title={isOwnProfile ? t('tabs.profile', 'Profile') : user?.username || t('tabs.profile', 'Profile')}
-          titleStyle={{ color: theme.text, fontSize: 23, fontWeight: '800' }}
-        />
-        {isOwnProfile && (
-          <Appbar.Action icon="cog-outline" color={theme.text} onPress={() => navigation.navigate('Settings')} />
-        )}
-      </Appbar.Header>
+      {/* A compact bar with no rule under it: the cover photo starts straight
+          away, so the header reads as part of the profile rather than as a slab
+          bolted on above it. */}
+      <ScreenHeader
+        title={isOwnProfile ? t('tabs.profile', 'Profile') : user?.username || t('tabs.profile', 'Profile')}
+        onBack={isOwnProfile ? undefined : () => navigation.goBack()}
+        actions={
+          isOwnProfile
+            ? [
+                {
+                  icon: 'settings-outline',
+                  onPress: () => navigation.navigate('Settings'),
+                  accessibilityLabel: t('settings.title', 'Ayarlar'),
+                },
+              ]
+            : undefined
+        }
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -389,9 +389,7 @@ const Profile = ({ route, navigation }: ProfileProps) => {
               marginHorizontal: CARD.padding,
               padding: 28,
               alignItems: 'center',
-              borderRadius: 14,
-              borderWidth: 1,
-              borderColor: theme.border,
+              borderRadius: 16,
               backgroundColor: theme.surface,
             }}
           >
@@ -492,9 +490,7 @@ const Profile = ({ route, navigation }: ProfileProps) => {
                     paddingVertical: 10,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    borderRadius: 10,
-                    borderWidth: 1,
-                    borderColor: theme.border,
+                    borderRadius: 14,
                     backgroundColor: theme.surfaceLight,
                   }}
                 >
@@ -729,9 +725,7 @@ const Profile = ({ route, navigation }: ProfileProps) => {
             style={{
               marginTop: 16,
               overflow: 'hidden',
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: theme.border,
+              borderRadius: 16,
               backgroundColor: theme.surface,
             }}
           >

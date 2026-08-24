@@ -21,6 +21,7 @@ import planRouter from "./routes/planRoutes.js";
 import postRouter from "./routes/postRoutes.js";
 import rbacRouter from "./routes/rbacRoutes.js";
 import routineRouter from "./routes/routineRoutes.js";
+import shareRouter from "./routes/shareRoutes.js";
 import storyRouter from "./routes/storyRoutes.js";
 import userRouter from "./routes/userRoutes.js";
 import workoutRouter from "./routes/workoutRoutes.js";
@@ -113,6 +114,11 @@ app.use("/api/auth", authRoutes); app.use("/api/user", userRouter); app.use("/ap
 app.use("/api/message", messageRouter); app.use("/api/exercise", exerciseRouter); app.use("/api/routine", routineRouter); app.use("/api/workout", workoutRouter);
 app.use("/api/plans", planRouter); app.use("/api/admin", rbacRouter); app.use("/api/muscle-groups", muscleGroupRouter); app.use("/api/equipment", equipmentRouter); app.use("/api/media", mediaRouter); app.use("/api/measurements", measurementRouter);
 app.use("/api/locations", locationRouter); app.use("/api/nearby", nearbyRouter); app.use("/api/notifications", notificationRouter);
+// Public, unauthenticated HTML for shared links. Mounted at the root rather
+// than under /api because it is a page address people paste into a chat, and
+// the crawler that fetches it before them needs the Open Graph tags served on
+// the first response.
+app.use(shareRouter);
 app.use(notFoundHandler); app.use(errorHandler);
 
 io.use(async (socket, next) => {

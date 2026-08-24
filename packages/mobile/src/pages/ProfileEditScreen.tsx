@@ -2,12 +2,12 @@ import React, { useMemo, useState } from 'react';
 import {
   Image,
   View,
+  StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import {
-  Appbar,
   Avatar,
   Button,
   Surface,
@@ -30,6 +30,7 @@ import {
 } from '../utils/feedback';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
+import ScreenHeader from '../components/ScreenHeader';
 import type { NavigationOnlyProps } from '../navigation/types';
 
 const ALLOWED_IMAGE_TYPES = new Set([
@@ -169,13 +170,10 @@ const ProfileEditScreen = ({ navigation }: NavigationOnlyProps) => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right', 'bottom']}>
-      <Appbar.Header statusBarHeight={0} style={{ backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} disabled={saving} />
-        <Appbar.Content
-          title={t('profile.edit_profile', 'Edit profile')}
-          titleStyle={{ color: theme.text, fontWeight: '800', fontSize: 20 }}
-        />
-      </Appbar.Header>
+      <ScreenHeader
+        title={t('profile.edit_profile', 'Edit profile')}
+        onBack={saving ? undefined : () => navigation.goBack()}
+      />
 
         <KeyboardAwareScrollView
           showsVerticalScrollIndicator={false}
@@ -195,7 +193,7 @@ const ProfileEditScreen = ({ navigation }: NavigationOnlyProps) => {
             style={{
               overflow: 'hidden',
               borderRadius: 16,
-              borderWidth: 1,
+              borderWidth: StyleSheet.hairlineWidth,
               borderColor: theme.border,
               backgroundColor: theme.surface,
             }}
@@ -264,7 +262,7 @@ const ProfileEditScreen = ({ navigation }: NavigationOnlyProps) => {
               padding: 16,
               gap: 13,
               borderRadius: 16,
-              borderWidth: 1,
+              borderWidth: StyleSheet.hairlineWidth,
               borderColor: theme.border,
               backgroundColor: theme.surface,
             }}
@@ -315,7 +313,7 @@ const ProfileEditScreen = ({ navigation }: NavigationOnlyProps) => {
                   minHeight: 56,
                   paddingHorizontal: 14,
                   borderRadius: 4,
-                  borderWidth: 1,
+                  borderWidth: StyleSheet.hairlineWidth,
                   borderColor: theme.border,
                   backgroundColor: theme.surfaceLight,
                 }}

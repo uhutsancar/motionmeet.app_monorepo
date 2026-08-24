@@ -9,7 +9,7 @@ import { Button, Surface, Text, TextInput, TouchableRipple } from 'react-native-
 import { useTranslation } from 'react-i18next';
 import { useAuthContext } from '../context/AuthProvider';
 import { useTheme, type MotionTheme } from '../context/ThemeContext';
-import MotionMark from '../components/MotionMark';
+import MotionLogo from '../components/MotionLogo';
 import { WEB_URL } from '../config/environment';
 import KeyboardAwareScrollView from '../components/KeyboardAwareScrollView';
 import { showError } from '../utils/feedback';
@@ -117,12 +117,11 @@ const Login = () => {
           extraScrollHeight={24}
         >
           <View style={styles.brandRow}>
-            <MotionMark size={46} />
-            <View>
-              <Text style={styles.brandName}>MotionMeet</Text>
-              <Text style={styles.brandTag}>{t('auth.tagline')}</Text>
-            </View>
+            {/* The one lockup, so the sign-in screen and the app header show
+                the logo at the same proportions rather than two near-misses. */}
+            <MotionLogo size={44} />
           </View>
+          <Text style={styles.brandTag}>{t('auth.tagline')}</Text>
 
           <View style={styles.intro}>
             <Text style={styles.eyebrow}>
@@ -265,20 +264,14 @@ const createStyles = (theme: MotionTheme) => StyleSheet.create({
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 11,
-    marginBottom: 28,
-  },
-  brandName: {
-    color: theme.text,
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: -0.5,
+    marginBottom: 6,
   },
   brandTag: {
     color: theme.textMuted,
-    fontSize: 8,
-    fontWeight: '900',
+    fontSize: 9,
+    fontWeight: '800',
     letterSpacing: 1.05,
+    marginBottom: 26,
   },
   intro: {
     marginBottom: 18,
@@ -308,7 +301,7 @@ const createStyles = (theme: MotionTheme) => StyleSheet.create({
     backgroundColor: theme.surface,
     borderRadius: 12,
     padding: 18,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.border,
   },
   segment: {

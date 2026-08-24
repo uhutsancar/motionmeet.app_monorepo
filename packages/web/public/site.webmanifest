@@ -4,8 +4,8 @@
   "description": "Train, track and connect with your fitness community.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0B0630",
-  "theme_color": "#0B0630",
+  "background_color": "#0B1220",
+  "theme_color": "#0B1220",
   "icons": [
     { "src": "/favicon-192.png", "type": "image/png", "sizes": "192x192" },
     { "src": "/favicon-512.png", "type": "image/png", "sizes": "512x512" },

@@ -402,7 +402,7 @@ const getStyles = (theme: MotionTheme, contentPadding: number, imageSize: number
     minHeight: 34,
     justifyContent: 'center',
     borderRadius: 9,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.border,
     backgroundColor: theme.surfaceLight,
   },

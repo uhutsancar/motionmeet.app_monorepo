@@ -27,6 +27,7 @@ import FollowButton from "~/components/FollowButton";
 import {
   API_ROUTES,
   CONTENT_LIMITS,
+  buildPostShareUrl,
   mediaSrcSet,
   mediaVariantUrl,
   type ApiFailure,
@@ -196,14 +197,32 @@ const PostCard = ({ post }: PostCardProps) => {
     }
   };
 
+  /**
+   * Shares the post, with a link that actually goes somewhere.
+   *
+   * The caption on its own gave the recipient nothing to open. The canonical
+   * URL is what makes a paste into WhatsApp or Telegram render a preview card
+   * that leads back here.
+   *
+   * On a phone `navigator.share` opens the operating system's own sheet, which
+   * already lists every app the reader has; on a desktop browser, where there
+   * usually is no sheet, the link is copied instead and a small toast says so.
+   * A post that is not public has no shareable URL, so only its text travels.
+   */
   const handleShare = async () => {
+    const isPublic = (post.visibility ?? "public") === "public";
+    const url = isPublic ? buildPostShareUrl(window.location.origin, post._id || post.id) : null;
     const text = [post.content, workout?.name].filter(Boolean).join("\n") || "MotionMeet";
     try {
       if (navigator.share) {
-        await navigator.share({ title: "MotionMeet", text });
+        await navigator.share({ title: "MotionMeet", text, ...(url ? { url } : {}) });
       } else {
-        await navigator.clipboard.writeText(text);
-        toast.success(t("feed.copied", "Copied to clipboard"));
+        await navigator.clipboard.writeText(url ?? text);
+        toast.success(
+          url
+            ? t("feed.link_copied", "Bağlantı kopyalandı")
+            : t("feed.copied", "Copied to clipboard"),
+        );
       }
     } catch (error: unknown) {
       if (!(error instanceof DOMException && error.name === "AbortError")) {

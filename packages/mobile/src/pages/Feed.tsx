@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   View,
   type ListRenderItem,
+  StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -235,16 +236,16 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
       <Surface
         elevation={0}
         style={{
-          minHeight: 58,
-          paddingHorizontal: 16,
+          // Compact, and with no rule under it: the stories rail reads as the
+          // top of the page rather than as a second band under a header bar.
+          minHeight: 52,
+          paddingHorizontal: 14,
           flexDirection: 'row',
           alignItems: 'center',
-          borderBottomWidth: 1,
-          borderBottomColor: theme.border,
-          backgroundColor: theme.surface,
+          backgroundColor: theme.background,
         }}
       >
-        <MotionMark size={28} />
+        <MotionMark size={26} />
         {/* One title that opens the feed picker, instead of two competing tabs. */}
         <View style={{ flex: 1, minWidth: 0, marginLeft: isNarrow ? 8 : 12 }}>
           <Menu
@@ -327,7 +328,7 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
                 marginHorizontal: 12,
                 padding: CARD.padding,
                 borderRadius: CARD.radius,
-                borderWidth: 1,
+                borderWidth: StyleSheet.hairlineWidth,
                 borderColor: theme.border,
                 backgroundColor: theme.surface,
               }}
@@ -400,7 +401,7 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
                 flexDirection: 'row',
                 alignItems: 'center',
                 borderRadius: CARD.radius,
-                borderWidth: 1,
+                borderWidth: StyleSheet.hairlineWidth,
                 borderColor: theme.border,
                 backgroundColor: theme.surface,
               }}
@@ -437,7 +438,7 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
                 padding: 24,
                 alignItems: 'center',
                 borderRadius: 12,
-                borderWidth: 1,
+                borderWidth: StyleSheet.hairlineWidth,
                 borderColor: theme.border,
                 backgroundColor: theme.surface,
               }}

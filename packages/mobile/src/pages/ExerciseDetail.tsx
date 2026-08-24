@@ -12,11 +12,12 @@ import { useTheme, type MotionTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { getExerciseHistory, getExerciseStats } from '../api/endpoints';
 import { useAuthContext } from '../context/AuthProvider';
-import { Appbar, Text, Surface, Button } from 'react-native-paper';
+import { Text, Surface, Button } from 'react-native-paper';
 import { logHandledError } from '../utils/feedback';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { CARD } from '../config/layout';
 import dayjs from '../utils/dayjs';
+import ScreenHeader from '../components/ScreenHeader';
 import type { ExerciseSessionEntry, ExerciseStats } from '@motionmeet/shared';
 import type { BaseNavigationScreenProps, ExerciseDetailRouteParams } from '../navigation/types';
 
@@ -145,13 +146,7 @@ const ExerciseDetail = ({ route, navigation }: BaseNavigationScreenProps) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <Appbar.Header style={styles.header} statusBarHeight={0}>
-        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
-        <Appbar.Content
-          title={exercise.name}
-          titleStyle={{ color: theme.text, fontSize: 17, fontWeight: '800' }}
-        />
-      </Appbar.Header>
+      <ScreenHeader title={exercise.name} onBack={() => navigation.goBack()} />
 
       {/* Tabs. The underline follows the pager, and the pager follows a tap,
           so the three panes can also just be swiped through by hand. */}
@@ -327,7 +322,7 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
   scrollContent: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingBottom: 24 },
   mediaContainer: { width: '100%', aspectRatio: 16 / 10, marginTop: 12 },
   media: { flex: 1, borderRadius: CARD.radius, backgroundColor: '#FFFFFF' },
-  placeholderMedia: { flex: 1, borderRadius: CARD.radius, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.border },
+  placeholderMedia: { flex: 1, borderRadius: CARD.radius, justifyContent: 'center', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border },
   infoSection: { marginTop: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: theme.border, backgroundColor: 'transparent' },
   title: { fontWeight: 'bold', color: theme.text, marginBottom: 3 },
   subtitle: { color: theme.textMuted, fontWeight: '500' },
@@ -340,7 +335,7 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
     flex: 1,
     borderRadius: CARD.radius,
     padding: CARD.padding,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.border,
     backgroundColor: theme.surface,
   },
@@ -358,7 +353,7 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
   chartBar: { width: '100%', maxWidth: 20, borderRadius: 3 },
   historyCard: {
     borderRadius: CARD.radius,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.border,
     backgroundColor: theme.surface,
     padding: CARD.padding,

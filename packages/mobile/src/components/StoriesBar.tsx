@@ -48,7 +48,9 @@ const StoriesBar = ({ onAddStory, navigation, onStoryDeleted }: StoriesBarProps)
   const ringSize = isNarrow ? 62 : 70;
   const avatarSize = ringSize - 9;
 
-  const [viewerStories, setViewerStories] = useState<Story[]>([]);
+  /* Which bubble the viewer opened on. It then walks the whole rail from
+     there, so what it needs is the position, not one person's stories. */
+  const [viewerGroup, setViewerGroup] = useState(0);
   const [viewerVisible, setViewerVisible] = useState(false);
 
   const { ownStories, otherGroups } = useMemo(() => {
@@ -159,15 +161,29 @@ const StoriesBar = ({ onAddStory, navigation, onStoryDeleted }: StoriesBarProps)
     [avatarSize, ringSize, theme],
   );
 
-  const openStories = useCallback((group: Story[]) => {
-    if (!group.length) return;
-    setViewerStories(group);
+  /**
+   * Every group the viewer can reach, in the order the rail shows them.
+   *
+   * The author's own stories come first, exactly as the bubbles do, so tapping
+   * a bubble and then letting the viewer run through to the end covers the rail
+   * left to right without ever going back to the feed.
+   */
+  const viewerGroups = useMemo(
+    () => [
+      ...(ownStories.length ? [{ stories: ownStories }] : []),
+      ...otherGroups.map((group) => ({ stories: group.stories })),
+    ],
+    [otherGroups, ownStories],
+  );
+
+  const openStories = useCallback((index: number) => {
+    if (index < 0) return;
+    setViewerGroup(index);
     setViewerVisible(true);
   }, []);
 
   const closeViewer = useCallback(() => {
     setViewerVisible(false);
-    setViewerStories([]);
   }, []);
 
   const renderAvatar = (picture: string, fallback: string) =>
@@ -193,7 +209,7 @@ const StoriesBar = ({ onAddStory, navigation, onStoryDeleted }: StoriesBarProps)
           {/* Own bubble: opens what is already posted, the badge adds more. */}
           <Pressable
             style={styles.bubble}
-            onPress={() => (hasOwnStories ? openStories(ownStories) : onAddStory())}
+            onPress={() => (hasOwnStories ? openStories(0) : onAddStory())}
             accessibilityRole="button"
             accessibilityLabel={t('feed.your_story', 'Hikayem')}
           >
@@ -215,14 +231,14 @@ const StoriesBar = ({ onAddStory, navigation, onStoryDeleted }: StoriesBarProps)
             </Text>
           </Pressable>
 
-          {otherGroups.map(({ user: storyUser, stories: userStories }) => {
+          {otherGroups.map(({ user: storyUser }, position) => {
             const picture =
               typeof storyUser.profile_picture === 'string' ? storyUser.profile_picture.trim() : '';
             return (
               <Pressable
                 key={storyUser._id}
                 style={styles.bubble}
-                onPress={() => openStories(userStories)}
+                onPress={() => openStories((ownStories.length ? 1 : 0) + position)}
                 accessibilityRole="button"
                 accessibilityLabel={storyUser.full_name || storyUser.username}
               >
@@ -244,7 +260,8 @@ const StoriesBar = ({ onAddStory, navigation, onStoryDeleted }: StoriesBarProps)
 
       <StoryViewer
         visible={viewerVisible}
-        stories={viewerStories}
+        groups={viewerGroups}
+        startGroup={viewerGroup}
         startIndex={0}
         navigation={navigation}
         onClose={closeViewer}

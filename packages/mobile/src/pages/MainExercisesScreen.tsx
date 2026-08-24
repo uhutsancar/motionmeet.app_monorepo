@@ -6,10 +6,11 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from "../context/AuthProvider";
 import endpoints from '../api/endpoints';
-import { Appbar, Surface, Text, ActivityIndicator } from 'react-native-paper';
+import { Surface, Text, ActivityIndicator } from 'react-native-paper';
 import type { WorkoutStats } from '@motionmeet/shared';
 import type { NavigationOnlyProps } from '../navigation/types';
 import { logHandledError } from '../utils/feedback';
+import ScreenHeader from '../components/ScreenHeader';
 
 type ExerciseBreakdown = WorkoutStats['exerciseBreakdown'][number];
 
@@ -56,7 +57,7 @@ const MainExercisesScreen = ({ navigation }: NavigationOnlyProps) => {
       padding: 16,
       paddingBottom: 40,
     },
-    list: { backgroundColor: theme.surface, borderRadius: 20, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' },
+    list: { backgroundColor: theme.surface, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border, overflow: 'hidden' },
     listItem: {
       flexDirection: 'row', alignItems: 'center', padding: 16,
       borderBottomWidth: 1, borderBottomColor: theme.border,
@@ -76,10 +77,10 @@ const MainExercisesScreen = ({ navigation }: NavigationOnlyProps) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <Appbar.Header style={styles.header} statusBarHeight={0}>
-        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
-        <Appbar.Content title={t('statistics.main_exercises', 'Ana egzersizler')} titleStyle={styles.headerTitle} />
-      </Appbar.Header>
+      <ScreenHeader
+        title={t('statistics.main_exercises', 'Ana egzersizler')}
+        onBack={() => navigation.goBack()}
+      />
 
       <ScrollView contentContainerStyle={styles.content}>
         {loading ? (

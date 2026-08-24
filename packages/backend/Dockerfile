@@ -13,7 +13,9 @@ FROM node:24-alpine AS runtime
 
 ENV NODE_ENV=production
 WORKDIR /app
-RUN apk add --no-cache tini
+# fontconfig and a real font family are what sharp needs to draw the type on a
+# share card; without them every label rasterises as empty boxes.
+RUN apk add --no-cache tini fontconfig ttf-dejavu
 
 COPY --from=dependencies --chown=node:node /app/node_modules ./node_modules
 COPY --from=dependencies --chown=node:node /app/packages/backend/node_modules ./packages/backend/node_modules

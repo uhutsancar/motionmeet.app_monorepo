@@ -6,8 +6,9 @@ import { useTranslation } from 'react-i18next';
 import dayjs from '../utils/dayjs';
 
 import { useTheme, type MotionTheme } from '../context/ThemeContext';
-import { Appbar, Surface, Text } from 'react-native-paper';
+import { Surface, Text } from 'react-native-paper';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import ScreenHeader from '../components/ScreenHeader';
 import type { BaseNavigationScreenProps, WorkoutDetailRouteParams } from '../navigation/types';
 import type { Exercise, WorkoutExercise } from '@motionmeet/shared';
 
@@ -24,10 +25,7 @@ const WorkoutDetailScreen = ({ navigation, route }: BaseNavigationScreenProps) =
   if (!workout || typeof workout !== 'object') {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-        <Appbar.Header style={styles.header} statusBarHeight={0}>
-          <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
-          <Appbar.Content title={t('workout.details', 'Workout Details')} titleStyle={styles.headerTitle} />
-        </Appbar.Header>
+        <ScreenHeader title={t('workout.details', 'Workout Details')} onBack={() => navigation.goBack()} />
         <Surface elevation={0} style={styles.emptyState}>
           <Ionicons name="alert-circle-outline" size={48} color={theme.textMuted} />
           <Text variant="bodyLarge" style={styles.emptyText}>{t('workout.not_available', 'Workout details are not available')}</Text>
@@ -41,10 +39,7 @@ const WorkoutDetailScreen = ({ navigation, route }: BaseNavigationScreenProps) =
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <Appbar.Header style={styles.header} statusBarHeight={0}>
-        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
-        <Appbar.Content title={t('workout.details', 'Workout Details')} titleStyle={styles.headerTitle} />
-      </Appbar.Header>
+      <ScreenHeader title={t('workout.details', 'Workout Details')} onBack={() => navigation.goBack()} />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingHorizontal: horizontalPadding }]}
@@ -107,7 +102,7 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
   statsRow: { flexDirection: 'row', gap: 10, marginTop: 24, marginBottom: 28 },
   statsRowNarrow: { flexDirection: 'column' },
   statCard: {
-    flex: 1, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border,
+    flex: 1, backgroundColor: theme.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
     borderRadius: 14, padding: 12,
   },
   statCardNarrow: { flex: 0, width: '100%' },
@@ -115,7 +110,7 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
   statValue: { color: theme.text, fontWeight: '700' },
   sectionTitle: { color: theme.text, fontWeight: '700', marginBottom: 12 },
   exerciseCard: {
-    backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border,
+    backgroundColor: theme.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
     borderRadius: 16, padding: 16, marginBottom: 12,
   },
   exerciseName: { color: theme.primary, fontWeight: '700', marginBottom: 10 },

@@ -68,7 +68,7 @@ const AppToast = () => {
     <Toast
       config={config}
       position="top"
-      topOffset={insets.top + 10}
+      topOffset={insets.top + 14}
       bottomOffset={insets.bottom + 10}
       visibilityTime={3800}
     />

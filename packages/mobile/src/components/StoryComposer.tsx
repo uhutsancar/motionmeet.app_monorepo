@@ -12,6 +12,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { VideoView, useVideoPlayer } from 'expo-video';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createOperationId, type Story, type StoryOverlay } from '@motionmeet/shared';
@@ -20,6 +21,7 @@ import { createStory } from '../api/endpoints';
 import { uploadMedia } from '../api/mediaUpload';
 import { useAppSelector } from '../store/hooks';
 import { useStoryFrame } from '../hooks/useStoryFrame';
+import { ensureMediaLibraryPermission } from '../utils/permissions';
 import {
   getUserFacingError,
   logHandledError,
@@ -129,9 +131,13 @@ const StoryComposer = ({ visible, onClose, onSuccess }: StoryComposerProps) => {
     if (pickerBusyRef.current) return;
     pickerBusyRef.current = true;
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      // A refusal is never final: the button asks again next time, and only a
+      // permanent block sends the member to the OS settings.
+      const permission = await ensureMediaLibraryPermission();
       if (!permission.granted) {
-        showError(t('common.error'), t('feed.permission_required_media'));
+        if (permission.outcome === 'denied') {
+          showError(t('common.error'), t('feed.permission_required_media'));
+        }
         if (closeOnCancel) close();
         return;
       }
@@ -271,7 +277,7 @@ const StoryComposer = ({ visible, onClose, onSuccess }: StoryComposerProps) => {
       navigationBarTranslucent
       onRequestClose={close}
     >
-      <View style={styles.root}>
+      <GestureHandlerRootView style={styles.root}>
         {/* The frame is the whole screen so the composed story and the story a
             viewer opens are the same picture, edge to edge, on every device. */}
         <View style={styles.frame} onLayout={onFrameLayout}>
@@ -414,7 +420,7 @@ const StoryComposer = ({ visible, onClose, onSuccess }: StoryComposerProps) => {
         {locationOpen && (
           <StoryLocationSheet onCancel={() => setLocationOpen(false)} onPick={addLocation} />
         )}
-      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 };
@@ -514,7 +520,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 25,
     backgroundColor: 'rgba(20,20,26,0.62)',
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.14)',
   },
   shareAvatar: {

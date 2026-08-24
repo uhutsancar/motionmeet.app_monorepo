@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { useNavigate, useParams } from 'react-router';
 
 import Box from '@mui/material/Box';
+import Dialog from '@mui/material/Dialog';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import AvatarMui from '@mui/material/Avatar';
@@ -72,6 +73,8 @@ const WebMessages = () => {
   const [activeConv, setActiveConv] = useState<UiConversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState('');
+  /** The photo being viewed full screen, if any. */
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [loadingConvs, setLoadingConvs] = useState(true);
   const [loadingMoreConvs, setLoadingMoreConvs] = useState(false);
@@ -622,7 +625,25 @@ const WebMessages = () => {
                 <Stack key={msg._id || idx} direction="row" sx={{ justifyContent: mine ? 'flex-end' : 'flex-start',  alignItems: "flex-end" }} spacing={1}>
                   {!mine && <Avatar user={activeConv.partner} size={26} />}
                   <Box sx={{ maxWidth: '70%' }}>
-                    {msg.message_type === 'image' && msg.media_url && <Box component="img" src={msg.media_url} alt="media" sx={{ borderRadius: 3, mb: 0.5, maxHeight: 240, objectFit: 'cover' }} />}
+                    {/* The photo is the message: no frame round it, and a click
+                        opens it full screen the way any chat app does. */}
+                    {msg.message_type === 'image' && msg.media_url && (
+                      <Box
+                        component="img"
+                        src={msg.media_url}
+                        alt={t('common.photo', 'Fotoğraf')}
+                        onClick={() => setViewerUrl(msg.media_url)}
+                        sx={{
+                          display: 'block',
+                          width: '100%',
+                          borderRadius: 3,
+                          mb: 0.5,
+                          maxHeight: 260,
+                          objectFit: 'cover',
+                          cursor: 'zoom-in',
+                        }}
+                      />
+                    )}
                     {msg.text && (
                       <Paper elevation={0} sx={{ px: 1.75, py: 1.1, borderRadius: 2.5, bgcolor: mine ? 'primary.main' : 'background.paper', color: mine ? 'primary.contrastText' : 'text.primary', border: !mine ? 1 : 0, borderColor: 'divider' }}>
                         <Typography variant="body2" sx={{ lineHeight: 1.5, wordBreak: 'break-word' }}>{msg.text}</Typography>
@@ -687,6 +708,36 @@ const WebMessages = () => {
         </Box>
       )}
       </Paper>
+
+      {/* A photo, full screen, and nothing round it. `contain` because the point
+          is to see what was actually sent, uncropped, on any aspect ratio. */}
+      <Dialog
+        open={Boolean(viewerUrl)}
+        onClose={() => setViewerUrl(null)}
+        fullScreen
+        slotProps={{ paper: { sx: { bgcolor: 'rgba(0,0,0,0.96)', border: 'none' } } }}
+      >
+        <Box
+          onClick={() => setViewerUrl(null)}
+          sx={{ position: 'relative', width: '100%', height: '100%', display: 'grid', placeItems: 'center', cursor: 'zoom-out' }}
+        >
+          {viewerUrl && (
+            <Box
+              component="img"
+              src={viewerUrl}
+              alt={t('common.photo', 'Fotoğraf')}
+              sx={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+            />
+          )}
+          <IconButton
+            aria-label={t('common.close', 'Kapat')}
+            onClick={() => setViewerUrl(null)}
+            sx={{ position: 'absolute', top: 12, left: 12, color: 'common.white', bgcolor: 'rgba(255,255,255,0.14)' }}
+          >
+            <X size={22} />
+          </IconButton>
+        </Box>
+      </Dialog>
     </Box>
   );
 };

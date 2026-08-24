@@ -2,7 +2,7 @@
 // expo-image build, and when it disagrees with the version installed here the
 // view renders blank instead of erroring, so exercise photos and GIFs vanish.
 import React, { useState, useEffect, useRef } from 'react';
-import { Image, View, Alert } from 'react-native';
+import { StyleSheet, Image, View, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, Surface, TextInput, Button, IconButton, TouchableRipple } from 'react-native-paper';
 const formatTime = (seconds: number): string => {
@@ -326,7 +326,7 @@ const ActiveWorkoutScreen = ({ navigation, route }: ActiveWorkoutProps) => {
 
         {/* Exercises */}
         {exercises.map((ex, exIndex) => (
-          <Surface key={exIndex} elevation={0} style={{ marginBottom: 12, borderRadius: CARD.radius, padding: isNarrow ? 10 : CARD.padding, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }}>
+          <Surface key={exIndex} elevation={0} style={{ marginBottom: 12, borderRadius: CARD.radius, padding: isNarrow ? 10 : CARD.padding, backgroundColor: theme.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 8 }}>
                 {ex.imageUrl ? (

@@ -4,6 +4,7 @@ import {
   TextInput,
   FlatList,
   ActivityIndicator,
+  Platform,
   Share,
   StyleSheet,
   View,
@@ -29,9 +30,12 @@ import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { AVATAR, EXERCISE_THUMB, POST_MEDIA_ASPECT, exerciseThumbStyle } from '../config/layout';
 import { useTheme } from '../context/ThemeContext';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
-import { getUserFacingError, logHandledError, showError } from '../utils/feedback';
+import * as Clipboard from 'expo-clipboard';
+import { getUserFacingError, logHandledError, showError, showInfo, showSuccess } from '../utils/feedback';
+import { WEB_URL } from '../config/environment';
 import {
   CONTENT_LIMITS,
+  buildPostShareUrl,
   mediaVariantUrl,
   type Comment,
   type Exercise,
@@ -103,12 +107,22 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
     Math.min(carouselWidth * POST_MEDIA_ASPECT, screenHeight * 0.62, 620),
   );
   const workoutExerciseCount = Math.min(workout?.exercises.length || 0, 4);
-  // Every post occupies the same box whether it carries a photo, a video or
-  // only a workout, so the feed scrolls at one rhythm and no post is short
-  // while the next one is tall.
-  const workoutSlideHeight = mediaSlideHeight;
-  // Few rows are centred in that box instead of being pinned to the top.
-  const centerWorkoutRows = workoutExerciseCount <= 2;
+  /*
+   * A workout slide matches the media beside it, and only then.
+   *
+   * Sharing the media height unconditionally is what put two exercise rows in
+   * the middle of a 600pt panel with nothing above or below them — a workout
+   * logged without a photo is not a picture and has no reason to be as tall as
+   * one. Alongside media it still has to match, or the carousel would jump
+   * between slides.
+   */
+  const hasMediaSlide = imageUrls.length > 0;
+  const workoutRowsHeight = 44 + workoutExerciseCount * 52;
+  const workoutSlideHeight = hasMediaSlide
+    ? mediaSlideHeight
+    : Math.round(Math.min(Math.max(workoutRowsHeight, 132), mediaSlideHeight));
+  // Rows are centred only when they are sharing a taller box with media.
+  const centerWorkoutRows = hasMediaSlide && workoutExerciseCount <= 2;
   const durationMinutes = Math.max(0, Math.round(workout?.durationMinutes ?? 0));
   const durationHours = Math.floor(durationMinutes / 60);
   const durationLabel = durationHours > 0
@@ -179,7 +193,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
       width: AVATAR.medium,
       height: AVATAR.medium,
       borderRadius: AVATAR.medium / 2,
-      borderWidth: 1,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.border,
     },
     avatarPlaceholder: {
@@ -321,15 +335,21 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
       justifyContent: centerWorkoutRows ? 'center' : 'flex-start',
       gap: 12,
     },
+    workoutSlideList: {
+      backgroundColor: 'transparent',
+      gap: 10,
+    },
     workoutSlideItem: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
+      paddingVertical: 2,
       backgroundColor: 'transparent'
     },
     workoutSlideIcon: {
-      // Same round artwork size the workout screens use.
-      ...exerciseThumbStyle(EXERCISE_THUMB.small),
+      // The medium thumbnail: at the small size the artwork was unreadable and
+      // two rows of it read as one block of noise.
+      ...exerciseThumbStyle(EXERCISE_THUMB.medium),
       backgroundColor: '#FFFFFF',
       justifyContent: 'center',
       alignItems: 'center',
@@ -433,7 +453,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
       width: AVATAR.small,
       height: AVATAR.small,
       borderRadius: AVATAR.small / 2,
-      borderWidth: 1,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.border,
     },
     commentContent: {
@@ -445,7 +465,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
       backgroundColor: theme.surfaceLight,
       borderRadius: 16,
       padding: 10,
-      borderWidth: 1,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.border,
     },
     commentUser: {
@@ -475,7 +495,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
       paddingVertical: 8,
       marginTop: 8,
       marginBottom: 16,
-      borderWidth: 1,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.border,
     },
     commentInput: {
@@ -587,6 +607,48 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
     }
   };
 
+  /**
+   * Hands the post to whatever the phone can share with.
+   *
+   * The message carries a real link rather than a copy of the caption.
+   * Sharing text alone produced a paste with nowhere to go: the recipient read
+   * a sentence and had no way back to the post, the author or the app. With
+   * the URL in it, WhatsApp, Telegram, Instagram and the rest render a preview
+   * card, and tapping it opens the post — in the app if it is installed, on
+   * the web if it is not.
+   *
+   * The OS sheet is used rather than a menu of our own. It already lists every
+   * app the member actually has, in the order they actually use them, and it
+   * includes Copy — so a custom row of brand buttons would be a worse version
+   * of something the platform already does better.
+   *
+   * A post that is not public has no shareable URL: the link would resolve to
+   * a privacy notice for everyone it reached, so the caption goes on its own
+   * and the member is told why.
+   */
+  /**
+   * Copies the post's link, for when someone wants the URL and not the sheet.
+   *
+   * Hung off a long press rather than given a button of its own: the OS sheet
+   * already offers Copy, and a second visible control for the same thing is
+   * exactly the kind of UI this app has too much of.
+   */
+  const handleCopyLink = async () => {
+    if ((post.visibility ?? 'public') !== 'public') {
+      showInfo(
+        t('feed.share', 'Paylaş'),
+        t('feed.share_private_hint', 'Bu gönderi herkese açık olmadığı için bağlantı paylaşılamaz.'),
+      );
+      return;
+    }
+    try {
+      await Clipboard.setStringAsync(buildPostShareUrl(WEB_URL, post._id || post.id));
+      showSuccess(t('common.success', 'Başarılı'), t('feed.link_copied', 'Bağlantı kopyalandı'));
+    } catch (error) {
+      logHandledError('copy-post-link', error);
+    }
+  };
+
   const handleShare = async () => {
     try {
       if (onShare) {
@@ -594,9 +656,22 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
         return;
       }
 
-      await Share.share({
-        message: [post.content, workout?.name].filter(Boolean).join('\n') || 'MotionMeet',
-      });
+      const isPublic = (post.visibility ?? 'public') === 'public';
+      const url = isPublic ? buildPostShareUrl(WEB_URL, post._id || post.id) : null;
+      const caption = [post.content, workout?.name].filter(Boolean).join('\n').trim();
+
+      await Share.share(
+        Platform.OS === 'ios' && url
+          ? { message: caption || 'MotionMeet', url }
+          : { message: [caption, url].filter(Boolean).join('\n\n') || 'MotionMeet' },
+      );
+
+      if (!isPublic) {
+        showInfo(
+          t('feed.share', 'Paylaş'),
+          t('feed.share_private_hint', 'Bu gönderi herkese açık olmadığı için bağlantı paylaşılamaz.'),
+        );
+      }
     } catch (error) {
       logHandledError('share-post', error);
       Alert.alert(t('common.error', 'Error'), t('feed.share_failed', 'Could not share this post'));
@@ -647,7 +722,10 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
           style={s.workoutSlideContainer} 
           onPress={() => navigation.navigate('WorkoutDetailScreen', { workout: item.data })}
         >
-          <Surface elevation={0} style={{ backgroundColor: 'transparent' }}>
+          {/* The rows carry their own spacing. The gap on the slide container
+              only ever applied to this one wrapper, so every exercise sat flush
+              against the next with its artwork touching. */}
+          <Surface elevation={0} style={s.workoutSlideList}>
              {exercises.slice(0, displayCount).map((ex, idx) => {
                const exerciseName = typeof ex.exerciseId === 'object'
                  ? (ex.exerciseId as Exercise).name
@@ -815,6 +893,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
           <TouchableRipple
             style={s.actionButton}
             onPress={handleShare}
+            onLongPress={() => void handleCopyLink()}
             accessibilityLabel={t('feed.share', 'Share')}
             borderless
           >

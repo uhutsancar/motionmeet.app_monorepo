@@ -456,6 +456,26 @@ export const getFeed = async (token: Token, cursor?: Cursor, mode: "discover" | 
   return data;
 };
 
+/**
+ * One post by id, for a reader who is signed in.
+ *
+ * The server applies the same visibility rules the feed does, so a
+ * followers-only post opened from a link is a 404 for anyone the author has not
+ * let in.
+ */
+export const getPost = async (postId: string, token: Token): Promise<PostResponse> => {
+  const { data } = await api.get<PostResponse>(API_ROUTES.post.byId(postId), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
+/** The same post for a visitor with no account, and only if it is fully public. */
+export const getPublicPost = async (postId: string): Promise<PostResponse> => {
+  const { data } = await api.get<PostResponse>(API_ROUTES.post.publicById(postId));
+  return data;
+};
+
 export const createPost = async (postData: OperationPayload, token: Token): Promise<PostResponse> => {
   const request = withOperationId(postData, 'post');
   const { data } = await api.post<PostResponse>(API_ROUTES.post.add, request.payload, {

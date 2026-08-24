@@ -1,17 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { StyleSheet, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
-  Appbar,
   Surface,
   Text,
 } from 'react-native-paper';
 import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from '../context/AuthProvider';
 import { getPersonalRecords } from '../api/endpoints';
+import ScreenHeader from '../components/ScreenHeader';
 import type { PersonalRecord } from '@motionmeet/shared';
 import type { NavigationOnlyProps } from '../navigation/types';
 
@@ -44,10 +44,10 @@ const LeaderboardScreen = ({ navigation }: NavigationOnlyProps) => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
-      <Appbar.Header statusBarHeight={0} style={{ backgroundColor: theme.background, elevation: 0, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-        <Appbar.BackAction accessibilityLabel={t('common.back', 'Back')} onPress={() => navigation.goBack()} color={theme.text} />
-        <Appbar.Content title={t('statistics.records', 'Personal Records')} titleStyle={{ fontWeight: '700', fontSize: 17, color: theme.text }} />
-      </Appbar.Header>
+      <ScreenHeader
+        title={t('statistics.records', 'Personal Records')}
+        onBack={() => navigation.goBack()}
+      />
 
       {loading ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -64,7 +64,7 @@ const LeaderboardScreen = ({ navigation }: NavigationOnlyProps) => {
           }}
           showsVerticalScrollIndicator={false}
         >
-          <Surface elevation={0} style={{ backgroundColor: theme.surfaceLight, borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: theme.border }}>
+          <Surface elevation={0} style={{ backgroundColor: theme.surfaceLight, borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border }}>
             <Text style={{ fontSize: 14, color: theme.textMuted, lineHeight: 20 }}>
               {t('statistics.records_desc', 'Your strongest completed set for each exercise.')}
             </Text>
@@ -83,7 +83,7 @@ const LeaderboardScreen = ({ navigation }: NavigationOnlyProps) => {
           ) : records.map((record, index) => {
             const accent = ACCENTS[index % ACCENTS.length];
             return (
-              <Surface key={record.exerciseId} elevation={1} style={{ backgroundColor: theme.surface, borderRadius: 18, padding: 18, marginBottom: 12, borderWidth: 1, borderColor: theme.border }}>
+              <Surface key={record.exerciseId} elevation={1} style={{ backgroundColor: theme.surface, borderRadius: 18, padding: 18, marginBottom: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <View style={{ width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginRight: 12, backgroundColor: `${accent}20` }}>
                     <Ionicons name="trophy-outline" size={22} color={accent} />

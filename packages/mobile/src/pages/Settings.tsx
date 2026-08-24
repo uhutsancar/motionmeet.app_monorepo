@@ -1,98 +1,67 @@
 import React from 'react';
-import { ScrollView, StatusBar, View } from 'react-native';
+import { Pressable, ScrollView, StatusBar, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  Appbar,
-  Button,
-  Divider,
-  List,
-  Surface,
-  Switch,
-  Text,
-  TouchableRipple,
-} from 'react-native-paper';
+import { List, Switch, Text, TouchableRipple } from 'react-native-paper';
 import Constants from 'expo-constants';
 import { useAuthContext } from '../context/AuthProvider';
 import { useTranslation } from 'react-i18next';
 import { useTheme, type MotionTheme } from '../context/ThemeContext';
+import ScreenHeader from '../components/ScreenHeader';
 import type { NavigationOnlyProps } from '../navigation/types';
 
-interface SettingsSectionProps extends React.PropsWithChildren { title: string; theme: MotionTheme }
+interface SettingsSectionProps extends React.PropsWithChildren {
+  title: string;
+  theme: MotionTheme;
+}
+
 interface SettingsRowProps {
   icon: React.ComponentProps<typeof List.Icon>['icon'];
-  iconColor: string;
   title: string;
   description?: string;
   onPress?: () => void;
   right?: React.ReactNode;
   theme: MotionTheme;
+  /** Suppresses the hairline above the first row of a group. */
+  first?: boolean;
 }
 
+/**
+ * One group of settings.
+ *
+ * Deliberately not a card. Boxing each group in an outlined surface pushed the
+ * content into a column narrower than the screen and drew four hard edges
+ * around rows that are already visually grouped by their heading and the gap
+ * above it. The rows now run the full width, and the only rule anywhere is the
+ * hairline between two of them.
+ */
 const SettingsSection = ({ title, children, theme }: SettingsSectionProps) => (
-  <View style={{ gap: 9 }}>
-    <Text style={{
-      color: theme.textMuted,
-      fontSize: 11,
-      fontWeight: '900',
-      letterSpacing: 1.2,
-      marginLeft: 4,
-    }}>
-      {title}
-    </Text>
-    <Surface
-      elevation={0}
-      style={{
-        overflow: 'hidden',
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: theme.border,
-        backgroundColor: theme.surface,
-      }}
-    >
-      {children}
-    </Surface>
+  <View style={styles.section}>
+    <Text style={[styles.sectionTitle, { color: theme.textMuted }]}>{title}</Text>
+    <View>{children}</View>
   </View>
 );
 
-const SettingsRow = ({
-  icon,
-  iconColor,
-  title,
-  description,
-  onPress,
-  right,
-  theme,
-}: SettingsRowProps) => (
+const SettingsRow = ({ icon, title, description, onPress, right, theme, first }: SettingsRowProps) => (
   <TouchableRipple onPress={onPress} disabled={!onPress}>
-    <View style={{
-      minHeight: 68,
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      gap: 11,
-    }}>
-      <View style={{
-        width: 40,
-        height: 40,
-        borderRadius: 9,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: `${iconColor}18`,
-      }}>
-        <List.Icon icon={icon} color={iconColor} style={{ margin: 0 }} />
-      </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ color: theme.text, fontSize: 14, fontWeight: '800' }}>
-          {title}
-        </Text>
+    <View
+      style={[
+        styles.row,
+        !first && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border },
+      ]}
+    >
+      <List.Icon icon={icon} color={theme.textSecondary} style={styles.rowIcon} />
+      <View style={styles.rowText}>
+        <Text style={[styles.rowTitle, { color: theme.text }]}>{title}</Text>
         {description ? (
-          <Text style={{ color: theme.textMuted, fontSize: 11.5, marginTop: 2 }}>
+          <Text style={[styles.rowDescription, { color: theme.textMuted }]} numberOfLines={1}>
             {description}
           </Text>
         ) : null}
       </View>
-      {right || (onPress ? <List.Icon icon="chevron-right" color={theme.textMuted} style={{ margin: 0 }} /> : null)}
+      {right ||
+        (onPress ? (
+          <List.Icon icon="chevron-right" color={theme.textMuted} style={styles.rowIcon} />
+        ) : null)}
     </View>
   </TouchableRipple>
 );
@@ -104,13 +73,7 @@ const Settings = ({ navigation }: NavigationOnlyProps) => {
   const isTr = i18n.language.startsWith('tr');
 
   const languageControl = (
-    <View style={{
-      flexDirection: 'row',
-      alignItems: 'center',
-      padding: 3,
-      borderRadius: 11,
-      backgroundColor: theme.surfaceLight,
-    }}>
+    <View style={[styles.languageSwitch, { backgroundColor: theme.surfaceLight }]}>
       {['en', 'tr'].map((language) => {
         const active = language === (isTr ? 'tr' : 'en');
         return (
@@ -118,20 +81,11 @@ const Settings = ({ navigation }: NavigationOnlyProps) => {
             key={language}
             borderless
             onPress={() => i18n.changeLanguage(language)}
-            style={{
-              minWidth: 38,
-              height: 30,
-              borderRadius: 9,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: active ? theme.surface : 'transparent',
-            }}
+            style={[styles.languageOption, active && { backgroundColor: theme.surface }]}
           >
-            <Text style={{
-              color: active ? theme.primary : theme.textMuted,
-              fontSize: 11,
-              fontWeight: '900',
-            }}>
+            <Text
+              style={[styles.languageLabel, { color: active ? theme.primary : theme.textMuted }]}
+            >
               {language.toUpperCase()}
             </Text>
           </TouchableRipple>
@@ -141,53 +95,25 @@ const Settings = ({ navigation }: NavigationOnlyProps) => {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: theme.background }}
+      edges={['top', 'left', 'right']}
+    >
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <Appbar.Header statusBarHeight={0} style={{
-        backgroundColor: theme.surface,
-        elevation: 0,
-        borderBottomWidth: 1,
-        borderBottomColor: theme.border,
-      }}>
-        <Appbar.Content
-          title={t('settings.title', 'Settings')}
-          titleStyle={{ color: theme.text, fontWeight: '800', fontSize: 23 }}
-        />
-      </Appbar.Header>
+      <ScreenHeader title={t('settings.title', 'Settings')} />
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          width: '100%',
-          maxWidth: 720,
-          alignSelf: 'center',
-          padding: 16,
-          paddingBottom: 32,
-          gap: 20,
-        }}
-      >
-        <View>
-          <Text style={{ color: theme.text, fontSize: 22, lineHeight: 28, fontWeight: '800', letterSpacing: -0.4 }}>
-            Make MotionMeet yours
-          </Text>
-          <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 4 }}>
-            Manage your account, privacy and app experience.
-          </Text>
-        </View>
-
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <SettingsSection title={t('settings.account', 'ACCOUNT').toUpperCase()} theme={theme}>
           <SettingsRow
+            first
             icon="account-outline"
-            iconColor={theme.primary}
             title={t('settings.account', 'Account')}
             description={t('settings.account_sub', 'Profile and security')}
             onPress={() => navigation.navigate('ProfileEdit')}
             theme={theme}
           />
-          <Divider />
           <SettingsRow
             icon="star-outline"
-            iconColor={theme.warning}
             title={t('settings.plans', 'Plans & pricing')}
             description={t('settings.plans_sub', 'Upgrade your experience')}
             onPress={() => navigation.navigate('PricingScreen')}
@@ -197,44 +123,36 @@ const Settings = ({ navigation }: NavigationOnlyProps) => {
 
         <SettingsSection title={t('settings.preferences', 'PREFERENCES').toUpperCase()} theme={theme}>
           <SettingsRow
+            first
             icon="bell-outline"
-            iconColor={theme.warning}
             title={t('settings.notifications', 'Notifications')}
             description={t('settings.notifications_sub', 'Reminders and activity')}
             onPress={() => navigation.navigate('NotificationsScreen')}
             theme={theme}
           />
-          <Divider />
           <SettingsRow
             icon="lock-outline"
-            iconColor={theme.secondary}
             title={t('settings.privacy', 'Privacy')}
             description={t('settings.privacy_sub', 'Visibility and data')}
             onPress={() => navigation.navigate('PrivacyScreen')}
             theme={theme}
           />
-          <Divider />
           <SettingsRow
             icon="map-marker-outline"
-            iconColor={theme.primary}
             title={t('settings.location', 'Location & Nearby')}
             description={t('settings.location_sub', 'Profile place, visibility and stored position')}
             onPress={() => navigation.navigate('LocationSettingsScreen')}
             theme={theme}
           />
-          <Divider />
           <SettingsRow
             icon={isDark ? 'weather-night' : 'weather-sunny'}
-            iconColor={theme.primary}
             title={t('settings.theme', 'Theme')}
             description={isDark ? t('settings.dark', 'Dark') : t('settings.light', 'Light')}
             right={<Switch value={isDark} onValueChange={toggleTheme} color={theme.primary} />}
             theme={theme}
           />
-          <Divider />
           <SettingsRow
             icon="web"
-            iconColor={theme.secondary}
             title={t('settings.language', 'Language')}
             right={languageControl}
             theme={theme}
@@ -243,19 +161,17 @@ const Settings = ({ navigation }: NavigationOnlyProps) => {
 
         <SettingsSection title={t('settings.support', 'SUPPORT').toUpperCase()} theme={theme}>
           <SettingsRow
+            first
             icon="help-circle-outline"
-            iconColor={theme.primary}
             title={t('settings.support', 'Help & support')}
-            description="FAQs and contact"
+            description={t('support.subtitle', 'FAQs and contact')}
             onPress={() => navigation.navigate('SupportScreen')}
             theme={theme}
           />
-          <Divider />
           {/* Both bundled datasets require their notice to stay reachable in
               released builds; see docs/LICENSES.md. */}
           <SettingsRow
             icon="license"
-            iconColor={theme.textMuted}
             title={t('licenses.title', 'Data & licences')}
             description={t('licenses.subtitle', 'Open data sources used by MotionMeet')}
             onPress={() => navigation.navigate('LicensesScreen')}
@@ -263,26 +179,97 @@ const Settings = ({ navigation }: NavigationOnlyProps) => {
           />
         </SettingsSection>
 
-        <Button
-          mode="outlined"
-          icon="logout"
-          textColor={theme.danger}
+        <Pressable
           onPress={() => signOut()}
-          contentStyle={{ minHeight: 50 }}
-          labelStyle={{ fontWeight: '900' }}
-          style={{ borderRadius: 10, borderColor: `${theme.danger}55` }}
+          style={styles.signOut}
+          accessibilityRole="button"
+          accessibilityLabel={t('settings.logout', 'Sign out')}
         >
-          {t('settings.logout', 'Sign out')}
-        </Button>
+          <Text style={[styles.signOutLabel, { color: theme.danger }]}>
+            {t('settings.logout', 'Sign out')}
+          </Text>
+        </Pressable>
 
         {/* Read from the app config rather than hardcoded, so a version bump
             cannot leave this line claiming an older build. */}
-        <Text style={{ color: theme.textMuted, textAlign: 'center', fontSize: 10.5 }}>
+        <Text style={[styles.version, { color: theme.textMuted }]}>
           MotionMeet v{Constants.expoConfig?.version ?? '—'} · © 2026 MotionMeet Studios
         </Text>
       </ScrollView>
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  content: {
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
+    paddingBottom: 32,
+    gap: 26,
+  },
+  section: {
+    gap: 6,
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+    paddingHorizontal: 16,
+  },
+  row: {
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  rowIcon: {
+    margin: 0,
+  },
+  rowText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  rowTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  rowDescription: {
+    fontSize: 12,
+  },
+  languageSwitch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 3,
+    borderRadius: 11,
+  },
+  languageOption: {
+    minWidth: 38,
+    height: 28,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  languageLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  signOut: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  signOutLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  version: {
+    textAlign: 'center',
+    fontSize: 10.5,
+  },
+});
 
 export default Settings;

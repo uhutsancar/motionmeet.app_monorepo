@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Image,
   FlatList,
+  StyleSheet,
   TouchableOpacity,
   View,
   type ListRenderItem,
@@ -12,8 +13,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
-  Appbar,
-  List,
   Searchbar,
   Surface,
   Text,
@@ -21,10 +20,13 @@ import {
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { resolvePublicMediaUrl, type Exercise } from '@motionmeet/shared';
+import ScreenHeader from '../components/ScreenHeader';
 import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from '../context/AuthProvider';
 import { getExercises } from '../api/endpoints';
 import CustomExerciseModal from '../components/CustomExerciseModal';
+import EquipmentAvatar from '../components/EquipmentAvatar';
+import MuscleAvatar from '../components/MuscleAvatar';
 import { useMuscleGroups } from '../hooks/useMuscleGroups';
 import { useEquipment } from '../hooks/useEquipment';
 import { API_URL } from '../config/environment';
@@ -148,23 +150,60 @@ const Exercises = ({ navigation }: NavigationOnlyProps) => {
     ));
   };
 
+  /*
+   * A plain row rather than Paper's List.Item.
+   *
+   * List.Item puts its `left` slot hard against the edge of the sheet — the
+   * drawings ended up touching the screen with the labels floating away from
+   * them. Laying the row out here gives the picture, the name and the tick one
+   * consistent gutter, and the same row serves both filters.
+   */
   const renderFilterItem: ListRenderItem<string> = ({ item }) => {
     const selectedValue = filterType === 'muscle' ? muscleFilter : equipmentFilter;
     const isActive = selectedValue === item;
+    const isAll = item === 'all';
+
     return (
-      <List.Item
-        title={filterLabel(filterType, item)}
+      <TouchableOpacity
+        activeOpacity={0.72}
         onPress={() => selectFilter(item)}
-        titleStyle={{
-          color: isActive ? theme.primary : theme.text,
-          fontSize: 14,
-          fontWeight: isActive ? '800' : '600',
+        accessibilityRole="button"
+        accessibilityState={{ selected: isActive }}
+        style={{
+          minHeight: 58,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 14,
+          paddingHorizontal: 18,
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: theme.border,
         }}
-        right={(props) => (
-          isActive ? <List.Icon {...props} icon="check" color={theme.primary} /> : null
+      >
+        {isAll ? (
+          // "Everything" is not a thing to draw, so the slot is held open and
+          // the names below stay on one line with the ones that are.
+          <View style={{ width: 34, height: 34 }} />
+        ) : filterType === 'equipment' ? (
+          <EquipmentAvatar code={item} size={34} selected={isActive} />
+        ) : (
+          <MuscleAvatar code={item} size={34} selected={isActive} />
         )}
-        style={{ borderBottomWidth: 1, borderBottomColor: theme.border }}
-      />
+
+        <Text
+          numberOfLines={1}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            color: isActive ? theme.primary : theme.text,
+            fontSize: 15,
+            fontWeight: isActive ? '800' : '600',
+          }}
+        >
+          {filterLabel(filterType, item)}
+        </Text>
+
+        {isActive ? <Ionicons name="checkmark" size={19} color={theme.primary} /> : null}
+      </TouchableOpacity>
     );
   };
 
@@ -217,40 +256,26 @@ const Exercises = ({ navigation }: NavigationOnlyProps) => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
-      <Appbar.Header
-        statusBarHeight={0}
-        style={{
-          backgroundColor: theme.surface,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.border,
-          elevation: 0,
-        }}
-      >
-        <Appbar.Content
-          title={t('menu.exercises', 'Exercises')}
-          titleStyle={{ color: theme.text, fontSize: 23, fontWeight: '800' }}
-        />
-        <Appbar.Action icon="plus" color={theme.text} onPress={() => setShowCreateModal(true)} />
-      </Appbar.Header>
+      <ScreenHeader
+        title={t('menu.exercises', 'Exercises')}
+        actions={[
+          {
+            icon: 'add',
+            onPress: () => setShowCreateModal(true),
+            accessibilityLabel: t('exercises.create', 'Egzersiz olustur'),
+          },
+        ]}
+      />
 
-      <View style={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: horizontalPadding, paddingTop: 18 }}>
-        <Text style={{ color: theme.text, fontSize: 21, lineHeight: 27, fontWeight: '800', letterSpacing: -0.3 }}>
-          {t('exercises.library_title', 'Movement library')}
-        </Text>
-        <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 4 }}>
-          {t('exercises.library_subtitle', 'Search by name, muscle group or equipment.')}
-        </Text>
+      <View style={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: horizontalPadding, paddingTop: 4 }}>
         <Searchbar
           placeholder={t('exercises.search', 'Search exercises')}
           onChangeText={setSearchQuery}
           value={searchQuery}
           style={{
-            height: 46,
-            marginTop: 14,
-            borderRadius: 10,
-            borderWidth: 1,
-            borderColor: theme.border,
-            backgroundColor: theme.surface,
+            height: 44,
+            borderRadius: 14,
+            backgroundColor: theme.surfaceLight,
             elevation: 0,
           }}
           inputStyle={{ minHeight: 0, color: theme.text, fontSize: 14 }}
@@ -276,7 +301,7 @@ const Exercises = ({ navigation }: NavigationOnlyProps) => {
                   flexDirection: 'row',
                   alignItems: 'center',
                   borderRadius: 10,
-                  borderWidth: 1,
+                  borderWidth: StyleSheet.hairlineWidth,
                   borderColor: active ? theme.primary : theme.border,
                   backgroundColor: active ? theme.primarySoft : theme.surface,
                 }}
@@ -346,7 +371,7 @@ const Exercises = ({ navigation }: NavigationOnlyProps) => {
                 padding: 24,
                 alignItems: 'center',
                 borderRadius: 12,
-                borderWidth: 1,
+                borderWidth: StyleSheet.hairlineWidth,
                 borderColor: theme.border,
                 backgroundColor: theme.surface,
               }}

@@ -1,12 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { StyleSheet, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { BarChart, LineChart } from 'react-native-chart-kit';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
-  Appbar,
   Chip,
   Surface,
   Text,
@@ -16,6 +15,7 @@ import { useAuthContext } from '../context/AuthProvider';
 import { getWorkoutStats } from '../api/endpoints';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { gridItemWidth } from '../config/layout';
+import ScreenHeader from '../components/ScreenHeader';
 import type { WorkoutStats } from '@motionmeet/shared';
 import type { NavigationOnlyProps } from '../navigation/types';
 
@@ -36,7 +36,7 @@ const MetricCard = ({ icon, label, value, unit, color, theme, width }: MetricCar
       minHeight: 94,
       padding: 14,
       borderRadius: 14,
-      borderWidth: 1,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.border,
       backgroundColor: theme.surface,
     }}
@@ -75,7 +75,7 @@ const ChartCard = ({ icon, title, color, theme, children }: ChartCardProps) => (
     style={{
       paddingVertical: 16,
       borderRadius: 16,
-      borderWidth: 1,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.border,
       backgroundColor: theme.surface,
       overflow: 'hidden',
@@ -199,21 +199,10 @@ const AdvancedStatisticsScreen = ({ navigation }: NavigationOnlyProps) => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
-      <Appbar.Header
-        statusBarHeight={0}
-        style={{
-          backgroundColor: theme.background,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.border,
-          elevation: 0,
-        }}
-      >
-        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.text} />
-        <Appbar.Content
-          title={t('statistics.advanced', 'Advanced statistics')}
-          titleStyle={{ color: theme.text, fontSize: 18, fontWeight: '800' }}
-        />
-      </Appbar.Header>
+      <ScreenHeader
+        title={t('statistics.advanced', 'Advanced statistics')}
+        onBack={() => navigation.goBack()}
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -266,7 +255,7 @@ const AdvancedStatisticsScreen = ({ navigation }: NavigationOnlyProps) => {
               justifyContent: 'center',
               padding: 24,
               borderRadius: 16,
-              borderWidth: 1,
+              borderWidth: StyleSheet.hairlineWidth,
               borderColor: theme.border,
               backgroundColor: theme.surface,
             }}
@@ -288,7 +277,7 @@ const AdvancedStatisticsScreen = ({ navigation }: NavigationOnlyProps) => {
               justifyContent: 'center',
               padding: 24,
               borderRadius: 16,
-              borderWidth: 1,
+              borderWidth: StyleSheet.hairlineWidth,
               borderColor: theme.border,
               backgroundColor: theme.surface,
             }}
@@ -401,7 +390,7 @@ const AdvancedStatisticsScreen = ({ navigation }: NavigationOnlyProps) => {
               style={{
                 padding: 16,
                 borderRadius: 16,
-                borderWidth: 1,
+                borderWidth: StyleSheet.hairlineWidth,
                 borderColor: theme.border,
                 backgroundColor: theme.surface,
               }}
