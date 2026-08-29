@@ -160,6 +160,7 @@
         "duration": "Duration",
         "volume": "Volume",
         "like": "Like",
+        "double_tap_like": "Double tap to like",
         "liked_by": "Liked by",
         "people": "people",
         "send_comment": "Send comment",
@@ -362,6 +363,7 @@
         "delete_failed": "Message could not be deleted",
         "load_failed": "Messages could not be loaded",
         "invalid_conversation": "Invalid conversation",
+        "typing": "typing…",
         "start_new_chat": "Start a new chat",
         "user_load_failed": "Conversation user could not be loaded"
     },

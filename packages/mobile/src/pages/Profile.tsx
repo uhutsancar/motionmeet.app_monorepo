@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 // expo-image: these rows scroll past many remote avatars, and it recycles
 // views and keeps a memory + disk cache where React Native's Image does not.
@@ -25,6 +25,7 @@ import { getUserProfile, getWorkouts } from '../api/endpoints';
 import ScreenHeader from '../components/ScreenHeader';
 import { useFollowAction } from '../hooks/useFollowAction';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { useScrollToTopOnTabPress } from '../hooks/useScrollToTopOnTabPress';
 import { AVATAR, CARD, EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
 import { API_URL } from '../config/environment';
 import { useAppSelector } from '../store/hooks';
@@ -34,6 +35,8 @@ import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation
 type ProfileStatTab = 'duration' | 'volume' | 'reps';
 type ProfileMetric = Record<ProfileStatTab, number>;
 interface ProfileChartData { labels: string[]; values: number[] }
+/** Every metric's five weeks at once, so each banner can carry its own number. */
+type ProfileSeries = { labels: string[] } & Record<ProfileStatTab, number[]>;
 interface ProfileProps {
   route: RouteProp<ParamListBase>;
   navigation: NavigationProp<ParamListBase>;
@@ -80,9 +83,11 @@ const Profile = ({ route, navigation }: ProfileProps) => {
   const isOwnProfile = !profileId || profileId === currentUser?._id;
   const [activeStatTab, setActiveStatTab] = useState<ProfileStatTab>('duration');
   const [workouts, setWorkouts] = useState<Workout[]>([]);
-  const [chartData, setChartData] = useState<ProfileChartData | null>(null);
+  const [series, setSeries] = useState<ProfileSeries | null>(null);
   const [publicProfile, setPublicProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(!isOwnProfile);
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTopOnTabPress(scrollRef);
   const user = isOwnProfile ? currentUser : publicProfile;
   // Seeded from the profile payload, then kept in step with every other follow
   // button in the app through the shared relationship store.
@@ -145,9 +150,12 @@ const Profile = ({ route, navigation }: ProfileProps) => {
     if (currentUser) fetchUserWorkouts();
   }, [currentUser, getToken, isOwnProfile]);
 
+  /* All three metrics are worked out together, not just the selected one.
+     Each banner shows its own number, so re-grouping every workout each time
+     the selection changed would have recomputed two thirds of it for nothing. */
   useEffect(() => {
     if (!workouts.length) {
-      setChartData(null);
+      setSeries(null);
       return;
     }
     const grouped: Record<string, ProfileMetric> = {};
@@ -163,9 +171,18 @@ const Profile = ({ route, navigation }: ProfileProps) => {
       });
     });
     const labels = Object.keys(grouped).slice(-5);
-    const values = labels.map((label) => grouped[label][activeStatTab] || 0);
-    setChartData({ labels, values });
-  }, [activeStatTab, workouts]);
+    setSeries({
+      labels,
+      duration: labels.map((label) => grouped[label].duration || 0),
+      volume: labels.map((label) => grouped[label].volume || 0),
+      reps: labels.map((label) => grouped[label].reps || 0),
+    });
+  }, [workouts]);
+
+  const chartData = useMemo<ProfileChartData | null>(
+    () => (series ? { labels: series.labels, values: series[activeStatTab] } : null),
+    [activeStatTab, series],
+  );
 
   const handleSignOut = () => {
     Alert.alert(
@@ -191,11 +208,17 @@ const Profile = ({ route, navigation }: ProfileProps) => {
   const followersCount = user?.followers_count ?? 0;
   const followingCount = user?.following_count ?? 0;
   const latestValue = chartData?.values?.[chartData.values.length - 1] || 0;
-  const unit = activeStatTab === 'duration'
-    ? t('common.min', 'min')
-    : activeStatTab === 'volume'
-      ? t('common.kg', 'kg')
-      : t('routines.reps', 'reps');
+  const metricUnits: Record<ProfileStatTab, string> = {
+    duration: t('common.min', 'min'),
+    volume: t('common.kg', 'kg'),
+    reps: t('routines.reps', 'reps'),
+  };
+  const metricIcons: Record<ProfileStatTab, React.ComponentProps<typeof Ionicons>['name']> = {
+    duration: 'time-outline',
+    volume: 'barbell-outline',
+    reps: 'repeat-outline',
+  };
+  const unit = metricUnits[activeStatTab];
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
@@ -219,6 +242,7 @@ const Profile = ({ route, navigation }: ProfileProps) => {
       />
 
       <ScrollView
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           width: '100%',
@@ -582,31 +606,66 @@ const Profile = ({ route, navigation }: ProfileProps) => {
               </View>
             )}
 
-            <View
-              style={{
-                flexDirection: 'row',
-                marginTop: 14,
-                padding: 3,
-                borderRadius: 10,
-                backgroundColor: theme.surfaceLight,
-              }}
-            >
+            {/* Three cards, not three slices of one pill.
+                Sure, Hacim and Tekrar are three different measurements of the
+                same week, and a segmented control said the opposite - that they
+                were three views of one thing, with only the selected label
+                legible and no number on any of them. Each carries its own
+                figure now, so the row reads before anything is chosen, and the
+                picked one is the card that is lit rather than the label that is
+                not grey. */}
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
               {(['duration', 'volume', 'reps'] as const).map((tab) => {
                 const active = activeStatTab === tab;
+                const metric = series?.[tab];
+                const latest = metric?.[metric.length - 1] ?? 0;
                 return (
                   <TouchableOpacity
                     key={tab}
+                    activeOpacity={0.75}
                     onPress={() => setActiveStatTab(tab)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`${t(`profile.${tab}`, tab)}: ${latest} ${metricUnits[tab]}`}
                     style={{
                       flex: 1,
-                      minHeight: 34,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderRadius: 8,
-                      backgroundColor: active ? theme.surface : 'transparent',
+                      minWidth: 0,
+                      paddingVertical: 10,
+                      paddingHorizontal: 10,
+                      borderRadius: CARD.radius,
+                      borderWidth: StyleSheet.hairlineWidth,
+                      borderColor: active ? theme.primary : theme.border,
+                      backgroundColor: active ? theme.primarySoft : theme.surface,
                     }}
                   >
-                    <Text style={{ color: active ? theme.text : theme.textMuted, fontSize: 11, fontWeight: '700' }}>
+                    <Ionicons
+                      name={metricIcons[tab]}
+                      size={15}
+                      color={active ? theme.primary : theme.textMuted}
+                    />
+                    <Text
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.7}
+                      style={{
+                        color: active ? theme.primary : theme.text,
+                        fontSize: 16,
+                        fontWeight: '800',
+                        marginTop: 7,
+                      }}
+                    >
+                      {latest.toLocaleString()}
+                      <Text style={{ fontSize: 10, fontWeight: '700' }}> {metricUnits[tab]}</Text>
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        color: active ? theme.primary : theme.textMuted,
+                        fontSize: 10.5,
+                        fontWeight: '700',
+                        marginTop: 2,
+                      }}
+                    >
                       {t(`profile.${tab}`, tab)}
                     </Text>
                   </TouchableOpacity>

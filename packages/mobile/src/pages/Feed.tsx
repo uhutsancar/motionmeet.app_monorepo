@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   RefreshControl,
@@ -34,6 +34,7 @@ import MotionMark from '../components/MotionMark';
 import { logHandledError } from '../utils/feedback';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useUnreadMessages } from '../hooks/useUnreadMessages';
+import { useScrollToTopOnTabPress } from '../hooks/useScrollToTopOnTabPress';
 import { AVATAR, CARD } from '../config/layout';
 import { MESSAGE_ICON } from '../config/icons';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
@@ -114,6 +115,27 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<FeedMode>('discover');
   const [feedMenuVisible, setFeedMenuVisible] = useState(false);
+  const listRef = useRef<FlatList<FeedRow>>(null);
+  useScrollToTopOnTabPress(listRef);
+
+  /*
+   * Switching feeds starts at the top of the new one.
+   *
+   * The two modes share one list, so picking Keşfet while halfway down Ana
+   * Sayfa left the scroll offset exactly where it was and dropped the reader
+   * into the middle of a feed they had not seen — and, until the new posts
+   * arrived, into the middle of the old one. Jumping without animating is
+   * deliberate: there is nothing between here and the top worth watching go by.
+   */
+  const scrollToTop = useCallback(() => {
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, []);
+
+  const selectTab = useCallback((mode: FeedMode) => {
+    setFeedMenuVisible(false);
+    scrollToTop();
+    setActiveTab(mode);
+  }, [scrollToTop]);
 
   const loadStaticData = useCallback(async () => {
     try {
@@ -272,13 +294,13 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
             }
           >
             <Menu.Item
-              onPress={() => { setActiveTab('following'); setFeedMenuVisible(false); }}
+              onPress={() => selectTab('following')}
               title={t('feed.home_following', 'Ana Sayfa (Takip edilenler)')}
               leadingIcon="home-outline"
               trailingIcon={activeTab === 'following' ? 'check' : undefined}
             />
             <Menu.Item
-              onPress={() => { setActiveTab('discover'); setFeedMenuVisible(false); }}
+              onPress={() => selectTab('discover')}
               title={t('feed.home_discover', 'Keşfet')}
               leadingIcon="earth"
               trailingIcon={activeTab === 'discover' ? 'check' : undefined}
@@ -307,7 +329,13 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
       </Surface>
 
       <FlatList
-        data={listData}
+        ref={listRef}
+        /* Emptied only while a *different* feed is being fetched, so switching
+           to Keşfet shows it loading rather than leaving Ana Sayfa's posts
+           under a title that no longer describes them. A pull to refresh keeps
+           what is on screen: the spinner in the control already says it is
+           working, and blanking the list there would be a flash of nothing. */
+        data={postsLoading && !refreshing ? [] : listData}
         renderItem={renderItem}
         keyExtractor={(row, index) => row.type === 'post' ? row.item._id || String(index) : row.id}
         showsVerticalScrollIndicator={false}

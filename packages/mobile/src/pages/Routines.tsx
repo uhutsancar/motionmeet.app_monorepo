@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { StyleSheet, ScrollView, View } from 'react-native';
+import { useScrollToTopOnTabPress } from '../hooks/useScrollToTopOnTabPress';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -106,6 +107,8 @@ const Routines = ({ navigation }: NavigationOnlyProps) => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTopOnTabPress(scrollRef);
 
   const fetchRoutines = useCallback(async (cursor: string | null = null) => {
     try {
@@ -148,6 +151,7 @@ const Routines = ({ navigation }: NavigationOnlyProps) => {
       />
 
       <ScrollView
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           width: '100%',

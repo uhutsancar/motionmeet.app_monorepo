@@ -33,6 +33,7 @@ import { API_URL } from '../config/environment';
 import { BottomSheetModal } from '../components/ResponsiveModal';
 import { logHandledError } from '../utils/feedback';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { useScrollToTopOnTabPress } from '../hooks/useScrollToTopOnTabPress';
 import { EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
 import type { NavigationOnlyProps } from '../navigation/types';
 
@@ -53,6 +54,8 @@ const Exercises = ({ navigation }: NavigationOnlyProps) => {
 
   const muscleGroups = ['all', ...muscleGroupsList.map((group) => group.code)];
   const equipment = ['all', ...equipmentListItems.map((item) => item.code)];
+  const listRef = useRef<FlatList<Exercise>>(null);
+  useScrollToTopOnTabPress(listRef);
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -345,6 +348,7 @@ const Exercises = ({ navigation }: NavigationOnlyProps) => {
         </View>
       ) : (
         <FlatList
+          ref={listRef}
           data={exercises}
           keyExtractor={(item) => item._id}
           renderItem={renderExercise}

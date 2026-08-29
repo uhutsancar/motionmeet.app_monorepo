@@ -48,7 +48,7 @@ const Messages = ({ navigation }: NavigationOnlyProps) => {
   const s = React.useMemo(() => getStyles(theme), [theme]);
 
   const { connections } = useAppSelector((state) => state.connections);
-  const { socket, onlineUsers } = useSocket();
+  const { socket } = useSocket();
 
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -293,7 +293,6 @@ const Messages = ({ navigation }: NavigationOnlyProps) => {
    * and its age together, the way every inbox people already use reads.
    */
   const renderConversation: ListRenderItem<ConversationItem> = ({ item: conv }) => {
-    const isOnline = onlineUsers.has(conv.user?._id);
     const hasUnread = (conv.unread || 0) > 0;
     const msgText = conv.lastMessage?.text
       || (conv.lastMessage?.message_type === 'image' ? `📷 ${t('common.photo', 'Fotoğraf')}` : '');
@@ -320,7 +319,6 @@ const Messages = ({ navigation }: NavigationOnlyProps) => {
                   labelStyle={{ color: theme.primary, fontWeight: '800' }}
                 />
             }
-            {isOnline && <View style={s.onlineDot} />}
           </View>
 
           <View style={s.convContent}>
@@ -473,17 +471,6 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
   convRow: { paddingHorizontal: 14, paddingVertical: 9 },
   convRowInner: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatarContainer: { position: 'relative' },
-  onlineDot: {
-    position: 'absolute',
-    bottom: 1,
-    right: 1,
-    width: 13,
-    height: 13,
-    borderRadius: 7,
-    backgroundColor: theme.success,
-    borderWidth: 2,
-    borderColor: theme.background,
-  },
   convContent: { flex: 1, minWidth: 0, gap: 3 },
   convName: { color: theme.text, fontSize: 15, fontWeight: '600' },
   convNameUnread: { fontWeight: '800' },

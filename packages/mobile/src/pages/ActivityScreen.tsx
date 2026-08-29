@@ -265,7 +265,13 @@ const ActivityScreen = ({ navigation }: NavigationOnlyProps) => {
         }
       />
 
-      <PostViewerModal post={openPost} navigation={navigation} onClose={() => setOpenPost(null)} />
+      {/* One post, from the notification that pointed at it: there is no list
+          behind an activity row to keep scrolling into. */}
+      <PostViewerModal
+        posts={openPost ? [openPost] : null}
+        navigation={navigation}
+        onClose={() => setOpenPost(null)}
+      />
 
       {openStories ? (
         <StoryViewer

@@ -95,17 +95,41 @@ export const getComputedWorkoutStats = async (userId: string, period: string): P
   const muscleCounts = new Map(activeMuscles.map((row) => [row.code, 0]));
   for (const row of muscleRows) muscleCounts.set(row.muscle, (muscleCounts.get(row.muscle) ?? 0) + row.set_count);
   const muscleTotal = [...muscleCounts.values()].reduce((sum, count) => sum + count, 0);
-  const breakdown = new Map<string, { volume: number; reps: number; sets: number }>();
+  const breakdown = new Map<string, { exerciseId: string; volume: number; reps: number; sets: number }>();
   for (const row of exerciseRows) {
-    const current = breakdown.get(row.exercise_name) ?? { volume: 0, reps: 0, sets: 0 };
+    const current = breakdown.get(row.exercise_name) ?? { exerciseId: row.exercise_id, volume: 0, reps: 0, sets: 0 };
     current.volume += numberValue(row.total_volume_kg); current.reps += numberValue(row.total_reps); current.sets += row.total_sets;
     breakdown.set(row.exercise_name, current);
   }
+  /*
+   * The top movements carry their own artwork.
+   *
+   * The breakdown is grouped by name, so the rows already know which exercise
+   * each one is; without the picture the "main exercises" list was five
+   * identical rank badges and nothing that said what the movement actually
+   * looks like. Only the handful that survive the slice are looked up, so this
+   * is one small query rather than a join across the whole period.
+   */
+  const topExercises = [...breakdown.entries()].sort((left, right) => right[1].volume - left[1].volume).slice(0, 5);
+  const artworkIds = [...new Set(topExercises.map(([, value]) => value.exerciseId).filter(Boolean))];
+  const artworkRows = artworkIds.length
+    ? await database.selectFrom("exercises").select(["id", "image_url", "gif_url"]).where("id", "in", artworkIds).execute()
+    : [];
+  const artwork = new Map(artworkRows.map((row) => [row.id, row]));
   const values = [...grouped.entries()];
   const dateKeys = await database.selectFrom("user_daily_workout_stats").select("date_key").where("user_id", "=", userId).where("date", "<=", now).orderBy("date", "desc").limit(370).execute();
   return {
     stats: { labels: values.map(([, value]) => value.label), dates: values.map(([key]) => key), volumes: values.map(([, value]) => Math.round(value.volume)), durations: values.map(([, value]) => value.duration), reps: values.map(([, value]) => value.reps), sets: values.map(([, value]) => value.sets), workouts: values.map(([, value]) => value.workouts) },
-    exerciseBreakdown: [...breakdown.entries()].sort((left, right) => right[1].volume - left[1].volume).slice(0, 5).map(([name, value]) => ({ name, ...value, total: Math.round(value.volume) })),
+    exerciseBreakdown: topExercises.map(([name, value]) => ({
+      name,
+      exerciseId: value.exerciseId,
+      volume: value.volume,
+      reps: value.reps,
+      sets: value.sets,
+      imageUrl: artwork.get(value.exerciseId)?.image_url || "",
+      gifUrl: artwork.get(value.exerciseId)?.gif_url || "",
+      total: Math.round(value.volume),
+    })),
     muscleDistribution: Object.fromEntries([...muscleCounts].map(([muscle, count]) => [muscle, muscleTotal ? Number((count / muscleTotal).toFixed(3)) : 0])),
     totalVolume: Math.round(rows.reduce((sum, row) => sum + numberValue(row.total_volume_kg), 0)),
     totalDuration: rows.reduce((sum, row) => sum + row.total_duration_minutes, 0),

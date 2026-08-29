@@ -1,5 +1,8 @@
 import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
+// expo-image, like every other exercise thumbnail in the app: it recycles views
+// and keeps a memory + disk cache where React Native's Image does not.
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
@@ -7,7 +10,9 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from "../context/AuthProvider";
 import endpoints from '../api/endpoints';
 import { Surface, Text, ActivityIndicator } from 'react-native-paper';
-import type { WorkoutStats } from '@motionmeet/shared';
+import { EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
+import { API_URL } from '../config/environment';
+import { mediaVariantUrl, resolvePublicMediaUrl, type WorkoutStats } from '@motionmeet/shared';
 import type { NavigationOnlyProps } from '../navigation/types';
 import { logHandledError } from '../utils/feedback';
 import ScreenHeader from '../components/ScreenHeader';
@@ -63,11 +68,34 @@ const MainExercisesScreen = ({ navigation }: NavigationOnlyProps) => {
       borderBottomWidth: 1, borderBottomColor: theme.border,
       backgroundColor: 'transparent'
     },
-    rankBadge: {
-      width: 40, height: 40, borderRadius: 20, backgroundColor: theme.primary + '20',
-      justifyContent: 'center', alignItems: 'center', marginRight: 16
+    // The artwork carries the rank rather than replacing it: the number says
+    // where the movement sits in the month, the picture says which movement it
+    // is, and a list of five identical badges said only the first of those.
+    artworkWrap: { marginRight: 14, position: 'relative' },
+    artwork: {
+      ...exerciseThumbStyle(EXERCISE_THUMB.large),
+      backgroundColor: '#FFFFFF',
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
     },
-    rankText: { fontWeight: '800', color: theme.primary },
+    artworkFallback: { backgroundColor: theme.primary + '20' },
+    artworkImage: { width: '100%', height: '100%' },
+    rankBadge: {
+      position: 'absolute',
+      left: -4,
+      top: -4,
+      minWidth: 21,
+      height: 21,
+      paddingHorizontal: 5,
+      borderRadius: 11,
+      backgroundColor: theme.primary,
+      borderWidth: 2,
+      borderColor: theme.surface,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    rankText: { fontWeight: '900', fontSize: 10.5, lineHeight: 13, color: '#FFFFFF' },
     itemInfo: { flex: 1, minWidth: 0, backgroundColor: 'transparent' },
     itemName: { fontWeight: '600', color: theme.text, marginBottom: 4 },
     itemValue: { color: theme.textMuted },
@@ -95,10 +123,26 @@ const MainExercisesScreen = ({ navigation }: NavigationOnlyProps) => {
              {exercises.map((item, index) => {
                 const tKey = item.name.toLowerCase().replace(/[\s-]/g, '_').replace('pull_up', 'pullup');
                 const translatedName = String(t(`statistics.ex_${tKey}`, item.name));
+                const artwork = resolvePublicMediaUrl(item.gifUrl || item.imageUrl, API_URL);
                 return (
                 <Surface key={index} style={[styles.listItem, index === exercises.length - 1 && { borderBottomWidth: 0 }]} elevation={0}>
-                    <Surface style={styles.rankBadge} elevation={0}>
-                        <Text variant="titleMedium" style={styles.rankText}>#{index + 1}</Text>
+                    <Surface style={styles.artworkWrap} elevation={0}>
+                        <Surface style={[styles.artwork, !artwork && styles.artworkFallback]} elevation={0}>
+                            {artwork ? (
+                              <Image
+                                source={{ uri: mediaVariantUrl(artwork, 'thumb') }}
+                                style={styles.artworkImage}
+                                contentFit="cover"
+                                cachePolicy="memory-disk"
+                                recyclingKey={item.exerciseId || item.name}
+                              />
+                            ) : (
+                              <Ionicons name="barbell" size={22} color={theme.primary} />
+                            )}
+                        </Surface>
+                        <Surface style={styles.rankBadge} elevation={0}>
+                            <Text style={styles.rankText}>{index + 1}</Text>
+                        </Surface>
                     </Surface>
                     <Surface style={styles.itemInfo} elevation={0}>
                         <Text variant="titleMedium" numberOfLines={2} style={styles.itemName}>{translatedName}</Text>

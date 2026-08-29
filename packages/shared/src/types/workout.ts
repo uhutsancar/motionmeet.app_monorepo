@@ -37,6 +37,10 @@ export interface WorkoutStats {
   };
   exerciseBreakdown: Array<{
     name: string;
+    /** The exercise this row is for, so its artwork can be shown beside it. */
+    exerciseId?: string;
+    imageUrl?: string;
+    gifUrl?: string;
     volume: number;
     reps: number;
     sets: number;

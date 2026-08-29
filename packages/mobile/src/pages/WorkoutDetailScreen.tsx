@@ -1,5 +1,8 @@
 import React from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
+// expo-image: the same recycling, caching thumbnail every other exercise row
+// in the app uses, so the artwork here looks and loads identically.
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
@@ -9,8 +12,22 @@ import { useTheme, type MotionTheme } from '../context/ThemeContext';
 import { Surface, Text } from 'react-native-paper';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import ScreenHeader from '../components/ScreenHeader';
+import { EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
+import { API_URL } from '../config/environment';
 import type { BaseNavigationScreenProps, WorkoutDetailRouteParams } from '../navigation/types';
-import type { Exercise, WorkoutExercise } from '@motionmeet/shared';
+import { mediaVariantUrl, resolvePublicMediaUrl, type Exercise, type WorkoutExercise } from '@motionmeet/shared';
+
+/**
+ * The movement's own picture, when the backend hydrated one.
+ *
+ * Every other list of exercises in the app leads with the artwork, so a session
+ * opened from a post was the one place a member had to read five names to work
+ * out what they had done.
+ */
+const exerciseArtwork = (exercise: WorkoutExercise): string | null => {
+  const hydrated = typeof exercise.exerciseId === 'object' ? (exercise.exerciseId as Exercise) : null;
+  return resolvePublicMediaUrl(hydrated?.gifUrl || hydrated?.imageUrl, API_URL);
+};
 
 const WorkoutDetailScreen = ({ navigation, route }: BaseNavigationScreenProps) => {
   const { t } = useTranslation();
@@ -66,11 +83,27 @@ const WorkoutDetailScreen = ({ navigation, route }: BaseNavigationScreenProps) =
         </Surface>
 
         <Text variant="titleLarge" style={styles.sectionTitle}>{t('workout.exercises', 'Exercises')}</Text>
-        {exercises.length > 0 ? exercises.map((exercise: WorkoutExercise, exerciseIndex: number) => (
+        {exercises.length > 0 ? exercises.map((exercise: WorkoutExercise, exerciseIndex: number) => {
+          const artwork = exerciseArtwork(exercise);
+          return (
           <Surface key={exercise.id || exerciseIndex} style={styles.exerciseCard} elevation={1}>
-            <Text variant="titleMedium" style={styles.exerciseName}>
-              {(typeof exercise.exerciseId === 'object' ? (exercise.exerciseId as Exercise).name : null) || exercise.exerciseName || t('routines.exercise', 'Exercise')}
-            </Text>
+            <View style={styles.exerciseHeading}>
+              <View style={styles.thumb}>
+                {artwork ? (
+                  <Image
+                    source={{ uri: mediaVariantUrl(artwork, 'thumb') }}
+                    style={styles.thumbImage}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                  />
+                ) : (
+                  <Ionicons name="barbell" size={20} color={theme.primary} />
+                )}
+              </View>
+              <Text variant="titleMedium" numberOfLines={2} style={styles.exerciseName}>
+                {(typeof exercise.exerciseId === 'object' ? (exercise.exerciseId as Exercise).name : null) || exercise.exerciseName || t('routines.exercise', 'Exercise')}
+              </Text>
+            </View>
             {exercise.sets.map((set, setIndex) => (
               <Surface elevation={0} key={set.id || setIndex} style={styles.setRow}>
                 <Text variant="bodyMedium" style={styles.setIndex}>{setIndex + 1}</Text>
@@ -79,7 +112,8 @@ const WorkoutDetailScreen = ({ navigation, route }: BaseNavigationScreenProps) =
               </Surface>
             ))}
           </Surface>
-        )) : (
+          );
+        }) : (
           <Text variant="bodyMedium" style={styles.emptyText}>{t('workout.no_exercises_yet', 'No exercises')}</Text>
         )}
       </ScrollView>
@@ -113,7 +147,16 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
     backgroundColor: theme.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
     borderRadius: 16, padding: 16, marginBottom: 12,
   },
-  exerciseName: { color: theme.primary, fontWeight: '700', marginBottom: 10 },
+  exerciseHeading: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
+  thumb: {
+    ...exerciseThumbStyle(EXERCISE_THUMB.medium),
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  thumbImage: { width: '100%', height: '100%' },
+  exerciseName: { flex: 1, minWidth: 0, color: theme.primary, fontWeight: '700' },
   setRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, gap: 14 },
   setIndex: { color: theme.textMuted, width: 22, fontWeight: '700' },
   setValue: { color: theme.text, flex: 1 },

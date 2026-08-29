@@ -1,10 +1,12 @@
-import React, { useState, useRef, memo, useMemo } from 'react';
+import React, { useState, useRef, memo, useMemo, useCallback } from 'react';
 import {
   Alert,
+  Animated,
   TextInput,
   FlatList,
   ActivityIndicator,
   Platform,
+  Pressable,
   Share,
   StyleSheet,
   View,
@@ -153,6 +155,23 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
   const [commentCursor, setCommentCursor] = useState<string | null>(post.comment_next_cursor || null);
   const [olderCommentsLoading, setOlderCommentsLoading] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
+  /* Double tap on the picture is how liking works everywhere else, and the
+     heart button was the only way to do it here. The two share one code path,
+     with one difference: a double tap only ever likes. Tapping twice to undo a
+     like is not a gesture anyone makes on purpose, and losing a like to a
+     mistimed scroll is worse than needing the button to take one back. */
+  const lastMediaTapRef = useRef(0);
+  const burst = useRef(new Animated.Value(0)).current;
+
+  const playBurst = useCallback(() => {
+    burst.setValue(0);
+    Animated.sequence([
+      Animated.spring(burst, { toValue: 1, useNativeDriver: true, friction: 4, tension: 90 }),
+      Animated.delay(420),
+      Animated.timing(burst, { toValue: 0, duration: 220, useNativeDriver: true }),
+    ]).start();
+  }, [burst]);
+
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken<CarouselItem>[] }) => {
     if (viewableItems.length > 0) {
       setActiveSlide(viewableItems[0]?.index ?? 0);
@@ -273,28 +292,36 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
     statsHeaderRow: {
       flexDirection: 'row',
       paddingHorizontal: POST_PADDING,
-      marginBottom: 16,
+      marginBottom: 12,
       gap: 8,
       flexWrap: 'wrap',
       backgroundColor: 'transparent'
     },
+    /* Two short facts do not need a 50pt block each.
+       The old box padded 8 above and below a 4pt gap between two lines, so a
+       post that says "0 dk" and "360 kg" carried a band as tall as a button
+       before the picture even started. Same information, two thirds the
+       height: the label is a caption over the number rather than a line of its
+       own, and the plate is only just bigger than the type it holds. */
     statBox: {
       justifyContent: 'center',
       backgroundColor: theme.surfaceLight,
-      borderRadius: 9,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
+      borderRadius: 8,
+      paddingHorizontal: 11,
+      paddingVertical: 6,
     },
     statLabel: {
       color: theme.textMuted,
-      fontSize: 11,
-      fontWeight: '600',
-      marginBottom: 4,
+      fontSize: 10,
+      lineHeight: 13,
+      fontWeight: '700',
+      letterSpacing: 0.3,
     },
     statValue: {
       color: theme.text,
-      fontSize: 15,
-      fontWeight: 'bold',
+      fontSize: 14.5,
+      lineHeight: 19,
+      fontWeight: '800',
     },
     statSmall: {
       fontSize: 12,
@@ -365,12 +392,28 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
       fontWeight: '600',
       lineHeight: 19,
     },
+    /* Lined up with the exercise names above it, not centred on the slide.
+       Centred, "2 egzersiz daha" sat a little left of the names and a long way
+       right of the artwork — belonging to neither column and reading as a
+       caption that had slipped. It is the last row of the same list, so it
+       starts where the other rows' text starts. */
     moreExercisesText: {
-      textAlign: 'center',
       color: theme.textMuted,
-      fontSize: 14,
-      fontWeight: '500',
-      marginTop: 8,
+      fontSize: 13.5,
+      fontWeight: '600',
+      marginTop: 6,
+      marginLeft: EXERCISE_THUMB.medium + 12,
+    },
+    burst: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
+      // A white heart is invisible over a bright photo without something under
+      // it; the shadow is what keeps it readable on any picture.
+      shadowColor: '#000',
+      shadowOpacity: 0.35,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 2 },
     },
     dotsContainer: {
       flexDirection: 'row',
@@ -559,6 +602,27 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
     }
   };
 
+  /**
+   * One tap does nothing, two tap likes.
+   *
+   * 280ms is the window: long enough that a deliberate double tap is never
+   * missed, short enough that two separate taps a beat apart are not mistaken
+   * for one. The counter is reset on a match so a triple tap does not register
+   * as two likes.
+   */
+  const handleMediaTap = () => {
+    const now = Date.now();
+    if (now - lastMediaTapRef.current < 280) {
+      lastMediaTapRef.current = 0;
+      // The heart plays either way. Double tapping something already liked has
+      // to answer "did that do anything?", and a silent no-op does not.
+      playBurst();
+      if (!isLiked) void handleLike();
+      return;
+    }
+    lastMediaTapRef.current = now;
+  };
+
   const handleAddComment = async () => {
     const content = commentText.trim();
     if (!content || isProcessing) return;
@@ -702,15 +766,25 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
     } else if (item.type === 'image') {
       if (!item.url) return null;
       return (
-        <Image
-          source={{ uri: mediaVariantUrl(item.url, 'feed') }}
+        <Pressable
+          onPress={handleMediaTap}
+          // A Pressable inside a paging list must not eat the swipe: with no
+          // press handler of its own for a single tap, the horizontal gesture
+          // still reaches the carousel underneath.
           style={s.carouselSlide}
-          contentFit="cover"
-          transition={120}
-          cachePolicy="memory-disk"
-          recyclingKey={item.url}
+          accessibilityRole="imagebutton"
           accessibilityLabel={post.content || t('feed.post', 'Post')}
-        />
+          accessibilityHint={t('feed.double_tap_like', 'Beğenmek için iki kez dokun')}
+        >
+          <Image
+            source={{ uri: mediaVariantUrl(item.url, 'feed') }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            transition={120}
+            cachePolicy="memory-disk"
+            recyclingKey={item.url}
+          />
+        </Pressable>
       );
     } else if (item.type === 'workout') {
       const exercises = item.data.exercises || [];
@@ -856,6 +930,22 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
             onViewableItemsChanged={onViewableItemsChanged}
             viewabilityConfig={viewabilityConfig}
           />
+          {/* Over the whole carousel rather than inside a slide, so it lands in
+              the middle of the picture whichever one is showing, and never
+              takes a touch away from it. */}
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              s.burst,
+              {
+                opacity: burst,
+                transform: [{ scale: burst.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] }) }],
+              },
+            ]}
+          >
+            <Ionicons name="heart" size={96} color="#FFFFFF" />
+          </Animated.View>
+
           {carouselData.length > 1 && (
             <Surface elevation={0} style={s.dotsContainer}>
               {carouselData.map((_, idx) => (

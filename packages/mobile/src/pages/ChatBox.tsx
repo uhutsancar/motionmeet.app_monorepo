@@ -106,7 +106,7 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
   const connections = useAppSelector((state) => state.connections.connections);
   const { messages } = useAppSelector((state) => state.messages);
 
-  const { socket, connected, onlineUsers, sendMessage: socketSend, emitTypingStart, emitTypingStop } = useSocket();
+  const { socket, connected, sendMessage: socketSend, emitTypingStart, emitTypingStop } = useSocket();
 
   const [text, setText] = useState('');
   const [image, setImage] = useState<ImagePickerAsset | null>(null);
@@ -591,8 +591,6 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
     );
   }
 
-  const isOnline = onlineUsers.has(userId);
-
   return (
     <SafeAreaView style={s.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
@@ -626,12 +624,17 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
                   labelStyle={{ color: theme.primary, fontWeight: '800' }}
                 />
             }
-            {isOnline && <View style={s.onlineDot} />}
           </View>
           <View style={s.headerText}>
             <Text numberOfLines={1} style={s.headerName}>{user.full_name || user.username}</Text>
+            {/* Presence is gone from here on purpose.
+                A socket that reconnects a beat late, or a partner on a phone
+                that has just locked, made the header say "Çevrimdışı" while
+                their message was still arriving — a line that is wrong exactly
+                when it is being read. The handle is always true, and when they
+                are typing that is the only live state worth showing. */}
             <Text numberOfLines={1} style={s.headerStatus}>
-              {isOnline ? t('status.online') : t('status.offline')}
+              {partnerTyping ? t('messages.typing', 'yazıyor...') : `@${user.username}`}
             </Text>
           </View>
         </View>
@@ -753,11 +756,6 @@ const getStyles = (theme: MotionTheme, _paperTheme: MD3Theme, _insets: EdgeInset
   headerIdentity: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerAvContainer: { position: 'relative' },
   headerText: { flex: 1, minWidth: 0 },
-  onlineDot: {
-    position: 'absolute', bottom: 0, right: 0,
-    width: 12, height: 12, borderRadius: 6,
-    backgroundColor: theme.success, borderColor: theme.background, borderWidth: 2,
-  },
   headerName: { fontSize: 16, fontWeight: '800', color: theme.text, letterSpacing: -0.3 },
   headerStatus: { fontSize: 12, color: theme.textMuted, marginTop: 1, fontWeight: '500' },
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },

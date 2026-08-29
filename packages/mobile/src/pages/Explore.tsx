@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -21,6 +21,7 @@ import { getPosts } from '../api/endpoints';
 import { logHandledError } from '../utils/feedback';
 import PostViewerModal from '../components/PostViewerModal';
 import { mediaVariantUrl, type Post } from '@motionmeet/shared';
+import { useScrollToTopOnTabPress } from '../hooks/useScrollToTopOnTabPress';
 import type { NavigationOnlyProps } from '../navigation/types';
 
 /** Instagram's grid, and the one people already know how to read. */
@@ -56,7 +57,11 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [openPost, setOpenPost] = useState<Post | null>(null);
+  /* The index the reader opened, not the post itself: the viewer needs
+     everything from there on so it can keep scrolling into the grid. */
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const gridRef = useRef<FlatList<Post>>(null);
+  useScrollToTopOnTabPress(gridRef);
 
   const tileSize = useMemo(
     () => Math.floor((width - GRID_GAP * (COLUMNS - 1)) / COLUMNS),
@@ -154,13 +159,24 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
     [theme, tileSize],
   );
 
+  const loadMore = useCallback(() => {
+    if (nextCursor && !loadingMore && !loading) void loadPosts(nextCursor);
+  }, [loading, loadingMore, loadPosts, nextCursor]);
+
+  /* Memoised: rebuilt inline this was a new array on every render, and the
+     viewer's list would have re-diffed itself each time a page arrived. */
+  const openedPosts = useMemo(
+    () => (openIndex === null ? null : posts.slice(openIndex)),
+    [openIndex, posts],
+  );
+
   const renderTile: ListRenderItem<Post> = useCallback(
     ({ item, index }) => {
       const media = firstMedia(item);
       if (!media) return null;
       return (
         <Pressable
-          onPress={() => setOpenPost(item)}
+          onPress={() => setOpenIndex(index)}
           style={[styles.tile, (index + 1) % COLUMNS === 0 && styles.tileLast]}
           accessibilityRole="button"
           accessibilityLabel={item.content || t('explore.open_post', 'Gonderiyi ac')}
@@ -212,6 +228,7 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
       </View>
 
       <FlatList
+        ref={gridRef}
         data={posts}
         renderItem={renderTile}
         keyExtractor={(item, index) => item._id || String(index)}
@@ -225,9 +242,7 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
         }
         onEndReachedThreshold={0.5}
-        onEndReached={() => {
-          if (nextCursor && !loadingMore && !loading) void loadPosts(nextCursor);
-        }}
+        onEndReached={loadMore}
         ListEmptyComponent={
           loading ? (
             <ActivityIndicator color={theme.primary} style={{ marginTop: 48 }} />
@@ -251,9 +266,11 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
       />
 
       <PostViewerModal
-        post={openPost}
+        posts={openedPosts}
         navigation={navigation}
-        onClose={() => setOpenPost(null)}
+        onClose={() => setOpenIndex(null)}
+        onEndReached={loadMore}
+        loadingMore={loadingMore}
       />
     </SafeAreaView>
   );

@@ -160,6 +160,7 @@
         "duration": "Süre",
         "volume": "Hacim",
         "like": "Beğen",
+        "double_tap_like": "Beğenmek için iki kez dokun",
         "liked_by": "Beğenen",
         "people": "kişi",
         "send_comment": "Yorum gönder",
@@ -362,6 +363,7 @@
         "delete_failed": "Mesaj silinemedi",
         "load_failed": "Mesajlar yüklenemedi",
         "invalid_conversation": "Geçersiz konuşma",
+        "typing": "yazıyor...",
         "start_new_chat": "Yeni sohbet başlat",
         "user_load_failed": "Sohbet kullanıcısı yüklenemedi"
     },

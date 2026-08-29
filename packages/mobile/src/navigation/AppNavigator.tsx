@@ -4,7 +4,9 @@ import {
   DarkTheme as NavigationDarkTheme,
   DefaultTheme as NavigationLightTheme,
   NavigationContainer,
+  useNavigation,
 } from '@react-navigation/native';
+import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
 import type { MaterialTopTabBarProps } from '@react-navigation/material-top-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -167,6 +169,9 @@ const TabNavigator = () => {
   const { theme } = useTheme();
   const { t } = useTranslation();
   const { socket } = useSocket();
+  // The tab navigator sits inside the main stack, so this is the same navigator
+  // the feed header pushes ChatBox onto.
+  const rootNavigation = useNavigation<NavigationProp<ParamListBase>>();
   const insets = useSafeAreaInsets();
   const { fontScale } = useWindowDimensions();
   const profilePicture = useAppSelector((state) => state.user.value?.profile_picture);
@@ -176,8 +181,19 @@ const TabNavigator = () => {
   // a gesture-bar phone, a button-bar phone and a tablet.
   const barHeight = fontScale > 1.4 ? 60 : 52;
 
-  // A new message still raises a toast from anywhere in the app. The unread
-  // count itself belongs to the feed header now, which is where it is shown.
+  /*
+   * A new message still raises a toast from anywhere in the app, and the toast
+   * opens the conversation.
+   *
+   * It used to be a notice and nothing more: it named the sender, quoted the
+   * message, and then did nothing at all when it was tapped — so the only way
+   * to answer was to dismiss it, open the feed header, find the thread and
+   * start again. Tapping it now pushes the chat and takes the toast down with
+   * it, which is what every messaging app has trained people to expect.
+   *
+   * The unread count itself belongs to the feed header, which is where it is
+   * shown.
+   */
   useEffect(() => {
     if (!socket) return;
     const onMessage = async (message: Message) => {
@@ -188,22 +204,26 @@ const TabNavigator = () => {
       } catch {
         // Invalid preferences fall back to enabled.
       }
+      const sender = typeof message.from_user_id === 'object' ? message.from_user_id : null;
       Toast.show({
         type: 'info',
-        text1:
-          (typeof message.from_user_id === 'object' ? message.from_user_id.full_name : '') ||
-          t('notifications.new_message', 'Yeni Mesaj'),
+        text1: sender?.full_name || sender?.username || t('notifications.new_message', 'Yeni Mesaj'),
         text2: message?.text || t('notifications.you_have_message', 'Size yeni bir mesaj geldi.'),
         position: 'top',
         topOffset: 60,
         visibilityTime: 4000,
+        onPress: () => {
+          Toast.hide();
+          if (!sender?._id) return;
+          rootNavigation.navigate('ChatBox', { userId: sender._id, user: sender });
+        },
       });
     };
     socket.on('message_received', onMessage);
     return () => {
       socket.off('message_received', onMessage);
     };
-  }, [socket, t]);
+  }, [rootNavigation, socket, t]);
 
   const renderTabBar = useCallback(
     (props: MaterialTopTabBarProps) => {

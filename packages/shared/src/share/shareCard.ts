@@ -229,32 +229,115 @@ const regionFor = (muscle: string): MuscleRegion | null =>
   REGION_BY_MUSCLE[muscle.trim().toLowerCase().replace(/[_\s]+/g, " ")] ?? null;
 
 /**
- * A simplified figure with the worked regions picked out.
+ * How wide the body diagram is, as a fraction of its height.
  *
- * The same idea every training app uses, because it answers "what did they
- * train?" faster than any list of names can. Drawn rather than photographed so
- * it scales, re-colours and needs no asset pipeline — and so the card the app
- * previews and the file the server renders are the same drawing.
+ * Callers place the figure by its right edge, so they need its width without
+ * having to know the drawing's grid.
+ */
+export const SHARE_CARD_BODY_ASPECT = 59 / 176;
+
+/** Left edge of the drawn figure on its grid; the margin either side is trimmed. */
+const BODY_LEFT = 18.5;
+/** Full height of the grid the parts below are authored on. */
+const BODY_GRID_HEIGHT = 176;
+
+/** Joins the emitted paths; named so the literal survives every editor. */
+const NEWLINE = String.fromCharCode(10);
+
+/**
+ * The body, as a silhouette and a set of muscle plates laid over it.
+ *
+ * Everything below is authored on a 96 x 176 grid with the spine on x = 48, and
+ * only the left half is written out: the right half is the same paths mirrored
+ * about the spine, so the two sides can never drift apart.
+ *
+ * The silhouette is drawn first, in one group with a single opacity so the
+ * overlapping limbs do not stack into darker seams where they meet. The plates
+ * then sit on top of it, and only they ever take the brand colour.
+ */
+const BODY_SILHOUETTE: string[] = [
+  // Head and neck.
+  "M47.4 2.4h.6a10.6 10.6 0 0 1 0 21.2h-.6Z",
+  "M43 21h5.6v13H46a3 3 0 0 1-3-3Z",
+  // Torso, tapering from the shoulders to the waist.
+  "M32 36C38 31.4 42.8 29.6 48.6 29.6V98H35L29 56C28.4 47 29 40 32 36Z",
+  // Hips, so the trunk does not end in mid-air above the legs.
+  "M34 94h14.6v20h-7.6c-4 0-6.5-2-7-6Z",
+  // Upper arm, forearm and hand, hanging beside the body.
+  "M19.5 46c4-3 8-2.5 10.5 1.5l1.5 28c.3 4-2 6.3-5.6 6.3s-5.8-2.3-6-6.3l-1-23c-.2-3.4 0-5.4.6-6.5Z",
+  "M19.8 80c3.2-1.4 6.6-1.2 9.4.6l1.4 24c.2 3.2-1.6 5-4.8 5s-5-1.8-5.2-5Z",
+  "M21 106h9.4l.5 8.6c.1 2.6-1.6 4-4.7 4s-4.9-1.4-5-4Z",
+  // Thigh, shin and foot.
+  "M33 104c5-2.4 10-2.4 14.6 0l-.6 32c-.1 4.4-2.7 6.6-7.4 6.6s-7.2-2.2-7.4-6.6l-.8-24c-.06-4 .2-6.6 1.6-8Z",
+  "M35 140c4-1.6 7.8-1.6 11.2 0l-.7 24c-.1 3.6-2 5.4-5 5.4s-4.8-1.8-4.9-5.4Z",
+  "M35.6 166.6h9.6v4c0 1.9-1.4 2.9-4.2 2.9h-9.6c-1.9 0-2.8-.8-2.8-2.4Z",
+];
+
+const BODY_MUSCLES: Array<{ d: string; region: MuscleRegion }> = [
+  // Trapezius and latissimus: the two parts of a back a front view can show.
+  { region: "back", d: "M32.5 37.4C38 32.4 42.8 30 47.2 29.4V37.6C43.4 38.4 39.6 40.4 36.4 43.4Z" },
+  { region: "back", d: "M31.2 51.4 35.8 53C35.8 60.6 36.8 67.6 38.8 74L34.6 80.6C31.4 72.4 30.2 62.6 31.2 51.4Z" },
+  // Deltoid, capping the shoulder.
+  { region: "shoulders", d: "M31.8 38.6C26.4 41 22.8 45.2 21.8 51.4 21.2 55 22.8 57 26.2 57.2 29.4 57.4 31.2 55.6 31.8 52 32.4 47.6 34 44.2 36.6 41.8Z" },
+  // Pectoral, hung off the sternum and running out under the deltoid.
+  { region: "chest", d: "M47.2 40.6V60.8H38.2C33.6 60.8 31.4 58.4 31.4 53.8V48.6C31.4 44.6 33.8 42.2 38.4 41.2 41.4 40.5 44.3 40.3 47.2 40.6Z" },
+  // Abdominals: three rows of blocks, the oblique beside them, the wedge below.
+  { region: "abs", d: "M39.8 62.4H46.6V70.8H39.8Z" },
+  { region: "abs", d: "M39.8 72.4H46.6V80.8H39.8Z" },
+  { region: "abs", d: "M39.8 82.4H46.6V90.8H39.8Z" },
+  { region: "abs", d: "M35.6 80 38.8 81.6V98.4L35.2 92C34.2 90.2 34.6 84 35.6 80Z" },
+  { region: "abs", d: "M39.8 92.8H46.6V98L42.6 106.4C41.2 109.2 39.8 108.4 39.8 105.6Z" },
+  // Biceps and forearm, read together as the arm.
+  { region: "arms", d: "M20.4 47.4C23.8 45 27.2 45.4 29.4 48.6L30.8 74.6C31 78.4 28.8 80.4 25.4 80.4 22 80.4 20 78.4 19.8 74.6L18.9 53.4C18.75 50.2 19.3 48.2 20.4 47.4Z" },
+  { region: "arms", d: "M20.5 81.2C23.4 80 26.4 80.2 29 81.8L30.3 104.4C30.5 107.4 28.9 109 25.9 109 22.9 109 21.2 107.4 21 104.4Z" },
+  // Quadriceps and calf.
+  { region: "legs", d: "M33.6 105.4C38.4 103 43.2 103 47 105.4L46.4 135.8C46.3 140 44 142 39.9 142 35.8 142 33.6 140 33.5 135.8L32.8 114C32.75 109.8 33 106.6 33.6 105.4Z" },
+  { region: "legs", d: "M35.8 141.6C39.4 140.2 43 140.2 46.2 141.6L45.6 162.6C45.5 166 43.6 167.6 40.9 167.6 38.2 167.6 36.4 166 36.3 162.6Z" },
+];
+
+/**
+ * The figure, with everything the session worked lit up.
+ *
+ * The old drawing was a stick outline about an eighth of the card tall, and at
+ * that size nobody could tell a chest day from a leg day — which is the one
+ * question it exists to answer. This one is built the way an anatomy chart is:
+ * a quiet body with the muscle groups laid over it as separate plates, so a
+ * worked group is a solid block of brand colour against a body that is barely
+ * there, and it reads at a glance from a story feed.
+ *
+ * Drawn rather than photographed so it scales, recolours and needs no asset
+ * pipeline — and so the card the app previews and the file the server renders
+ * really are the same picture.
  */
 const bodyDiagram = (muscles: string[], x: number, y: number, height: number): string => {
   const worked = new Set(muscles.map(regionFor).filter((region): region is MuscleRegion => Boolean(region)));
-  const scale = height / 60;
-  const shade = (region: MuscleRegion) =>
-    worked.has(region) ? SHARE_CARD_COLORS.accentEnd : "#FFFFFF";
-  const alpha = (region: MuscleRegion) => (worked.has(region) ? "0.95" : "0.16");
+  const scale = height / BODY_GRID_HEIGHT;
 
-  const part = (d: string, region: MuscleRegion) =>
-    `<path d="${d}" fill="${shade(region)}" opacity="${alpha(region)}"/>`;
+  const plate = ({ d, region }: (typeof BODY_MUSCLES)[number]): string =>
+    worked.has(region)
+      ? `<path d="${d}" fill="${SHARE_CARD_COLORS.accentEnd}" opacity="0.97"/>`
+      : `<path d="${d}" fill="#FFFFFF" opacity="0.2"/>`;
 
-  return `<g transform="translate(${x} ${y}) scale(${scale})">
-<circle cx="24" cy="7.5" r="4.4" fill="#FFFFFF" opacity="0.16"/>
-${part("M13.5 15.5c3-2.2 6.4-3.2 10.5-3.2s7.5 1 10.5 3.2l-1.6 3.6c-2.6-1.8-5.5-2.7-8.9-2.7s-6.3.9-8.9 2.7Z", "shoulders")}
-${part("M15.4 19.6c2.5-1.7 5.3-2.5 8.6-2.5s6.1.8 8.6 2.5v6.2c0 1.6-1.2 2.6-2.9 2.6h-11.4c-1.7 0-2.9-1-2.9-2.6Z", "chest")}
-${part("M18.6 28.8h10.8v9.4h-10.8Z", "abs")}
-${part("M12.6 16.6c-1.7 1.1-2.6 2.8-2.6 5v10.6c0 1.4.9 2.3 2.2 2.3s2.2-.9 2.2-2.3V21.4Z", "arms")}
-${part("M35.4 16.6c1.7 1.1 2.6 2.8 2.6 5v10.6c0 1.4-.9 2.3-2.2 2.3s-2.2-.9-2.2-2.3V21.4Z", "arms")}
-${part("M18.8 39h4.1l-.5 12.4c-.05 1.5-.9 2.4-2.2 2.4s-2.1-.9-2.1-2.4Z", "legs")}
-${part("M25.1 39h4.1l.7 12.4c.06 1.5-.8 2.4-2.1 2.4s-2.15-.9-2.2-2.4Z", "legs")}
+  // One opacity on the group, not on each path: the limbs overlap where they
+  // join, and per-path transparency turned every one of those joins into a
+  // visible darker seam.
+  const mirror = (markup: string): string =>
+    `<g transform="translate(96 0) scale(-1 1)">${NEWLINE}${markup}${NEWLINE}</g>`;
+
+  const outline = BODY_SILHOUETTE.map((d) => `<path d="${d}"/>`).join(NEWLINE);
+  // One opacity, applied once to both halves together. Two half-groups meeting
+  // at the spine composited their transparency twice and drew a dark stripe
+  // straight down the middle of the body.
+  const silhouette = `<g fill="#FFFFFF" opacity="0.11">${NEWLINE}${outline}${NEWLINE}${mirror(outline)}${NEWLINE}</g>`;
+  const plates = BODY_MUSCLES.map(plate).join(NEWLINE);
+
+  // The grid is wider than the body so the paths could be written about a
+  // round-numbered spine; the empty margin is trimmed here instead, which is
+  // what lets a caller place the figure by its real right edge.
+  return `<g transform="translate(${x - BODY_LEFT * scale} ${y}) scale(${scale})">
+${silhouette}
+${plates}
+${mirror(plates)}
 </g>`;
 };
 
@@ -339,9 +422,12 @@ const renderSummary: TemplateRenderer = (data, frame) => {
   const muscles = data.muscles ?? [];
 
   /* The figure stands beside the numbers, so the two together are one band
-     rather than the diagram costing the card a whole section of its own. */
-  const diagramHeight = muscles.length ? 250 : 0;
-  const statsWidth = diagramHeight ? frame.inner - diagramHeight * 0.9 : frame.inner;
+     rather than the diagram costing the card a whole section of its own. It is
+     the second thing read after the title — what the session actually worked —
+     so it is sized to be legible from a story feed, not tucked into a corner. */
+  const diagramHeight = muscles.length ? Math.round(frame.height * 0.26) : 0;
+  const diagramWidth = Math.round(diagramHeight * SHARE_CARD_BODY_ASPECT);
+  const statsWidth = diagramWidth ? frame.inner - diagramWidth - 48 : frame.inner;
   const columnWidth = statsWidth / Math.max(stats.length, 1);
 
   const titleHeight = 88 + (data.subtitle ? 54 : 0);
@@ -374,7 +460,7 @@ const renderSummary: TemplateRenderer = (data, frame) => {
 
   if (diagramHeight) {
     parts.push(
-      bodyDiagram(muscles, frame.left + frame.inner - diagramHeight * 0.82, bandTop, diagramHeight),
+      bodyDiagram(muscles, frame.left + frame.inner - diagramWidth, bandTop, diagramHeight),
     );
   }
 
@@ -427,7 +513,8 @@ const renderExercises: TemplateRenderer = (data, frame) => {
   const ceiling = Math.round(frame.height * 0.14);
   const floor = frame.footer - 130;
   const muscles = data.muscles ?? [];
-  const diagramHeight = muscles.length ? Math.round(frame.height * 0.17) : 0;
+  const diagramHeight = muscles.length ? Math.round(frame.height * 0.22) : 0;
+  const diagramWidth = Math.round(diagramHeight * SHARE_CARD_BODY_ASPECT);
   const header = 200 + (diagramHeight ? diagramHeight + 24 : 0);
   const maxRows = Math.max(1, Math.floor((floor - ceiling - header) / rowHeight));
   const rows = data.exercises.slice(0, maxRows);
@@ -437,7 +524,7 @@ const renderExercises: TemplateRenderer = (data, frame) => {
   return [
     text(clip(data.title, 20), { x: frame.left, y: top + 92, size: 92, weight: 700, spacing: -2 }),
     diagramHeight
-      ? bodyDiagram(muscles, frame.left + frame.inner - diagramHeight * 0.8, top + 118, diagramHeight)
+      ? bodyDiagram(muscles, frame.left + frame.inner - diagramWidth, top + 118, diagramHeight)
       : "",
     ...rows.map((exercise, index) => {
       const y = top + header + rowHeight * index;

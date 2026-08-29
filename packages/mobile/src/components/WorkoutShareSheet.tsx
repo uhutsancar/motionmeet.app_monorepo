@@ -66,8 +66,19 @@ const CARD_FILE = 'motionmeet-share-card.png';
    screen rather than assuming a size that overflows a short phone. */
 const TITLE_BLOCK_HEIGHT = 56;
 const DOTS_HEIGHT = 20;
-const ACTION_ROW_HEIGHT = 104;
 const DONE_ROW_HEIGHT = 62;
+
+/** One action: the round plate, the gap under it, and two lines of label.
+    Kept tight on purpose — the grid wraps to two rows on a phone, and every
+    point it spends is a point off the card preview above it. */
+const ACTION_PLATE = 48;
+const ACTION_LABEL_HEIGHT = 26;
+const ACTION_HEIGHT = ACTION_PLATE + 6 + ACTION_LABEL_HEIGHT;
+/** The gutter either side of the action grid, and the gap between its cells. */
+const ACTION_GUTTER = 16;
+const ACTION_GAP = 8;
+/** Narrower than this and four across stops being comfortably tappable. */
+const ACTION_MIN_WIDTH = 74;
 
 /**
  * What to do with a finished workout.
@@ -108,6 +119,30 @@ const WorkoutShareSheet = ({ visible, data, workoutId, shareUrl, onClose }: Work
   const pageWidth = window.width;
 
   /*
+   * The actions are a grid that fits the screen, not a strip that runs off it.
+   *
+   * They used to be a horizontal list with the last item deliberately left
+   * peeking at the edge — which reads as "there is more" only if you already
+   * know there is. On a phone it looked like a row that had been cut off: a
+   * half-drawn circle and a clipped word hard against the right edge, with
+   * nothing to say they could be scrolled to. Every action is on screen now,
+   * laid out in as many columns as the width honestly holds, so nothing
+   * overflows on a small phone and nothing floats in a lonely row on a tablet.
+   */
+  const actionCount = shareUrl ? 6 : 5;
+  const actionColumns = Math.max(
+    3,
+    Math.min(
+      actionCount,
+      Math.floor((pageWidth - ACTION_GUTTER * 2 + ACTION_GAP) / (ACTION_MIN_WIDTH + ACTION_GAP)),
+    ),
+  );
+  const actionRows = Math.ceil(actionCount / actionColumns);
+  const actionWidth =
+    (pageWidth - ACTION_GUTTER * 2 - ACTION_GAP * (actionColumns - 1)) / actionColumns;
+  const actionBlockHeight = actionRows * ACTION_HEIGHT + (actionRows - 1) * ACTION_GAP + 14;
+
+  /*
    * The card is sized to what is actually left over, not to a fixed width.
    *
    * A 9:16 card at 340pt wide is 604pt tall, which is more than the space above
@@ -117,7 +152,7 @@ const WorkoutShareSheet = ({ visible, data, workoutId, shareUrl, onClose }: Work
    * phone and still fills a large one.
    */
   const chromeHeight =
-    insets.top + 12 + TITLE_BLOCK_HEIGHT + DOTS_HEIGHT + ACTION_ROW_HEIGHT + DONE_ROW_HEIGHT +
+    insets.top + 12 + TITLE_BLOCK_HEIGHT + DOTS_HEIGHT + actionBlockHeight + DONE_ROW_HEIGHT +
     Math.max(insets.bottom, 14);
   const availableHeight = Math.max(window.height - chromeHeight, 220);
   const cardHeight = Math.min(
@@ -422,23 +457,16 @@ const WorkoutShareSheet = ({ visible, data, workoutId, shareUrl, onClose }: Work
           ))}
         </View>
 
-        {/* A horizontal strip that says it is one: the last item is deliberately
-            left peeking at the edge, so it reads as "there is more" instead of
-            looking like a label that got cut off. */}
-        <FlatList
-          data={actions}
-          keyExtractor={(action) => action.key}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.actionList}
-          contentContainerStyle={styles.actionRow}
-          renderItem={({ item }) => (
+        <View style={styles.actionGrid}>
+          {actions.map((item) => (
             <Pressable
+              key={item.key}
               onPress={() => void item.onPress()}
               disabled={Boolean(busy)}
-              style={styles.action}
+              style={[styles.action, { width: actionWidth }]}
               accessibilityRole="button"
               accessibilityLabel={item.label}
+              accessibilityState={{ disabled: Boolean(busy), selected: Boolean(done[item.key]) }}
             >
               <View
                 style={[
@@ -458,12 +486,14 @@ const WorkoutShareSheet = ({ visible, data, workoutId, shareUrl, onClose }: Work
                   />
                 )}
               </View>
+              {/* Two lines, always: a one-word label and a two-word one next to
+                  each other used to sit their circles at different heights. */}
               <Text numberOfLines={2} style={[styles.actionLabel, { color: theme.textMuted }]}>
                 {item.label}
               </Text>
             </Pressable>
-          )}
-        />
+          ))}
+        </View>
 
         <Pressable
           onPress={onClose}
@@ -519,31 +549,32 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
   },
-  actionList: {
-    flexGrow: 0,
-  },
-  actionRow: {
-    paddingHorizontal: 16,
-    gap: 14,
-    alignItems: 'flex-start',
-    paddingTop: 16,
-    paddingBottom: 4,
+  actionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+    paddingHorizontal: ACTION_GUTTER,
+    columnGap: ACTION_GAP,
+    rowGap: ACTION_GAP,
+    paddingTop: 12,
+    paddingBottom: 2,
   },
   action: {
-    width: 76,
+    height: ACTION_HEIGHT,
     alignItems: 'center',
-    gap: 7,
+    gap: 6,
   },
   actionIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: ACTION_PLATE,
+    height: ACTION_PLATE,
+    borderRadius: ACTION_PLATE / 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionLabel: {
     fontSize: 10.5,
     lineHeight: 13,
+    height: ACTION_LABEL_HEIGHT,
     textAlign: 'center',
     fontWeight: '600',
   },

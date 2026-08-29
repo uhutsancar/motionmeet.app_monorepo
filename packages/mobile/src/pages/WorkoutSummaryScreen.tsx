@@ -13,6 +13,7 @@ import { uploadMedia } from '../api/mediaUpload';
 import dayjs from '../utils/dayjs';
 
 import { Button, Surface, Text, TextInput, Divider, List, IconButton, ActivityIndicator } from 'react-native-paper';
+import { EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
 import KeyboardAwareScrollView from '../components/KeyboardAwareScrollView';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import ScreenHeader from '../components/ScreenHeader';
@@ -455,6 +456,18 @@ const WorkoutSummaryScreen = ({ navigation, route }: WorkoutSummaryProps) => {
                       titleStyle={styles.listItemTitleBold}
                       description={`${ex.sets.length} ${t('statistics.sets', 'set')} ${ex.sets[0]?.weight ? ` • ${ex.sets[0].weight}kg` : ''}`}
                       descriptionStyle={styles.listItemDescription}
+                      /* The movement's own artwork, the way the active workout
+                         and every browse list show it. The last screen before a
+                         session is saved was reading as a wall of names. */
+                      left={() => (
+                        <View style={styles.exerciseThumb}>
+                          {ex.imageUrl ? (
+                            <Image source={{ uri: ex.imageUrl }} style={styles.exerciseThumbImage} resizeMode="cover" />
+                          ) : (
+                            <List.Icon icon="dumbbell" color={theme.textMuted} style={styles.exerciseThumbIcon} />
+                          )}
+                        </View>
+                      )}
                       style={[
                         styles.exerciseItem,
                         i === workoutData.exercises.length - 1 ? styles.exerciseItemLast : { borderBottomColor: theme.border }
@@ -521,7 +534,17 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
   textInputStyle: { backgroundColor: theme.surfaceLight, width: '100%', minWidth: 0, fontSize: 14 },
   exercisesContainer: { marginBottom: 20 },
   cardInner: { overflow: 'hidden', borderRadius: 16 },
-  exerciseItem: { borderBottomWidth: 1 },
+  exerciseItem: { borderBottomWidth: 1, alignItems: 'center' },
+  exerciseThumb: {
+    ...exerciseThumbStyle(EXERCISE_THUMB.medium),
+    marginLeft: 16,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  exerciseThumbImage: { width: '100%', height: '100%' },
+  exerciseThumbIcon: { margin: 0 },
   exerciseItemLast: { borderBottomWidth: 0 },
   deleteButton: { marginTop: 8 },
 });
