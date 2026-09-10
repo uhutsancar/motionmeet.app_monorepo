@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Provider } from 'react-redux';
 import { AuthProvider } from './src/context/AuthProvider';
 import { store } from './src/store/store';
@@ -11,6 +11,7 @@ import { PaperProvider } from 'react-native-paper';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppToast from './src/components/AppToast';
+import { ensureAdsInitialized } from './src/services/adsInit';
 
 const AppContent = () => {
   const { theme, isDark } = useTheme();
@@ -28,6 +29,12 @@ const AppContent = () => {
 };
 
 export default function App() {
+  // Consent + SDK init run once at startup, independent of auth state, so
+  // the first ad slot to mount doesn't have to wait on them itself.
+  useEffect(() => {
+    void ensureAdsInitialized();
+  }, []);
+
   return (
     // Gestures are routed through the native handler tree, which the swipeable
     // tab pager needs in order to negotiate with the carousels inside screens.

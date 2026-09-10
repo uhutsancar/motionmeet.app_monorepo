@@ -30,6 +30,7 @@ import {
   Bell,
   ChevronDown,
   ChevronRight,
+  CreditCard,
   ExternalLink,
   Globe,
   HelpCircle,
@@ -190,6 +191,34 @@ const Settings = () => {
     }
   };
 
+  const [billingPending, setBillingPending] = useState(false);
+
+  /**
+   * Opens Paddle's own hosted billing page - MotionMeet never builds a
+   * cancel/update-card UI itself. Silently no-ops (toast only) when the
+   * user has never had a Paddle customer id assigned, since the backend
+   * returns 404 for that rather than an error worth alarming over.
+   */
+  const manageBilling = async () => {
+    try {
+      setBillingPending(true);
+      const token = await getToken();
+      if (!token) throw new Error("Your session has expired");
+      const { data } = await api.post<{ success: boolean; url?: string; message?: string }>(
+        API_ROUTES.payments.portalSession,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!data.success || !data.url) throw new Error(data.message || "No billing account on file yet.");
+      window.open(data.url, "_blank", "noopener,noreferrer");
+    } catch (error: unknown) {
+      const failure = axios.isAxiosError<ApiFailure>(error) ? error.response?.data : undefined;
+      toast.error(failure?.message || (error instanceof Error ? error.message : "Billing portal is unavailable."));
+    } finally {
+      setBillingPending(false);
+    }
+  };
+
   const exportData = async () => {
     try {
       setAccountRequestPending(true);
@@ -343,6 +372,20 @@ const Settings = () => {
             label={t("measurements.title", "Measurements")}
             subtitle={t("measurements.settings_hint", "Weight, body fat and circumferences over time")}
             onClick={() => navigate("/measurements")}
+          />
+        </Section>
+
+        <Section icon={CreditCard} title={t("settings.billing", "Faturalama")}>
+          <LinkRow
+            label={billingPending ? t("common.loading", "Yükleniyor…") : t("settings.manage_billing", "Faturamı Yönet")}
+            subtitle={t("settings.manage_billing_hint", "Planını, ödeme yöntemini ve faturalarını Paddle üzerinden yönet")}
+            onClick={manageBilling}
+            external
+          />
+          <LinkRow
+            label={t("pricing_page.title", "Planlar")}
+            subtitle={t("settings.plans_hint", "Mevcut planları ve fiyatları gör")}
+            onClick={() => navigate("/pricing")}
           />
         </Section>
 

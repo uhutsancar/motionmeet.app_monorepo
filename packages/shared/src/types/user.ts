@@ -2,7 +2,7 @@ import type { EntityId, Timestamped } from "./common.js";
 import type { ProfileLocation } from "./location.js";
 
 export type Role = "user" | "admin" | "superadmin";
-export type PlanStatus = "free" | "active" | "trialing" | "cancelled" | "expired";
+export type PlanStatus = "free" | "active" | "trialing" | "past_due" | "paused" | "cancelled" | "expired";
 
 export interface PrivacySettings {
   publicProfile: boolean;
@@ -137,6 +137,8 @@ export interface User extends UserProfile {
   planStartDate: string | null;
   planEndDate: string | null;
   planCancelledAt: string | null;
+  /** True once a cancellation is scheduled for the end of the current billing period - access continues until planEndDate. */
+  planCancelAtPeriodEnd: boolean;
 }
 
 export interface UserUpdateInput {

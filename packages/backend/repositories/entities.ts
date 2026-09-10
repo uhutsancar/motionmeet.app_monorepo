@@ -11,6 +11,10 @@ export interface InternalUser extends User {
   cover_photo_key?: string;
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
+  paddleCustomerId?: string;
+  paddleSubscriptionId?: string;
+  billingProvider?: "none" | "paddle";
+  paddleEnvironment?: "sandbox" | "live" | null;
 }
 
 export const numberValue = (value: number | string | null | undefined): number => {
@@ -118,6 +122,7 @@ export const serializeUser = (row: Row<"users">, plan: InternalPlan | null = nul
     planStartDate: iso(row.plan_start_date),
     planEndDate: iso(row.plan_end_date),
     planCancelledAt: iso(row.plan_cancelled_at),
+    planCancelAtPeriodEnd: row.plan_cancel_at_period_end,
     weight: numberValue(row.weight),
     height: numberValue(row.height),
     followers_count: row.followers_count,
@@ -134,6 +139,10 @@ export const serializeUser = (row: Row<"users">, plan: InternalPlan | null = nul
           cover_photo_key: row.cover_photo_key,
           stripeCustomerId: row.stripe_customer_id,
           stripeSubscriptionId: row.stripe_subscription_id,
+          paddleCustomerId: row.paddle_customer_id,
+          paddleSubscriptionId: row.paddle_subscription_id,
+          billingProvider: row.billing_provider,
+          paddleEnvironment: row.paddle_environment,
         }
       : {}),
   };

@@ -217,7 +217,7 @@ packages/backend/
 ├─ db/
 │  ├─ migrations/ # PostgreSQL schema sürümleri
 │  ├─ migrator.ts # Kysely migration registry/runner
-│  └─ types.ts    # 39 uygulama tablosunun tipli DB sözleşmesi
+│  └─ types.ts    # 41 uygulama tablosunun tipli DB sözleşmesi
 ├─ middlewares/   # JWT auth, DB user bağlama, RBAC, request ID, error handling
 ├─ realtime/      # Socket.IO auth sonrası mesaj/presence/typing işleyicileri
 ├─ repositories/  # SQL okuma/hydration ve DB entity -> API entity dönüşümü
@@ -295,7 +295,8 @@ status'a çevrilir; PostgreSQL unique violation `409`, bilinmeyen server hatalar
 | Workout | `GET/POST /api/workout`, `GET /api/workout/stats` | Antrenman yazma, geçmiş ve aggregate istatistikler. |
 | Routine | `GET/POST /api/routine`, `PUT/DELETE /api/routine/:id` | Kullanıcı rutinleri ve plan kotası. |
 | Exercise | `GET/POST /api/exercise`, `GET /records`, `GET /:id`, `GET /:id/stats` | Katalog, custom exercise ve analitik. |
-| Plan | `GET /api/plans`, `POST /api/plans/update` | Aktif planları okuma ve mevcut kullanıcı planını değiştirme. |
+| Plan | `GET /api/plans`, `POST /api/plans/update` | Aktif planları okuma ve mevcut kullanıcı planını değiştirme (yalnızca ücretsiz plan - ücretli planlar için 409 guard). |
+| Payments | `GET /api/payments/checkout-intent`, `GET /api/payments/subscription`, `POST /api/payments/portal-session`, `POST /api/payments/webhooks/paddle` | Paddle checkout başlatma, abonelik özeti, fatura portalı ve webhook (ayrı raw-body middleware, `express.json()`'dan önce mount). |
 | Lookup | `GET /api/muscle-groups`, `GET /api/equipment` | Aktif master data. |
 | Location | `GET /api/locations/search`, `/countries`, `/recent`, `/attribution`, `/:kind/:id`; `POST /api/locations/resolve` | Dünya ülke/bölge/şehir referans verisinde arama, tekil kayıt okuma, koordinattan öneri üretme ve ODbL attribution metni. |
 | Profil konumu | `GET/PUT/PATCH/DELETE /api/user/location` | Dataset kaydına referansla profil konumu okuma, kaydetme, görünürlük değiştirme ve kaldırma. |
@@ -370,9 +371,15 @@ Bootstrap edilen planlar:
 `-1` sınırsız kota anlamına gelir. Kota rezervasyonları `usage_counters`
 tablosunda transaction içinde atomik artırılır; aynı anda gelen istekler limiti
 aşamaz. Workout aylık, post/story günlük, rutin lifetime bucket kullanır.
-Repository'de Stripe customer/subscription ve price ID alanları hazırdır; ancak
-bu repository'de Stripe SDK, checkout veya webhook implementasyonu yoktur. Plan
-değişimi şu an API/admin uygulama mantığıyla yapılır.
+Repository'de kullanılmayan Stripe customer/subscription/price ID alanları hâlâ
+duruyor (dokunulmadı). Gerçek billing provider olarak **Paddle** entegre
+edildi (Sandbox): `plan_provider_prices` tablosu plan+aralık+ortam bazında
+Paddle price ID'lerine eşleniyor, `payment_webhook_events` webhook'ları
+idempotent işliyor, `users.paddle_customer_id`/`paddle_subscription_id`
+gerçek abonelik durumunu tutuyor. Detay ve kalan adımlar için
+`docs/paddle-integration-plan.md`. Self-servis ücretsiz plan değişimi hâlâ
+`POST /api/plans/update` üzerinden; ücretli planlar `POST
+/api/payments/checkout-intent` + Paddle Checkout ile.
 
 ### 6.7 Domain service'leri ve önemli transaction sınırları
 
@@ -518,20 +525,23 @@ asıl veri bütünlüğü PostgreSQL FK, unique, check, enum ve transaction'lar�
   `latitude`/`longitude` kolonları üzerinden bounding box + haversine yolu
   çalışır. Seçim boot'ta `detectGeometrySupport()` ile yapılır; şema iki durumda
   da aynıdır, sonradan PostGIS eklenebilir.
-- Enum'lar: `user_role`, `plan_status`, `billing_interval`, `set_type`,
-  `post_type`, `post_visibility`, `media_type`, `story_media_type`,
+- Enum'lar: `user_role`, `plan_status` (artık `past_due`/`paused` dahil, Paddle
+  için eklendi), `billing_interval`, `billing_provider`, `billing_environment`,
+  `set_type`, `post_type`, `post_visibility`, `media_type`, `story_media_type`,
   `connection_status`, `message_type`, `upload_purpose`, `outbox_status`,
   `outbox_type`. Konum tabloları enum yerine `CHECK` kısıtı kullanır: dataset
   yenilendiğinde yeni bir değer eklemek `ALTER TYPE` gerektirmesin diye.
 
-### 7.3 39 uygulama tablosu
+### 7.3 41 uygulama tablosu
 
 #### Plan ve kullanıcı
 
 | Tablo | Ana alanlar ve amaç |
 | --- | --- |
 | `plans` | Plan fiyatı, trial, aktiflik ve bütün ürün feature/kota değerleri. |
-| `plan_billing_cycles` | Plan başına monthly/yearly fiyat ve gelecekteki Stripe price ID. Composite PK `(plan_id, interval)`. |
+| `plan_billing_cycles` | Plan başına monthly/yearly fiyat; `stripe_price_id` kullanılmıyor (legacy). Gerçek sağlayıcı eşlemesi `plan_provider_prices`'ta (Paddle, ortama göre ayrı). Composite PK `(plan_id, interval)`. |
+| `plan_provider_prices` | `(plan_id, interval, provider, environment)` → Paddle product/price ID eşlemesi. Ortam bazında ayrı (sandbox/live), sıfır satırla da güvenle boot alır. |
+| `payment_webhook_events` | Paddle webhook idempotency log'u. `event_id` PK - tekrar teslimat `ON CONFLICT DO NOTHING` ile no-op. |
 | `users` | Kimlik, password hash, profil/kapak key ve URL'leri, rol, plan, privacy, sosyal ve workout toplam sayaçları. Ayrıca profil konumu: `location` (backend'in ürettiği etiket), `location_country_id` / `location_state_id` / `location_city_id` (dataset referansları), `location_source`, `location_visibility`, `location_selected_at`. |
 
 #### Konum referans verisi ve yakınlık
@@ -612,7 +622,7 @@ kayıtlar silinmez, `is_active = false` yapılır.
 | `user_daily_muscle_stats` | Günlük aggregate'e bağlı kas başına set sayısı. |
 | `user_exercise_daily_stats` | Kullanıcı-gün-egzersiz başına volume, rep, set, session ve max weight. |
 
-Kysely'nin kendi migration metadata tabloları bu 39 uygulama tablosuna dahil
+Kysely'nin kendi migration metadata tabloları bu 41 uygulama tablosuna dahil
 değildir.
 
 ### 7.4 Normalizasyon ve bilinçli denormalizasyon
@@ -2368,8 +2378,12 @@ Bu bölüm mevcut kaynak durumunu dürüstçe kaydeder:
    production için canonical dosya `Dockerfile.prod`'dur.
 5. OpenAPI temel endpoint'leri kapsar; runtime'daki bazı legacy alias ve
    idempotent like route'larıyla düzenli olarak senkron kontrol edilmelidir.
-6. Stripe alanları schema/plan modelinde vardır fakat billing provider,
-   checkout, webhook ve subscription reconciliation implementasyonu yoktur.
+6. Kullanılmayan Stripe alanları schema/plan modelinde hâlâ duruyor (temizlenmedi,
+   sadece artık aktif kullanılmıyor). Gerçek billing provider **Paddle**
+   (Sandbox) olarak eklendi - bkz. §6.6 ve `docs/paddle-integration-plan.md`.
+   Gerçek webhook teslimatı yerel ortamda henüz test edilmedi (Paddle
+   localhost'a ulaşamıyor, public tünel gerekiyor); Sandbox katalog (ürün/fiyat)
+   gerçek Paddle API'sinde oluşturuldu ve doğrulandı.
 7. Notification tipi ve mobil Notifications ekranı vardır; ayrı kalıcı
    `notifications` tablosu veya push notification provider'ı yoktur.
 8. Shared tiplerde `SavedItem/Favorite` sözleşmesi bulunur; backend'de saved-post

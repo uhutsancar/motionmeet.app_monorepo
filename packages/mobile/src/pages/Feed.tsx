@@ -31,6 +31,9 @@ import StoryComposer from '../components/StoryComposer';
 import SuggestedAthletes from '../components/SuggestedAthletes';
 import NearbyAthletes from '../components/NearbyAthletes';
 import MotionMark from '../components/MotionMark';
+import AdBanner from '../components/ads/AdBanner';
+import { useAdEntitlement } from '../hooks/useAdEntitlement';
+import { nextAdFrequency } from '../config/ads';
 import { logHandledError } from '../utils/feedback';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useUnreadMessages } from '../hooks/useUnreadMessages';
@@ -45,7 +48,33 @@ type FeedMode = 'discover' | 'following';
 type FeedRow =
   | { type: 'post'; item: Post }
   | { type: 'suggested'; id: string }
-  | { type: 'nearby'; id: string };
+  | { type: 'nearby'; id: string }
+  | { type: 'ad'; id: string };
+
+/**
+ * Inserts one ad row every 10-15 posts (re-rolled per gap), never right
+ * before another special row (suggested/nearby), so two non-post rows never
+ * land back to back. Client-side only - it runs after the real posts have
+ * already been paginated, so it never affects the backend cursor.
+ */
+const insertAdRows = (rows: FeedRow[]): FeedRow[] => {
+  const result: FeedRow[] = [];
+  let postsSinceAd = 0;
+  let adIndex = 0;
+  let gap = nextAdFrequency();
+  rows.forEach((row, index) => {
+    result.push(row);
+    if (row.type !== 'post') return;
+    postsSinceAd += 1;
+    const next = rows[index + 1];
+    if (postsSinceAd >= gap && (!next || next.type === 'post')) {
+      result.push({ type: 'ad', id: `ad-${adIndex++}` });
+      postsSinceAd = 0;
+      gap = nextAdFrequency();
+    }
+  });
+  return result;
+};
 
 interface HeaderActionProps {
   icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -106,6 +135,7 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
     loadingMore,
   } = useAppSelector((state) => state.posts);
   const user = useAppSelector((state) => state.user.value);
+  const { shouldShowAds } = useAdEntitlement();
   // Kept live by the socket, so a like or follow request badges the bell without
   // the screen polling for it.
   const unreadCount = useAppSelector((state) => state.notifications.unreadCount);
@@ -238,12 +268,13 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
         { type: 'nearby', id: 'nearby' },
       );
     }
-    return rows;
-  }, [posts]);
+    return shouldShowAds ? insertAdRows(rows) : rows;
+  }, [posts, shouldShowAds]);
 
   const renderItem: ListRenderItem<FeedRow> = useCallback(({ item: row }) => {
     if (row.type === 'suggested') return <SuggestedAthletes navigation={navigation} />;
     if (row.type === 'nearby') return <NearbyAthletes navigation={navigation} />;
+    if (row.type === 'ad') return <AdBanner />;
     return (
       <PostCard
         post={row.item}

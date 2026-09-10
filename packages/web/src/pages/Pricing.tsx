@@ -20,7 +20,15 @@ import api from "~/api/axios.js";
 import { useAuthContext } from "../context/AuthProvider";
 import { fetchUser } from "../features/user/userSlice";
 import { useAppDispatch, useAppSelector } from "~/app/hooks";
+import { getPaddle } from "~/config/paddle";
 import type { TFunction } from "i18next";
+
+interface CheckoutIntentResponse {
+  success: boolean;
+  priceId?: string;
+  customData?: Record<string, unknown>;
+  message?: string;
+}
 
 const planFeatureRows = (plan: Plan, t: TFunction): string[] => {
   const features = plan.features || {};
@@ -96,25 +104,62 @@ const Pricing = () => {
     [i18n.resolvedLanguage]
   );
 
+  const handleFreePlanSelect = async (plan: Plan, token: string) => {
+    const { data } = await api.post<{ success: boolean; message?: string }>(
+      API_ROUTES.plan.update,
+      { planId: plan._id },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!data.success) throw new Error(data.message || "Plan could not be updated");
+    await dispatch(fetchUser(token));
+    toast.success(t("pricing_page.upgrade_success", "Plan updated."));
+  };
+
+  /**
+   * A paid plan is never activated from a client callback - only a verified
+   * Paddle webhook does that (see docs/paddle-integration-plan.md §7-8). This
+   * only opens the checkout overlay; `checkout.completed` below is UX only
+   * (closes the loading state), not the source of truth for entitlement.
+   */
+  const handlePaidPlanSelect = async (plan: Plan, token: string) => {
+    const interval = plan.billingCycles[0]?.interval ?? "monthly";
+    const { data } = await api.get<CheckoutIntentResponse>(API_ROUTES.payments.checkoutIntent, {
+      params: { planId: plan._id, interval },
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!data.success || !data.priceId) {
+      throw new Error(data.message || t("pricing_page.checkout_unavailable", "This plan isn't available for checkout yet."));
+    }
+    const paddle = await getPaddle((event) => {
+      // UX only - refreshes the badge/plan display a beat after the overlay
+      // reports success. Real entitlement always comes from the webhook; if
+      // it's slow, this fetch simply shows the pre-checkout plan a little
+      // longer rather than granting anything itself.
+      if (event.name === "checkout.completed") {
+        toast.success(t("pricing_page.checkout_processing", "Payment received - updating your plan…"));
+        setTimeout(() => { void getToken().then((freshToken) => { if (freshToken) void dispatch(fetchUser(freshToken)); }); }, 3000);
+      }
+    });
+    paddle.Checkout.open({
+      items: [{ priceId: data.priceId, quantity: 1 }],
+      customer: currentUser?.email ? { email: currentUser.email } : undefined,
+      customData: data.customData,
+    });
+  };
+
   const handleSelectPlan = async (plan: Plan) => {
     if (!currentUser) {
       navigate("/login");
       return;
     }
-    if (plan.price > 0 || plan.name !== "Free") return;
+    const isFree = plan.price === 0 && plan.name === "Free";
 
     setUpdatingPlan(plan._id);
     try {
       const token = await getToken();
       if (!token) throw new Error("Your session has expired");
-      const { data } = await api.post<{ success: boolean; message?: string }>(
-        API_ROUTES.plan.update,
-        { planId: plan._id },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (!data.success) throw new Error(data.message || "Plan could not be updated");
-      await dispatch(fetchUser(token));
-      toast.success(t("pricing_page.upgrade_success", "Plan updated."));
+      if (isFree) await handleFreePlanSelect(plan, token);
+      else await handlePaidPlanSelect(plan, token);
     } catch (error: unknown) {
       const failure = axios.isAxiosError<ApiFailure>(error) ? error.response?.data : undefined;
       toast.error(
@@ -206,7 +251,7 @@ const Pricing = () => {
                       <Button
                         fullWidth
                         variant={isCurrent ? "outlined" : "contained"}
-                        disabled={isCurrent || isPaid || updatingPlan === plan._id}
+                        disabled={isCurrent || updatingPlan === plan._id}
                         onClick={() => handleSelectPlan(plan)}
                         sx={{ minHeight: 48, borderRadius: 3, fontWeight: 800 }}
                       >
@@ -215,7 +260,7 @@ const Pricing = () => {
                           : isCurrent
                             ? t("pricing_page.current_plan", "Current plan")
                             : isPaid
-                              ? t("pricing_page.checkout_soon", "Checkout coming soon")
+                              ? t("pricing_page.upgrade_cta", "Upgrade")
                               : t("pricing_page.select_plan", "Select plan")}
                       </Button>
                     </Paper>

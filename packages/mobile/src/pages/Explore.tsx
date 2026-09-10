@@ -22,11 +22,41 @@ import { logHandledError } from '../utils/feedback';
 import PostViewerModal from '../components/PostViewerModal';
 import { mediaVariantUrl, type Post } from '@motionmeet/shared';
 import { useScrollToTopOnTabPress } from '../hooks/useScrollToTopOnTabPress';
+import { useAdEntitlement } from '../hooks/useAdEntitlement';
+import { nextAdFrequency } from '../config/ads';
+import NativeAdTile from '../components/ads/NativeAdTile';
 import type { NavigationOnlyProps } from '../navigation/types';
 
 /** Instagram's grid, and the one people already know how to read. */
 const COLUMNS = 3;
 const GRID_GAP = 2;
+
+type GridItem =
+  | { type: 'post'; post: Post; postIndex: number }
+  | { type: 'ad'; id: string };
+
+/**
+ * Interleaves one ad tile every 10-15 post tiles. `postIndex` keeps each
+ * post tile pointed at its real position in `posts`, so opening the viewer
+ * still works once ad tiles have shifted everything after them - the
+ * viewer slices `posts` directly and never sees an ad tile at all.
+ */
+const withAdTiles = (posts: Post[]): GridItem[] => {
+  const result: GridItem[] = [];
+  let sincePost = 0;
+  let gap = nextAdFrequency();
+  let adIndex = 0;
+  posts.forEach((post, postIndex) => {
+    result.push({ type: 'post', post, postIndex });
+    sincePost += 1;
+    if (sincePost >= gap) {
+      result.push({ type: 'ad', id: `ad-${adIndex++}` });
+      sincePost = 0;
+      gap = nextAdFrequency();
+    }
+  });
+  return result;
+};
 
 const firstMedia = (post: Post): { url: string; isVideo: boolean } | null => {
   const entry = post.media?.find((item) => typeof item.url === 'string' && item.url.trim());
@@ -51,6 +81,7 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
   const { t } = useTranslation();
   const { getToken } = useAuthContext();
   const { width } = useWindowDimensions();
+  const { shouldShowAds } = useAdEntitlement();
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -60,7 +91,7 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
   /* The index the reader opened, not the post itself: the viewer needs
      everything from there on so it can keep scrolling into the grid. */
   const [openIndex, setOpenIndex] = useState<number | null>(null);
-  const gridRef = useRef<FlatList<Post>>(null);
+  const gridRef = useRef<FlatList<GridItem>>(null);
   useScrollToTopOnTabPress(gridRef);
 
   const tileSize = useMemo(
@@ -170,35 +201,44 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
     [openIndex, posts],
   );
 
-  const renderTile: ListRenderItem<Post> = useCallback(
+  const gridItems = useMemo<GridItem[]>(
+    () => (shouldShowAds ? withAdTiles(posts) : posts.map((post, postIndex) => ({ type: 'post', post, postIndex }))),
+    [posts, shouldShowAds],
+  );
+
+  const renderTile: ListRenderItem<GridItem> = useCallback(
     ({ item, index }) => {
-      const media = firstMedia(item);
+      const tileStyle = [styles.tile, (index + 1) % COLUMNS === 0 && styles.tileLast];
+      if (item.type === 'ad') return <NativeAdTile size={tileSize} />;
+
+      const post = item.post;
+      const media = firstMedia(post);
       if (!media) return null;
       return (
         <Pressable
-          onPress={() => setOpenIndex(index)}
-          style={[styles.tile, (index + 1) % COLUMNS === 0 && styles.tileLast]}
+          onPress={() => setOpenIndex(item.postIndex)}
+          style={tileStyle}
           accessibilityRole="button"
-          accessibilityLabel={item.content || t('explore.open_post', 'Gonderiyi ac')}
+          accessibilityLabel={post.content || t('explore.open_post', 'Gonderiyi ac')}
         >
           <Image
             source={{ uri: mediaVariantUrl(media.url, 'thumb') }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
             cachePolicy="memory-disk"
-            recyclingKey={item._id}
+            recyclingKey={post._id}
             transition={100}
           />
           {media.isVideo && (
             <Ionicons name="play" size={17} color="#FFFFFF" style={styles.tileBadge} />
           )}
-          {(item.media?.length ?? item.image_urls?.length ?? 0) > 1 && !media.isVideo && (
+          {(post.media?.length ?? post.image_urls?.length ?? 0) > 1 && !media.isVideo && (
             <Ionicons name="copy-outline" size={15} color="#FFFFFF" style={styles.tileBadge} />
           )}
         </Pressable>
       );
     },
-    [styles, t],
+    [styles, t, tileSize],
   );
 
   return (
@@ -229,9 +269,9 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
 
       <FlatList
         ref={gridRef}
-        data={posts}
+        data={gridItems}
         renderItem={renderTile}
-        keyExtractor={(item, index) => item._id || String(index)}
+        keyExtractor={(item, index) => (item.type === 'post' ? item.post._id || String(index) : item.id)}
         numColumns={COLUMNS}
         showsVerticalScrollIndicator={false}
         removeClippedSubviews

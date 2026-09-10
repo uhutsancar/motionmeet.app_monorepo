@@ -65,12 +65,18 @@ export interface UserTable extends BaseTable {
   location_selected_at: NullableTimestamp;
   role: Generated<"user" | "admin" | "superadmin">;
   plan_id: string | null;
-  plan_status: Generated<"free" | "active" | "trialing" | "cancelled" | "expired">;
+  plan_status: Generated<"free" | "active" | "trialing" | "past_due" | "paused" | "cancelled" | "expired">;
   plan_start_date: NullableTimestamp;
   plan_end_date: NullableTimestamp;
   plan_cancelled_at: NullableTimestamp;
+  plan_cancel_at_period_end: Generated<boolean>;
   stripe_customer_id: Generated<string>;
   stripe_subscription_id: Generated<string>;
+  paddle_customer_id: Generated<string>;
+  paddle_subscription_id: Generated<string>;
+  billing_provider: Generated<"none" | "paddle">;
+  paddle_environment: "sandbox" | "live" | null;
+  last_paddle_event_occurred_at: NullableTimestamp;
   weight: GeneratedNumeric;
   height: GeneratedNumeric;
   followers_count: Generated<number>;
@@ -517,9 +523,48 @@ export interface UserExerciseDailyStatTable extends BaseTable {
   max_weight: GeneratedNumeric;
 }
 
+/**
+ * Maps a (plan, interval) to Paddle's own product/price ids, scoped by
+ * environment so a sandbox price id can never be mistaken for a live one -
+ * see docs/paddle-integration-plan.md §2-3. Starts empty; the app must run
+ * correctly with zero rows here until the Paddle dashboard catalog exists.
+ */
+export interface PlanProviderPriceTable {
+  plan_id: string;
+  interval: "monthly" | "yearly";
+  provider: Generated<"none" | "paddle">;
+  environment: "sandbox" | "live";
+  external_product_id: string;
+  external_price_id: string;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+}
+
+/**
+ * Idempotency log for Paddle webhook deliveries. `event_id` as the primary
+ * key is the dedupe mechanism: a duplicate delivery (expected - Paddle
+ * retries) hits a unique-violation on insert, which the app treats as
+ * "already handled" rather than an error.
+ */
+export interface PaymentWebhookEventTable {
+  event_id: string;
+  notification_id: string;
+  event_type: string;
+  environment: "sandbox" | "live";
+  occurred_at: Timestamp;
+  received_at: GeneratedTimestamp;
+  processed_at: NullableTimestamp;
+  status: Generated<"received" | "processed" | "failed" | "ignored">;
+  attempts: Generated<number>;
+  last_error: Generated<string>;
+  payload: unknown;
+}
+
 export interface Database {
   plans: PlanTable;
   plan_billing_cycles: PlanBillingCycleTable;
+  plan_provider_prices: PlanProviderPriceTable;
+  payment_webhook_events: PaymentWebhookEventTable;
   users: UserTable;
   location_countries: LocationCountryTable;
   location_states: LocationStateTable;

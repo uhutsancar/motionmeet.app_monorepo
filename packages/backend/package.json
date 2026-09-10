@@ -28,6 +28,7 @@
     "@aws-sdk/lib-storage": "^3.1010.0",
     "@aws-sdk/s3-request-presigner": "^3.1093.0",
     "@motionmeet/shared": "workspace:*",
+    "@paddle/paddle-node-sdk": "^3.10.0",
     "@socket.io/redis-adapter": "^8.3.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
