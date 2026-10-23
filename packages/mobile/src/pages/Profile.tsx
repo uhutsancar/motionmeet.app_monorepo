@@ -1,19 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
 // expo-image: these rows scroll past many remote avatars, and it recycles
 // views and keeps a memory + disk cache where React Native's Image does not.
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { MESSAGE_ICON_PAPER } from '../config/icons';
-import {
-  ActivityIndicator,
-  Avatar,
-  Button,
-  Divider,
-  Surface,
-  Text,
-} from 'react-native-paper';
+import { ActivityIndicator, Avatar, Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import dayjs, { setDayjsLocale } from '../utils/dayjs';
 
@@ -24,34 +16,31 @@ import { logHandledError, showInfo } from '../utils/feedback';
 import { getUserProfile, getWorkouts } from '../api/endpoints';
 import ScreenHeader from '../components/ScreenHeader';
 import { useFollowAction } from '../hooks/useFollowAction';
-import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useScrollToTopOnTabPress } from '../hooks/useScrollToTopOnTabPress';
-import { AVATAR, CARD, EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
-import { API_URL } from '../config/environment';
+import { useScrollEdge } from '../hooks/useScrollEdge';
+import { AVATAR, CONTROL, EXERCISE_THUMB, TYPE, exerciseThumbStyle } from '../config/layout';
+import { API_URL, WEB_URL } from '../config/environment';
 import { useAppSelector } from '../store/hooks';
+import WeeklyActivity from '../components/stats/WeeklyActivity';
+import SoftButton from '../components/ui/SoftButton';
+import { formatDuration, formatNumber } from '../utils/format';
 import { mediaVariantUrl, resolvePublicMediaUrl, type UserProfile, type Workout } from '@motionmeet/shared';
 import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation/native';
 
-type ProfileStatTab = 'duration' | 'volume' | 'reps';
-type ProfileMetric = Record<ProfileStatTab, number>;
-interface ProfileChartData { labels: string[]; values: number[] }
-/** Every metric's five weeks at once, so each banner can carry its own number. */
-type ProfileSeries = { labels: string[] } & Record<ProfileStatTab, number[]>;
 interface ProfileProps {
   route: RouteProp<ParamListBase>;
   navigation: NavigationProp<ParamListBase>;
-}
-interface ProfileShortcut {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  label: string;
-  route: string;
-  color?: string;
 }
 interface ProfileStat {
   label: string;
   value: number;
   /** Connections tab opened when the counter is tapped. */
   section?: string;
+}
+interface Shortcut {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  route: string;
 }
 
 /**
@@ -71,23 +60,38 @@ const workoutArtwork = (workout: Workout): string | null => {
   return null;
 };
 
+/** Total kilograms lifted in a session, from the sets that were completed. */
+const workoutVolume = (workout: Workout): number =>
+  (workout.exercises ?? []).reduce(
+    (sum, entry) => sum + (entry.sets ?? []).reduce(
+      (inner, set) => inner + (set.completed === false ? 0 : (Number(set.weight) || 0) * (Number(set.reps) || 0)),
+      0,
+    ),
+    0,
+  );
+
+/**
+ * A profile in Instagram's order - the username in the header with the
+ * settings menu at its edge, picture and counts on one line, who this is, two
+ * short buttons - and the member's own training in Hevy's: twelve weeks of
+ * bars, a two-by-two dashboard of the places people go next, then the last
+ * workouts.
+ */
 const Profile = ({ route, navigation }: ProfileProps) => {
-  const { signOut, getToken } = useAuthContext();
+  const { getToken } = useAuthContext();
   const currentUser = useAppSelector((state) => state.user.value);
   const loading = useAppSelector((state) => state.user.loading);
   const { theme } = useTheme();
   const { t, i18n } = useTranslation();
-  const { isNarrow } = useResponsiveLayout();
   const profileParams = route.params as { userId?: string } | undefined;
   const profileId = profileParams?.userId;
   const isOwnProfile = !profileId || profileId === currentUser?._id;
-  const [activeStatTab, setActiveStatTab] = useState<ProfileStatTab>('duration');
   const [workouts, setWorkouts] = useState<Workout[]>([]);
-  const [series, setSeries] = useState<ProfileSeries | null>(null);
   const [publicProfile, setPublicProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(!isOwnProfile);
   const scrollRef = useRef<ScrollView>(null);
   useScrollToTopOnTabPress(scrollRef);
+  const headerEdge = useScrollEdge();
   const user = isOwnProfile ? currentUser : publicProfile;
   // Seeded from the profile payload, then kept in step with every other follow
   // button in the app through the shared relationship store.
@@ -104,7 +108,6 @@ const Profile = ({ route, navigation }: ProfileProps) => {
   useEffect(() => {
     setDayjsLocale(i18n.language);
   }, [i18n.language]);
-
 
   useEffect(() => {
     if (isOwnProfile) return;
@@ -150,49 +153,19 @@ const Profile = ({ route, navigation }: ProfileProps) => {
     if (currentUser) fetchUserWorkouts();
   }, [currentUser, getToken, isOwnProfile]);
 
-  /* All three metrics are worked out together, not just the selected one.
-     Each banner shows its own number, so re-grouping every workout each time
-     the selection changed would have recomputed two thirds of it for nothing. */
-  useEffect(() => {
-    if (!workouts.length) {
-      setSeries(null);
-      return;
-    }
-    const grouped: Record<string, ProfileMetric> = {};
-    workouts.forEach((workout) => {
-      const week = dayjs(workout.createdAt || workout.startTime).format('MMM DD');
-      if (!grouped[week]) grouped[week] = { duration: 0, volume: 0, reps: 0 };
-      grouped[week].duration += workout.durationMinutes || 0;
-      grouped[week].volume += workout.volumeKg || 0;
-      workout.exercises.forEach((exercise) => {
-        exercise.sets.forEach((set) => {
-          if (set.completed !== false) grouped[week].reps += set.reps || 0;
-        });
+  const shareProfile = async () => {
+    if (!user?._id) return;
+    try {
+      await Share.share({
+        message: t('profile.share_message', {
+          name: user.full_name || user.username,
+          url: `${WEB_URL}/profile/${user._id}`,
+          defaultValue: '{{name}} MotionMeet\'te: {{url}}',
+        }),
       });
-    });
-    const labels = Object.keys(grouped).slice(-5);
-    setSeries({
-      labels,
-      duration: labels.map((label) => grouped[label].duration || 0),
-      volume: labels.map((label) => grouped[label].volume || 0),
-      reps: labels.map((label) => grouped[label].reps || 0),
-    });
-  }, [workouts]);
-
-  const chartData = useMemo<ProfileChartData | null>(
-    () => (series ? { labels: series.labels, values: series[activeStatTab] } : null),
-    [activeStatTab, series],
-  );
-
-  const handleSignOut = () => {
-    Alert.alert(
-      t('settings.logout'),
-      t('common.confirm_logout', 'Are you sure you want to sign out?'),
-      [
-        { text: t('common.cancel', 'Cancel'), style: 'cancel' },
-        { text: t('settings.logout'), style: 'destructive', onPress: signOut },
-      ],
-    );
+    } catch (error) {
+      logHandledError('share-profile', error);
+    }
   };
 
   if ((!user && loading) || profileLoading) {
@@ -200,635 +173,333 @@ const Profile = ({ route, navigation }: ProfileProps) => {
       <SafeAreaView
         style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background }}
       >
-        <ActivityIndicator color={theme.primary} />
+        <ActivityIndicator color={theme.textMuted} />
       </SafeAreaView>
     );
   }
 
   const followersCount = user?.followers_count ?? 0;
   const followingCount = user?.following_count ?? 0;
-  const latestValue = chartData?.values?.[chartData.values.length - 1] || 0;
-  const metricUnits: Record<ProfileStatTab, string> = {
-    duration: t('common.min', 'min'),
-    volume: t('common.kg', 'kg'),
-    reps: t('routines.reps', 'reps'),
-  };
-  const metricIcons: Record<ProfileStatTab, React.ComponentProps<typeof Ionicons>['name']> = {
-    duration: 'time-outline',
-    volume: 'barbell-outline',
-    reps: 'repeat-outline',
-  };
-  const unit = metricUnits[activeStatTab];
+  const shortcuts: Shortcut[] = [
+    { icon: 'stats-chart-outline', label: t('statistics.title', 'İstatistikler'), route: 'Statistics' },
+    { icon: 'calendar-outline', label: t('statistics.monthly_report', 'Aylık rapor'), route: 'MonthlyReportScreen' },
+    { icon: 'resize-outline', label: t('measurements.title', 'Ölçümler'), route: 'MeasurementsScreen' },
+    { icon: 'trophy-outline', label: t('statistics.records', 'Kişisel rekorlar'), route: 'LeaderboardScreen' },
+  ];
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
-      {/* A compact bar with no rule under it: the cover photo starts straight
-          away, so the header reads as part of the profile rather than as a slab
-          bolted on above it. */}
       <ScreenHeader
-        title={isOwnProfile ? t('tabs.profile', 'Profile') : user?.username || t('tabs.profile', 'Profile')}
+        large={isOwnProfile}
+        scrolled={headerEdge.scrolled}
+        title={user?.username || t('tabs.profile', 'Profile')}
         onBack={isOwnProfile ? undefined : () => navigation.goBack()}
         actions={
           isOwnProfile
             ? [
                 {
-                  icon: 'settings-outline',
+                  icon: 'add-circle-outline',
+                  onPress: () => navigation.navigate('Routines'),
+                  accessibilityLabel: t('routines.start_empty', 'Antrenmana başla'),
+                },
+                {
+                  icon: 'menu-outline',
                   onPress: () => navigation.navigate('Settings'),
                   accessibilityLabel: t('settings.title', 'Ayarlar'),
                 },
               ]
-            : undefined
+            : [
+                {
+                  icon: 'share-social-outline',
+                  onPress: () => void shareProfile(),
+                  accessibilityLabel: t('profile.share_profile', 'Profili paylaş'),
+                },
+              ]
         }
       />
 
       <ScrollView
         ref={scrollRef}
+        onScroll={headerEdge.onScroll}
+        scrollEventThrottle={headerEdge.scrollEventThrottle}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          width: '100%',
-          maxWidth: 720,
-          alignSelf: 'center',
-          paddingTop: 0,
-          paddingBottom: 28,
-        }}
+        contentContainerStyle={styles.content}
       >
-        <Surface
-          elevation={0}
-          style={{
-            backgroundColor: theme.background,
-            overflow: 'hidden',
-          }}
-        >
-          <View style={{ height: 92, backgroundColor: theme.primarySoft }}>
-            {user?.cover_photo ? (
-              <Image source={{ uri: mediaVariantUrl(user.cover_photo, 'detail') }} style={{ width: '100%', height: '100%' }} contentFit="cover" cachePolicy="memory-disk" />
-            ) : (
-              <View style={{ flex: 1, backgroundColor: theme.primarySoft }} />
-            )}
-            <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(8,10,14,.12)' }} />
-          </View>
+        {/* A cover shows only when there is one; the purple band that stood in
+            for a missing cover is gone. */}
+        {user?.cover_photo ? (
+          <Image
+            source={{ uri: mediaVariantUrl(user.cover_photo, 'detail') }}
+            style={styles.cover}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+          />
+        ) : null}
 
-          <View style={{ padding: CARD.padding, paddingTop: 0 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: -30 }}>
+        <View style={styles.header}>
+          <View style={styles.identityRow}>
             {user?.profile_picture ? (
               <Avatar.Image
                 source={{ uri: user.profile_picture }}
                 size={AVATAR.large}
-                style={{ borderWidth: 3, borderColor: theme.surface, backgroundColor: theme.surface }}
+                style={{ backgroundColor: theme.surfaceLight }}
               />
             ) : (
               <Avatar.Text
                 label={user?.full_name?.charAt(0).toUpperCase() || 'U'}
                 size={AVATAR.large}
-                style={{ backgroundColor: theme.primary, borderWidth: 3, borderColor: theme.surface }}
+                color={theme.textSecondary}
+                labelStyle={{ fontSize: 30, fontWeight: '500' }}
+                style={{ backgroundColor: theme.surfaceLight }}
               />
             )}
-            <View style={{ flex: 1, minWidth: 0, marginLeft: 12, paddingTop: 30 }}>
-              <Text style={{ color: theme.text, fontSize: 20, fontWeight: '800' }} numberOfLines={1}>
-                {user?.full_name || user?.username}
-              </Text>
-              <Text style={{ color: theme.textMuted, fontSize: 13, marginTop: 2 }} numberOfLines={1}>
-                @{user?.username || 'member'}
-              </Text>
-              {!!user?.bio && (
-                <Text style={{ color: theme.textSecondary, fontSize: 12, lineHeight: 17, marginTop: 6 }} numberOfLines={2}>
-                  {user.bio}
-                </Text>
-              )}
-              {/* The backend already withholds this label from anyone the
-                  member did not open it to, so an empty string here means
-                  "not shared" and the row simply disappears. */}
-              {!!user?.location && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
-                  <Ionicons name="location-outline" size={12} color={theme.textMuted} />
-                  <Text style={{ color: theme.textMuted, fontSize: 11.5, flex: 1 }} numberOfLines={1}>
-                    {user.location}
-                  </Text>
-                </View>
-              )}
+            <View style={styles.counts}>
+              {([
+                {
+                  label: isOwnProfile ? t('profile.workouts', 'Workouts') : t('feed.post', 'Posts'),
+                  value: user?.statistics?.totalWorkouts ?? workouts.length,
+                },
+                // The connections API only serves the signed-in user, so the
+                // lists stay tappable on the own profile only.
+                { label: t('profile.followers', 'Followers'), value: followersCount, section: 'Followers' },
+                { label: t('profile.following', 'Following'), value: followingCount, section: 'Following' },
+              ] satisfies ProfileStat[]).map((stat) => {
+                const openable = isOwnProfile && Boolean(stat.section);
+                return (
+                  <Pressable
+                    key={stat.label}
+                    disabled={!openable}
+                    accessibilityRole={openable ? 'button' : undefined}
+                    accessibilityLabel={`${stat.label}: ${stat.value}`}
+                    onPress={() => {
+                      if (openable) navigation.navigate('Connections', { section: stat.section });
+                    }}
+                    style={({ pressed }) => [styles.count, pressed && { opacity: 0.6 }]}
+                  >
+                    <Text style={[styles.countValue, { color: theme.text }]}>{formatNumber(stat.value, i18n.language)}</Text>
+                    <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.countLabel, { color: theme.text }]}>
+                      {stat.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
           </View>
 
-          <Divider style={{ marginVertical: 16, backgroundColor: theme.border }} />
-          <View style={{ flexDirection: 'row' }}>
-            {([
-              {
-                label: isOwnProfile ? t('profile.workouts', 'Workouts') : t('feed.post', 'Posts'),
-                value: user?.statistics?.totalWorkouts ?? workouts.length,
-              },
-              // The connections API only serves the signed-in user, so the
-              // lists stay tappable on the own profile only.
-              { label: t('profile.followers', 'Followers'), value: followersCount, section: 'Followers' },
-              { label: t('profile.following', 'Following'), value: followingCount, section: 'Following' },
-            ] satisfies ProfileStat[]).map((stat, index) => {
-              const openable = isOwnProfile && Boolean(stat.section);
-              return (
-              <React.Fragment key={stat.label}>
-                {index > 0 && <Divider style={{ width: 1, height: 38, backgroundColor: theme.border }} />}
-                <TouchableOpacity
-                  activeOpacity={openable ? 0.72 : 1}
-                  disabled={!openable}
-                  accessibilityRole={openable ? 'button' : undefined}
-                  accessibilityLabel={openable ? `${stat.label}: ${stat.value}` : undefined}
-                  onPress={() => {
-                    if (openable) navigation.navigate('Connections', { section: stat.section });
-                  }}
-                  style={{ flex: 1, minWidth: 0, alignItems: 'center', paddingVertical: 4 }}
-                >
-                  <Text style={{ color: theme.text, fontSize: 17, fontWeight: '800' }}>{stat.value}</Text>
-                  <Text
-                    numberOfLines={2}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.8}
-                    style={{
-                      color: openable ? theme.textSecondary : theme.textMuted,
-                      fontSize: 11,
-                      marginTop: 3,
-                      textAlign: 'center',
-                    }}
-                  >
-                    {stat.label}
-                  </Text>
-                </TouchableOpacity>
-              </React.Fragment>
-              );
-            })}
-          </View>
-
-          {isOwnProfile ? (
-            <Button
-              mode="outlined"
-              icon="pencil-outline"
-              onPress={() => navigation.navigate('ProfileEdit')}
-              style={{ marginTop: 16, borderRadius: 10, borderColor: theme.border }}
-              contentStyle={{ minHeight: 42 }}
-              labelStyle={{ color: theme.text, fontWeight: '700' }}
-            >
-              {t('profile.edit_profile', 'Edit profile')}
-            </Button>
-          ) : (
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
-              <Button
-                mode={follow.state === 'following' || follow.state === 'requested' ? 'outlined' : 'contained'}
-                onPress={() => { void follow.toggle(); }}
-                loading={follow.busy}
-                disabled={follow.busy}
-                style={{ flex: 1, borderRadius: 10, borderColor: theme.border }}
-                contentStyle={{ minHeight: 42 }}
-                labelStyle={{ fontWeight: '700' }}
-              >
-                {follow.label}
-              </Button>
-              <Button
-                mode="outlined"
-                icon={MESSAGE_ICON_PAPER}
-                onPress={() => {
-                  if (!canMessage) {
-                    showInfo(
-                      t('profile.private_title', 'Bu hesap gizli'),
-                      t('profile.message_needs_mutual', 'Mesaj gönderebilmek için birbirinizi takip etmeniz gerekiyor.'),
-                    );
-                    return;
-                  }
-                  navigation.navigate('ChatBox', { userId: user?._id, user });
-                }}
-                style={{ flex: 1, borderRadius: 10, borderColor: theme.border, opacity: canMessage ? 1 : 0.55 }}
-                contentStyle={{ minHeight: 42 }}
-                labelStyle={{ color: theme.text, fontWeight: '700' }}
-              >
-                {t('messages.message', 'Mesaj')}
-              </Button>
+          <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
+            {user?.full_name || user?.username}
+          </Text>
+          {!!user?.bio && (
+            <Text style={[styles.bio, { color: theme.text }]} numberOfLines={3}>{user.bio}</Text>
+          )}
+          {/* The backend already withholds this label from anyone the member
+              did not open it to, so an empty string here means "not shared"
+              and the row simply disappears. */}
+          {!!user?.location && (
+            <View style={styles.location}>
+              <Ionicons name="location-outline" size={13} color={theme.textMuted} />
+              <Text style={{ color: theme.textMuted, fontSize: 13, flex: 1 }} numberOfLines={1}>{user.location}</Text>
             </View>
           )}
+
+          <View style={styles.actions}>
+            {isOwnProfile ? (
+              <>
+                <SoftButton label={t('profile.edit_profile', 'Profili düzenle')} onPress={() => navigation.navigate('ProfileEdit')} />
+                <SoftButton label={t('profile.share_profile', 'Profili paylaş')} onPress={() => void shareProfile()} />
+              </>
+            ) : (
+              <>
+                <SoftButton
+                  label={follow.label}
+                  busy={follow.busy}
+                  primary={!(follow.state === 'following' || follow.state === 'requested')}
+                  onPress={() => { void follow.toggle(); }}
+                />
+                <SoftButton
+                  label={t('messages.message', 'Mesaj')}
+                  dimmed={!canMessage}
+                  onPress={() => {
+                    if (!canMessage) {
+                      showInfo(
+                        t('profile.private_title', 'Bu hesap gizli'),
+                        t('profile.message_needs_mutual', 'Mesaj gönderebilmek için birbirinizi takip etmeniz gerekiyor.'),
+                      );
+                      return;
+                    }
+                    navigation.navigate('ChatBox', { userId: user?._id, user });
+                  }}
+                />
+              </>
+            )}
           </View>
-        </Surface>
+        </View>
 
         {/* A locked account keeps its header - name, avatar and counts - and
             swaps only the content for an explanation, the way Instagram does. */}
         {contentHidden && (
-          <Surface
-            elevation={0}
-            style={{
-              marginTop: 16,
-              marginHorizontal: CARD.padding,
-              padding: 28,
-              alignItems: 'center',
-              borderRadius: 16,
-              backgroundColor: theme.surface,
-            }}
-          >
-            <Ionicons name="lock-closed-outline" size={30} color={theme.textMuted} />
-            <Text style={{ color: theme.text, fontSize: 15, fontWeight: '800', marginTop: 10 }}>
+          <View style={[styles.locked, { borderTopColor: theme.border }]}>
+            <Ionicons name="lock-closed-outline" size={26} color={theme.textMuted} />
+            <Text style={{ color: theme.text, fontSize: TYPE.section, fontWeight: '600', marginTop: 10 }}>
               {t('profile.private_title', 'Bu hesap gizli')}
             </Text>
-            <Text style={{ color: theme.textMuted, fontSize: 12.5, lineHeight: 18, textAlign: 'center', marginTop: 5 }}>
+            <Text style={{ color: theme.textMuted, fontSize: 13, lineHeight: 18, textAlign: 'center', marginTop: 4 }}>
               {follow.state === 'requested'
                 ? t('profile.private_requested', 'İsteğin onaylandığında gönderilerini ve hikâyelerini görebilirsin.')
                 : t('profile.private_body', 'Gönderilerini ve hikâyelerini görmek için takip isteği gönder.')}
             </Text>
-          </Surface>
+          </View>
         )}
 
         {isOwnProfile && (
-          <Surface
-            elevation={0}
-            style={{
-              marginTop: 10,
-              paddingHorizontal: CARD.padding,
-              paddingVertical: CARD.padding,
-              borderTopWidth: StyleSheet.hairlineWidth,
-              borderBottomWidth: StyleSheet.hairlineWidth,
-              borderColor: theme.border,
-              backgroundColor: theme.background,
-            }}
-          >
-            <TouchableOpacity
-              activeOpacity={0.72}
-              onPress={() => navigation.navigate('Statistics')}
-              style={{ flexDirection: 'row', alignItems: 'center' }}
-            >
-              <View
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 10,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: theme.primarySoft,
-                }}
-              >
-                <Ionicons name="stats-chart-outline" size={20} color={theme.primary} />
-              </View>
-              <View style={{ flex: 1, minWidth: 0, paddingHorizontal: 11 }}>
-                <Text style={{ color: theme.text, fontSize: 16, fontWeight: '900' }}>
-                  {t('statistics.title', 'Statistics')}
-                </Text>
-                <Text style={{ color: theme.textMuted, fontSize: 11, lineHeight: 16, marginTop: 2 }}>
-                  {t('profile.statistics_hint', 'Reports, muscle distribution and personal records')}
-                </Text>
-              </View>
-              <Ionicons name="arrow-forward" size={18} color={theme.primary} />
-            </TouchableOpacity>
+          <>
+            <View style={styles.block}>
+              <WeeklyActivity />
+            </View>
 
-            <Divider style={{ marginVertical: 14, backgroundColor: theme.border }} />
-
-            {/* Four shortcuts share the row, so the gap and inner padding stay
-                tight enough for the longest label to still fit on two lines. */}
-            <View style={{ flexDirection: 'row', gap: 6 }}>
-              {([
-                {
-                  icon: 'calendar-outline',
-                  label: t('statistics.monthly_report', 'Monthly report'),
-                  route: 'MonthlyReportScreen',
-                  color: '#8B5CF6',
-                },
-                {
-                  icon: 'body-outline',
-                  label: t('statistics.muscle_dist', 'Muscle distribution'),
-                  route: 'MuscleDistribution',
-                  color: '#3B82F6',
-                },
-                {
-                  icon: 'analytics-outline',
-                  label: t('statistics.advanced', 'Advanced'),
-                  route: 'AdvancedStatisticsScreen',
-                  color: '#22A06B',
-                },
-                {
-                  icon: 'resize-outline',
-                  label: t('measurements.title', 'Measurements'),
-                  route: 'MeasurementsScreen',
-                  color: '#D98A12',
-                },
-              ] satisfies ProfileShortcut[]).map(item => (
-                <TouchableOpacity
-                  key={item.route}
-                  activeOpacity={0.72}
+            {/* Hevy's dashboard: the four places people go from a profile,
+                as short soft buttons two by two instead of a list of rows
+                with a sentence under each. */}
+            <View style={styles.dashboard}>
+              {shortcuts.map((shortcut) => (
+                <Pressable
+                  key={shortcut.route}
+                  onPress={() => navigation.navigate(shortcut.route)}
                   accessibilityRole="button"
-                  accessibilityLabel={item.label}
-                  onPress={() => navigation.navigate(item.route)}
-                  style={{
-                    flex: 1,
-                    minHeight: isNarrow ? 90 : 78,
-                    paddingHorizontal: 4,
-                    paddingVertical: 10,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: 14,
-                    backgroundColor: theme.surfaceLight,
-                  }}
+                  accessibilityLabel={shortcut.label}
+                  style={({ pressed }) => [
+                    styles.shortcut,
+                    { backgroundColor: theme.surfaceLight, opacity: pressed ? 0.7 : 1 },
+                  ]}
                 >
-                  <Ionicons name={item.icon} size={19} color={item.color} />
-                  <Text
-                    numberOfLines={2}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.78}
-                    style={{
-                      color: theme.textSecondary,
-                      fontSize: 9.5,
-                      lineHeight: 13,
-                      textAlign: 'center',
-                      fontWeight: '800',
-                      marginTop: 7,
-                    }}
-                  >
-                    {item.label}
-                  </Text>
-                </TouchableOpacity>
+                  <Ionicons name={shortcut.icon} size={17} color={theme.text} />
+                  <Text numberOfLines={1} style={[styles.shortcutLabel, { color: theme.text }]}>{shortcut.label}</Text>
+                </Pressable>
               ))}
             </View>
-          </Surface>
+          </>
         )}
 
-        {isOwnProfile && (
-          <Surface
-            elevation={0}
-            style={{
-              marginTop: 10,
-              paddingHorizontal: CARD.padding,
-              paddingVertical: CARD.padding,
-              borderTopWidth: StyleSheet.hairlineWidth,
-              borderBottomWidth: StyleSheet.hairlineWidth,
-              borderColor: theme.border,
-              backgroundColor: theme.background,
-            }}
-          >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
-                <Text numberOfLines={2} style={{ color: theme.text, fontSize: 17, fontWeight: '800' }}>
-                  {t('profile.weekly_activity', 'Training activity')}
-                </Text>
-                <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 3 }}>
-                  {t('profile.last_five_weeks', 'Last five weeks')}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => navigation.navigate('Statistics')}>
-                <Text style={{ color: theme.primary, fontSize: 13, fontWeight: '800' }}>
-                  {t('profile.statistics', 'Details')}
-                </Text>
-              </TouchableOpacity>
-            </View>
+        {!contentHidden && (
+          <>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>
+              {t('profile.recent_workouts', 'Recent workouts')}
+            </Text>
 
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 16 }}>
-              <Text style={{ color: theme.text, fontSize: 28, fontWeight: '800' }}>{latestValue}</Text>
-              <Text style={{ color: theme.textMuted, fontSize: 12, fontWeight: '700', marginLeft: 5 }}>
-                {unit}
-              </Text>
-            </View>
-
-            {chartData?.values.some((value) => value > 0) ? (
-              <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 96, gap: 8, marginTop: 12 }}>
-                {chartData.values.map((value, index) => {
-                  const maxValue = Math.max(...chartData.values, 1);
-                  return (
-                    <View key={`${chartData.labels[index]}-${index}`} style={{ flex: 1, alignItems: 'center' }}>
-                      <View
-                        style={{
-                          width: '100%',
-                          maxWidth: 34,
-                          height: Math.max(4, (value / maxValue) * 66),
-                          borderRadius: 4,
-                          backgroundColor: index === chartData.values.length - 1 ? theme.primary : theme.primarySoft,
-                        }}
-                      />
-                      <Text style={{ color: theme.textMuted, fontSize: 8, marginTop: 5 }} numberOfLines={1}>
-                        {chartData.labels[index]}
-                      </Text>
+            {workouts.length ? (
+              workouts.slice(0, 5).map((workout, index) => {
+                const artwork = workoutArtwork(workout);
+                const volume = workoutVolume(workout);
+                return (
+                  <Pressable
+                    key={workout._id || index}
+                    onPress={() => navigation.navigate('WorkoutDetailScreen', { workout })}
+                    style={({ pressed }) => [styles.workoutRow, pressed && { backgroundColor: theme.surfaceLight }]}
+                  >
+                    <View
+                      style={[
+                        styles.thumb,
+                        { backgroundColor: artwork ? '#FFFFFF' : theme.surfaceLight },
+                      ]}
+                    >
+                      {artwork ? (
+                        <Image
+                          source={{ uri: mediaVariantUrl(artwork, 'thumb') }}
+                          style={{ width: '100%', height: '100%' }}
+                          contentFit="cover"
+                          cachePolicy="memory-disk"
+                        />
+                      ) : (
+                        <Ionicons name="barbell-outline" size={18} color={theme.textMuted} />
+                      )}
                     </View>
-                  );
-                })}
-              </View>
+                    <View style={[styles.workoutBody, { borderBottomColor: theme.border }]}>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={[styles.workoutName, { color: theme.text }]} numberOfLines={1}>
+                          {workout.name || t('workout.my_workout', 'Workout')}
+                        </Text>
+                        <Text style={[styles.workoutMeta, { color: theme.textMuted }]} numberOfLines={1}>
+                          {dayjs(workout.startTime || workout.createdAt).fromNow()}
+                          {' · '}
+                          {formatDuration(workout.durationMinutes || 0, i18n.language)}
+                          {volume > 0 ? ` · ${formatNumber(Math.round(volume), i18n.language)} kg` : ''}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
+                    </View>
+                  </Pressable>
+                );
+              })
             ) : (
-              <View style={{ height: 88, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ color: theme.textMuted, fontSize: 12 }}>
-                  {t('common.no_data', 'No activity recorded yet')}
+              <View style={styles.empty}>
+                <Text style={{ color: theme.text, fontSize: TYPE.row, fontWeight: '600' }}>
+                  {t('profile.no_workouts_yet', 'No workouts yet')}
+                </Text>
+                <Text style={{ color: theme.textMuted, fontSize: 13, marginTop: 3, textAlign: 'center' }}>
+                  {t('profile.no_workouts_hint', 'Your completed sessions will appear here.')}
                 </Text>
               </View>
             )}
-
-            {/* Three cards, not three slices of one pill.
-                Sure, Hacim and Tekrar are three different measurements of the
-                same week, and a segmented control said the opposite - that they
-                were three views of one thing, with only the selected label
-                legible and no number on any of them. Each carries its own
-                figure now, so the row reads before anything is chosen, and the
-                picked one is the card that is lit rather than the label that is
-                not grey. */}
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
-              {(['duration', 'volume', 'reps'] as const).map((tab) => {
-                const active = activeStatTab === tab;
-                const metric = series?.[tab];
-                const latest = metric?.[metric.length - 1] ?? 0;
-                return (
-                  <TouchableOpacity
-                    key={tab}
-                    activeOpacity={0.75}
-                    onPress={() => setActiveStatTab(tab)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                    accessibilityLabel={`${t(`profile.${tab}`, tab)}: ${latest} ${metricUnits[tab]}`}
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      paddingVertical: 10,
-                      paddingHorizontal: 10,
-                      borderRadius: CARD.radius,
-                      borderWidth: StyleSheet.hairlineWidth,
-                      borderColor: active ? theme.primary : theme.border,
-                      backgroundColor: active ? theme.primarySoft : theme.surface,
-                    }}
-                  >
-                    <Ionicons
-                      name={metricIcons[tab]}
-                      size={15}
-                      color={active ? theme.primary : theme.textMuted}
-                    />
-                    <Text
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.7}
-                      style={{
-                        color: active ? theme.primary : theme.text,
-                        fontSize: 16,
-                        fontWeight: '800',
-                        marginTop: 7,
-                      }}
-                    >
-                      {latest.toLocaleString()}
-                      <Text style={{ fontSize: 10, fontWeight: '700' }}> {metricUnits[tab]}</Text>
-                    </Text>
-                    <Text
-                      numberOfLines={1}
-                      style={{
-                        color: active ? theme.primary : theme.textMuted,
-                        fontSize: 10.5,
-                        fontWeight: '700',
-                        marginTop: 2,
-                      }}
-                    >
-                      {t(`profile.${tab}`, tab)}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </Surface>
-        )}
-
-        {/* Same gutter as every card on this screen. Without it the heading sat
-            on the screen edge and the counter was clipped off the right side. */}
-        {!contentHidden && <>
-        <View
-          style={{
-            marginTop: 24,
-            marginBottom: 10,
-            paddingHorizontal: CARD.padding,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 10,
-          }}
-        >
-          <Text numberOfLines={1} style={{ flexShrink: 1, color: theme.text, fontSize: 17, fontWeight: '800' }}>
-            {t('profile.recent_workouts', 'Recent workouts')}
-          </Text>
-          <Text style={{ color: theme.textMuted, fontSize: 12, fontWeight: '700' }}>
-            {Math.min(workouts.length, 3)}
-          </Text>
-        </View>
-
-        <Surface
-          elevation={0}
-          style={{
-            overflow: 'hidden',
-            borderTopWidth: StyleSheet.hairlineWidth,
-            borderBottomWidth: StyleSheet.hairlineWidth,
-            borderColor: theme.border,
-            backgroundColor: theme.background,
-          }}
-        >
-          {workouts.length ? (
-            workouts.slice(0, 3).map((workout, index) => {
-              const artwork = workoutArtwork(workout);
-              return (
-              <TouchableOpacity
-                key={workout._id || index}
-                activeOpacity={0.72}
-                onPress={() => navigation.navigate('WorkoutDetailScreen', { workout })}
-                style={{
-                  minHeight: 76,
-                  paddingHorizontal: CARD.padding,
-                  paddingVertical: 14,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  borderBottomWidth: index < Math.min(workouts.length, 3) - 1 ? 1 : 0,
-                  borderBottomColor: theme.border,
-                }}
-              >
-                <View
-                  style={{
-                    ...exerciseThumbStyle(EXERCISE_THUMB.large),
-                    overflow: 'hidden',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: artwork ? '#FFFFFF' : theme.primarySoft,
-                  }}
-                >
-                  {artwork ? (
-                    <Image
-                      source={{ uri: mediaVariantUrl(artwork, 'thumb') }}
-                      style={{ width: '100%', height: '100%' }}
-                      contentFit="cover"
-                      cachePolicy="memory-disk"
-                    />
-                  ) : (
-                    <Ionicons name="barbell-outline" size={20} color={theme.primary} />
-                  )}
-                </View>
-                <View style={{ flex: 1, minWidth: 0, paddingHorizontal: 12 }}>
-                  <Text style={{ color: theme.text, fontSize: 14, fontWeight: '700' }} numberOfLines={1}>
-                    {workout.name || t('workout.my_workout', 'Workout')}
-                  </Text>
-                  <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: 3 }}>
-                    {dayjs(workout.createdAt || workout.startTime).fromNow()} · {workout.exercises?.length || 0} {t('workout.exercises', 'exercises')}
-                  </Text>
-                </View>
-                <Text
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.72}
-                  style={{ maxWidth: '32%', color: theme.textSecondary, fontSize: 12, fontWeight: '700' }}
-                >
-                  {workout.durationMinutes || 0} {t('common.min', 'min')}
-                </Text>
-              </TouchableOpacity>
-              );
-            })
-          ) : (
-            <View style={{ alignItems: 'center', padding: 24 }}>
-              <Ionicons name="barbell-outline" size={26} color={theme.textMuted} />
-              <Text style={{ color: theme.text, fontSize: 14, fontWeight: '700', marginTop: 9 }}>
-                {t('profile.no_workouts_yet', 'No workouts yet')}
-              </Text>
-              <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 3, textAlign: 'center' }}>
-                {t('profile.no_workouts_hint', 'Your completed sessions will appear here.')}
-              </Text>
-            </View>
-          )}
-        </Surface>
-        </>}
-
-        {isOwnProfile && (
-          <Surface
-            elevation={0}
-            style={{
-              marginTop: 16,
-              overflow: 'hidden',
-              borderRadius: 16,
-              backgroundColor: theme.surface,
-            }}
-          >
-            {([
-              { icon: 'shield-checkmark-outline', label: t('settings.privacy_security'), route: 'PrivacyScreen' },
-              { icon: 'help-circle-outline', label: t('settings.help_support'), route: 'SupportScreen' },
-            ] satisfies ProfileShortcut[]).map((item, index) => (
-              <TouchableOpacity
-                key={item.route}
-                onPress={() => navigation.navigate(item.route)}
-                style={{
-                  minHeight: 52,
-                  paddingHorizontal: 14,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  borderBottomWidth: index === 0 ? 1 : 0,
-                  borderBottomColor: theme.border,
-                }}
-              >
-                <Ionicons name={item.icon} size={19} color={theme.textSecondary} />
-                <Text style={{ flex: 1, color: theme.text, fontSize: 14, fontWeight: '600', marginLeft: 11 }}>
-                  {item.label}
-                </Text>
-                <Ionicons name="chevron-forward" size={17} color={theme.textMuted} />
-              </TouchableOpacity>
-            ))}
-          </Surface>
-        )}
-
-        {isOwnProfile && (
-          <Button
-            mode="text"
-            icon="logout"
-            textColor={theme.danger}
-            onPress={handleSignOut}
-            style={{ marginTop: 12, borderRadius: 10 }}
-            labelStyle={{ fontWeight: '700' }}
-          >
-            {t('settings.logout')}
-          </Button>
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  content: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingBottom: 32 },
+  cover: { width: '100%', height: 110 },
+  header: { paddingHorizontal: 16, paddingTop: 6 },
+  identityRow: { flexDirection: 'row', alignItems: 'center' },
+  counts: { flex: 1, flexDirection: 'row', marginLeft: 16 },
+  count: { flex: 1, minWidth: 0, alignItems: 'center', paddingVertical: 4 },
+  countValue: { fontSize: 16, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  countLabel: { fontSize: 13, marginTop: 1 },
+  name: { fontSize: TYPE.body, fontWeight: '600', marginTop: 10 },
+  bio: { fontSize: TYPE.body, lineHeight: 19, marginTop: 2 },
+  location: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  actions: { flexDirection: 'row', gap: 6, marginTop: 12 },
+  locked: {
+    marginTop: 20,
+    paddingTop: 32,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  block: { marginTop: 24 },
+  dashboard: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 16, marginTop: 20 },
+  shortcut: {
+    flexGrow: 1,
+    flexBasis: '45%',
+    height: CONTROL.large,
+    borderRadius: CONTROL.radius,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  shortcutLabel: { flex: 1, minWidth: 0, fontSize: TYPE.button, fontWeight: '600' },
+  sectionTitle: { fontSize: TYPE.section, fontWeight: '700', paddingHorizontal: 16, marginTop: 28, marginBottom: 4 },
+  workoutRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: 16, minHeight: 62 },
+  thumb: {
+    ...exerciseThumbStyle(EXERCISE_THUMB.medium),
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  workoutBody: {
+    flex: 1,
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 12,
+    paddingRight: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  workoutName: { fontSize: TYPE.row, fontWeight: '600' },
+  workoutMeta: { fontSize: TYPE.meta, marginTop: 2 },
+  empty: { alignItems: 'center', paddingVertical: 28, paddingHorizontal: 32 },
+});
 
 export default Profile;

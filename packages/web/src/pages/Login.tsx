@@ -110,7 +110,7 @@ const Login = () => {
             }}
           />
           <Stack direction="row" sx={{ alignItems: "center", justifyContent: "flex-end", mt: -0.5 }}>
-            <Link component={RouterLink} to="/forgot-password" underline="hover" variant="body2" sx={{ fontWeight: 800 }}>
+            <Link component={RouterLink} to="/forgot-password" underline="hover" variant="body2" sx={{ fontWeight: 700 }}>
               {t("auth.forgot_password")}
             </Link>
           </Stack>
@@ -122,7 +122,7 @@ const Login = () => {
 
       <Typography variant="body2" align="center" color="text.secondary" sx={{ mt: 3 }}>
         {t("auth.new_here")}{" "}
-        <Link component={RouterLink} to="/signup" underline="hover" sx={{ fontWeight: 800 }}>
+        <Link component={RouterLink} to="/signup" underline="hover" sx={{ fontWeight: 700 }}>
           {t("auth.create_an_account")}
         </Link>
       </Typography>

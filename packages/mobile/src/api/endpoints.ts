@@ -22,7 +22,6 @@ import {
   type NearbyScope,
   type DistanceVisibility,
   type PersonalRecord,
-  type Plan,
   type Post,
   type PublicUser,
   type Routine,
@@ -58,11 +57,11 @@ interface RoutinesResponse extends BasicResponse { routines: Routine[]; nextCurs
 interface RoutineResponse extends BasicResponse { routine: Routine }
 interface ExercisesResponse extends BasicResponse { exercises: Exercise[]; total: number | null; nextCursor: string | null; limit: number; skip: number }
 interface ExerciseResponse extends BasicResponse { exercise: Exercise }
-interface ExerciseStatsResponse extends BasicResponse, ExerciseStats {}
+/** The server nests the aggregates under `stats`; reading them from the top level showed 0 kg and 0 sessions for every movement. */
+interface ExerciseStatsResponse extends BasicResponse { stats?: ExerciseStats }
 interface ExerciseHistoryResponse extends BasicResponse { history: ExerciseSessionEntry[] }
 interface StoryViewersResponse extends BasicResponse { viewers: StoryViewer[] }
 interface RecordsResponse extends BasicResponse { records: PersonalRecord[] }
-interface PlansResponse extends BasicResponse { plans: Plan[] }
 interface LikeResponse extends BasicResponse { liked: boolean; like_count: number }
 interface CommentResponse extends BasicResponse { comment: Comment; comment_count: number }
 interface RelationshipResponse extends BasicResponse { relationship: RelationshipState; action?: 'followed' | 'requested' | 'already_requested' | 'already_following' }
@@ -433,7 +432,7 @@ export const deleteMeasurement = async (measurementId: string, token: Token): Pr
 };
 
 // ============= WORKOUT APIs =============
-export const getWorkoutStats = async (period: 'week' | 'month' | 'calendar_month' | 'year', token: Token): Promise<WorkoutStats & BasicResponse> => {
+export const getWorkoutStats = async (period: 'week' | 'weeks' | 'month' | 'calendar_month' | 'year', token: Token): Promise<WorkoutStats & BasicResponse> => {
   const { data } = await api.get(API_ROUTES.workout.stats, {
     headers: { Authorization: `Bearer ${token}` },
     params: { period }
@@ -513,21 +512,6 @@ export const getExerciseHistory = async (exerciseId: string, token: Token, limit
 
 export const getPersonalRecords = async (token: Token): Promise<RecordsResponse> => {
   const { data } = await api.get(API_ROUTES.exercise.records, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return data;
-};
-
-// ============= PLAN APIs =============
-export const getPlans = async (token: Token): Promise<PlansResponse> => {
-  const { data } = await api.get(API_ROUTES.plan.base, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return data;
-};
-
-export const updatePlan = async (planId: string, token: Token): Promise<UserResponse> => {
-  const { data } = await api.post(API_ROUTES.plan.update, { planId }, {
     headers: { Authorization: `Bearer ${token}` },
   });
   return data;
@@ -759,10 +743,6 @@ export default {
   getExerciseStats,
   getExerciseHistory,
   getPersonalRecords,
-
-  // Plan
-  getPlans,
-  updatePlan,
 
   // Post Extras
   addComment,

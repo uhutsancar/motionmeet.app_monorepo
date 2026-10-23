@@ -3,7 +3,7 @@ import { database } from "../configs/database.js";
 
 /** Every table the application code reads or writes; boot refuses to serve without all of them. */
 const REQUIRED_TABLES = [
-  "plans", "plan_billing_cycles", "users", "equipment", "muscle_groups", "exercises", "exercise_secondary_muscles", "exercise_instructions",
+  "users", "equipment", "muscle_groups", "exercises", "exercise_secondary_muscles", "exercise_instructions",
   "routines", "routine_exercises", "routine_sets", "workouts", "workout_exercises", "workout_sets", "posts", "post_media", "post_likes", "post_comments",
   "stories", "story_views", "user_follows", "follow_requests", "notifications", "connections", "conversations", "conversation_participants", "messages", "sessions", "password_reset_tokens",
   "upload_reservations", "media_deletion_jobs", "usage_counters", "outbox_events", "personal_records", "user_daily_workout_stats", "user_daily_muscle_stats", "user_exercise_daily_stats",

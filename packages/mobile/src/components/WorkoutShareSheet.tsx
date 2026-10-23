@@ -20,19 +20,19 @@ import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { ImagePickerAsset } from 'expo-image-picker';
 import {
   API_ROUTES,
   SHARE_CARD_SIZES,
-  createOperationId,
   SHARE_CARD_TEMPLATES,
   buildShareCardSvg,
   buildShareCardText,
   type ShareCardData,
   type ShareCardTemplate,
 } from '@motionmeet/shared';
-import { createStory } from '../api/endpoints';
-import { uploadMedia } from '../api/mediaUpload';
 import { useAuthContext } from '../context/AuthProvider';
+import StoryComposer from './StoryComposer';
+import { SHARE_CARD_FILE_PREFIX } from '../utils/shareCardCache';
 import { fetchStories } from '../features/stories/storiesSlice';
 import { useAppDispatch } from '../store/hooks';
 import { useTheme } from '../context/ThemeContext';
@@ -59,8 +59,12 @@ interface ShareAction {
   accent?: boolean;
 }
 
-/** Where a rendered card is written before it is handed to another app. */
-const CARD_FILE = 'motionmeet-share-card.png';
+/**
+ * Rendered cards are written to the cache as `<prefix><workoutId>-<template>.png`
+ * before being handed to another app. One file per workout and layout, so two
+ * sessions never overwrite each other's card; sign-out removes them all.
+ */
+const CARD_FILE_PREFIX = SHARE_CARD_FILE_PREFIX;
 
 /* Measured chrome, so the card can be fitted into whatever is left of the
    screen rather than assuming a size that overflows a short phone. */
@@ -112,8 +116,14 @@ const WorkoutShareSheet = ({ visible, data, workoutId, shareUrl, onClose }: Work
    * missed.
    */
   const [done, setDone] = useState<Record<string, boolean>>({});
-  /** The file for a template, once fetched, so a second tap is instant. */
-  const cacheRef = useRef<Map<ShareCardTemplate, string>>(new Map());
+  /** The card being turned into a MotionMeet story, while the editor is open. */
+  const [storyCard, setStoryCard] = useState<ImagePickerAsset | null>(null);
+  /**
+   * Fetched files by workout and template, so a second tap is instant. The
+   * workout is part of the key because the same sheet can be reopened for a
+   * different session, which must never get the previous one's picture.
+   */
+  const cacheRef = useRef<Map<string, string>>(new Map());
 
   const window = useWindowDimensions();
   const pageWidth = window.width;
@@ -185,13 +195,14 @@ const WorkoutShareSheet = ({ visible, data, workoutId, shareUrl, onClose }: Work
    */
   const fetchCardFile = useCallback(async (): Promise<string | null> => {
     if (!workoutId) return null;
-    const cached = cacheRef.current.get(template);
+    const cacheKey = `${workoutId}:${template}`;
+    const cached = cacheRef.current.get(cacheKey);
     if (cached) return cached;
 
     const token = await getToken();
     if (!token) return null;
 
-    const target = `${FileSystem.cacheDirectory}${template}-${CARD_FILE}`;
+    const target = `${FileSystem.cacheDirectory}${CARD_FILE_PREFIX}${workoutId}-${template}.png`;
     const url = `${API_URL}${API_ROUTES.workout.shareCard(workoutId)}?template=${template}&size=story`;
     // downloadAsync takes the remote URL first and the destination second.
     const result = await FileSystem.downloadAsync(url, target, {
@@ -202,17 +213,23 @@ const WorkoutShareSheet = ({ visible, data, workoutId, shareUrl, onClose }: Work
     if (result.status !== 200) {
       throw new Error(`Share card request failed with ${result.status}`);
     }
-    cacheRef.current.set(template, result.uri);
+    cacheRef.current.set(cacheKey, result.uri);
     return result.uri;
   }, [getToken, template, workoutId]);
 
+  /**
+   * Runs one action and ticks it when it resolves. An action returns `false`
+   * when it cannot know the outcome - handing a file to the OS sheet only
+   * opens it, it does not mean anything was posted - or when it failed and
+   * already said so.
+   */
   const run = useCallback(
-    async (key: string, action: () => Promise<void>) => {
+    async (key: string, action: () => Promise<void | false>) => {
       if (busy) return;
       setBusy(key);
       try {
-        await action();
-        setDone((current) => ({ ...current, [key]: true }));
+        const outcome = await action();
+        if (outcome !== false) setDone((current) => ({ ...current, [key]: true }));
       } catch (error) {
         logHandledError(`workout-share-${key}`, error);
         // Say what actually went wrong. A single "sharing failed" for a network
@@ -261,7 +278,7 @@ const WorkoutShareSheet = ({ visible, data, workoutId, shareUrl, onClose }: Work
           const uri = await fetchCardFile();
           if (!uri) {
             showError(t('common.error', 'Hata'), t('workout.share_failed', 'Paylaşım tamamlanamadı.'));
-            return;
+            return false;
           }
           // The OS sheet is what actually offers Instagram. Posting straight to
           // Stories needs a private API on iOS and a signed intent on Android,
@@ -269,13 +286,14 @@ const WorkoutShareSheet = ({ visible, data, workoutId, shareUrl, onClose }: Work
           // sheet reaches the same place and keeps working.
           if (!(await Sharing.isAvailableAsync())) {
             await Share.share({ message: caption });
-            return;
+            return false;
           }
           await Sharing.shareAsync(uri, {
             mimeType: 'image/png',
             dialogTitle: t('workout.share_stories', 'Hikayeler'),
             UTI: 'public.png',
           });
+          return false;
         }),
     },
     {
@@ -285,42 +303,23 @@ const WorkoutShareSheet = ({ visible, data, workoutId, shareUrl, onClose }: Work
       onPress: () =>
         run('story', async () => {
           const uri = await fetchCardFile();
-          const token = await getToken();
-          if (!uri || !token) {
+          if (!uri) {
             showError(t('common.error', 'Hata'), t('workout.share_failed', 'Paylaşım tamamlanamadı.'));
-            return;
+            return false;
           }
-          // The card is already a finished 9:16 picture, so it goes up as the
-          // story itself; there is nothing left to compose on top of it.
-          const uploadedKey = await uploadMedia(
-            { uri, mimeType: 'image/png', fileName: `${template}.png` },
-            'stories',
-            token,
-          );
-          const result = await createStory(
-            {
-              operationId: createOperationId('story'),
-              content: '',
-              media_type: 'image',
-              background_color: '',
-              overlays: [],
-              uploadedKey,
-            },
-            token,
-          );
-          if (!result.success) {
-            throw new Error(result.message || 'Story could not be created');
-          }
-          // Pull the rail so the new story is on it straight away. Without this
-          // the card was posted and nothing on screen changed, which reads
-          // exactly like the button having done nothing at all.
-          const refreshToken = await getToken();
-          if (refreshToken) await dispatch(fetchStories(refreshToken)).unwrap().catch(() => undefined);
-          showSuccess(t('common.success', 'Başarılı'), t('feed.story_created', 'Hikayen paylaşıldı'));
-          // The story is posted and the rail behind this sheet now shows it, so
-          // the sheet has nothing left to do. Leaving it open looked like the
-          // tap had been ignored, and the card got posted three times.
-          onClose();
+          // The card opens in the story editor as its picture, so a caption or
+          // a place can go on top and nothing is posted until the author says
+          // so. The editor owns the upload and its retry-safe operation id.
+          setStoryCard({
+            uri,
+            width: SHARE_CARD_SIZES.story.width,
+            height: SHARE_CARD_SIZES.story.height,
+            type: 'image',
+            mimeType: 'image/png',
+            fileName: `motionmeet-${template}.png`,
+            assetId: `${workoutId}:${template}`,
+          });
+          return false;
         }),
     },
     {
@@ -332,9 +331,10 @@ const WorkoutShareSheet = ({ visible, data, workoutId, shareUrl, onClose }: Work
           const uri = await fetchCardFile();
           if (uri && (await Sharing.isAvailableAsync())) {
             await Sharing.shareAsync(uri, { mimeType: 'image/png', UTI: 'public.png' });
-            return;
+            return false;
           }
           await Share.share({ message: caption });
+          return false;
         }),
     },
     {
@@ -346,7 +346,7 @@ const WorkoutShareSheet = ({ visible, data, workoutId, shareUrl, onClose }: Work
           const uri = await fetchCardFile();
           if (!uri) {
             showError(t('common.error', 'Hata'), t('workout.share_failed', 'Paylaşım tamamlanamadı.'));
-            return;
+            return false;
           }
 
           /*
@@ -370,13 +370,14 @@ const WorkoutShareSheet = ({ visible, data, workoutId, shareUrl, onClose }: Work
               dialogTitle: t('workout.share_download', 'İndir'),
               UTI: 'public.png',
             });
-            return;
+            return false;
           }
 
           showError(
             t('common.error', 'Hata'),
             t('workout.share_save_denied', 'Kaydetmek için galeri izni gerekiyor.'),
           );
+          return false;
         }),
     },
     ...(shareUrl
@@ -504,6 +505,20 @@ const WorkoutShareSheet = ({ visible, data, workoutId, shareUrl, onClose }: Work
           <Text style={styles.doneLabel}>{t('story.done', 'Bitti')}</Text>
         </Pressable>
       </View>
+
+      <StoryComposer
+        visible={Boolean(storyCard)}
+        initialMedia={storyCard}
+        onClose={() => setStoryCard(null)}
+        onSuccess={() => {
+          setDone((current) => ({ ...current, story: true }));
+          // Pull the rail so the new story is on it the moment the sheet goes.
+          void getToken().then((token) => (
+            token ? dispatch(fetchStories(token)).unwrap().catch(() => undefined) : undefined
+          ));
+          onClose();
+        }}
+      />
     </Modal>
   );
 };

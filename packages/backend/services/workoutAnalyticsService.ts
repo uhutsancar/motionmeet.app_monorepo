@@ -65,12 +65,66 @@ export const applyWorkoutAnalytics = async (workout: Workout, { transaction }: {
   }
 };
 
+/**
+ * The exercise catalogue files each movement under the dataset's body part
+ * ("upper legs", "lower arms", "waist"), while the app's muscle groups are
+ * eight codes. Without this, a leg day's sets were counted under a key the
+ * app never draws and the distribution showed no leg work at all.
+ */
+const CANONICAL_MUSCLE: Record<string, string> = {
+  "upper legs": "legs",
+  "lower legs": "legs",
+  "upper arms": "arms",
+  "lower arms": "arms",
+  waist: "abs",
+  neck: "shoulders",
+};
+const canonicalMuscle = (muscle: string): string => CANONICAL_MUSCLE[muscle.trim().toLowerCase()] ?? muscle;
+
+/** How many weeks the `weeks` period covers, the current one included. */
+const STATS_WEEKS = 12;
+
+/** The Monday (UTC) of the week a day falls in, as a `YYYY-MM-DD` key. */
+const weekStartKey = (date: Date): string => {
+  const monday = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
+  return monday.toISOString().slice(0, 10);
+};
+
 const statsCutoff = (period: string, now: Date): Date => {
   if (period === "calendar_month") return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  if (period === "weeks") {
+    const start = new Date(`${weekStartKey(now)}T00:00:00.000Z`);
+    start.setUTCDate(start.getUTCDate() - (STATS_WEEKS - 1) * 7);
+    return start;
+  }
   const result = new Date(now);
   result.setUTCDate(result.getUTCDate() - (period === "week" ? 7 : period === "month" ? 30 : 365) + 1);
   result.setUTCHours(0, 0, 0, 0);
   return result;
+};
+
+/**
+ * The window just before the period, for "this month against last month".
+ * The 12-week series has nothing to compare against and gets none.
+ */
+const previousWindow = (period: string, cutoff: Date): { start: Date; end: Date } | null => {
+  if (period === "weeks") return null;
+  if (period === "calendar_month") {
+    return { start: new Date(Date.UTC(cutoff.getUTCFullYear(), cutoff.getUTCMonth() - 1, 1)), end: cutoff };
+  }
+  const start = new Date(cutoff);
+  start.setUTCDate(start.getUTCDate() - (period === "week" ? 7 : period === "month" ? 30 : 365));
+  return { start, end: cutoff };
+};
+
+const countMuscleSets = (codes: string[], rows: Array<{ muscle: string; set_count: number }>): Map<string, number> => {
+  const counts = new Map(codes.map((code) => [code, 0]));
+  for (const row of rows) {
+    const muscle = canonicalMuscle(row.muscle);
+    counts.set(muscle, (counts.get(muscle) ?? 0) + row.set_count);
+  }
+  return counts;
 };
 
 export const getComputedWorkoutStats = async (userId: string, period: string): Promise<WorkoutStats> => {
@@ -83,17 +137,27 @@ export const getComputedWorkoutStats = async (userId: string, period: string): P
     .where("date", ">=", cutoff).where("date", "<=", now).execute();
   const muscleRows = dailyIds.length ? await database.selectFrom("user_daily_muscle_stats").selectAll().where("daily_stat_id", "in", dailyIds).execute() : [];
   const activeMuscles = await database.selectFrom("muscle_groups").select("code").where("is_active", "=", true).execute();
+  const muscleCodes = activeMuscles.map((row) => row.code);
+  const previous = previousWindow(period, cutoff);
+  const previousMuscleRows = previous
+    ? await database.selectFrom("user_daily_muscle_stats")
+      .innerJoin("user_daily_workout_stats", "user_daily_workout_stats.id", "user_daily_muscle_stats.daily_stat_id")
+      .select(["user_daily_muscle_stats.muscle", "user_daily_muscle_stats.set_count"])
+      .where("user_daily_workout_stats.user_id", "=", userId)
+      .where("user_daily_workout_stats.date", ">=", previous.start)
+      .where("user_daily_workout_stats.date", "<", previous.end)
+      .execute()
+    : null;
   const grouped = new Map<string, { label: string; volume: number; duration: number; reps: number; sets: number; workouts: number }>();
   for (const row of rows) {
     const date = new Date(row.date);
-    const key = period === "year" ? row.date_key.slice(0, 7) : row.date_key;
+    const key = period === "year" ? row.date_key.slice(0, 7) : period === "weeks" ? weekStartKey(date) : row.date_key;
     const current = grouped.get(key) ?? { label: period === "year" ? date.toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }) : date.toLocaleDateString("en-US", { month: period.includes("month") ? "short" : undefined, day: period.includes("month") ? "numeric" : undefined, weekday: period.includes("month") ? undefined : "short", timeZone: "UTC" }), volume: 0, duration: 0, reps: 0, sets: 0, workouts: 0 };
     current.volume += numberValue(row.total_volume_kg); current.duration += row.total_duration_minutes;
     current.reps += numberValue(row.total_reps); current.sets += row.total_sets; current.workouts += row.total_workouts;
     grouped.set(key, current);
   }
-  const muscleCounts = new Map(activeMuscles.map((row) => [row.code, 0]));
-  for (const row of muscleRows) muscleCounts.set(row.muscle, (muscleCounts.get(row.muscle) ?? 0) + row.set_count);
+  const muscleCounts = countMuscleSets(muscleCodes, muscleRows);
   const muscleTotal = [...muscleCounts.values()].reduce((sum, count) => sum + count, 0);
   const breakdown = new Map<string, { exerciseId: string; volume: number; reps: number; sets: number }>();
   for (const row of exerciseRows) {
@@ -131,6 +195,8 @@ export const getComputedWorkoutStats = async (userId: string, period: string): P
       total: Math.round(value.volume),
     })),
     muscleDistribution: Object.fromEntries([...muscleCounts].map(([muscle, count]) => [muscle, muscleTotal ? Number((count / muscleTotal).toFixed(3)) : 0])),
+    muscleSets: Object.fromEntries(muscleCounts),
+    ...(previousMuscleRows ? { previousMuscleSets: Object.fromEntries(countMuscleSets(muscleCodes, previousMuscleRows)) } : {}),
     totalVolume: Math.round(rows.reduce((sum, row) => sum + numberValue(row.total_volume_kg), 0)),
     totalDuration: rows.reduce((sum, row) => sum + row.total_duration_minutes, 0),
     totalWorkouts: rows.reduce((sum, row) => sum + row.total_workouts, 0),

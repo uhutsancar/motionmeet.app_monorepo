@@ -12,6 +12,13 @@ interface PostsState {
   error: string | null;
   mode: FeedMode;
   activeRequestId: string | null;
+  /**
+   * Bumped whenever a first page is requested. A next-page request remembers
+   * the generation it was made for, so a page that lands after a refresh has
+   * started is dropped instead of being appended to the new list.
+   */
+  generation: number;
+  appendRequest: { requestId: string; generation: number } | null;
 }
 interface CreatePostArgument { postData: FormData | (Record<string, unknown> & { operationId?: string }); token: string }
 interface LikePostArgument { postId: string; token: string; liked: boolean }
@@ -25,6 +32,8 @@ const initialState: PostsState = {
   error: null,
   mode: "discover",
   activeRequestId: null,
+  generation: 0,
+  appendRequest: null,
 };
 
 export const fetchPosts = createAsyncThunk<
@@ -94,18 +103,26 @@ const postsSlice = createSlice({
       .addCase(fetchPosts.pending, (state, action) => {
         if (argumentCursor(action.meta.arg)) {
           state.loadingMore = true;
+          state.appendRequest = { requestId: action.meta.requestId, generation: state.generation };
           return;
         }
         state.loading = true;
         state.loadingMore = false;
         state.mode = argumentMode(action.meta.arg);
         state.activeRequestId = action.meta.requestId;
+        state.generation += 1;
+        state.appendRequest = null;
       })
       .addCase(fetchPosts.fulfilled, (state, action) => {
         // A mode switch or a newer first page makes this answer obsolete.
         if (action.payload.mode !== state.mode) return;
         if (!action.payload.append && state.activeRequestId !== action.meta.requestId) return;
+        if (
+          action.payload.append &&
+          (state.appendRequest?.requestId !== action.meta.requestId || state.appendRequest.generation !== state.generation)
+        ) return;
         if (action.payload.append) {
+          state.appendRequest = null;
           const knownIds = new Set(state.posts.map((post) => post._id));
           state.posts.push(...action.payload.posts.filter((post) => !knownIds.has(post._id)));
         } else {
@@ -118,7 +135,15 @@ const postsSlice = createSlice({
       })
       .addCase(fetchPosts.rejected, (state, action) => {
         if (argumentMode(action.meta.arg) !== state.mode) return;
-        if (!argumentCursor(action.meta.arg) && state.activeRequestId !== action.meta.requestId) return;
+        if (argumentCursor(action.meta.arg)) {
+          // A failed next page only ends its own spinner, never a later refresh.
+          if (state.appendRequest?.requestId !== action.meta.requestId) return;
+          state.appendRequest = null;
+          state.loadingMore = false;
+          state.error = action.error.message ?? null;
+          return;
+        }
+        if (state.activeRequestId !== action.meta.requestId) return;
         state.loading = false;
         state.loadingMore = false;
         state.activeRequestId = null;

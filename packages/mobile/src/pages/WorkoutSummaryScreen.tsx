@@ -38,6 +38,7 @@ import {
 import type { ImagePickerAsset } from 'expo-image-picker';
 import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation/native';
 import type { WorkoutSummaryData } from '../types/workoutDraft';
+import { clearActiveWorkoutDraft } from '../features/workout/activeWorkoutDraft';
 
 interface WorkoutSummaryProps { navigation: NavigationProp<ParamListBase>; route: RouteProp<ParamListBase> }
 interface UploadedMedia { signature: string; key: string }
@@ -59,7 +60,7 @@ const WorkoutSummaryScreen = ({ navigation, route }: WorkoutSummaryProps) => {
   const { horizontalPadding, isNarrow } = useResponsiveLayout();
   const currentUser = useAppSelector((state) => state.user.value);
 
-  const routeParams = route.params as { workoutData?: WorkoutSummaryData } | undefined;
+  const routeParams = route.params as { workoutData?: WorkoutSummaryData; operationId?: string; startedAt?: number } | undefined;
   const workoutData: WorkoutSummaryData = routeParams?.workoutData ?? {
     name: '',
     note: '',
@@ -81,7 +82,10 @@ const WorkoutSummaryScreen = ({ navigation, route }: WorkoutSummaryProps) => {
     postId: string | null;
   } | null>(null);
   const savedWorkoutIdRef = useRef<string | null>(null);
-  const workoutOperationIdRef = useRef(createOperationId('workout'));
+  // Comes from the stored draft, so a save retried after the app was killed
+  // mid-request finds the first attempt instead of making a second workout.
+  const workoutOperationIdRef = useRef(routeParams?.operationId ?? createOperationId('workout'));
+  const ownerId = currentUser?._id ?? null;
   const workoutPayloadRef = useRef<WorkoutRequest | null>(null);
   const postOperationIdRef = useRef(createOperationId('post'));
   const uploadedMediaRef = useRef<UploadedMedia | null>(null);
@@ -169,13 +173,14 @@ const WorkoutSummaryScreen = ({ navigation, route }: WorkoutSummaryProps) => {
 
       let savedWorkoutId = savedWorkoutIdRef.current;
       if (!savedWorkoutId) {
+        const startTime = routeParams?.startedAt ?? Date.now() - (workoutData.duration || 0) * 1000;
         workoutPayloadRef.current ||= {
           operationId: workoutOperationIdRef.current,
           name: workoutData.name || t('workout.my_workout', 'Antrenmanım'),
           durationMinutes: Math.round((workoutData.duration || 0) / 60),
           volumeKg: workoutData.totalVolume || 0,
-          startTime: new Date(Date.now() - (workoutData.duration || 0) * 1000),
-          endTime: new Date(),
+          startTime: new Date(startTime),
+          endTime: new Date(startTime + (workoutData.duration || 0) * 1000),
           exercises: workoutData.exercises || [],
         };
         const workoutPayload = workoutPayloadRef.current;
@@ -190,6 +195,9 @@ const WorkoutSummaryScreen = ({ navigation, route }: WorkoutSummaryProps) => {
         savedWorkoutId = workoutRes.workout?._id ?? null;
         if (!savedWorkoutId) throw new Error('Workout response did not include an identifier');
         savedWorkoutIdRef.current = savedWorkoutId;
+        // The server has it now; whatever happens to the post below, there is
+        // nothing left on the device to resume.
+        if (ownerId) void clearActiveWorkoutDraft(ownerId).catch((error) => logHandledError('clear-workout-draft', error));
       }
 
       let postError: unknown = null;
@@ -307,7 +315,12 @@ const WorkoutSummaryScreen = ({ navigation, route }: WorkoutSummaryProps) => {
             ? t('common.leave', 'Çık')
             : t('common.delete', 'Sil'),
           style: 'destructive',
-          onPress: () => navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] }),
+          onPress: () => {
+            if (!workoutAlreadySaved && ownerId) {
+              void clearActiveWorkoutDraft(ownerId).catch((error) => logHandledError('clear-workout-draft', error));
+            }
+            navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });
+          },
         }
       ]
     );
@@ -506,22 +519,22 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: theme.background },
   flex1: { flex: 1 },
   header: { backgroundColor: theme.background, elevation: 0 },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: theme.text },
+  headerTitle: { fontSize: 16.5, fontWeight: '700', color: theme.text },
   activityIndicator: { marginRight: 16 },
   saveButton: { marginRight: 8, borderRadius: 8 },
   scrollContent: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingBottom: 60 },
-  workoutName: { color: theme.text, fontWeight: 'bold', marginTop: 16 },
+  workoutName: { color: theme.text, fontWeight: '700', marginTop: 16 },
   statsContainer: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 16, gap: 12 },
   statsContainerNarrow: { gap: 8 },
   statCard: { flex: 1, padding: 12, borderRadius: 12, backgroundColor: theme.surfaceLight },
   statCardNarrow: { minWidth: 88, paddingHorizontal: 8 },
   statLabel: { color: theme.textMuted },
-  statValuePrimary: { color: theme.primary, fontWeight: 'bold', marginTop: 4 },
-  statValue: { color: theme.text, fontWeight: 'bold', marginTop: 4 },
+  statValuePrimary: { color: theme.primary, fontWeight: '700', marginTop: 4 },
+  statValue: { color: theme.text, fontWeight: '700', marginTop: 4 },
   divider: { marginVertical: 20, backgroundColor: theme.border },
-  sectionTitle: { color: theme.textMuted, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 4 },
-  sectionTitleBottomMargin: { color: theme.textMuted, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 8 },
-  sectionTitleBottomMargin12: { color: theme.textMuted, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 12 },
+  sectionTitle: { color: theme.textMuted, fontWeight: '700', textTransform: 'uppercase', marginBottom: 4 },
+  sectionTitleBottomMargin: { color: theme.textMuted, fontWeight: '700', textTransform: 'uppercase', marginBottom: 8 },
+  sectionTitleBottomMargin12: { color: theme.textMuted, fontWeight: '700', textTransform: 'uppercase', marginBottom: 12 },
   dateValue: { color: theme.primary, fontWeight: '600' },
   mediaContainer: { position: 'relative' },
   mediaImage: { width: '100%', height: 200, borderRadius: 16 },
@@ -529,7 +542,7 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
   cardSurface: { borderRadius: 16, backgroundColor: theme.surfaceLight },
   listItemPadding: { paddingVertical: 12 },
   listItemTitle: { color: theme.text, fontWeight: '500' },
-  listItemTitleBold: { color: theme.text, fontWeight: 'bold' },
+  listItemTitleBold: { color: theme.text, fontWeight: '700' },
   listItemDescription: { color: theme.textMuted },
   textInputStyle: { backgroundColor: theme.surfaceLight, width: '100%', minWidth: 0, fontSize: 14 },
   exercisesContainer: { marginBottom: 20 },

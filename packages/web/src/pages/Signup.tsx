@@ -166,7 +166,7 @@ const Signup = () => {
       </Typography>
       <Typography variant="body2" align="center" color="text.secondary" sx={{ mt: 2.5 }}>
         Already have an account?{" "}
-        <Link component={RouterLink} to="/login" underline="hover" sx={{ fontWeight: 800 }}>
+        <Link component={RouterLink} to="/login" underline="hover" sx={{ fontWeight: 700 }}>
           Sign in
         </Link>
       </Typography>

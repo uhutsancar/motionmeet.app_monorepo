@@ -1,102 +1,68 @@
-import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { StyleSheet, ScrollView, View } from 'react-native';
+import React, { useCallback, useState, useRef } from 'react';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useScrollToTopOnTabPress } from '../hooks/useScrollToTopOnTabPress';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  ActivityIndicator,
-  Button,
-  Divider,
-  Surface,
-  Text,
-} from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
-import { useTheme, type MotionTheme } from '../context/ThemeContext';
+import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from '../context/AuthProvider';
 import { getRoutines } from '../api/endpoints';
 import RoutineBuilderModal from '../components/RoutineBuilderModal';
 import ScreenHeader from '../components/ScreenHeader';
+import SoftButton from '../components/ui/SoftButton';
 import { logHandledError } from '../utils/feedback';
+import { exerciseTitle } from '../utils/exerciseLabels';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { useActiveWorkoutDraft } from '../features/workout/useActiveWorkoutDraft';
+import { useScrollEdge } from '../hooks/useScrollEdge';
+import { TYPE } from '../config/layout';
 import type { Exercise, Routine } from '@motionmeet/shared';
 import type { NavigationLike, NavigationOnlyProps } from '../navigation/types';
 
-interface RoutineCardProps { routine: Routine; theme: MotionTheme; navigation: NavigationLike }
+interface RoutineCardProps { routine: Routine; navigation: NavigationLike }
 
-const RoutineCard = ({ routine, theme, navigation }: RoutineCardProps) => {
-  const { t } = useTranslation();
+/**
+ * A routine as Hevy lists it: the name, which movements it holds in one grey
+ * line, and the button that starts it. The set-by-set weights the card used
+ * to spell out belong to the workout screen, where they can be changed.
+ */
+const RoutineCard = ({ routine, navigation }: RoutineCardProps) => {
+  const { t, i18n } = useTranslation();
+  const { theme } = useTheme();
   const exercises = routine.exercises || [];
   const totalSets = exercises.reduce((sum, exercise) => sum + (exercise.sets?.length || 0), 0);
+  const names = exercises
+    .map((exercise) => (typeof exercise.exerciseId === 'object' ? (exercise.exerciseId as Exercise).name : exercise.exerciseName) || '')
+    .filter(Boolean)
+    .map((name) => exerciseTitle(name, i18n.language))
+    .join(', ');
 
   return (
-    <Surface
-      elevation={0}
-      style={{
-        padding: 16,
-        gap: 14,
-        borderRadius: 12,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: theme.border,
-        backgroundColor: theme.surface,
-      }}
-    >
-      <View>
-        <Text style={{ color: theme.text, fontSize: 17, fontWeight: '800' }}>
-          {routine.name}
-        </Text>
-        <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 3 }}>
-          {exercises.length} {t('workout.exercises', 'exercises')} · {totalSets} {t('routines.sets', 'sets')}
-        </Text>
-      </View>
-
-      <View style={{ gap: 9 }}>
-        {exercises.slice(0, 3).map((exercise, index) => (
-          <View key={exercise.id || index} style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-            <Text
-              style={{
-                width: 28,
-                color: theme.textMuted,
-                fontSize: 11,
-                fontWeight: '800',
-                paddingTop: 1,
-              }}
-            >
-              {String(index + 1).padStart(2, '0')}
-            </Text>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: theme.text, fontSize: 13, fontWeight: '700' }} numberOfLines={1}>
-                {(typeof exercise.exerciseId === 'object' ? (exercise.exerciseId as Exercise).name : exercise.exerciseName) || t('routines.exercise', 'Exercise')}
-              </Text>
-              <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
-                {(exercise.sets || [])
-                  .map((set) => `${set.weight || 0} ${t('common.kg', 'kg')} × ${set.reps || 0}`)
-                  .join('  ·  ')}
-              </Text>
-            </View>
-          </View>
-        ))}
-        {exercises.length > 3 && (
-          <Text style={{ color: theme.primary, fontSize: 12, fontWeight: '700', marginLeft: 28 }}>
-            +{exercises.length - 3} {t('profile.more_exercises', 'more exercises')}
-          </Text>
-        )}
-      </View>
-
-      <Divider style={{ backgroundColor: theme.border }} />
-      <Button
-        mode="contained"
-        icon="play"
+    <View style={[styles.card, { backgroundColor: theme.surface }]}>
+      <Text numberOfLines={1} style={[styles.cardTitle, { color: theme.text }]}>{routine.name}</Text>
+      {names ? <Text numberOfLines={2} style={[styles.cardBody, { color: theme.textMuted }]}>{names}</Text> : null}
+      <Text style={[styles.cardMeta, { color: theme.textMuted }]}>
+        {t('workout.exercises_count', { count: exercises.length, defaultValue: '{{count}} egzersiz' })}
+        {' · '}
+        {t('monthly_report.sets_count', { count: totalSets, defaultValue: '{{count}} set' })}
+      </Text>
+      <SoftButton
+        primary
+        label={t('routines.start_routine', 'Rutini başlat')}
         onPress={() => navigation.navigate('ActiveWorkoutScreen', { routine })}
-        style={{ borderRadius: 10 }}
-        contentStyle={{ minHeight: 44 }}
-        labelStyle={{ fontWeight: '800', fontSize: 14 }}
-      >
-        {t('routines.start_routine', 'Start routine')}
-      </Button>
-    </Surface>
+        style={styles.cardAction}
+      />
+    </View>
   );
 };
 
+/**
+ * The workout tab in Hevy's order: start an empty session, make or find a
+ * routine, then the member's own routines. One way to each action - the
+ * header "+" and the second "New routine" inside the empty state repeated the
+ * buttons right above them.
+ */
 const Routines = ({ navigation }: NavigationOnlyProps) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
@@ -107,13 +73,19 @@ const Routines = ({ navigation }: NavigationOnlyProps) => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const headerEdge = useScrollEdge();
   const scrollRef = useRef<ScrollView>(null);
   useScrollToTopOnTabPress(scrollRef);
+  const activeWorkout = useActiveWorkoutDraft();
 
+  const loaded = useRef(false);
   const fetchRoutines = useCallback(async (cursor: string | null = null) => {
     try {
       if (cursor) setLoadingMore(true);
-      else setLoading(true);
+      else if (!loaded.current) setLoading(true);
+      setFailed(false);
       const token = await getToken();
       if (!token) throw new Error('Authentication required');
       const data = await getRoutines(token, cursor);
@@ -124,192 +96,112 @@ const Routines = ({ navigation }: NavigationOnlyProps) => {
           return [...current, ...(data.routines || []).filter((routine) => !knownIds.has(routine._id))];
         });
         setNextCursor(data.nextCursor);
+        loaded.current = true;
       }
     } catch (error) {
       logHandledError('load-routines', error);
+      if (!cursor) setFailed(true);
     } finally {
       setLoading(false);
       setLoadingMore(false);
+      setRefreshing(false);
     }
   }, [getToken]);
 
-  useEffect(() => {
-    fetchRoutines();
-  }, [fetchRoutines]);
+  // Refetched whenever the tab is opened: a routine saved from a finished
+  // workout, or a load that failed while offline, shows up without a restart.
+  useFocusEffect(useCallback(() => {
+    void fetchRoutines();
+  }, [fetchRoutines]));
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
-      <ScreenHeader
-        title={t('routines.title', 'Routines')}
-        actions={[
-          {
-            icon: 'add',
-            onPress: () => setShowModal(true),
-            accessibilityLabel: t('routines.create', 'Rutin olustur'),
-          },
-        ]}
-      />
+      <ScreenHeader large scrolled={headerEdge.scrolled} title={t('routines.title', 'Antrenman')} />
 
       <ScrollView
         ref={scrollRef}
+        onScroll={headerEdge.onScroll}
+        scrollEventThrottle={headerEdge.scrollEventThrottle}
+        refreshControl={(
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => { setRefreshing(true); void fetchRoutines(); }}
+            tintColor={theme.textMuted}
+          />
+        )}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          width: '100%',
-          maxWidth: 720,
-          alignSelf: 'center',
-          paddingHorizontal: horizontalPadding,
-          paddingTop: 20,
-          paddingBottom: 32,
-        }}
+        contentContainerStyle={[styles.content, { paddingHorizontal: horizontalPadding }]}
       >
-        {/* One line, not a hero. The header above already names the screen. */}
-        <Text
-          style={{
-            color: theme.textSecondary,
-            fontSize: 13.5,
-            lineHeight: 19,
-            marginBottom: 14,
-          }}
-        >
-          {t('routines.ready_subtitle', 'Start a blank workout or continue with one of your plans.')}
+        {activeWorkout ? (
+          <View style={[styles.resume, { backgroundColor: theme.primarySoft }]}>
+            <Ionicons name="timer-outline" size={20} color={theme.primary} />
+            <View style={styles.resumeText}>
+              <Text style={[styles.resumeTitle, { color: theme.text }]}>
+                {t('active_workout.in_progress', 'Devam eden antrenman')}
+              </Text>
+              <Text numberOfLines={1} style={{ color: theme.textSecondary, fontSize: 12.5, marginTop: 2 }}>
+                {activeWorkout.name}
+              </Text>
+            </View>
+            <SoftButton
+              primary
+              label={t('active_workout.resume', 'Devam et')}
+              onPress={() => navigation.navigate('ActiveWorkoutScreen')}
+              style={styles.resumeAction}
+            />
+          </View>
+        ) : null}
+
+        <Text style={[styles.section, { color: theme.textSecondary }]}>{t('routines.quick_start', 'Hızlı başlangıç')}</Text>
+        <View style={styles.row}>
+          <SoftButton
+            large
+            icon="add"
+            label={t('routines.start_empty', 'Boş antrenmana başla')}
+            onPress={() => navigation.navigate('ActiveWorkoutScreen', {
+              routine: {
+                name: t('routines.quick_workout', 'Hızlı antrenman'),
+                exercises: [],
+              },
+            })}
+          />
+        </View>
+
+        <Text style={[styles.section, { color: theme.textSecondary }]}>{t('routines.routines_section', 'Rutinler')}</Text>
+        <View style={styles.row}>
+          <SoftButton large icon="clipboard-outline" label={t('routines.new_routine', 'Yeni rutin')} onPress={() => setShowModal(true)} />
+          <SoftButton large icon="search" label={t('routines.discover', 'Keşfet')} onPress={() => navigation.navigate('Exercises')} />
+        </View>
+
+        <Text style={[styles.heading, { color: theme.text }]}>
+          {t('routines.my_routines', 'Rutinlerim')}
+          {routines.length ? <Text style={{ color: theme.textMuted, fontWeight: '600' }}> ({routines.length}{nextCursor ? '+' : ''})</Text> : null}
         </Text>
 
-        <Surface
-          elevation={0}
-          style={{
-            padding: 16,
-            marginBottom: 12,
-            borderRadius: 12,
-            borderWidth: StyleSheet.hairlineWidth,
-            borderColor: theme.border,
-            backgroundColor: theme.surface,
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <View
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 10,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: theme.energySoft,
-              }}
-            >
-              <Ionicons name="barbell-outline" size={22} color={theme.text} />
-            </View>
-            <View style={{ flex: 1, paddingHorizontal: 12 }}>
-              <Text style={{ color: theme.text, fontSize: 16, fontWeight: '800' }}>
-                {t('routines.start_empty', 'Start empty workout')}
-              </Text>
-              <Text style={{ color: theme.textMuted, fontSize: 12, lineHeight: 17, marginTop: 2 }}>
-                {t('routines.empty_subtitle', 'Add exercises as you train.')}
-              </Text>
-            </View>
-            <Button
-              compact
-              mode="contained"
-              onPress={() => navigation.navigate('ActiveWorkoutScreen', {
-                routine: {
-                  name: t('routines.quick_workout', 'Quick workout'),
-                  exercises: [],
-                },
-              })}
-              style={{ borderRadius: 9 }}
-              contentStyle={{ minHeight: 38 }}
-              labelStyle={{ fontSize: 12, fontWeight: '800' }}
-            >
-              {t('common.start', 'Start')}
-            </Button>
-          </View>
-        </Surface>
-
-        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 24 }}>
-          <Button
-            mode="outlined"
-            icon="clipboard-outline"
-            onPress={() => setShowModal(true)}
-            style={{ flex: 1, borderRadius: 10, borderColor: theme.border }}
-            labelStyle={{ color: theme.textSecondary, fontSize: 12, fontWeight: '700' }}
-          >
-            {t('routines.new_routine', 'New routine')}
-          </Button>
-          <Button
-            mode="outlined"
-            icon="magnify"
-            onPress={() => navigation.navigate('Exercises')}
-            style={{ flex: 1, borderRadius: 10, borderColor: theme.border }}
-            labelStyle={{ color: theme.textSecondary, fontSize: 12, fontWeight: '700' }}
-          >
-            {t('routines.discover', 'Explore')}
-          </Button>
-        </View>
-
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: 12,
-          }}
-        >
-          <Text style={{ color: theme.text, fontSize: 17, fontWeight: '800' }}>
-            {t('routines.my_routines', 'My routines')}
-          </Text>
-          <Text style={{ color: theme.textMuted, fontSize: 12, fontWeight: '700' }}>{routines.length}</Text>
-        </View>
-
         {loading ? (
-          <ActivityIndicator color={theme.primary} style={{ marginTop: 36 }} />
+          <ActivityIndicator color={theme.textMuted} style={{ marginTop: 28 }} />
+        ) : failed && routines.length === 0 ? (
+          <Pressable onPress={() => void fetchRoutines()} accessibilityRole="button">
+            <Text style={[styles.empty, { color: theme.textMuted }]}>
+              {t('routines.load_failed', 'Rutinler yüklenemedi.')}{' '}
+              <Text style={{ color: theme.primary, fontWeight: '600' }}>{t('common.retry', 'Tekrar dene')}</Text>
+            </Text>
+          </Pressable>
         ) : routines.length === 0 ? (
-          <Surface
-            elevation={0}
-            style={{
-              alignItems: 'center',
-              padding: 24,
-              gap: 8,
-              borderRadius: 12,
-              borderWidth: StyleSheet.hairlineWidth,
-              borderColor: theme.border,
-              backgroundColor: theme.surface,
-            }}
-          >
-            <Ionicons name="clipboard-outline" size={28} color={theme.textMuted} />
-            <Text style={{ color: theme.text, fontSize: 15, fontWeight: '700' }}>
-              {t('routines.no_routines', 'No routines yet')}
-            </Text>
-            <Text style={{ color: theme.textMuted, fontSize: 13, lineHeight: 18, textAlign: 'center' }}>
-              {t('routines.no_routines_hint', 'Create a repeatable plan for your next session.')}
-            </Text>
-            <Button
-              mode="contained"
-              onPress={() => setShowModal(true)}
-              style={{ borderRadius: 10, marginTop: 6 }}
-              labelStyle={{ fontWeight: '800' }}
-            >
-              {t('routines.new_routine', 'Create routine')}
-            </Button>
-          </Surface>
+          <Text style={[styles.empty, { color: theme.textMuted }]}>
+            {t('routines.no_routines', 'Henüz rutin yok')}. {t('routines.no_routines_hint', 'Sonraki antrenmanın için tekrar kullanılabilir bir plan oluştur.')}
+          </Text>
         ) : (
-          <View style={{ gap: 12 }}>
+          <View style={{ gap: 8 }}>
             {routines.map((routine) => (
-              <RoutineCard
-                key={routine._id}
-                routine={routine}
-                theme={theme}
-                navigation={navigation}
-              />
+              <RoutineCard key={routine._id} routine={routine} navigation={navigation} />
             ))}
             {nextCursor && (
-              <Button
-                mode="outlined"
+              <SoftButton
+                label={t('common.load_more', 'Daha fazla')}
+                busy={loadingMore}
                 onPress={() => fetchRoutines(nextCursor)}
-                loading={loadingMore}
-                disabled={loadingMore}
-                style={{ borderRadius: 10 }}
-              >
-                {t('common.load_more', 'Load more')}
-              </Button>
+              />
             )}
           </View>
         )}
@@ -326,5 +218,22 @@ const Routines = ({ navigation }: NavigationOnlyProps) => {
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  content: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingTop: 4, paddingBottom: 32 },
+  resume: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, marginBottom: 6 },
+  resumeText: { flex: 1, minWidth: 0 },
+  resumeTitle: { fontSize: TYPE.row, fontWeight: '600' },
+  resumeAction: { flex: 0, paddingHorizontal: 14 },
+  section: { fontSize: 13, fontWeight: '500', marginTop: 14, marginBottom: 8 },
+  row: { flexDirection: 'row', gap: 8 },
+  heading: { fontSize: TYPE.section + 1, fontWeight: '700', marginTop: 24, marginBottom: 10 },
+  empty: { fontSize: 13.5, lineHeight: 19 },
+  card: { borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12 },
+  cardTitle: { fontSize: TYPE.section, fontWeight: '600' },
+  cardBody: { fontSize: 13, lineHeight: 18, marginTop: 3 },
+  cardMeta: { fontSize: TYPE.meta, marginTop: 4 },
+  cardAction: { flex: 0, marginTop: 10 },
+});
 
 export default Routines;

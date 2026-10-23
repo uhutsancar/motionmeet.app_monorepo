@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColorScheme } from 'react-native';
-import { MD3DarkTheme, MD3LightTheme, type MD3Theme } from 'react-native-paper';
+import { MD3DarkTheme, MD3LightTheme, configureFonts, type MD3Theme } from 'react-native-paper';
 
 export const lightTheme = {
   background: '#F6F7F5',
@@ -50,6 +50,29 @@ export const darkTheme = {
   overlay: 'rgba(0, 0, 0, 0.68)',
   shadow: '#000000',
 };
+
+/*
+ * Paper's Material 3 type scale is built for tablets and the web: a 22pt
+ * titleLarge and a 24pt headlineSmall made every screen that used a variant
+ * read a size above the rest of the app. These are the same roles at the
+ * sizes Instagram and Hevy use on a phone; weights stop at semibold.
+ */
+const fonts = configureFonts({
+  config: {
+    headlineLarge: { fontSize: 26, lineHeight: 32, fontWeight: '700' },
+    headlineMedium: { fontSize: 23, lineHeight: 29, fontWeight: '700' },
+    headlineSmall: { fontSize: 20, lineHeight: 26, fontWeight: '700' },
+    titleLarge: { fontSize: 18, lineHeight: 24, fontWeight: '700' },
+    titleMedium: { fontSize: 15, lineHeight: 21, fontWeight: '600', letterSpacing: 0 },
+    titleSmall: { fontSize: 13.5, lineHeight: 19, fontWeight: '600', letterSpacing: 0 },
+    bodyLarge: { fontSize: 15, lineHeight: 21, letterSpacing: 0 },
+    bodyMedium: { fontSize: 14, lineHeight: 20, letterSpacing: 0 },
+    bodySmall: { fontSize: 12, lineHeight: 17, letterSpacing: 0 },
+    labelLarge: { fontSize: 13.5, lineHeight: 19, fontWeight: '600', letterSpacing: 0 },
+    labelMedium: { fontSize: 12, lineHeight: 16, letterSpacing: 0 },
+    labelSmall: { fontSize: 11, lineHeight: 15, letterSpacing: 0 },
+  },
+});
 
 type MotionPalette = { [Key in keyof typeof lightTheme]: string };
 export type MotionTheme = Omit<MD3Theme, 'colors'> & MotionPalette & {
@@ -105,6 +128,7 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
       ...paperBase,
       ...palette,
       dark: isDark,
+      fonts,
       roundness: 12,
       animation: { scale: 1 },
       colors: {

@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   list: { flex: 1, width: '100%', maxWidth: 720, alignSelf: 'center' },
   footer: { marginVertical: 18 },

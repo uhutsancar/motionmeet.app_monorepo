@@ -57,7 +57,7 @@ const SuggestedAthletes = () => {
     <Card variant="outlined">
       <CardContent sx={{ p: 2.5, "&:last-child": { pb: 2.5 } }}>
         <Stack direction="row" sx={{ mb: 2, alignItems: "center", justifyContent: "space-between" }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
             {t("feed.suggested_athletes")}
           </Typography>
           <Button size="small" onClick={() => navigate("/connections")}>
@@ -76,7 +76,7 @@ const SuggestedAthletes = () => {
                     {user.username?.charAt(0).toUpperCase()}
                   </Avatar>
                   <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="body2" noWrap sx={{ fontWeight: 800 }}>
+                    <Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>
                       {user.username}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
@@ -93,7 +93,7 @@ const SuggestedAthletes = () => {
                   requestSent: Boolean(user.requestSent),
                   requestReceived: Boolean(user.requestReceived),
                 }}
-                sx={{ minWidth: 88 }}
+                appearance="link"
               />
             </Stack>
           ))}

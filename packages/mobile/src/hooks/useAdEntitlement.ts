@@ -4,22 +4,13 @@ import { ADS_ENABLED } from '../config/ads';
 /**
  * Whether ads may be shown to the current user right now.
  *
- * Fails closed: until the profile has loaded *and* resolved a populated
- * plan, this reports `false` rather than guessing. `getUserById` on the
- * backend requests the plan populated (`{ plan: true }`), so a logged-in
- * user's `plan` is normally a full `Plan` object with `.features.ad_free` -
- * but if that ever regresses to an id-only reference, ads simply stay off
- * instead of showing to someone who paid to not see them.
+ * MotionMeet has no paid tier, so there is nothing to be exempt from: every
+ * signed-in member sees ads while the master switch is on. It still waits for
+ * the profile to load, so a signed-out screen or a half-restored session never
+ * requests inventory. Consent and SDK readiness are checked separately by
+ * `useAdsReady`.
  */
 export const useAdEntitlement = (): { shouldShowAds: boolean } => {
-  const { value: user, loading } = useAppSelector((state) => state.user);
-
-  if (!ADS_ENABLED) return { shouldShowAds: false };
-  if (loading || !user) return { shouldShowAds: false };
-
-  const plan = user.plan;
-  const isPopulatedPlan = typeof plan === 'object' && plan !== null && 'features' in plan;
-  if (!isPopulatedPlan) return { shouldShowAds: false };
-
-  return { shouldShowAds: plan.features.ad_free !== true };
+  const signedIn = useAppSelector((state) => Boolean(state.user.value));
+  return { shouldShowAds: ADS_ENABLED && signedIn };
 };

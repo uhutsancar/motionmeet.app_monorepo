@@ -24,12 +24,12 @@ const QuickProfile = () => {
             <Avatar
               src={user.profile_picture || undefined}
               alt={user.username}
-              sx={{ width: 52, height: 52, fontSize: 20, fontWeight: 800, border: 1, borderColor: "divider" }}
+              sx={{ width: 52, height: 52, fontSize: 20, fontWeight: 700, border: 1, borderColor: "divider" }}
             >
               {user.username?.charAt(0).toUpperCase()}
             </Avatar>
             <Stack sx={{ minWidth: 0 }}>
-              <Typography variant="subtitle1" noWrap sx={{ fontWeight: 800 }}>
+              <Typography variant="subtitle1" noWrap sx={{ fontWeight: 700 }}>
                 {user.full_name || user.username}
               </Typography>
               <Typography variant="caption" color="text.secondary" noWrap>
@@ -44,7 +44,7 @@ const QuickProfile = () => {
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
                   {stat.label}
                 </Typography>
-                <Typography variant="subtitle1" sx={{ fontWeight: 800, lineHeight: 1 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1 }}>
                   {stat.value}
                 </Typography>
               </Stack>

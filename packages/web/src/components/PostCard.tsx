@@ -268,7 +268,7 @@ const PostCard = ({ post }: PostCardProps) => {
             </Avatar>
             <Stack sx={{ minWidth: 0 }}>
               <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
-                <Typography variant="body2" noWrap sx={{ fontWeight: 800 }}>
+                <Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>
                   {author.full_name}
                 </Typography>
               </Stack>
@@ -297,13 +297,14 @@ const PostCard = ({ post }: PostCardProps) => {
               isFollowedBy: Boolean(post.author_follows_me),
               requestSent: Boolean(post.author_follow_requested),
             }}
+            appearance="link"
           />
         )}
       </Stack>
 
       <Stack spacing={0.75} sx={{ px: { xs: 1.75, sm: 2.5 }, py: 1.75 }}>
         {hasWorkout && workout?.name && (
-          <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
             {workout.name}
           </Typography>
         )}
@@ -329,7 +330,7 @@ const PostCard = ({ post }: PostCardProps) => {
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
                 {stat.label}
               </Typography>
-              <Typography variant="body2" sx={{ fontWeight: 800 }}>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
                 {stat.value}
               </Typography>
             </Stack>
@@ -412,7 +413,7 @@ const PostCard = ({ post }: PostCardProps) => {
 
       {likeCount > 0 && (
         <Typography variant="caption" color="text.secondary" sx={{ display: "block", px: { xs: 2, sm: 2.5 }, pb: 0.5 }}>
-          {t("feed.liked_by", "Liked by")} <Box component="span" sx={{ color: "text.primary", fontWeight: 800 }}>{likeCount}</Box> {t("feed.people", "people")}
+          {t("feed.liked_by", "Liked by")} <Box component="span" sx={{ color: "text.primary", fontWeight: 700 }}>{likeCount}</Box> {t("feed.people", "people")}
         </Typography>
       )}
 
@@ -438,7 +439,7 @@ const PostCard = ({ post }: PostCardProps) => {
                   </Avatar>
                   <Stack sx={{ minWidth: 0, flex: 1 }}>
                     <Paper variant="outlined" sx={{ display: "inline-block", alignSelf: "flex-start", minWidth: "60%", p: 1.25, borderRadius: 2, bgcolor: "action.hover" }}>
-                      <Typography variant="caption" sx={{ fontWeight: 800 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 700 }}>
                         {comment.user?.full_name}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">

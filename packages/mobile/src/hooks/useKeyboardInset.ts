@@ -34,13 +34,19 @@ export interface KeyboardInset {
  * The frame's `screenY` is measured rather than the reported `height`: on a
  * phone tested here the height came back 48pt short of the real keyboard,
  * because the suggestion strip above it was not counted.
+ *
+ * `screenY` is measured from the top of the physical screen, and Android runs
+ * edge-to-edge, so content reaches the very bottom of the screen. The window
+ * height Android reports leaves out the navigation bar, which left every lifted
+ * field another 48pt short - the place input and its Add button sat half
+ * under the keyboard. The screen height is what `screenY` is measured against.
  */
 export const useKeyboardInset = (): KeyboardInset => {
   const [height, setHeight] = useState(0);
 
   useEffect(() => {
     const apply = (event: KeyboardEvent) => {
-      const screenHeight = Dimensions.get('window').height;
+      const screenHeight = Dimensions.get(Platform.OS === 'android' ? 'screen' : 'window').height;
       const frame = event.endCoordinates;
       const covered = frame ? Math.max(0, screenHeight - frame.screenY) : 0;
       setHeight(covered < COVERS_SCREEN_ABOVE ? 0 : covered);

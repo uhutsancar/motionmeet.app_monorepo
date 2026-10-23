@@ -28,7 +28,7 @@ test("PostgreSQL declares cursor, relationship, and expiry indexes", async () =>
 
 test("relationship self-edges are rejected by database constraints", async () => {
   const id = randomUUID(); userIds.push(id);
-  await database.insertInto("users").values({ legacy_mongo_id: null, email: `constraint-${runId}@example.test`, full_name: "Constraint User", username: `constraint_${runId}`, password_hash: "test-hash", plan_id: null, plan_start_date: null, plan_end_date: null, plan_cancelled_at: null }).execute();
+  await database.insertInto("users").values({ legacy_mongo_id: null, email: `constraint-${runId}@example.test`, full_name: "Constraint User", username: `constraint_${runId}`, password_hash: "test-hash" }).execute();
   const inserted = await database.selectFrom("users").select("id").where("email", "=", `constraint-${runId}@example.test`).executeTakeFirstOrThrow();
   userIds[userIds.length - 1] = inserted.id;
   await assert.rejects(
@@ -38,8 +38,8 @@ test("relationship self-edges are rejected by database constraints", async () =>
 });
 
 test("internal object-storage keys are never serialized by public hydrators", async () => {
-  const first = await database.insertInto("users").values({ legacy_mongo_id: null, email: `media-a-${runId}@example.test`, full_name: "Media A", username: `media_a_${runId}`, password_hash: "test-hash", plan_id: null, plan_start_date: null, plan_end_date: null, plan_cancelled_at: null }).returning("id").executeTakeFirstOrThrow();
-  const second = await database.insertInto("users").values({ legacy_mongo_id: null, email: `media-b-${runId}@example.test`, full_name: "Media B", username: `media_b_${runId}`, password_hash: "test-hash", plan_id: null, plan_start_date: null, plan_end_date: null, plan_cancelled_at: null }).returning("id").executeTakeFirstOrThrow();
+  const first = await database.insertInto("users").values({ legacy_mongo_id: null, email: `media-a-${runId}@example.test`, full_name: "Media A", username: `media_a_${runId}`, password_hash: "test-hash" }).returning("id").executeTakeFirstOrThrow();
+  const second = await database.insertInto("users").values({ legacy_mongo_id: null, email: `media-b-${runId}@example.test`, full_name: "Media B", username: `media_b_${runId}`, password_hash: "test-hash" }).returning("id").executeTakeFirstOrThrow();
   userIds.push(first.id, second.id);
   const postRow = await database.insertInto("posts").values({ legacy_mongo_id: null, user_id: first.id, operation_id: `contract-post-${runId}`, author_full_name: "Media A", author_username: `media_a_${runId}`, content: "media", post_type: "image", visibility: "public", workout_id: null }).returningAll().executeTakeFirstOrThrow();
   await database.insertInto("post_media").values({ legacy_mongo_id: null, post_id: postRow.id, position: 0, url: "https://example.invalid/post.png", object_key: "posts/private-key.png", media_type: "image", mime_type: "image/png", file_size: null, width: null, height: null, duration_seconds: null }).execute();

@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { useAdsReady } from '../../hooks/useAdsReady';
 import { getAdsModule } from '../../services/adsModule';
@@ -8,31 +9,58 @@ import { resolveAdUnitId } from '../../config/ads';
 // module require() that makes Expo Go unusable for the real import.
 import type { NativeAd as NativeAdInstance } from 'react-native-google-mobile-ads';
 
+interface NativeAdTileProps {
+  size: number;
+  /**
+   * Called once when no ad can be shown in this cell (no fill, an error, or
+   * the SDK unavailable), so the grid can drop the cell rather than keep an
+   * empty square in it.
+   */
+  onUnavailable?: () => void;
+}
+
 /**
  * One Explore grid cell showing a native ad, sized to match the surrounding
- * photo tiles exactly. Renders a plain placeholder square (matching the
- * empty-tile background already used elsewhere in the grid) until an ad
- * actually loads, and stays that way on failure - removing the cell instead
- * would shift every tile after it and, worse, desync the post-viewer's index
- * mapping into the grid.
+ * photo tiles exactly, with a "Sponsorlu" plate large enough to read. While
+ * the ad loads the cell is a plain placeholder square in the grid's empty-tile
+ * colour; if it never fills, `onUnavailable` lets the grid remove it. Post
+ * tiles carry their own index into the post list, so removing an ad cell never
+ * changes which post the viewer opens.
  */
-const NativeAdTile = ({ size }: { size: number }) => {
+const NativeAdTile = ({ size, onUnavailable }: NativeAdTileProps) => {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const ready = useAdsReady();
   const ads = getAdsModule();
   const [nativeAd, setNativeAd] = useState<NativeAdInstance | null>(null);
-  const requested = useRef(false);
 
   useEffect(() => {
-    if (!ads || !ready || requested.current) return;
-    requested.current = true;
+    if (!ads) {
+      onUnavailable?.();
+      return undefined;
+    }
+    if (!ready) return undefined;
+    let alive = true;
+    let loaded: NativeAdInstance | null = null;
     const unitId = resolveAdUnitId('native', Platform.OS, ads.TestIds);
-    ads.NativeAd.createForAdRequest(unitId)
-      .then(setNativeAd)
-      .catch((error: Error) => console.warn('[ads] native tile failed to load:', error));
+    ads.NativeAd.createForAdRequest(unitId, { startVideoMuted: true })
+      .then((ad) => {
+        if (!alive) return ad.destroy();
+        loaded = ad;
+        setNativeAd(ad);
+      })
+      .catch((error: Error) => {
+        console.warn('[ads] native tile not filled:', error.message);
+        if (alive) onUnavailable?.();
+      });
+    return () => {
+      alive = false;
+      loaded?.destroy();
+    };
+    // `onUnavailable` is a notification, not an input: a new callback must not
+    // re-request the ad.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ads, ready]);
-
-  useEffect(() => () => nativeAd?.destroy(), [nativeAd]);
 
   const placeholderStyle = { width: size, height: size, backgroundColor: theme.surfaceLight };
   if (!ads || !nativeAd) return <View style={placeholderStyle} />;
@@ -43,7 +71,7 @@ const NativeAdTile = ({ size }: { size: number }) => {
     <NativeAdView nativeAd={nativeAd} style={[placeholderStyle, styles.container]}>
       <NativeMediaView style={StyleSheet.absoluteFill} resizeMode="cover" />
       <View style={styles.captionBar}>
-        <Text style={styles.label}>Reklam</Text>
+        <Text style={styles.label}>{t('ads.sponsored', 'Sponsorlu')}</Text>
         <NativeAsset assetType={NativeAssetType.HEADLINE}>
           <Text numberOfLines={1} style={styles.headline}>{nativeAd.headline}</Text>
         </NativeAsset>
@@ -59,22 +87,19 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: 5,
-    paddingVertical: 3,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(0,0,0,0.62)',
   },
   label: {
     color: '#FFFFFF',
-    fontSize: 7,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-    opacity: 0.85,
+    fontSize: 11,
+    fontWeight: '700',
   },
   headline: {
     color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '600',
   },
 });
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 // expo-image: the same recycling, caching thumbnail every other exercise row
 // in the app uses, so the artwork here looks and loads identically.
 import { Image } from 'expo-image';
@@ -7,15 +7,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import dayjs from '../utils/dayjs';
-
-import { useTheme, type MotionTheme } from '../context/ThemeContext';
-import { Surface, Text } from 'react-native-paper';
-import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { capitalizeFirst, formatDuration, formatNumber, formatWeight } from '../utils/format';
+import { useTheme } from '../context/ThemeContext';
 import ScreenHeader from '../components/ScreenHeader';
+import StatStrip from '../components/charts/StatStrip';
+import ShareBar from '../components/charts/ShareBar';
+import { bodyPartLabel } from '../utils/exerciseLabels';
 import { EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
 import { API_URL } from '../config/environment';
 import type { BaseNavigationScreenProps, WorkoutDetailRouteParams } from '../navigation/types';
-import { mediaVariantUrl, resolvePublicMediaUrl, type Exercise, type WorkoutExercise } from '@motionmeet/shared';
+import { mediaVariantUrl, resolvePublicMediaUrl, type Exercise, type ExerciseSet, type WorkoutExercise } from '@motionmeet/shared';
 
 /**
  * The movement's own picture, when the backend hydrated one.
@@ -29,139 +30,147 @@ const exerciseArtwork = (exercise: WorkoutExercise): string | null => {
   return resolvePublicMediaUrl(hydrated?.gifUrl || hydrated?.imageUrl, API_URL);
 };
 
+/**
+ * One finished session, read the way it was logged: the totals in one strip,
+ * then each exercise with its sets as rows. Warm-up, drop and failure sets
+ * carry a letter in place of their number, as they do while logging, so the
+ * working sets are the ones counted 1, 2, 3.
+ */
 const WorkoutDetailScreen = ({ navigation, route }: BaseNavigationScreenProps) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const language = i18n.language;
   const { theme } = useTheme();
-  const { horizontalPadding, isNarrow } = useResponsiveLayout({
-    minTwoColumnWidth: 420,
-  });
-  const styles = React.useMemo(() => getStyles(theme), [theme]);
-  const routeParams = route.params as WorkoutDetailRouteParams | undefined;
-  const workout = routeParams?.workout;
+  const workout = (route.params as WorkoutDetailRouteParams | undefined)?.workout;
 
   if (!workout || typeof workout !== 'object') {
     return (
-      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-        <ScreenHeader title={t('workout.details', 'Workout Details')} onBack={() => navigation.goBack()} />
-        <Surface elevation={0} style={styles.emptyState}>
-          <Ionicons name="alert-circle-outline" size={48} color={theme.textMuted} />
-          <Text variant="bodyLarge" style={styles.emptyText}>{t('workout.not_available', 'Workout details are not available')}</Text>
-        </Surface>
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
+        <ScreenHeader title={t('workout.details', 'Antrenman')} onBack={() => navigation.goBack()} />
+        <Text style={[styles.note, { color: theme.textMuted }]}>{t('workout.not_available', 'Antrenman ayrıntıları bulunamadı.')}</Text>
       </SafeAreaView>
     );
   }
 
   const exercises = workout.exercises || [];
   const totalSets = exercises.reduce((total, exercise) => total + exercise.sets.length, 0);
+  // Where the session's sets went, by the catalogue's body part: Hevy's
+  // "muscle split" for one workout, as a single bar rather than a chart.
+  const split = new Map<string, { label: string; sets: number }>();
+  exercises.forEach((exercise) => {
+    const hydrated = typeof exercise.exerciseId === 'object' ? (exercise.exerciseId as Exercise) : null;
+    const raw = hydrated?.muscleGroup || '';
+    if (!raw) return;
+    const entry = split.get(raw) ?? { label: bodyPartLabel(raw, t, language), sets: 0 };
+    entry.sets += exercise.sets.length;
+    split.set(raw, entry);
+  });
+  const splitParts = [...split.entries()].map(([key, entry]) => ({
+    key,
+    label: entry.label,
+    value: entry.sets,
+    display: t('monthly_report.sets_count', { count: entry.sets, defaultValue: '{{count}} set' }),
+  }));
+  const setBadge: Record<string, { letter: string; color: string }> = {
+    warmup: { letter: t('workout.set_letter_warmup', 'I'), color: theme.warning },
+    drop: { letter: 'D', color: theme.secondary },
+    failure: { letter: t('workout.set_letter_failure', 'T'), color: theme.danger },
+  };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <ScreenHeader title={t('workout.details', 'Workout Details')} onBack={() => navigation.goBack()} />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
+      <ScreenHeader title={t('workout.details', 'Antrenman')} onBack={() => navigation.goBack()} />
 
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingHorizontal: horizontalPadding }]}
-        showsVerticalScrollIndicator={false}
-      >
-        <Text variant="headlineMedium" style={styles.title}>{workout.name || t('workout.my_workout', 'Workout')}</Text>
-        <Text variant="bodyMedium" style={styles.date}>
-          {dayjs(workout.startTime || workout.createdAt).format('D MMM YYYY, HH:mm')}
-        </Text>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.pad}>
+          <Text style={[styles.title, { color: theme.text }]}>{workout.name || t('workout.my_workout', 'Antrenman')}</Text>
+          <Text style={[styles.date, { color: theme.textMuted }]}>
+            {dayjs(workout.startTime || workout.createdAt).format('D MMMM YYYY, dddd · HH:mm')}
+          </Text>
+        </View>
 
-        <Surface elevation={0} style={[styles.statsRow, isNarrow && styles.statsRowNarrow]}>
-          <Surface style={[styles.statCard, isNarrow && styles.statCardNarrow]} elevation={1}>
-            <Text variant="labelSmall" style={styles.statLabel}>{t('statistics.duration', 'Duration')}</Text>
-            <Text variant="titleMedium" style={styles.statValue}>{workout.durationMinutes || 0} min</Text>
-          </Surface>
-          <Surface style={[styles.statCard, isNarrow && styles.statCardNarrow]} elevation={1}>
-            <Text variant="labelSmall" style={styles.statLabel}>{t('statistics.volume', 'Volume')}</Text>
-            <Text variant="titleMedium" style={styles.statValue}>{workout.volumeKg || 0} kg</Text>
-          </Surface>
-          <Surface style={[styles.statCard, isNarrow && styles.statCardNarrow]} elevation={1}>
-            <Text variant="labelSmall" style={styles.statLabel}>{t('statistics.sets', 'Sets')}</Text>
-            <Text variant="titleMedium" style={styles.statValue}>{totalSets}</Text>
-          </Surface>
-        </Surface>
+        <View style={styles.strip}>
+          <StatStrip
+            cells={[
+              { key: 'duration', label: t('stats.duration', 'Süre'), value: formatDuration(workout.durationMinutes || 0, language) },
+              { key: 'volume', label: t('stats.volume', 'Hacim'), value: formatNumber(workout.volumeKg || 0, language), unit: 'kg' },
+              { key: 'sets', label: t('stats.sets', 'Set'), value: formatNumber(totalSets, language) },
+            ]}
+          />
+        </View>
 
-        <Text variant="titleLarge" style={styles.sectionTitle}>{t('workout.exercises', 'Exercises')}</Text>
+        {splitParts.length > 1 ? (
+          <View style={[styles.pad, styles.split]}>
+            <Text style={[styles.splitTitle, { color: theme.text }]}>{t('monthly_report.muscle_distribution', 'Kas dağılımı')}</Text>
+            <ShareBar parts={splitParts} accessibilityLabel={splitParts.map((part) => `${part.label} ${part.display}`).join(', ')} />
+          </View>
+        ) : null}
+
         {exercises.length > 0 ? exercises.map((exercise: WorkoutExercise, exerciseIndex: number) => {
           const artwork = exerciseArtwork(exercise);
+          const name = (typeof exercise.exerciseId === 'object' ? (exercise.exerciseId as Exercise).name : null)
+            || exercise.exerciseName || t('routines.exercise', 'Egzersiz');
+          let workingSet = 0;
           return (
-          <Surface key={exercise.id || exerciseIndex} style={styles.exerciseCard} elevation={1}>
-            <View style={styles.exerciseHeading}>
-              <View style={styles.thumb}>
-                {artwork ? (
-                  <Image
-                    source={{ uri: mediaVariantUrl(artwork, 'thumb') }}
-                    style={styles.thumbImage}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
-                  />
-                ) : (
-                  <Ionicons name="barbell" size={20} color={theme.primary} />
-                )}
+            <View key={exercise.id || exerciseIndex} style={[styles.exercise, { borderBottomColor: theme.border }]}>
+              <View style={styles.heading}>
+                <View style={[styles.thumb, { backgroundColor: artwork ? '#FFFFFF' : theme.surfaceLight }]}>
+                  {artwork ? (
+                    <Image source={{ uri: mediaVariantUrl(artwork, 'thumb') }} style={styles.thumbImage} contentFit="cover" cachePolicy="memory-disk" />
+                  ) : (
+                    <Ionicons name="barbell-outline" size={20} color={theme.textMuted} />
+                  )}
+                </View>
+                <Text numberOfLines={2} style={[styles.exerciseName, { color: theme.text }]}>{capitalizeFirst(name, language)}</Text>
               </View>
-              <Text variant="titleMedium" numberOfLines={2} style={styles.exerciseName}>
-                {(typeof exercise.exerciseId === 'object' ? (exercise.exerciseId as Exercise).name : null) || exercise.exerciseName || t('routines.exercise', 'Exercise')}
-              </Text>
+
+              <View style={styles.setHeader}>
+                <Text style={[styles.setCol, { color: theme.textMuted }]}>{t('workout.set_column', 'SET')}</Text>
+                <Text style={[styles.setMain, { color: theme.textMuted }]}>{t('workout.weight_reps', 'Ağırlık × tekrar')}</Text>
+              </View>
+              {exercise.sets.map((set: ExerciseSet, setIndex: number) => {
+                const badge = setBadge[set.setType ?? 'normal'];
+                if (!badge) workingSet += 1;
+                return (
+                  <View key={set.id || setIndex} style={styles.setRow}>
+                    <Text style={[styles.setCol, styles.setNumber, { color: badge ? badge.color : theme.text }]}>
+                      {badge ? badge.letter : workingSet}
+                    </Text>
+                    <Text style={[styles.setMain, styles.setValue, { color: theme.text }]}>
+                      {`${formatWeight(set.weight || 0, language)} kg × ${formatNumber(set.reps || 0, language)}`}
+                    </Text>
+                  </View>
+                );
+              })}
             </View>
-            {exercise.sets.map((set, setIndex) => (
-              <Surface elevation={0} key={set.id || setIndex} style={styles.setRow}>
-                <Text variant="bodyMedium" style={styles.setIndex}>{setIndex + 1}</Text>
-                <Text variant="bodyMedium" style={styles.setValue}>{set.weight || 0} kg</Text>
-                <Text variant="bodyMedium" style={styles.setValue}>{set.reps || 0} reps</Text>
-              </Surface>
-            ))}
-          </Surface>
           );
         }) : (
-          <Text variant="bodyMedium" style={styles.emptyText}>{t('workout.no_exercises_yet', 'No exercises')}</Text>
+          <Text style={[styles.note, { color: theme.textMuted }]}>{t('workout.no_exercises_yet', 'Bu antrenmanda egzersiz yok.')}</Text>
         )}
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-const getStyles = (theme: MotionTheme) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.background },
-  header: {
-    backgroundColor: theme.background,
-    borderBottomWidth: 1, 
-    borderBottomColor: theme.border,
-    elevation: 0,
-  },
-  headerTitle: { color: theme.text, fontSize: 17, fontWeight: '700' },
-  content: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingTop: 20, paddingBottom: 48 },
-  title: { color: theme.text, fontWeight: '800' },
-  date: { color: theme.textMuted, marginTop: 4 },
-  statsRow: { flexDirection: 'row', gap: 10, marginTop: 24, marginBottom: 28 },
-  statsRowNarrow: { flexDirection: 'column' },
-  statCard: {
-    flex: 1, backgroundColor: theme.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
-    borderRadius: 14, padding: 12,
-  },
-  statCardNarrow: { flex: 0, width: '100%' },
-  statLabel: { color: theme.textMuted, marginBottom: 6 },
-  statValue: { color: theme.text, fontWeight: '700' },
-  sectionTitle: { color: theme.text, fontWeight: '700', marginBottom: 12 },
-  exerciseCard: {
-    backgroundColor: theme.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
-    borderRadius: 16, padding: 16, marginBottom: 12,
-  },
-  exerciseHeading: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
-  thumb: {
-    ...exerciseThumbStyle(EXERCISE_THUMB.medium),
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
+const styles = StyleSheet.create({
+  content: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingBottom: 48 },
+  pad: { paddingHorizontal: 16, paddingTop: 12 },
+  title: { fontSize: 19, fontWeight: '700', letterSpacing: -0.2 },
+  date: { fontSize: 13, marginTop: 3 },
+  strip: { marginTop: 16 },
+  split: { paddingTop: 18, paddingBottom: 6 },
+  splitTitle: { fontSize: 15, fontWeight: '700', marginBottom: 10 },
+  exercise: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  heading: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  thumb: { ...exerciseThumbStyle(EXERCISE_THUMB.medium), alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   thumbImage: { width: '100%', height: '100%' },
-  exerciseName: { flex: 1, minWidth: 0, color: theme.primary, fontWeight: '700' },
-  setRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, gap: 14 },
-  setIndex: { color: theme.textMuted, width: 22, fontWeight: '700' },
-  setValue: { color: theme.text, flex: 1 },
-  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  emptyText: { color: theme.textMuted, textAlign: 'center', marginTop: 10 },
+  exerciseName: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '600' },
+  setHeader: { flexDirection: 'row', marginTop: 14, marginBottom: 4 },
+  setRow: { flexDirection: 'row', alignItems: 'center', minHeight: 34 },
+  setCol: { width: 44, fontSize: 11.5, fontWeight: '500' },
+  setMain: { flex: 1, fontSize: 11.5, fontWeight: '500' },
+  setNumber: { fontSize: 14, fontWeight: '600' },
+  setValue: { fontSize: 14.5, fontWeight: '400', fontVariant: ['tabular-nums'] },
+  note: { fontSize: 14, padding: 16 },
 });
 
 export default WorkoutDetailScreen;

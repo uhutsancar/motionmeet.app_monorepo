@@ -1,20 +1,10 @@
-import type { Plan, PlanFeatures, PrivacySettings, ProfileLocation, ProfileLocationSource, User, UserStatistics } from "@motionmeet/shared";
+import type { PrivacySettings, ProfileLocation, ProfileLocationSource, User, UserStatistics } from "@motionmeet/shared";
 import type { Row } from "../db/types.js";
-
-export interface InternalPlan extends Plan {
-  stripePriceIds: Partial<Record<"monthly" | "yearly", string>>;
-}
 
 export interface InternalUser extends User {
   password?: string;
   profile_picture_key?: string;
   cover_photo_key?: string;
-  stripeCustomerId?: string;
-  stripeSubscriptionId?: string;
-  paddleCustomerId?: string;
-  paddleSubscriptionId?: string;
-  billingProvider?: "none" | "paddle";
-  paddleEnvironment?: "sandbox" | "live" | null;
 }
 
 export const numberValue = (value: number | string | null | undefined): number => {
@@ -27,46 +17,6 @@ const iso = (value: Date | string | null | undefined): string | null => {
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 };
-
-export const planFeatures = (row: Row<"plans">): PlanFeatures => ({
-  max_workouts_per_month: row.max_workouts_per_month,
-  max_routines: row.max_routines,
-  max_posts_per_day: row.max_posts_per_day,
-  max_stories_per_day: row.max_stories_per_day,
-  max_media_upload_mb: row.max_media_upload_mb,
-  can_message_anyone: row.can_message_anyone,
-  premium_content_access: row.premium_content_access,
-  ad_free: row.ad_free,
-  priority_support: row.priority_support,
-  can_access_analytics: row.can_access_analytics,
-  can_create_custom_exercises: row.can_create_custom_exercises,
-});
-
-export const serializePlan = (
-  row: Row<"plans">,
-  cycles: Array<Row<"plan_billing_cycles">> = [],
-): InternalPlan => ({
-  id: row.id,
-  _id: row.id,
-  name: row.name,
-  slug: row.slug,
-  description: row.description,
-  displayOrder: row.display_order,
-  trialDays: row.trial_days,
-  billingCycles: cycles.map((cycle) => ({
-    interval: cycle.interval,
-    price: numberValue(cycle.price),
-    currency: cycle.currency,
-    stripePriceId: cycle.stripe_price_id,
-  })),
-  price: numberValue(row.price),
-  currency: row.currency,
-  features: planFeatures(row),
-  isActive: row.is_active,
-  createdAt: iso(row.created_at) ?? new Date(0).toISOString(),
-  updatedAt: iso(row.updated_at) ?? new Date(0).toISOString(),
-  stripePriceIds: Object.fromEntries(cycles.map((cycle) => [cycle.interval, cycle.stripe_price_id])),
-});
 
 export const privacySettings = (row: Row<"users">): PrivacySettings => ({
   publicProfile: row.privacy_public_profile,
@@ -102,7 +52,7 @@ export const userStatistics = (row: Row<"users">): UserStatistics => ({
   totalVolumeKg: numberValue(row.total_volume_kg),
 });
 
-export const serializeUser = (row: Row<"users">, plan: InternalPlan | null = null, includeSensitive = false): InternalUser => {
+export const serializeUser = (row: Row<"users">, includeSensitive = false): InternalUser => {
   const createdAt = iso(row.created_at) ?? new Date(0).toISOString();
   const updatedAt = iso(row.updated_at) ?? createdAt;
   return {
@@ -117,12 +67,6 @@ export const serializeUser = (row: Row<"users">, plan: InternalPlan | null = nul
     location: row.location,
     profileLocation: profileLocation(row),
     role: row.role,
-    plan: plan ?? row.plan_id,
-    planStatus: row.plan_status,
-    planStartDate: iso(row.plan_start_date),
-    planEndDate: iso(row.plan_end_date),
-    planCancelledAt: iso(row.plan_cancelled_at),
-    planCancelAtPeriodEnd: row.plan_cancel_at_period_end,
     weight: numberValue(row.weight),
     height: numberValue(row.height),
     followers_count: row.followers_count,
@@ -137,12 +81,6 @@ export const serializeUser = (row: Row<"users">, plan: InternalPlan | null = nul
           password: row.password_hash,
           profile_picture_key: row.profile_picture_key,
           cover_photo_key: row.cover_photo_key,
-          stripeCustomerId: row.stripe_customer_id,
-          stripeSubscriptionId: row.stripe_subscription_id,
-          paddleCustomerId: row.paddle_customer_id,
-          paddleSubscriptionId: row.paddle_subscription_id,
-          billingProvider: row.billing_provider,
-          paddleEnvironment: row.paddle_environment,
         }
       : {}),
   };

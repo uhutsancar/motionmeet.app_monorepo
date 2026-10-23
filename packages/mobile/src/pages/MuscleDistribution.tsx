@@ -1,309 +1,162 @@
-import React, { useState, useEffect } from 'react';
-import { ScrollView, ActivityIndicator, TouchableOpacity, StyleSheet, View } from 'react-native';
-import { Menu, Surface, Text } from 'react-native-paper';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
-import { useTheme, type MotionTheme } from '../context/ThemeContext';
-import Svg, { Circle, Polygon, Line, Text as SvgText } from 'react-native-svg';
+import { useTheme } from '../context/ThemeContext';
 import { getWorkoutStats } from '../api/endpoints';
 import { useAuthContext } from '../context/AuthProvider';
 import { useMuscleGroups } from '../hooks/useMuscleGroups';
-import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { gridItemWidth } from '../config/layout';
 import { logHandledError } from '../utils/feedback';
+import { formatDuration, formatNumber } from '../utils/format';
+import ScreenHeader from '../components/ScreenHeader';
+import StatStrip from '../components/charts/StatStrip';
+import BarList from '../components/charts/BarList';
+import RadarChart from '../components/charts/RadarChart';
+import { toMuscleAxes } from '../features/stats/muscleAxes';
+import NavRow from '../components/ui/NavRow';
+import PillTabs from '../components/ui/PillTabs';
 import type { WorkoutStats } from '@motionmeet/shared';
 import type { NavigationOnlyProps } from '../navigation/types';
 
 type StatsPeriod = 'week' | 'month' | 'year';
-interface MuscleGroupOption { code: string; name: string }
 
+/**
+ * Where the sets went: each muscle group's share of the period's sets, as a
+ * sorted list. The question is "am I training everything, or the same few
+ * groups?", so the biggest block is the ranking itself; the period's totals
+ * sit above it as one strip of figures.
+ */
 const MuscleDistribution = ({ navigation }: NavigationOnlyProps) => {
-  const {
-    columnGap,
-    contentWidth,
-    horizontalPadding,
-  } = useResponsiveLayout();
-  // Compact tiles sit two per row on phones instead of stretching full width.
-  const statCardWidth = gridItemWidth(contentWidth, columnGap, 2);
-  const SIZE = Math.max(1, Math.min(contentWidth, 420));
-  const CENTER = SIZE / 2;
-  const labelGutter = SIZE < 300 ? 36 : 44;
-  const RADIUS = Math.max(24, SIZE / 2 - labelGutter);
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const language = i18n.language;
   const { theme } = useTheme();
-  const chartAccent = theme.dark ? '#60A5FA' : '#2563EB';
-  const styles = getStyles(theme, chartAccent);
-  const { data: rawMuscleGroups, isLoading: isMusclesLoading } = useMuscleGroups();
-  const muscleGroupsList: MuscleGroupOption[] = rawMuscleGroups;
   const { getToken } = useAuthContext();
-
+  const { data: muscleGroups, isLoading: musclesLoading } = useMuscleGroups();
   const [period, setPeriod] = useState<StatsPeriod>('month');
-  const [showDropdown, setShowDropdown] = useState(false);
   const [stats, setStats] = useState<WorkoutStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
 
-  const periodLabels: Record<StatsPeriod, string> = {
-    week: t('statistics.last_7_days', 'Son 7 gün'),
-    month: t('statistics.last_30_days', 'Son 30 gün'),
-    year: t('statistics.last_year', 'Son 1 yıl'),
+  const periods: Array<{ key: StatsPeriod; label: string }> = [
+    { key: 'week', label: t('statistics.last_7_days', 'Son 7 gün') },
+    { key: 'month', label: t('statistics.last_30_days', 'Son 30 gün') },
+    { key: 'year', label: t('statistics.last_year', 'Son 12 ay') },
+  ];
+  const previousLabels: Record<StatsPeriod, string> = {
+    week: t('stats.previous_7_days', 'Önceki 7 gün'),
+    month: t('stats.previous_30_days', 'Önceki 30 gün'),
+    year: t('stats.previous_12_months', 'Önceki 12 ay'),
   };
 
   useEffect(() => {
-    const fetchStats = async () => {
+    let active = true;
+    const load = async () => {
       setLoading(true);
+      setFailed(false);
       try {
         const token = await getToken();
         if (!token) throw new Error('Authentication required');
         const data = await getWorkoutStats(period, token);
-        if (data.success) {
-          setStats(data);
-        }
+        if (active) setStats(data.success ? data : null);
       } catch (error) {
         logHandledError('load-muscle-stats', error);
+        if (active) setFailed(true);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
-    fetchStats();
+    void load();
+    return () => { active = false; };
   }, [getToken, period]);
 
-  const MUSCLE_KEYS = muscleGroupsList.map(mg => mg.code);
-
-  const values = MUSCLE_KEYS.map(k => stats?.muscleDistribution?.[k] ?? 0);
-  const angles = MUSCLE_KEYS.map((_, i) => (Math.PI * 2 * i) / (MUSCLE_KEYS.length || 1) - Math.PI / 2);
-
-  const getPoint = (val: number, idx: number): string => {
-    const normalizedValue = Math.min(1, Math.max(Number(val) || 0, 0.03));
-    const r = RADIUS * normalizedValue;
-    return `${CENTER + r * Math.cos(angles[idx])},${CENTER + r * Math.sin(angles[idx])}`;
-  };
-
-  const currentPolygon = values.map((v, i) => getPoint(v, i)).join(' ');
-  const gridLevels = [0.2, 0.4, 0.6, 0.8, 1.0];
-  const hasDistribution = values.some(value => value > 0);
+  const groups = muscleGroups as Array<{ code: string; name: string }>;
+  const axes = toMuscleAxes(groups, stats, t, language);
+  const previousSets = stats?.previousMuscleSets;
+  const previousTotal = previousSets ? Object.values(previousSets).reduce((sum, count) => sum + count, 0) : 0;
+  const rows = groups
+    .map((group) => ({
+      key: group.code,
+      label: String(t(`muscle_groups.${group.code}`, group.name || group.code)),
+      value: stats?.muscleDistribution?.[group.code] ?? 0,
+      // Last period's share of its own sets, so the tick compares like with like.
+      previous: previousTotal > 0 ? (previousSets?.[group.code] ?? 0) / previousTotal : undefined,
+    }))
+    .filter((row) => row.value > 0)
+    .sort((left, right) => right.value - left.value)
+    .map((row) => ({ ...row, display: `%${formatNumber(row.value * 100, language)}` }));
+  const leader = rows[0];
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      {/* Header */}
-      <Surface elevation={0} style={styles.header}>
-        <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
-          {t('statistics.muscle_dist', 'Kas Dağılımı')}
-        </Text>
-        <View style={styles.iconBtn} />
-      </Surface>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
+      <ScreenHeader title={t('statistics.muscle_dist', 'Kas dağılımı')} onBack={() => navigation.goBack()} />
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <PillTabs tabs={periods} selected={period} onSelect={setPeriod} />
 
-      <ScrollView contentContainerStyle={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: horizontalPadding, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-
-        {/*
-          Period picker. The options used to be an absolutely positioned view
-          inside this ScrollView: `zIndex` there only orders siblings within the
-          same parent, so the chart card that comes after it painted on top and
-          the choices were half-hidden behind it. Paper's Menu renders through a
-          Portal above the whole tree, which fixes the overlap identically on
-          Android and iOS while keeping the same pill-and-chevron anchor.
-        */}
-        <View style={{ alignSelf: 'center', marginTop: 10 }}>
-          <Menu
-            visible={showDropdown}
-            onDismiss={() => setShowDropdown(false)}
-            anchorPosition="bottom"
-            contentStyle={{ backgroundColor: theme.surface, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border }}
-            anchor={
-              <TouchableOpacity
-                style={styles.dropdownBtn}
-                onPress={() => setShowDropdown(true)}
-                accessibilityRole="button"
-                accessibilityLabel={periodLabels[period]}
-              >
-                <Text style={styles.dropdownText}>{periodLabels[period]}</Text>
-                <Ionicons name="chevron-down" size={18} color={theme.textMuted} />
-              </TouchableOpacity>
-            }
-          >
-            {(Object.entries(periodLabels) as Array<[StatsPeriod, string]>).map(([key, label]) => (
-              <Menu.Item
-                key={key}
-                onPress={() => { setPeriod(key); setShowDropdown(false); }}
-                title={label}
-                titleStyle={{ color: period === key ? theme.primary : theme.text, fontWeight: period === key ? '700' : '400' }}
-                trailingIcon={period === key ? 'check' : undefined}
+        {loading || musclesLoading ? (
+          <View style={styles.state}><ActivityIndicator color={theme.textMuted} /></View>
+        ) : failed ? (
+          <Text style={[styles.note, { color: theme.textMuted }]}>{t('stats.load_failed', 'İstatistikler yüklenemedi.')}</Text>
+        ) : (
+          <>
+            <View style={styles.block}>
+              <StatStrip
+                cells={[
+                  { key: 'workouts', label: t('stats.workouts', 'Antrenman'), value: formatNumber(stats?.totalWorkouts ?? 0, language) },
+                  { key: 'duration', label: t('stats.duration', 'Süre'), value: formatDuration(stats?.totalDuration ?? 0, language) },
+                  { key: 'volume', label: t('stats.volume', 'Hacim'), value: formatNumber(stats?.totalVolume ?? 0, language), unit: 'kg' },
+                  { key: 'sets', label: t('stats.sets', 'Set'), value: formatNumber(stats?.totalSets ?? 0, language) },
+                ]}
               />
-            ))}
-          </Menu>
-        </View>
+            </View>
 
-        {/* Radar Chart */}
-        <Surface elevation={0} style={styles.chartContainer}>
-          {loading || isMusclesLoading ? (
-            <ActivityIndicator color={theme.primary} size="large" style={{ marginVertical: 60 }} />
-          ) : (
-            <Svg width={SIZE} height={SIZE}>
-              {/* Grid rings */}
-              {gridLevels.map((lvl, index) => (
-                <Polygon
-                  key={`grid-${index}`}
-                  points={MUSCLE_KEYS.map((_, i) => getPoint(lvl, i)).join(' ')}
-                  stroke={theme.border}
-                  strokeWidth="1"
-                  fill="none"
-                />
-              ))}
-
-              {/* Axis lines */}
-              {MUSCLE_KEYS.map((_, i) => (
-                <Line
-                  key={`axis-${i}`}
-                  x1={CENTER} y1={CENTER}
-                  x2={CENTER + RADIUS * Math.cos(angles[i])}
-                  y2={CENTER + RADIUS * Math.sin(angles[i])}
-                  stroke={theme.border}
-                  strokeWidth="1"
-                />
-              ))}
-
-              {/* Data polygon */}
-              {hasDistribution && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>{t('stats.sets_by_muscle', 'Setlerin kas gruplarına dağılımı')}</Text>
+              <Text style={[styles.note, { color: theme.textMuted }]}>
+                {leader
+                  ? t('stats.muscle_leader', { name: leader.label, share: leader.display, defaultValue: 'En çok {{name}} çalıştı: setlerin {{share}} kadarı.' })
+                  : t('stats.no_sets_period', 'Bu dönemde tamamlanmış set yok.')}
+              </Text>
+              {rows.length ? (
                 <>
-                  <Polygon
-                    points={currentPolygon}
-                    stroke={chartAccent}
-                    strokeWidth="3"
-                    strokeLinejoin="round"
-                    fill={`${chartAccent}28`}
-                  />
-                  {values.map((value, index) => {
-                    const pointRadius = RADIUS * Math.min(
-                      1,
-                      Math.max(Number(value) || 0, 0.03),
-                    );
-                    return (
-                      <Circle
-                        key={`${MUSCLE_KEYS[index]}-point`}
-                        cx={CENTER + pointRadius * Math.cos(angles[index])}
-                        cy={CENTER + pointRadius * Math.sin(angles[index])}
-                        r="3.5"
-                        fill={theme.surface}
-                        stroke={chartAccent}
-                        strokeWidth="2.5"
-                      />
-                    );
-                  })}
+                  <View style={styles.radar}>
+                    <RadarChart
+                      axes={axes}
+                      currentLabel={periods.find((item) => item.key === period)?.label ?? ''}
+                      previousLabel={previousLabels[period]}
+                      accessibilityLabel={axes.map((axis) => `${axis.label} ${axis.display}`).join(', ')}
+                    />
+                  </View>
+                  <View style={styles.list}><BarList rows={rows} /></View>
                 </>
-              )}
-              <Circle cx={CENTER} cy={CENTER} r="2.5" fill={chartAccent} />
+              ) : null}
+            </View>
 
-              {/* Labels */}
-              {MUSCLE_KEYS.map((key, i) => {
-                const cosine = Math.cos(angles[i]);
-                const x = CENTER + (RADIUS + 18) * cosine;
-                const y = CENTER + (RADIUS + 18) * Math.sin(angles[i]);
-                const mg = muscleGroupsList.find(m => m.code === key);
-                return (
-                  <SvgText
-                    key={`label-${i}`}
-                    x={x} y={y + 4}
-                    fontSize={SIZE < 280 ? 8.5 : 10}
-                    fontWeight="600"
-                    fill={theme.textSecondary}
-                    textAnchor={cosine > 0.25 ? 'end' : cosine < -0.25 ? 'start' : 'middle'}
-                  >
-                    {String(t(`muscle_groups.${key}`, mg?.name || key))}
-                  </SvgText>
-                );
-              })}
-            </Svg>
-          )}
-
-          <Surface elevation={0} style={styles.legendRow}>
-            <Surface elevation={0} style={styles.legendItem}>
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: chartAccent }} />
-              <Text style={styles.legendText}>{t('statistics.current', 'Güncel')}</Text>
-            </Surface>
-            {!hasDistribution && (
-              <Text style={styles.legendText}>{t('monthly_report.no_data', 'Bu dönem için veri yok')}</Text>
-            )}
-          </Surface>
-        </Surface>
-
-        {/* Stats Grid — dynamic */}
-        <Surface elevation={0} style={[styles.statsGrid, { columnGap }]}>
-          <Surface elevation={0} style={[styles.statSquare, { width: statCardWidth }]}>
-            <Text style={styles.statLabel}>{t('statistics.workouts', 'Antrenman')}</Text>
-            <Text style={styles.statLargeVal}>{stats?.totalWorkouts ?? 0}</Text>
-            <Text style={styles.statDiffPos}>● {t('statistics.current_period', 'Güncel dönem')}</Text>
-          </Surface>
-          <Surface elevation={0} style={[styles.statSquare, { width: statCardWidth }]}>
-            <Text style={styles.statLabel}>{t('statistics.duration', 'Süre')}</Text>
-            <Text style={styles.statLargeVal}>{stats?.totalDuration ?? 0}<Text style={{ fontSize: 14, fontWeight: 'normal' }}>min</Text></Text>
-            <Text style={styles.statDiffPos}>● {t('statistics.current_period', 'Güncel dönem')}</Text>
-          </Surface>
-          <Surface elevation={0} style={[styles.statSquare, { width: statCardWidth }]}>
-            <Text style={styles.statLabel}>{t('statistics.volume', 'Hacim')}</Text>
-            <Text style={styles.statLargeVal}>{stats?.totalVolume ?? 0} <Text style={{ fontSize: 14, fontWeight: 'normal' }}>kg</Text></Text>
-            <Text style={styles.statDiffPos}>● {t('statistics.current_period', 'Güncel dönem')}</Text>
-          </Surface>
-          <Surface elevation={0} style={[styles.statSquare, { width: statCardWidth }]}>
-            <Text style={styles.statLabel}>{t('statistics.sets', 'Set')}</Text>
-            <Text style={styles.statLargeVal}>{stats?.totalSets ?? 0}</Text>
-            <Text style={styles.statDiffPos}>● {t('statistics.current_period', 'Güncel dönem')}</Text>
-          </Surface>
-        </Surface>
-
+            <View style={[styles.links, { borderTopColor: theme.border }]}>
+              <NavRow
+                icon="grid-outline"
+                title={t('statistics.muscle_dist_body', 'Kas yükü tablosu')}
+                subtitle={t('statistics.muscle_body_desc', 'Her kas grubunun antrenmandaki payı')}
+                onPress={() => navigation.navigate('MuscleDistributionBodyScreen')}
+                last
+              />
+            </View>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-const getStyles = (theme: MotionTheme, chartAccent: string) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.background },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12,
-  },
-  iconBtn: { width: 34, height: 34, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { flex: 1, minWidth: 0, paddingHorizontal: 8, textAlign: 'center', fontSize: 18, fontWeight: '700', color: theme.text },
-  dropdownBtn: {
-    backgroundColor: theme.surface, alignSelf: 'center', paddingHorizontal: 20,
-    paddingVertical: 10, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6,
-    marginTop: 10
-  },
-  dropdownText: { color: theme.text, fontSize: 16, fontWeight: '600' },
-  chartContainer: {
-    width: '100%',
-    alignItems: 'center',
-    marginTop: 24,
-    paddingTop: 18,
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.border,
-    backgroundColor: theme.surface,
-    overflow: 'hidden',
-  },
-  legendRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 16,
-    marginTop: 10,
-    marginBottom: 20,
-    paddingHorizontal: 12,
-  },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  legendText: { fontSize: 12, color: theme.textMuted },
-  // The grid used to start flush against the chart card, so the four tiles read
-  // as part of it. A little clearance separates the two blocks.
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 18, rowGap: 12 },
-  statSquare: {
-    backgroundColor: theme.surface, borderRadius: 16,
-    paddingHorizontal: 16, paddingVertical: 20, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border
-  },
-  statLabel: { fontSize: 15, color: theme.textMuted, fontWeight: '500', marginBottom: 12 },
-  statLargeVal: { fontSize: 22, fontWeight: 'bold', color: theme.text, marginBottom: 4 },
-  statDiffPos: { fontSize: 12, color: chartAccent, fontWeight: 'bold' }
+const styles = StyleSheet.create({
+  content: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingBottom: 40 },
+  block: { marginTop: 18 },
+  section: { paddingHorizontal: 16, marginTop: 28 },
+  sectionTitle: { fontSize: 15, fontWeight: '700' },
+  note: { fontSize: 13, lineHeight: 19, marginTop: 4 },
+  radar: { marginTop: 14 },
+  list: { marginTop: 22 },
+  links: { marginTop: 32, borderTopWidth: StyleSheet.hairlineWidth },
+  state: { height: 240, alignItems: 'center', justifyContent: 'center' },
 });
 
 export default MuscleDistribution;

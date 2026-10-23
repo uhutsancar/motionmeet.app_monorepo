@@ -63,7 +63,7 @@ const PersonalRecords = () => {
         title={t("statistics.records", "Personal Records")}
         description={t("statistics.records_desc", "Your 1RM and strongest sets")}
         onBack={() => navigate("/statistics")}
-        action={<Chip label="PRO" size="small" color="warning" sx={{ fontWeight: 900 }} />}
+        action={<Chip label="PRO" size="small" color="warning" sx={{ fontWeight: 700 }} />}
       />
 
       {loading ? (
@@ -86,7 +86,7 @@ const PersonalRecords = () => {
                       <Icon sx={{ fontSize: 21, color: "#fff" }} />
                     </Box>
                     <Box sx={{ minWidth: 0 }}>
-                      <Typography variant="subtitle1" noWrap sx={{ fontWeight: 800 }}>{record.name}</Typography>
+                      <Typography variant="subtitle1" noWrap sx={{ fontWeight: 700 }}>{record.name}</Typography>
                       <Typography variant="caption" color="text.secondary">
                         {t("statistics.archived_on", "Recorded")}{" "}
                         {new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(record.recordedAt))}
@@ -94,7 +94,7 @@ const PersonalRecords = () => {
                     </Box>
                   </Stack>
                   <Box sx={{ flexShrink: 0, textAlign: "right" }}>
-                    <Typography variant="h5" sx={{ fontWeight: 800 }}>
+                    <Typography variant="h5" sx={{ fontWeight: 700 }}>
                       {record.value} <Typography component="span" variant="body2" color="text.secondary">kg</Typography>
                     </Typography>
                     <Chip label="1RM" size="small" variant="outlined" sx={{ mt: 0.5 }} />

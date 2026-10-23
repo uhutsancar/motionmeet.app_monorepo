@@ -20,6 +20,7 @@ import { resolvePublicMediaUrl, type Exercise } from '@motionmeet/shared';
 import { API_URL } from '../config/environment';
 import { EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { exerciseMeta, exerciseTitle } from '../utils/exerciseLabels';
 
 interface ExercisePickerModalProps {
   visible: boolean;
@@ -29,7 +30,7 @@ interface ExercisePickerModalProps {
 }
 
 const ExercisePickerModal = ({ visible, onDismiss, onSelect, excludedIds = [] }: ExercisePickerModalProps) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { theme } = useTheme();
   const { getToken } = useAuthContext();
   const [search, setSearch] = useState('');
@@ -77,14 +78,15 @@ const ExercisePickerModal = ({ visible, onDismiss, onSelect, excludedIds = [] }:
           backgroundColor: theme.surface,
         }}
       >
-        <Text variant="titleLarge" style={{ color: theme.text, fontWeight: '800', marginBottom: 14 }}>
+        <Text variant="titleMedium" style={{ color: theme.text, fontWeight: '700', marginBottom: 10 }}>
           {t('active_workout.add_exercise', 'Add exercise')}
         </Text>
         <Searchbar
           value={search}
           onChangeText={setSearch}
           placeholder={t('exercises.search', 'Search exercises')}
-          style={{ backgroundColor: theme.background, marginBottom: 10 }}
+          style={{ backgroundColor: theme.background, marginBottom: 8, height: 38, borderRadius: 10, elevation: 0 }}
+          inputStyle={{ minHeight: 0, fontSize: 14 }}
         />
         {loading ? (
           <View style={{ paddingVertical: 48, alignItems: 'center' }}>
@@ -116,8 +118,8 @@ const ExercisePickerModal = ({ visible, onDismiss, onSelect, excludedIds = [] }:
                       )}
                     </Surface>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ color: disabled ? theme.textMuted : theme.text, fontWeight: '700' }}>{item.name}</Text>
-                      <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 3 }}>{item.muscleGroup} · {item.equipment}</Text>
+                      <Text style={{ color: disabled ? theme.textMuted : theme.text, fontWeight: '600', fontSize: 14.5 }}>{exerciseTitle(item.name, i18n.language)}</Text>
+                      <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 3 }}>{exerciseMeta(item, t, i18n.language)}</Text>
                     </View>
                   </Surface>
                 </TouchableRipple>

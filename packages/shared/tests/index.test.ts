@@ -5,10 +5,29 @@ import {
   API_ROUTES,
   AUTH_LIMITS,
   createOperationId,
+  elapsedWorkoutSeconds,
   getUtf8ByteLength,
   hasValidPasswordByteLength,
+  parseDecimalInput,
   resolvePublicMediaUrl,
 } from '../dist/index.js';
+
+test('set inputs accept a decimal comma and never turn a blank into zero', () => {
+  assert.equal(parseDecimalInput('12,5'), 12.5);
+  assert.equal(parseDecimalInput(' 12.5 '), 12.5);
+  assert.equal(parseDecimalInput('80'), 80);
+  assert.equal(parseDecimalInput('12.'), 12);
+  assert.equal(parseDecimalInput(',5'), 0.5);
+  assert.equal(parseDecimalInput(''), null);
+  assert.equal(parseDecimalInput('-'), null);
+  assert.equal(parseDecimalInput('1.234,5'), null);
+  assert.equal(parseDecimalInput('12kg'), null);
+});
+
+test('workout time comes from the start instant, not from counted ticks', () => {
+  assert.equal(elapsedWorkoutSeconds(1_000, 61_999), 60);
+  assert.equal(elapsedWorkoutSeconds(5_000, 1_000), 0);
+});
 
 test('dynamic API routes preserve resource identifiers', () => {
   assert.equal(API_ROUTES.post.comments('post-1'), '/api/post/post-1/comments');

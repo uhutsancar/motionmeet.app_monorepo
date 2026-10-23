@@ -50,7 +50,7 @@ const Licenses = () => {
 
       {notices.map((notice) => (
         <Paper key={notice.title} variant="outlined" sx={{ p: 2.5 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{notice.title}</Typography>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{notice.title}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75, lineHeight: 1.7 }}>
             {notice.body}
           </Typography>

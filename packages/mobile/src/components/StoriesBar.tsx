@@ -130,7 +130,7 @@ const StoriesBar = ({ onAddStory, navigation, onStoryDeleted }: StoriesBarProps)
         avatarLetter: {
           color: theme.text,
           fontSize: avatarSize * 0.4,
-          fontWeight: '800',
+          fontWeight: '700',
         },
         addBadge: {
           position: 'absolute',

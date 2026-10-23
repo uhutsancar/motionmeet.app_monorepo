@@ -22,12 +22,6 @@ export const presignMediaUpload: RequestHandler = async (req, res, next) => {
       fileName: req.body?.fileName,
       contentType: req.body?.contentType,
       size: req.body?.size,
-      maxUploadMb:
-        req.dbUser?.role === "superadmin"
-          ? -1
-          : req.dbUser?.plan && typeof req.dbUser.plan === "object"
-            ? req.dbUser.plan.features.max_media_upload_mb
-            : 20,
     });
     if (!reservation) {
       return res.status(400).json({

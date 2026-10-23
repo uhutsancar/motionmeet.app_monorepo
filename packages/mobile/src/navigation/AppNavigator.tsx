@@ -58,7 +58,6 @@ const loadActivity = () => require('../pages/ActivityScreen').default;
 const loadNotifications = () => require('../pages/NotificationsScreen').default;
 const loadPrivacy = () => require('../pages/PrivacyScreen').default;
 const loadSupport = () => require('../pages/SupportScreen').default;
-const loadPricing = () => require('../pages/PricingScreen').default;
 const loadAdvancedStatistics = () => require('../pages/AdvancedStatisticsScreen').default;
 const loadMuscleDistributionBody = () => require('../pages/MuscleDistributionBodyScreen').default;
 const loadMainExercises = () => require('../pages/MainExercisesScreen').default;
@@ -135,7 +134,6 @@ const MainStack = () => (
     <Stack.Screen name="SetsDetailScreen" getComponent={loadSetsDetail} />
     <Stack.Screen name="PrivacyScreen" getComponent={loadPrivacy} />
     <Stack.Screen name="SupportScreen" getComponent={loadSupport} />
-    <Stack.Screen name="PricingScreen" getComponent={loadPricing} />
     <Stack.Screen name="AdvancedStatisticsScreen" getComponent={loadAdvancedStatistics} />
     <Stack.Screen name="MuscleDistributionBodyScreen" getComponent={loadMuscleDistributionBody} />
     <Stack.Screen name="MainExercisesScreen" getComponent={loadMainExercises} />
@@ -160,8 +158,8 @@ const MainStack = () => (
 const TABS = [
   { name: 'Home', icon: 'home' },
   { name: 'ExploreTab', icon: 'search' },
-  { name: 'Routines', icon: 'fitness' },
-  { name: 'Exercises', icon: 'barbell' },
+  { name: 'Routines', icon: 'barbell' },
+  { name: 'Exercises', icon: 'list' },
   { name: 'ProfileTab', icon: 'person' },
 ] as const;
 
@@ -179,7 +177,7 @@ const TabNavigator = () => {
   // One height on every device. The row itself never changes size — only the
   // safe-area padding underneath it does — so the bar sits at the same place on
   // a gesture-bar phone, a button-bar phone and a tablet.
-  const barHeight = fontScale > 1.4 ? 60 : 52;
+  const barHeight = fontScale > 1.4 ? 58 : 50;
 
   /*
    * A new message still raises a toast from anywhere in the app, and the toast
@@ -276,9 +274,9 @@ const TabNavigator = () => {
                     <Image
                       source={{ uri: avatar }}
                       style={{
-                        width: 26,
-                        height: 26,
-                        borderRadius: 13,
+                        width: 25,
+                        height: 25,
+                        borderRadius: 12.5,
                         // The ring is the selected state for the avatar, the
                         // way the filled glyph is for the others. It is always
                         // drawn so the avatar never changes size between tabs.
@@ -289,7 +287,7 @@ const TabNavigator = () => {
                   ) : (
                     <Ionicons
                       name={iconName}
-                      size={26}
+                      size={24}
                       // Monochrome: weight, not hue, says which tab is open.
                       color={focused ? theme.text : theme.textMuted}
                     />

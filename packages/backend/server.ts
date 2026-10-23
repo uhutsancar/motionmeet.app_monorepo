@@ -17,9 +17,6 @@ import nearbyRouter from "./routes/nearbyRoutes.js";
 import messageRouter from "./routes/messageRoutes.js";
 import muscleGroupRouter from "./routes/muscleGroupRoutes.js";
 import notificationRouter from "./routes/notificationRoutes.js";
-import paddleWebhookRouter from "./routes/paddleWebhookRoutes.js";
-import paymentRouter from "./routes/paymentRoutes.js";
-import planRouter from "./routes/planRoutes.js";
 import postRouter from "./routes/postRoutes.js";
 import rbacRouter from "./routes/rbacRoutes.js";
 import routineRouter from "./routes/routineRoutes.js";
@@ -100,11 +97,12 @@ app.set("trust proxy", 1);
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(requestContext);
 app.use(cors(corsOptions));
-// Paddle's signature verification needs the exact bytes it signed, so this is
-// mounted with its own raw-body parser ahead of the app-wide express.json()
-// below - by the time that runs, a webhook request has already matched this
-// route and never reaches it. See docs/paddle-integration-plan.md §7.1.
-app.use("/api/payments/webhooks/paddle", express.raw({ type: "application/json", limit: "1mb" }), paddleWebhookRouter);
+// MotionMeet no longer sells plans. Old clients and the provider's webhook
+// retries get an explicit 410 instead of a generic 404, ahead of body parsing
+// so nothing they send is read.
+app.use(["/api/plans", "/api/payments"], (_request, response) => {
+  response.status(410).json({ success: false, message: "Plans and payments are no longer offered" });
+});
 app.use("/api", rejectUnsupportedApiContentType);
 app.use(express.json({ limit: "500kb", strict: true }));
 const configuredGlobalLimit = Number.parseInt(process.env.GLOBAL_RATE_LIMIT_PER_15_MIN ?? "", 10);
@@ -119,7 +117,7 @@ app.get("/health/ready", async (_request, response) => {
 
 app.use("/api/auth", authRoutes); app.use("/api/user", userRouter); app.use("/api/post", postRouter); app.use("/api/story", storyRouter);
 app.use("/api/message", messageRouter); app.use("/api/exercise", exerciseRouter); app.use("/api/routine", routineRouter); app.use("/api/workout", workoutRouter);
-app.use("/api/plans", planRouter); app.use("/api/payments", paymentRouter); app.use("/api/admin", rbacRouter); app.use("/api/muscle-groups", muscleGroupRouter); app.use("/api/equipment", equipmentRouter); app.use("/api/media", mediaRouter); app.use("/api/measurements", measurementRouter);
+app.use("/api/admin", rbacRouter); app.use("/api/muscle-groups", muscleGroupRouter); app.use("/api/equipment", equipmentRouter); app.use("/api/media", mediaRouter); app.use("/api/measurements", measurementRouter);
 app.use("/api/locations", locationRouter); app.use("/api/nearby", nearbyRouter); app.use("/api/notifications", notificationRouter);
 // Public, unauthenticated HTML for shared links. Mounted at the root rather
 // than under /api because it is a page address people paste into a chat, and

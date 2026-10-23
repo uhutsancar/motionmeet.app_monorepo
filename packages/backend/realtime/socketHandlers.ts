@@ -23,14 +23,14 @@ export const handleSocketConnection = async (socket: MotionSocket): Promise<void
   if (wasOffline) await emitPresenceToConnections(userId, "user_online", { userId });
 
   /**
-   * The handshake already loaded this user with their plan, and messaging
-   * permission only depends on the plan's `can_message_anyone` flag plus the
-   * privacy settings behind `evaluateMessagePermission`. Re-reading both on
-   * every keystroke-sized event cost four queries per message in a conversation
-   * where nothing about either side had changed.
+   * The handshake already loaded this user, and messaging permission only
+   * depends on their role plus the privacy settings behind
+   * `evaluateMessagePermission`. Re-reading both on every keystroke-sized event
+   * cost four queries per message in a conversation where nothing about either
+   * side had changed.
    *
    * The record is refreshed on a timer rather than pinned for the life of the
-   * socket, so a plan or role change reaches a long-lived connection.
+   * socket, so a role change reaches a long-lived connection.
    */
   let senderLoadedAt = Date.now();
   const currentSender = async (): Promise<typeof socket.data.user | null> => {
@@ -39,8 +39,8 @@ export const handleSocketConnection = async (socket: MotionSocket): Promise<void
     if (!refreshed) return null;
     socket.data.user = refreshed;
     senderLoadedAt = Date.now();
-    // A plan change can flip `can_message_anyone`, so decisions taken under the
-    // old record must not outlive it.
+    // A role change can flip the answer, so decisions taken under the old
+    // record must not outlive it.
     socket.data.messagePermissionCache?.clear();
     return refreshed;
   };

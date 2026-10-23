@@ -61,14 +61,15 @@ export const PageShell = ({ children, maxWidth = 1200, sx = {} }: PageShellProps
  * use it. The heading used to be 28px with an outlined tile beside it and an
  * outlined circle before that — three hard edges and a lot of height spent on
  * repeating the name of the page the reader had just navigated to. It is a
- * heading now: smaller, no outlines, and the icon is a soft tint rather than a
- * boxed badge.
+ * heading now: 20px, no outlines.
+ *
+ * The eyebrow and icon props are still accepted so callers do not change, but
+ * neither is drawn: a tracked uppercase label over the title and an icon in a
+ * tinted circle beside it repeated the page's name three times on every page.
  */
 export const PageHeader = ({
   title,
   description = "",
-  eyebrow = "",
-  icon: Icon,
   action = null,
   onBack,
 }: PageHeaderProps) => (
@@ -82,42 +83,19 @@ export const PageHeader = ({
         <IconButton
           aria-label="Back"
           onClick={onBack}
-          sx={{ width: 38, height: 38 }}
+          sx={{ width: 36, height: 36, ml: -1 }}
         >
           <ArrowBackRounded fontSize="small" />
         </IconButton>
       )}
-      {Icon && (
-        <Box
-          sx={{
-            width: 34,
-            height: 34,
-            display: { xs: "none", sm: "grid" },
-            placeItems: "center",
-            flexShrink: 0,
-            color: "primary.main",
-            bgcolor: "action.hover",
-            borderRadius: "50%",
-          }}
-        >
-          <Icon size={18} />
-        </Box>
-      )}
       <Box sx={{ minWidth: 0 }}>
-        {eyebrow && (
-          <Typography
-            variant="overline"
-            color="primary.main"
-            sx={{ display: "block", mb: 0.1, fontSize: 10, fontWeight: 800, lineHeight: 1.4, letterSpacing: "0.12em" }}
-          >
-            {eyebrow}
-          </Typography>
-        )}
-        <Typography variant="h4" sx={{ fontSize: { xs: 19, sm: 21 }, lineHeight: 1.25, letterSpacing: "-0.01em" }}>
+        {/* On a phone the top bar already names the page; the heading would
+            say it a second time right under it. */}
+        <Typography variant="h4" sx={{ display: { xs: onBack ? "block" : "none", sm: "block" }, fontSize: { xs: 18, sm: 20 }, lineHeight: 1.25, letterSpacing: "-0.01em" }}>
           {title}
         </Typography>
         {description && (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
             {description}
           </Typography>
         )}
@@ -130,7 +108,7 @@ export const PageHeader = ({
 export const SectionHeader = ({ title, description = "", action = null }: SectionHeaderProps) => (
   <Stack direction="row" spacing={2} sx={{ alignItems: "flex-end", justifyContent: "space-between" }}>
     <Box>
-      <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{title}</Typography>
+      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{title}</Typography>
       {description && <Typography variant="caption" color="text.secondary">{description}</Typography>}
     </Box>
     {action}
@@ -152,17 +130,16 @@ export const EmptyState = ({
       p: 3,
       display: "grid",
       placeItems: "center",
-      borderRadius: 3.5,
-      bgcolor: "action.hover",
+      bgcolor: "transparent",
     }}
   >
-    <Stack spacing={1.25} sx={{ maxWidth: 360, alignItems: "center", textAlign: "center" }}>
+    <Stack spacing={1} sx={{ maxWidth: 360, alignItems: "center", textAlign: "center" }}>
       {Icon && (
-        <Box sx={{ width: 44, height: 44, display: "grid", placeItems: "center", borderRadius: 2.5, bgcolor: "action.hover", color: "text.secondary" }}>
-          <Icon size={21} />
+        <Box sx={{ color: "text.secondary", display: "grid", placeItems: "center" }}>
+          <Icon size={26} strokeWidth={1.6} />
         </Box>
       )}
-      <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{title}</Typography>
+      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{title}</Typography>
       {description && <Typography variant="body2" color="text.secondary">{description}</Typography>}
       {actionLabel && (
         <Button variant="contained" onClick={onAction} sx={{ mt: 0.75 }}>

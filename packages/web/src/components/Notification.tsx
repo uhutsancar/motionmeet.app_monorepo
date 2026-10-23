@@ -74,7 +74,7 @@ const Notification = ({ toastInstance, message }: NotificationProps) => {
           sx={{
             px: 3,
             color: "primary.main",
-            fontWeight: 800,
+            fontWeight: 700,
             fontSize: "0.75rem",
             letterSpacing: 1,
             borderRadius: 0,

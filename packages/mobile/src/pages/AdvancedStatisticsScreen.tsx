@@ -1,432 +1,215 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { StyleSheet, ScrollView, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { BarChart, LineChart } from 'react-native-chart-kit';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  Chip,
-  Surface,
-  Text,
-} from 'react-native-paper';
-import { useTheme, type MotionTheme } from '../context/ThemeContext';
+import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from '../context/AuthProvider';
 import { getWorkoutStats } from '../api/endpoints';
-import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { gridItemWidth } from '../config/layout';
+import { logHandledError } from '../utils/feedback';
+import { capitalizeFirst, formatCompact, formatDuration, formatNumber } from '../utils/format';
+import { latestActiveIndex } from '../components/charts/scale';
+import dayjs from '../utils/dayjs';
 import ScreenHeader from '../components/ScreenHeader';
+import BarChart from '../components/charts/BarChart';
+import StatStrip from '../components/charts/StatStrip';
+import BarList from '../components/charts/BarList';
+import PillTabs from '../components/ui/PillTabs';
+import { useScrollEdge } from '../hooks/useScrollEdge';
+import { TYPE } from '../config/layout';
+import { toPeriodBuckets, type PeriodBucket, type StatsPeriod } from '../features/stats/periodSeries';
 import type { WorkoutStats } from '@motionmeet/shared';
 import type { NavigationOnlyProps } from '../navigation/types';
 
-type StatsPeriod = 'week' | 'month' | 'year';
-interface MetricCardProps {
-  icon: React.ComponentProps<typeof Ionicons>['name']; label: string; value?: number;
-  unit: string; color: string; theme: MotionTheme; width: number;
-}
-interface ChartCardProps extends React.PropsWithChildren {
-  icon: React.ComponentProps<typeof Ionicons>['name']; title: string; color: string; theme: MotionTheme;
-}
+type Metric = 'volume' | 'reps' | 'duration' | 'sets';
 
-const MetricCard = ({ icon, label, value, unit, color, theme, width }: MetricCardProps) => (
-  <Surface
-    elevation={0}
-    style={{
-      width,
-      minHeight: 94,
-      padding: 14,
-      borderRadius: 14,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.border,
-      backgroundColor: theme.surface,
-    }}
-  >
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-      <View
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: 9,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: `${color}18`,
-        }}
-      >
-        <Ionicons name={icon} size={17} color={color} />
-      </View>
-      <Text style={{ flex: 1, color: theme.textMuted, fontSize: 11, fontWeight: '700' }}>
-        {label}
-      </Text>
-    </View>
-    <Text
-      numberOfLines={1}
-      adjustsFontSizeToFit
-      style={{ color: theme.text, fontSize: 21, fontWeight: '900', marginTop: 9 }}
-    >
-      {Number(value || 0).toLocaleString()}
-      {unit ? <Text style={{ color: theme.textMuted, fontSize: 11, fontWeight: '700' }}> {unit}</Text> : null}
-    </Text>
-  </Surface>
-);
-
-const ChartCard = ({ icon, title, color, theme, children }: ChartCardProps) => (
-  <Surface
-    elevation={0}
-    style={{
-      paddingVertical: 16,
-      borderRadius: 16,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.border,
-      backgroundColor: theme.surface,
-      overflow: 'hidden',
-    }}
-  >
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, marginBottom: 12 }}>
-      <Ionicons name={icon} size={18} color={color} />
-      <Text numberOfLines={1} style={{ flex: 1, color: theme.text, fontSize: 15, fontWeight: '800' }}>
-        {title}
-      </Text>
-    </View>
-    <View style={{ width: '100%', alignItems: 'center', overflow: 'hidden' }}>
-      {children}
-    </View>
-  </Surface>
-);
-
+/**
+ * Volume, reps, time and sets over a week, a month or a year. One chart at a
+ * time, switched by the strip of totals above it, instead of three charts in
+ * three colours stacked down the page; the period's heaviest movements close
+ * the screen.
+ */
 const AdvancedStatisticsScreen = ({ navigation }: NavigationOnlyProps) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const language = i18n.language;
   const { theme } = useTheme();
   const { getToken } = useAuthContext();
   const [period, setPeriod] = useState<StatsPeriod>('month');
+  const [metric, setMetric] = useState<Metric>('volume');
   const [statsData, setStatsData] = useState<WorkoutStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadFailed, setLoadFailed] = useState(false);
-  const {
-    columnGap,
-    contentWidth,
-    horizontalPadding,
-  } = useResponsiveLayout({ minTwoColumnWidth: 460 });
-  const metricWidth =
-    gridItemWidth(contentWidth, columnGap, 2);
-
-  const chartWidth = Math.max(1, Math.min(contentWidth - 2, 670));
-  const blue = theme.dark ? '#60A5FA' : '#2563EB';
-  const green = '#22A06B';
-  const purple = '#8B5CF6';
+  const [failed, setFailed] = useState(false);
+  const [selected, setSelected] = useState<number | null>(null);
+  const headerEdge = useScrollEdge();
 
   const fetchStats = useCallback(async () => {
     setLoading(true);
-    setLoadFailed(false);
+    setFailed(false);
     try {
       const token = await getToken();
       if (!token) throw new Error('Authentication required');
       const data = await getWorkoutStats(period, token);
-      if (data.success) {
-        setStatsData(data);
-      } else {
-        setLoadFailed(true);
-      }
-    } catch {
-      setLoadFailed(true);
+      if (data.success) setStatsData(data);
+      else setFailed(true);
+    } catch (error) {
+      logHandledError('load-advanced-stats', error);
+      setFailed(true);
     } finally {
       setLoading(false);
     }
   }, [getToken, period]);
 
   useEffect(() => {
-    let active = true;
-    const load = async () => {
-      if (!active) return;
-      await fetchStats();
-    };
-    load();
-    return () => {
-      active = false;
-    };
+    setSelected(null);
+    void fetchStats();
   }, [fetchStats]);
 
-  const chartData = useMemo(() => {
-    const stats = statsData?.stats;
-    const labels = stats?.labels || [];
-    const narrowPointLimit = period === 'year' ? 6 : 5;
-    const regularPointLimit = period === 'year' ? 12 : period === 'week' ? 7 : 10;
-    const pointLimit = contentWidth < 400 ? narrowPointLimit : regularPointLimit;
-    const start = Math.max(0, labels.length - pointLimit);
-    return {
-      labels: labels.slice(start),
-      volumes: (stats?.volumes || []).slice(start),
-      reps: (stats?.reps || []).slice(start),
-      durations: (stats?.durations || []).slice(start),
-    };
-  }, [contentWidth, period, statsData]);
+  const buckets = toPeriodBuckets(statsData?.stats, period);
+  const selectedIndex = selected ?? latestActiveIndex(buckets.map((item) => item[metric]));
+  const bucket = buckets[selectedIndex];
+  const totals: Record<Metric, number> = {
+    volume: statsData?.totalVolume ?? 0,
+    reps: buckets.reduce((sum, item) => sum + item.reps, 0),
+    duration: statsData?.totalDuration ?? 0,
+    sets: statsData?.totalSets ?? 0,
+  };
 
-  const safeSeries = (values: number[]): number[] => (
-    values.length ? values.map(value => Number(value) || 0) : [0]
-  );
-  const safeLabels = chartData.labels.length ? chartData.labels : [''];
-  const totalReps = (statsData?.stats?.reps || []).reduce((sum, value) => sum + (Number(value) || 0), 0);
-  const hasData = (statsData?.totalWorkouts || 0) > 0;
-  const muscleData = Object.entries(statsData?.muscleDistribution || {})
-    .map(([name, value]) => ({
-      name,
-      value: Math.max(0, Math.min(100, Math.round((Number(value) || 0) * 100))),
-    }))
-    .sort((a, b) => b.value - a.value);
+  const labelOf = (item: PeriodBucket) =>
+    period === 'year' ? dayjs(`${item.key}-01`).format('MMM') : period === 'week' ? dayjs(item.key).format('dd') : dayjs(item.key).format('D');
+  const bucketTitle = (item: PeriodBucket) =>
+    period === 'year' ? dayjs(`${item.key}-01`).format('MMMM YYYY') : dayjs(item.key).format('D MMMM dddd');
+  const describe = (value: number): string =>
+    metric === 'duration'
+      ? formatDuration(value, language)
+      : metric === 'volume'
+        ? `${formatNumber(value, language)} kg`
+        : metric === 'reps'
+          ? t('stats.reps_count', { count: value, defaultValue: '{{count}} tekrar' })
+          : t('monthly_report.sets_count', { count: value, defaultValue: '{{count}} set' });
 
-  const chartConfig = (color: string) => ({
-    backgroundGradientFrom: theme.surface,
-    backgroundGradientTo: theme.surface,
-    decimalPlaces: 0,
-    color: () => color,
-    labelColor: () => theme.textMuted,
-    propsForBackgroundLines: {
-      stroke: theme.border,
-      strokeDasharray: '4',
-    },
-    propsForDots: {
-      r: '3',
-      strokeWidth: '2',
-      stroke: color,
-    },
-    barPercentage: 0.55,
-  });
+  const exerciseRows = (statsData?.exerciseBreakdown ?? []).map((item) => ({
+    key: item.exerciseId || item.name,
+    label: capitalizeFirst(item.name, language),
+    value: item.volume,
+    display: `${formatNumber(item.volume, language)} kg`,
+  }));
 
-  const periods = [
-    { value: 'week', label: t('statistics.week', 'Week') },
-    { value: 'month', label: t('statistics.month', 'Month') },
-    { value: 'year', label: t('statistics.year', 'Year') },
+  // What one session looks like on average in this period: the question the
+  // totals above cannot answer, and the one that shows a program getting
+  // denser or lighter without counting how often it was done.
+  const sessions = statsData?.totalWorkouts ?? 0;
+  const averages = sessions
+    ? [
+        { key: 'duration', label: t('stats.avg_duration', 'Ortalama süre'), value: formatDuration(Math.round(totals.duration / sessions), language) },
+        { key: 'volume', label: t('stats.avg_volume', 'Ortalama hacim'), value: `${formatNumber(Math.round(totals.volume / sessions), language)} kg` },
+        { key: 'sets', label: t('stats.avg_sets', 'Ortalama set'), value: formatNumber(Math.round((totals.sets / sessions) * 10) / 10, language, 1) },
+        { key: 'reps', label: t('stats.avg_reps', 'Ortalama tekrar'), value: formatNumber(Math.round(totals.reps / sessions), language) },
+      ]
+    : [];
+
+  const periods: Array<{ key: StatsPeriod; label: string }> = [
+    { key: 'week', label: t('statistics.last_7_days', 'Son 7 gün') },
+    { key: 'month', label: t('statistics.last_30_days', 'Son 30 gün') },
+    { key: 'year', label: t('statistics.last_year', 'Son 12 ay') },
   ];
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
       <ScreenHeader
-        title={t('statistics.advanced', 'Advanced statistics')}
+        title={t('statistics.advanced', 'Gelişmiş istatistikler')}
         onBack={() => navigation.goBack()}
+        scrolled={headerEdge.scrolled}
       />
-
       <ScrollView
+        contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          width: '100%',
-          maxWidth: 720,
-          alignSelf: 'center',
-          paddingHorizontal: horizontalPadding,
-          paddingTop: 16,
-          paddingBottom: 36,
-          gap: 14,
-        }}
+        onScroll={headerEdge.onScroll}
+        scrollEventThrottle={headerEdge.scrollEventThrottle}
       >
-        <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 19 }}>
-          {t('statistics.advanced_desc', 'Volume, set, repetition and duration details.')}
-        </Text>
-
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          {periods.map(item => {
-            const selected = period === item.value;
-            return (
-              <Chip
-                key={item.value}
-                selected={selected}
-                onPress={() => setPeriod(item.value as StatsPeriod)}
-                mode="outlined"
-                style={{
-                  flex: 1,
-                  borderColor: selected ? blue : theme.border,
-                  backgroundColor: selected ? blue : theme.surface,
-                }}
-                textStyle={{ color: selected ? '#FFFFFF' : theme.textSecondary, fontWeight: '800' }}
-              >
-                {item.label}
-              </Chip>
-            );
-          })}
-        </View>
+        <PillTabs tabs={periods} selected={period} onSelect={setPeriod} />
 
         {loading ? (
-          <View style={{ minHeight: 320, alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator size="large" color={blue} />
-          </View>
-        ) : loadFailed ? (
-          <Surface
-            elevation={0}
-            style={{
-              minHeight: 220,
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 24,
-              borderRadius: 16,
-              borderWidth: StyleSheet.hairlineWidth,
-              borderColor: theme.border,
-              backgroundColor: theme.surface,
-            }}
-          >
-            <Ionicons name="cloud-offline-outline" size={38} color={theme.textMuted} />
-            <Text style={{ color: theme.text, fontWeight: '800', marginTop: 12 }}>
-              {t('statistics.load_failed', 'Statistics could not be loaded.')}
+          <View style={styles.state}><ActivityIndicator color={theme.textMuted} /></View>
+        ) : failed ? (
+          <Pressable onPress={() => void fetchStats()} style={styles.state} accessibilityRole="button">
+            <Text style={{ color: theme.textMuted, fontSize: 13 }}>
+              {t('stats.load_failed', 'İstatistikler yüklenemedi.')}{' '}
+              <Text style={{ color: theme.primary, fontWeight: '600' }}>{t('common.retry', 'Tekrar dene')}</Text>
             </Text>
-            <Chip mode="outlined" onPress={fetchStats} style={{ marginTop: 14 }}>
-              {t('common.retry', 'Retry')}
-            </Chip>
-          </Surface>
-        ) : !hasData ? (
-          <Surface
-            elevation={0}
-            style={{
-              minHeight: 220,
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 24,
-              borderRadius: 16,
-              borderWidth: StyleSheet.hairlineWidth,
-              borderColor: theme.border,
-              backgroundColor: theme.surface,
-            }}
-          >
-            <Ionicons name="analytics-outline" size={40} color={theme.textMuted} />
-            <Text style={{ color: theme.text, fontWeight: '800', marginTop: 12 }}>
-              {t('common.no_data', 'No data yet')}
-            </Text>
-            <Text style={{ color: theme.textMuted, fontSize: 12, textAlign: 'center', marginTop: 5 }}>
-              {t('statistics.log_more_workouts', 'Complete workouts to see your statistics here.')}
-            </Text>
-          </Surface>
+          </Pressable>
         ) : (
           <>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: columnGap }}>
-              <MetricCard
-                icon="trending-up-outline"
-                label={t('statistics.volume', 'Volume')}
-                value={statsData?.totalVolume}
-                unit={t('common.kg', 'kg')}
-                color={blue}
-                theme={theme}
-                width={metricWidth}
+            <View style={{ marginTop: 12 }}>
+              <StatStrip
+                selectedKey={metric}
+                onSelect={(key) => setMetric(key as Metric)}
+                cells={[
+                  { key: 'volume', label: t('stats.volume', 'Hacim'), value: formatNumber(totals.volume, language), unit: 'kg' },
+                  { key: 'reps', label: t('stats.reps', 'Tekrar'), value: formatNumber(totals.reps, language) },
+                  { key: 'duration', label: t('stats.duration', 'Süre'), value: formatDuration(totals.duration, language) },
+                  { key: 'sets', label: t('stats.sets', 'Set'), value: formatNumber(totals.sets, language) },
+                ]}
               />
-              <MetricCard
-                icon="repeat-outline"
-                label={t('profile.reps', 'Repetitions')}
-                value={totalReps}
-                unit={t('routines.reps', 'reps').toLowerCase()}
-                color={green}
-                theme={theme}
-                width={metricWidth}
-              />
-              <MetricCard
-                icon="time-outline"
-                label={t('statistics.duration', 'Duration')}
-                value={statsData?.totalDuration}
-                unit={t('common.min', 'min')}
-                color="#3284FF"
-                theme={theme}
-                width={metricWidth}
-              />
-              <MetricCard
-                icon="layers-outline"
-                label={t('statistics.sets', 'Sets')}
-                value={statsData?.totalSets}
-                unit=""
-                color={purple}
-                theme={theme}
-                width={metricWidth}
+            </View>
+            <View style={styles.readout}>
+              <Text style={{ color: theme.textMuted, fontSize: 12.5 }}>{bucket ? bucketTitle(bucket) : ''}</Text>
+              <Text style={[styles.readoutValue, { color: theme.text }]}>{bucket ? describe(bucket[metric]) : ''}</Text>
+            </View>
+            <View style={styles.pad}>
+              <BarChart
+                variant="lollipop"
+                data={buckets.map((item) => ({ key: item.key, label: labelOf(item), value: item[metric] }))}
+                selectedIndex={selectedIndex}
+                onSelect={setSelected}
+                integer={metric === 'sets' || metric === 'reps'}
+                formatTick={(value) => (metric === 'duration' ? formatNumber(value, language) : formatCompact(value, language))}
+                height={180}
               />
             </View>
 
-            <ChartCard
-              icon="trending-up-outline"
-              title={t('statistics.volume', 'Volume')}
-              color={blue}
-              theme={theme}
-            >
-              <LineChart
-                data={{ labels: safeLabels, datasets: [{ data: safeSeries(chartData.volumes) }] }}
-                width={chartWidth}
-                height={220}
-                fromZero
-                bezier
-                withShadow={false}
-                chartConfig={chartConfig(blue)}
-                style={{ borderRadius: 14 }}
-              />
-            </ChartCard>
-
-            <ChartCard
-              icon="repeat-outline"
-              title={t('profile.reps', 'Repetitions')}
-              color={green}
-              theme={theme}
-            >
-              <BarChart
-                data={{ labels: safeLabels, datasets: [{ data: safeSeries(chartData.reps) }] }}
-                width={chartWidth}
-                height={210}
-                yAxisLabel=""
-                yAxisSuffix=""
-                fromZero
-                showValuesOnTopOfBars
-                chartConfig={chartConfig(green)}
-                style={{ borderRadius: 14 }}
-              />
-            </ChartCard>
-
-            <ChartCard
-              icon="time-outline"
-              title={t('statistics.duration', 'Duration')}
-              color="#3284FF"
-              theme={theme}
-            >
-              <LineChart
-                data={{ labels: safeLabels, datasets: [{ data: safeSeries(chartData.durations) }] }}
-                width={chartWidth}
-                height={210}
-                fromZero
-                withShadow={false}
-                chartConfig={chartConfig('#3284FF')}
-                style={{ borderRadius: 14 }}
-              />
-            </ChartCard>
-
-            <Surface
-              elevation={0}
-              style={{
-                padding: 16,
-                borderRadius: 16,
-                borderWidth: StyleSheet.hairlineWidth,
-                borderColor: theme.border,
-                backgroundColor: theme.surface,
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                <Ionicons name="body-outline" size={18} color={purple} />
-                <Text style={{ color: theme.text, fontSize: 15, fontWeight: '800' }}>
-                  {t('statistics.muscle_dist', 'Muscle distribution')}
-                </Text>
-              </View>
-              {muscleData.map(item => (
-                <View key={item.name} style={{ marginBottom: 14 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
-                    <Text numberOfLines={2} style={{ flex: 1, minWidth: 0, color: theme.textSecondary, fontSize: 12, fontWeight: '700' }}>
-                      {t(`muscle_groups.${item.name}`, item.name)}
-                    </Text>
-                    <Text style={{ flexShrink: 0, color: blue, fontSize: 12, fontWeight: '900' }}>{item.value}%</Text>
-                  </View>
-                  <View style={{ height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: theme.surfaceLight }}>
+            {averages.length ? (
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, styles.pad, { color: theme.text }]}>{t('stats.per_workout', 'Antrenman başına')}</Text>
+                <View style={[styles.averages, { borderTopColor: theme.border }]}>
+                  {averages.map((item, index) => (
                     <View
-                      style={{
-                        width: `${item.value}%`,
-                        height: '100%',
-                        borderRadius: 4,
-                        backgroundColor: blue,
-                      }}
-                    />
-                  </View>
+                      key={item.key}
+                      style={[styles.averageRow, index < averages.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border }]}
+                    >
+                      <Text style={[styles.averageLabel, { color: theme.textSecondary }]}>{item.label}</Text>
+                      <Text style={[styles.averageValue, { color: theme.text }]}>{item.value}</Text>
+                    </View>
+                  ))}
                 </View>
-              ))}
-            </Surface>
+              </View>
+            ) : null}
+
+            <View style={[styles.pad, styles.section]}>
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>{t('stats.top_exercises', 'En çok hacim yapılan hareketler')}</Text>
+              {exerciseRows.length ? (
+                <View style={{ marginTop: 16 }}><BarList rows={exerciseRows} /></View>
+              ) : (
+                <Text style={{ color: theme.textMuted, fontSize: 13, marginTop: 6 }}>{t('stats.no_sets_period', 'Bu dönemde tamamlanmış set yok.')}</Text>
+              )}
+            </View>
           </>
         )}
       </ScrollView>
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  content: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingBottom: 40 },
+  pad: { paddingHorizontal: 16 },
+  readout: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
+  readoutValue: { fontSize: 20, fontWeight: '600', marginTop: 2, fontVariant: ['tabular-nums'] },
+  section: { marginTop: 28 },
+  sectionTitle: { fontSize: TYPE.section, fontWeight: '700' },
+  averages: { marginTop: 6, marginLeft: 16, borderTopWidth: StyleSheet.hairlineWidth },
+  averageRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44, paddingRight: 16 },
+  averageLabel: { fontSize: TYPE.body },
+  averageValue: { fontSize: TYPE.body, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  state: { height: 300, alignItems: 'center', justifyContent: 'center' },
+});
 
 export default AdvancedStatisticsScreen;

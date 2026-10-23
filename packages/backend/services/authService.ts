@@ -2,7 +2,6 @@ import crypto from "node:crypto";
 import { database, withTransaction } from "../configs/database.js";
 import { findUserById } from "../repositories/userRepository.js";
 import { serializeUser, type InternalUser } from "../repositories/entities.js";
-import { getOrCreateFreePlan } from "../utils/plans.js";
 
 export const getUserByEmailOrUsername = async (email: string, username: string): Promise<InternalUser | null> => {
   const normalizedEmail = String(email).trim().toLowerCase();
@@ -15,7 +14,7 @@ export const getUserByEmailOrUsername = async (email: string, username: string):
 
 export const getUserByEmailWithPassword = async (email: string): Promise<InternalUser | null> => {
   const row = await database.selectFrom("users").selectAll().where("email", "=", String(email).trim().toLowerCase()).executeTakeFirst();
-  return row ? serializeUser(row, null, true) : null;
+  return row ? serializeUser(row, true) : null;
 };
 
 export const createUser = async (
@@ -24,13 +23,11 @@ export const createUser = async (
   fullName: string,
   username: string,
 ): Promise<InternalUser> => {
-  const freePlan = await getOrCreateFreePlan();
   const created = await database.insertInto("users").values({
     email, password_hash: hashedPassword, full_name: fullName, username,
-    plan_id: freePlan.id, plan_status: "free", role: "user", legacy_mongo_id: null,
-    plan_start_date: null, plan_end_date: null, plan_cancelled_at: null,
+    role: "user", legacy_mongo_id: null,
   }).returningAll().executeTakeFirstOrThrow();
-  return serializeUser(created, freePlan);
+  return serializeUser(created);
 };
 
 const hashResetToken = (token: string): string => crypto.createHash("sha256").update(token).digest("hex");
@@ -61,4 +58,4 @@ export const resetPasswordWithToken = async (rawToken: unknown, hashedPassword: 
   });
 };
 
-export const getUserAfterAuthentication = (userId: string): Promise<InternalUser | null> => findUserById(userId, { plan: true });
+export const getUserAfterAuthentication = (userId: string): Promise<InternalUser | null> => findUserById(userId);

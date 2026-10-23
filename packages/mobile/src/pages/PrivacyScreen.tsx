@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Linking, ScrollView, Share, StatusBar, StyleSheet, Switch, TouchableOpacity, View } from 'react-native';
+import { Linking, ScrollView, Share, StatusBar, StyleSheet, Switch, TouchableOpacity } from 'react-native';
 import { Button, Dialog, Portal, Surface, Text, TextInput } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -10,6 +10,7 @@ import { API_ROUTES } from '@motionmeet/shared';
 import api from '../api/client';
 import { KeyboardResponsiveView } from '../components/KeyboardAwareScrollView';
 import { getUserFacingError, logHandledError, showError } from '../utils/feedback';
+import ScreenHeader from '../components/ScreenHeader';
 import type { NavigationOnlyProps } from '../navigation/types';
 
 type PrivacyPreferences = typeof DEFAULT_PREFS;
@@ -144,25 +145,12 @@ const PrivacyScreen = ({ navigation }: NavigationOnlyProps) => {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      <Surface elevation={0} style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </TouchableOpacity>
-        <Text
-          style={styles.headerTitle}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.75}
-        >
-          {t('settings.privacy', 'Gizlilik')}
-        </Text>
-        <View style={styles.headerRight} />
-      </Surface>
+      <ScreenHeader title={t('settings.privacy', 'Gizlilik')} onBack={() => navigation.goBack()} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* Profile Visibility */}
         <Surface elevation={0} style={styles.section}>
-          <Text style={styles.sectionLabel}>{t('privacy.profile_section', 'PROFİL GÖRÜNÜRLÜĞÜ').toUpperCase()}</Text>
+          <Text style={styles.sectionLabel}>{t('privacy.profile_section', 'Profil görünürlüğü')}</Text>
           <Surface elevation={0} style={styles.card}>
             {/*
               This one switch decides who may see the account's posts, stories
@@ -202,7 +190,7 @@ const PrivacyScreen = ({ navigation }: NavigationOnlyProps) => {
 
         {/* Workout Privacy */}
         <Surface elevation={0} style={styles.section}>
-          <Text style={styles.sectionLabel}>{t('privacy.workout_section', 'ANTRENMAN').toUpperCase()}</Text>
+          <Text style={styles.sectionLabel}>{t('privacy.workout_section', 'Antrenman')}</Text>
           <Surface elevation={0} style={styles.card}>
             <SwitchRow
               label={t('privacy.workouts_on_feed', 'Antrenmanları Akışta Göster')}
@@ -215,7 +203,7 @@ const PrivacyScreen = ({ navigation }: NavigationOnlyProps) => {
 
         {/* Social Privacy */}
         <Surface elevation={0} style={styles.section}>
-          <Text style={styles.sectionLabel}>{t('privacy.social_section', 'SOSYAL').toUpperCase()}</Text>
+          <Text style={styles.sectionLabel}>{t('privacy.social_section', 'Sosyal')}</Text>
           <Surface elevation={0} style={styles.card}>
             <SwitchRow
               label={t('privacy.allow_followers', 'Takipçilere İzin Ver')}
@@ -233,7 +221,7 @@ const PrivacyScreen = ({ navigation }: NavigationOnlyProps) => {
 
         {/* Links */}
         <Surface elevation={0} style={styles.section}>
-          <Text style={styles.sectionLabel}>{t('privacy.legal_section', 'YASAL').toUpperCase()}</Text>
+          <Text style={styles.sectionLabel}>{t('privacy.legal_section', 'Yasal')}</Text>
           <Surface elevation={0} style={styles.card}>
             <TouchableOpacity
               style={[styles.row, styles.rowBorder]}
@@ -309,27 +297,28 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
     minWidth: 0,
     paddingHorizontal: 8,
     textAlign: 'center',
-    fontSize: 18,
+    fontSize: 16.5,
     fontWeight: '700',
     color: theme.text,
   },
-  section: { marginTop: 24 },
+  section: { marginTop: 20 },
   sectionLabel: {
-    fontSize: 12, fontWeight: '700', letterSpacing: 0.8, color: theme.textMuted,
-    paddingHorizontal: 20, marginBottom: 8,
+    fontSize: 13, fontWeight: '600', color: theme.textMuted,
+    paddingHorizontal: 16, marginBottom: 2,
   },
+  // Rows run the full width like the settings list they are opened from;
+  // the rounded panels drew a box around every group of two switches.
   card: {
-    marginHorizontal: 16, backgroundColor: theme.surface, borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border, overflow: 'hidden',
+    overflow: 'hidden',
   },
   row: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14,
+    paddingHorizontal: 16, paddingVertical: 11, minHeight: 52,
   },
   rowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
   rowText: { flex: 1, minWidth: 0, paddingRight: 12 },
-  rowLabel: { flexShrink: 1, fontSize: 15, fontWeight: '600', color: theme.text },
-  rowSub: { fontSize: 12, color: theme.textMuted, marginTop: 2 },
+  rowLabel: { flexShrink: 1, fontSize: 14.5, fontWeight: '400', color: theme.text },
+  rowSub: { fontSize: 12, color: theme.textMuted, marginTop: 1 },
   passwordInput: { marginTop: 16 },
   dialogKeyboardView: { flex: 1, justifyContent: 'center' },
   headerRight: { width: 40 },
@@ -337,7 +326,7 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
     width: '100%',
     maxWidth: 720,
     alignSelf: 'center',
-    paddingBottom: 40,
+    paddingBottom: 72,
   },
   dangerText: { color: '#ef4444' },
 });

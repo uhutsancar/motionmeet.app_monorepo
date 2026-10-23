@@ -513,7 +513,7 @@ const StoryComposer = ({ open, onClose, onCreated }: StoryComposerProps) => {
                       }
                       setEditingId(null);
                     }}
-                    sx={{ color: "common.white", fontWeight: 800 }}
+                    sx={{ color: "common.white", fontWeight: 700 }}
                   >
                     {t("story.done", "Done")}
                   </Button>
@@ -536,7 +536,7 @@ const StoryComposer = ({ open, onClose, onCreated }: StoryComposerProps) => {
                         color: editing.backdrop === "plate" ? "#101014" : editing.color,
                         textAlign: editing.align,
                         fontSize: 30,
-                        fontWeight: 800,
+                        fontWeight: 700,
                       },
                     }}
                   />
@@ -640,7 +640,7 @@ const StoryComposer = ({ open, onClose, onCreated }: StoryComposerProps) => {
 
       <Dialog open={locationOpen} onClose={() => setLocationOpen(false)} fullWidth maxWidth="xs">
         <Stack spacing={2} sx={{ p: 2.5 }}>
-          <Typography sx={{ fontWeight: 800 }}>{t("story.add_location", "Add location")}</Typography>
+          <Typography sx={{ fontWeight: 700 }}>{t("story.add_location", "Add location")}</Typography>
           <TextField
             autoFocus
             fullWidth

@@ -110,11 +110,10 @@ export interface MessagePermission {
  *
  * - a public account can be messaged by anyone who is allowed to message at all;
  * - a private account requires a mutual follow, so both sides have opted in;
- * - an existing accepted connection, a plan with `can_message_anyone`, and
- *   superadmin all keep working as before.
+ * - an existing accepted connection and superadmin keep working as before.
  */
 export const evaluateMessagePermission = async (
-  sender: { id: string; role?: string; canMessageAnyone?: boolean },
+  sender: { id: string; role?: string },
   recipientId: string,
 ): Promise<MessagePermission> => {
   if (!sender.id || sender.id === recipientId) return { allowed: false, reason: "invalid_recipient" };
@@ -124,7 +123,7 @@ export const evaluateMessagePermission = async (
     .where("id", "=", recipientId)
     .executeTakeFirst();
   if (!recipient) return { allowed: false, reason: "invalid_recipient" };
-  if (sender.role === "superadmin" || sender.canMessageAnyone) return { allowed: true, reason: "ok" };
+  if (sender.role === "superadmin") return { allowed: true, reason: "ok" };
   if (!recipient.privacy_allow_messages) return { allowed: false, reason: "blocked_by_settings" };
 
   const visibility = await getAccountVisibility(sender.id, recipientId);

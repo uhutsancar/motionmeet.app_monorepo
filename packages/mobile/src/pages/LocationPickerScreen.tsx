@@ -1,14 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, ActivityIndicator, FlatList, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Divider, Surface, Text, TextInput, TouchableRipple } from 'react-native-paper';
+import { StyleSheet, ActivityIndicator, FlatList, Pressable, TextInput, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Text, TouchableRipple } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Localization from 'expo-localization';
 import { useTranslation } from 'react-i18next';
 import type { LocationSuggestion } from '@motionmeet/shared';
 import { useAuthContext } from '../context/AuthProvider';
 import { useTheme } from '../context/ThemeContext';
-import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useDeviceLocation } from '../hooks/useDeviceLocation';
 import {
   getRecentLocations,
@@ -20,6 +19,9 @@ import { fetchUser } from '../features/user/userSlice';
 import { useAppDispatch } from '../store/hooks';
 import { getUserFacingError, showError, showSuccess } from '../utils/feedback';
 import ScreenHeader from '../components/ScreenHeader';
+import SoftButton from '../components/ui/SoftButton';
+import { useKeyboardInset } from '../hooks/useKeyboardInset';
+import { TYPE } from '../config/layout';
 import type { NavigationScreenProps } from '../navigation/types';
 
 /**
@@ -60,7 +62,8 @@ const LocationPickerScreen = ({ navigation, route }: NavigationScreenProps<Locat
   const { t, i18n } = useTranslation();
   const { getToken } = useAuthContext();
   const dispatch = useAppDispatch();
-  const { horizontalPadding } = useResponsiveLayout();
+  const insets = useSafeAreaInsets();
+  const keyboard = useKeyboardInset();
   const { busy: locating, requestFix, openSettings } = useDeviceLocation();
 
   const [query, setQuery] = useState('');
@@ -200,172 +203,167 @@ const LocationPickerScreen = ({ navigation, route }: NavigationScreenProps<Locat
       ? t('location.recent', 'Recently used')
       : '';
 
-  const inputTheme = useMemo(
-    () => ({ colors: { primary: theme.primary, background: theme.surfaceLight, onSurfaceVariant: theme.textMuted } }),
-    [theme],
-  );
-
   const renderRow = useCallback(({ item }: { item: LocationSuggestion }) => (
     <TouchableRipple onPress={() => void select(item)} disabled={saving}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13 }}>
-        <Text style={{ fontSize: 20 }}>{item.countryEmoji || '📍'}</Text>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text numberOfLines={1} style={{ color: theme.text, fontSize: 14, fontWeight: '700' }}>{item.name}</Text>
-          <Text numberOfLines={1} style={{ color: theme.textMuted, fontSize: 11.5, marginTop: 2 }}>{item.displayName}</Text>
+      <View style={styles.row}>
+        <Text style={styles.flag}>{item.countryEmoji || '📍'}</Text>
+        <View style={[styles.rowBody, { borderBottomColor: theme.border }]}>
+          <Text numberOfLines={1} style={{ color: theme.text, fontSize: TYPE.row, fontWeight: '500' }}>{item.name}</Text>
+          <Text numberOfLines={1} style={{ color: theme.textMuted, fontSize: TYPE.meta, marginTop: 1 }}>{item.displayName}</Text>
         </View>
-        <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
       </View>
     </TouchableRipple>
   ), [saving, select, theme]);
 
   const emptyState = () => {
+    const note = (icon: React.ComponentProps<typeof Ionicons>['name'] | null, title: string | null, body: string) => (
+      <View style={styles.note}>
+        {icon ? <Ionicons name={icon} size={24} color={theme.textMuted} /> : null}
+        {title ? <Text style={{ color: theme.text, fontSize: TYPE.body, fontWeight: '600' }}>{title}</Text> : null}
+        <Text style={{ color: theme.textMuted, fontSize: 13, textAlign: 'center' }}>{body}</Text>
+      </View>
+    );
     if (searching) {
       return (
-        <View style={{ alignItems: 'center', paddingVertical: 32, gap: 10 }}>
-          <ActivityIndicator color={theme.primary} />
-          <Text style={{ color: theme.textMuted, fontSize: 12 }}>{t('location.searching', 'Searching…')}</Text>
+        <View style={styles.note}>
+          <ActivityIndicator color={theme.textMuted} />
         </View>
       );
     }
     if (failed) {
-      return (
-        <View style={{ alignItems: 'center', paddingVertical: 32, gap: 6, paddingHorizontal: 24 }}>
-          <Ionicons name="cloud-offline-outline" size={26} color={theme.textMuted} />
-          <Text style={{ color: theme.text, fontSize: 13, fontWeight: '700' }}>{t('location.offline_title', 'No connection')}</Text>
-          <Text style={{ color: theme.textMuted, fontSize: 12, textAlign: 'center' }}>
-            {t('location.offline_body', 'Locations could not be loaded. Check your connection and try again.')}
-          </Text>
-        </View>
+      return note(
+        'cloud-offline-outline',
+        t('location.offline_title', 'No connection'),
+        t('location.offline_body', 'Locations could not be loaded. Check your connection and try again.'),
       );
     }
     if (trimmed.length >= MIN_QUERY_LENGTH) {
-      return (
-        <View style={{ alignItems: 'center', paddingVertical: 32, gap: 6, paddingHorizontal: 24 }}>
-          <Ionicons name="search-outline" size={26} color={theme.textMuted} />
-          <Text style={{ color: theme.text, fontSize: 13, fontWeight: '700' }}>{t('location.no_results_title', 'No matches')}</Text>
-          <Text style={{ color: theme.textMuted, fontSize: 12, textAlign: 'center' }}>
-            {t('location.no_results_body', 'Try the city name, or the province it belongs to.')}
-          </Text>
-        </View>
+      return note(
+        'search-outline',
+        t('location.no_results_title', 'No matches'),
+        t('location.no_results_body', 'Try the city name, or the province it belongs to.'),
       );
     }
-    return (
-      <View style={{ alignItems: 'center', paddingVertical: 32, gap: 6, paddingHorizontal: 24 }}>
-        <Ionicons name="location-outline" size={26} color={theme.textMuted} />
-        <Text style={{ color: theme.textMuted, fontSize: 12, textAlign: 'center' }}>
-          {t('location.hint', 'Type at least two letters to find your city, district or country.')}
-        </Text>
-      </View>
-    );
+    return note(null, null, t('location.hint', 'Type at least two letters to find your city, district or country.'));
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right', 'bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
+      {/* The search field is the header: back on the left, the field taking
+          the rest of the bar, the way Instagram's location search reads. */}
       <ScreenHeader
         title={t('location.picker_title', 'Choose location')}
         onBack={saving ? undefined : () => navigation.goBack()}
-      />
-
-      <View style={{ flex: 1, width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: horizontalPadding, paddingTop: 12 }}>
-        <TextInput
-          mode="outlined"
-          autoFocus
-          value={query}
-          onChangeText={setQuery}
-          maxLength={80}
-          placeholder={t('location.search_placeholder', 'City, district or country')}
-          left={<TextInput.Icon icon="magnify" color={theme.textMuted} />}
-          right={query ? <TextInput.Icon icon="close" onPress={() => setQuery('')} color={theme.textMuted} /> : undefined}
-          theme={inputTheme}
-          textColor={theme.text}
-          autoCorrect={false}
-          autoCapitalize="words"
-          returnKeyType="search"
-        />
-
-        <TouchableRipple onPress={() => void detectCurrentLocation()} disabled={locating || saving} style={{ borderRadius: 12, marginTop: 12 }}>
-          <Surface
-            elevation={0}
-            style={{
-              flexDirection: 'row', alignItems: 'center', gap: 11,
-              paddingHorizontal: 14, paddingVertical: 13,
-              borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border, backgroundColor: theme.surface,
-            }}
-          >
-            <View style={{ width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: `${theme.primary}18` }}>
-              {locating ? <ActivityIndicator size="small" color={theme.primary} /> : <Ionicons name="navigate" size={17} color={theme.primary} />}
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ color: theme.text, fontSize: 13.5, fontWeight: '800' }}>
-                {t('location.use_current', 'Use my current location')}
-              </Text>
-              <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: 2 }}>
-                {t('location.use_current_hint', 'Suggests a city. Nothing is saved until you confirm.')}
-              </Text>
-            </View>
-          </Surface>
-        </TouchableRipple>
-
-        {proposal ? (
-          <Surface
-            elevation={0}
-            style={{
-              marginTop: 12, padding: 14, borderRadius: 12, gap: 10,
-              borderWidth: StyleSheet.hairlineWidth, borderColor: `${theme.primary}55`, backgroundColor: theme.primarySoft,
-            }}
-          >
-            <Text style={{ color: theme.text, fontSize: 12.5, fontWeight: '700' }}>
-              {t('location.proposal_title', 'Set your profile location to this?')}
-            </Text>
-            <Text style={{ color: theme.text, fontSize: 15, fontWeight: '800' }}>
-              {proposal.countryEmoji} {proposal.displayName}
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <TouchableRipple
-                onPress={() => void select(proposal)}
-                disabled={saving}
-                style={{ flex: 1, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: theme.primary }}
-              >
-                <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>{t('common.confirm', 'Confirm')}</Text>
-              </TouchableRipple>
-              <TouchableRipple
-                onPress={() => setProposal(null)}
-                style={{ flex: 1, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border }}
-              >
-                <Text style={{ color: theme.textSecondary, fontSize: 13, fontWeight: '800' }}>{t('common.cancel', 'Cancel')}</Text>
-              </TouchableRipple>
-            </View>
-          </Surface>
-        ) : null}
-
-        {listHeading ? (
-          <Text style={{ color: theme.textMuted, fontSize: 10.5, fontWeight: '900', letterSpacing: 1.1, marginTop: 18, marginBottom: 8, marginLeft: 4 }}>
-            {listHeading.toUpperCase()}
-          </Text>
-        ) : <View style={{ height: 18 }} />}
-
-        <Surface
-          elevation={0}
-          style={{ flex: 1, overflow: 'hidden', borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border, backgroundColor: theme.surface }}
-        >
-          <FlatList
-            data={listed}
-            keyExtractor={(item) => `${item.kind}:${item.id}`}
-            renderItem={renderRow}
-            ItemSeparatorComponent={() => <Divider />}
-            ListEmptyComponent={emptyState}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
+      >
+        <View style={[styles.search, { backgroundColor: theme.surfaceLight }]}>
+          <Ionicons name="search" size={16} color={theme.textMuted} />
+          <TextInput
+            autoFocus
+            value={query}
+            onChangeText={setQuery}
+            maxLength={80}
+            placeholder={t('location.search_placeholder', 'City, district or country')}
+            placeholderTextColor={theme.textMuted}
+            style={[styles.searchInput, { color: theme.text }]}
+            autoCorrect={false}
+            autoCapitalize="words"
+            returnKeyType="search"
           />
-        </Surface>
+          {query ? (
+            <Pressable onPress={() => setQuery('')} hitSlop={10} accessibilityRole="button" accessibilityLabel={t('common.clear', 'Temizle')}>
+              <Ionicons name="close-circle" size={16} color={theme.textMuted} />
+            </Pressable>
+          ) : null}
+        </View>
+      </ScreenHeader>
 
-        {/* ODbL requires the source to stay visible wherever the data is shown. */}
-        <Text style={{ color: theme.textMuted, fontSize: 9.5, textAlign: 'center', marginTop: 10, marginBottom: 6 }}>
-          {t('location.attribution', 'Place data by Countries States Cities Database · ODbL v1.0')}
-        </Text>
+      <View style={{ flex: 1, width: '100%', maxWidth: 720, alignSelf: 'center' }}>
+        <FlatList
+          data={listed}
+          keyExtractor={(item) => `${item.kind}:${item.id}`}
+          renderItem={renderRow}
+          ListEmptyComponent={emptyState}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          contentContainerStyle={{ paddingBottom: (keyboard.visible ? keyboard.height : insets.bottom) + 12 }}
+          ListHeaderComponent={(
+            <>
+              <TouchableRipple onPress={() => void detectCurrentLocation()} disabled={locating || saving}>
+                <View style={styles.row}>
+                  <View style={styles.flagSlot}>
+                    {locating ? <ActivityIndicator size="small" color={theme.primary} /> : <Ionicons name="navigate-outline" size={19} color={theme.primary} />}
+                  </View>
+                  <View style={[styles.rowBody, { borderBottomColor: theme.border }]}>
+                    <Text style={{ color: theme.primary, fontSize: TYPE.row, fontWeight: '600' }}>
+                      {t('location.use_current', 'Use my current location')}
+                    </Text>
+                    <Text numberOfLines={1} style={{ color: theme.textMuted, fontSize: TYPE.meta, marginTop: 1 }}>
+                      {t('location.use_current_hint', 'Suggests a city. Nothing is saved until you confirm.')}
+                    </Text>
+                  </View>
+                </View>
+              </TouchableRipple>
+
+              {proposal ? (
+                <View style={[styles.proposal, { borderBottomColor: theme.border }]}>
+                  <Text style={{ color: theme.textMuted, fontSize: TYPE.meta }}>
+                    {t('location.proposal_title', 'Set your profile location to this?')}
+                  </Text>
+                  <Text style={{ color: theme.text, fontSize: TYPE.section, fontWeight: '600', marginTop: 2 }}>
+                    {proposal.countryEmoji} {proposal.displayName}
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                    <SoftButton primary label={t('common.confirm', 'Confirm')} busy={saving} onPress={() => void select(proposal)} />
+                    <SoftButton label={t('common.cancel', 'Cancel')} onPress={() => setProposal(null)} />
+                  </View>
+                </View>
+              ) : null}
+
+              {listHeading ? (
+                <Text style={[styles.heading, { color: theme.textMuted }]}>{listHeading}</Text>
+              ) : null}
+            </>
+          )}
+          ListFooterComponent={(
+            // ODbL requires the source to stay visible wherever the data is shown.
+            <Text style={[styles.attribution, { color: theme.textMuted }]}>
+              {t('location.attribution', 'Place data by Countries States Cities Database · ODbL v1.0')}
+            </Text>
+          )}
+        />
       </View>
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  search: {
+    flex: 1,
+    height: 36,
+    marginRight: 10,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  searchInput: { flex: 1, minWidth: 0, fontSize: TYPE.body, paddingVertical: 0 },
+  row: { flexDirection: 'row', alignItems: 'center', paddingLeft: 16, minHeight: 56 },
+  flag: { width: 28, fontSize: 19, textAlign: 'center' },
+  flagSlot: { width: 28, alignItems: 'center' },
+  rowBody: {
+    flex: 1,
+    minWidth: 0,
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+    marginLeft: 12,
+    paddingRight: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  proposal: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  heading: { fontSize: 13, fontWeight: '600', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 2 },
+  note: { alignItems: 'center', gap: 6, paddingVertical: 32, paddingHorizontal: 32 },
+  attribution: { fontSize: 10.5, textAlign: 'center', marginTop: 16 },
+});
 
 export default LocationPickerScreen;

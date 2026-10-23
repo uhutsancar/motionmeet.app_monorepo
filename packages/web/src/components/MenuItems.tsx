@@ -4,7 +4,6 @@ import List from "@mui/material/List";
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
-import { alpha } from "@mui/material/styles";
 import { useTranslation } from "react-i18next";
 import { NavLink, useLocation } from "react-router";
 import { menuItemsData } from "~/assets/assets";
@@ -21,7 +20,7 @@ const MenuItems = ({ setSideBarOpen, unreadCount = 0 }: MenuItemsProps) => {
     <List component="nav" aria-label="Primary navigation" sx={{ px: 0, py: 0 }}>
       {menuItemsData.map(({ to, label, Icon }) => {
         const isActive = pathname === to || pathname.startsWith(`${to}/`);
-        const icon = <Icon sx={{ fontSize: 21 }} />;
+        const icon = <Icon sx={{ fontSize: 22 }} />;
         const badgeCount = to === "/messages" ? unreadCount : to === "/activity" ? unreadActivity : 0;
 
         return (
@@ -31,42 +30,20 @@ const MenuItems = ({ setSideBarOpen, unreadCount = 0 }: MenuItemsProps) => {
             to={to}
             aria-current={isActive ? "page" : undefined}
             onClick={() => setSideBarOpen(false)}
+            // Instagram's rail: the open page is told by weight alone, the
+            // label going bold, with no coloured bar or tinted icon tile.
             sx={{
-              position: "relative",
               borderRadius: 2,
-              mb: 0.5,
+              mb: 0.25,
               minHeight: 44,
-              px: 0.75,
-              color: isActive ? "primary.main" : "text.secondary",
-              "&::before": {
-                content: '""',
-                position: "absolute",
-                left: 0,
-                width: 3,
-                height: isActive ? 20 : 0,
-                borderRadius: 2,
-                bgcolor: "primary.main",
-                transition: "height 180ms ease",
-              },
-              "&.Mui-selected": {
-                bgcolor: (theme) => alpha(theme.palette.primary.main, 0.11),
-              },
-              "&.Mui-selected:hover": {
-                bgcolor: (theme) => alpha(theme.palette.primary.main, 0.14),
-              },
+              px: 1,
+              color: "text.primary",
+              "&:hover": { bgcolor: "action.hover" },
+              "&.Mui-selected, &.Mui-selected:hover": { bgcolor: "action.hover" },
             }}
           >
-            <ListItemIcon sx={{ color: "inherit", minWidth: 40 }}>
-              <Box
-                sx={{
-                  display: "grid",
-                  placeItems: "center",
-                  width: 30,
-                  height: 30,
-                  borderRadius: 2,
-                  bgcolor: isActive ? (theme) => alpha(theme.palette.primary.main, 0.1) : "transparent",
-                }}
-              >
+            <ListItemIcon sx={{ color: "inherit", minWidth: 38 }}>
+              <Box sx={{ display: "grid", placeItems: "center", width: 26, height: 26 }}>
                 {badgeCount > 0 ? (
                   <Badge badgeContent={badgeCount} color="error" max={99}>
                     {icon}
@@ -80,9 +57,8 @@ const MenuItems = ({ setSideBarOpen, unreadCount = 0 }: MenuItemsProps) => {
                 primary: {
                   sx: {
                     color: "inherit",
-                    fontSize: 14,
-                    fontWeight: isActive ? 800 : 650,
-                    letterSpacing: "-0.01em",
+                    fontSize: 14.5,
+                    fontWeight: isActive ? 700 : 400,
                   },
                 },
               }}

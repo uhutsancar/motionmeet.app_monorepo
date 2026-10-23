@@ -250,7 +250,7 @@ const LocationPickerDialog = ({ open, source = "manual_search", onClose, onSaved
 
   return (
     <Dialog open={open} onClose={saving ? undefined : onClose} fullWidth maxWidth="sm">
-      <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1, fontWeight: 800 }}>
+      <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1, fontWeight: 700 }}>
         <Box sx={{ flex: 1 }}>{t("location.picker_title", "Choose location")}</Box>
         <IconButton aria-label={t("common.close", "Close")} onClick={onClose} disabled={saving}>
           <CloseRounded />
@@ -285,7 +285,7 @@ const LocationPickerDialog = ({ open, source = "manual_search", onClose, onSaved
           sx={{ mt: 1.5, justifyContent: "flex-start", py: 1.25 }}
         >
           <Box sx={{ textAlign: "left" }}>
-            <Typography variant="body2" sx={{ fontWeight: 800 }}>{t("location.use_current", "Use my current location")}</Typography>
+            <Typography variant="body2" sx={{ fontWeight: 700 }}>{t("location.use_current", "Use my current location")}</Typography>
             <Typography variant="caption" color="text.secondary">
               {t("location.use_current_hint", "Suggests a city. Nothing is saved until you confirm.")}
             </Typography>
@@ -297,7 +297,7 @@ const LocationPickerDialog = ({ open, source = "manual_search", onClose, onSaved
             <Typography variant="body2" sx={{ fontWeight: 700 }}>
               {t("location.proposal_title", "Set your profile location to this?")}
             </Typography>
-            <Typography variant="subtitle1" sx={{ fontWeight: 800, mt: 0.5 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, mt: 0.5 }}>
               {proposal.countryEmoji} {proposal.displayName}
             </Typography>
             <Stack direction="row" spacing={1} sx={{ mt: 1.25 }}>
@@ -312,7 +312,7 @@ const LocationPickerDialog = ({ open, source = "manual_search", onClose, onSaved
         )}
 
         {listHeading && (
-          <Typography variant="overline" color="text.secondary" sx={{ display: "block", mt: 2, fontWeight: 900 }}>
+          <Typography variant="overline" color="text.secondary" sx={{ display: "block", mt: 2, fontWeight: 700 }}>
             {listHeading}
           </Typography>
         )}

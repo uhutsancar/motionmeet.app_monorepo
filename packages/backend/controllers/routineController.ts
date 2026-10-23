@@ -1,3 +1,4 @@
+import { USAGE_LIMITS, usageLimitFor } from "../configs/usageLimits.js";
 import { isExerciseList, isNonEmptyString, isOptionalString, isUuid } from "../utils/validation.js";
 import type { RequestHandler } from "express";
 import * as routineService from "../services/routineService.js";
@@ -46,12 +47,7 @@ export const createRoutine: RequestHandler = async (req, res, next) => {
     }
 
     const exercisesWithSnapshots = await addExerciseSnapshots(exercises, userId);
-    const quotaLimit =
-      req.dbUser?.role === "superadmin"
-        ? -1
-        : req.dbUser?.plan && typeof req.dbUser.plan === "object"
-          ? req.dbUser.plan.features.max_routines
-          : -1;
+    const quotaLimit = usageLimitFor(req.dbUser, USAGE_LIMITS.routines);
     const populated = await routineService.createRoutine(
       {
         userId,

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, type KeyboardEvent } f
 import { useTranslation } from 'react-i18next';
 import { useAuthContext } from "../context/AuthProvider";
 import { useSocket } from '../hooks/useSocket';
-import { Send, Search, ArrowLeft, Check, CheckCheck, X, Trash2 } from 'lucide-react';
+import { Send, Search, ArrowLeft, X, Trash2 } from 'lucide-react';
 import dayjs, { setDayjsLocale } from '../utils/dayjs';
 import toast from 'react-hot-toast';
 import { useNavigate, useParams } from 'react-router';
@@ -532,7 +532,7 @@ const WebMessages = () => {
                 const isOnline = onlineUsers.has(conv.partner?._id);
                 const hasUnread = conv.unreadCount > 0;
                 return (
-                  <ListItemButton key={conv.partner?._id} onClick={() => navigate(`/messages/${conv.partner?._id}`)} selected={isActive} sx={{ px: 2.5, py: 1.5, borderRight: isActive ? 2 : 0, borderColor: 'primary.main', bgcolor: isActive ? 'action.selected' : 'transparent' }}>
+                  <ListItemButton key={conv.partner?._id} onClick={() => navigate(`/messages/${conv.partner?._id}`)} selected={isActive} sx={{ px: 2.5, py: 1.25, borderRadius: 0, bgcolor: isActive ? 'action.hover' : 'transparent', '&.Mui-selected, &.Mui-selected:hover': { bgcolor: 'action.hover' } }}>
                     <ListItemAvatar>
                       <Avatar user={conv.partner} size={48} online={isOnline} />
                     </ListItemAvatar>
@@ -546,7 +546,7 @@ const WebMessages = () => {
                       secondary={
                         <Stack direction="row" sx={{ justifyContent: "space-between",  alignItems: "center" }}>
                           <Typography variant="caption" noWrap sx={{ maxWidth: 180, color: hasUnread ? 'text.primary' : 'text.secondary', fontWeight: hasUnread ? 500 : 400 }}>
-                            {conv.isNew ? t('messages.start_new_chat', 'Start a new chat') : (conv.lastMessage?.text || (conv.lastMessage?.message_type === 'image' ? '📷 Fotoğraf' : '...'))}
+                            {conv.isNew ? t('messages.start_new_chat', 'Start a new chat') : (conv.lastMessage?.text || (conv.lastMessage?.message_type === 'image' ? t('messages.sent_photo', 'Fotoğraf gönderdi') : '...'))}
                           </Typography>
                           {hasUnread && <Box sx={{ minWidth: 20, height: 20, px: 0.75, borderRadius: 10, bgcolor: 'primary.main', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, ml: 1, flexShrink: 0 }}>{conv.unreadCount}</Box>}
                         </Stack>
@@ -620,46 +620,102 @@ const WebMessages = () => {
                 <Typography variant="body2" color="text.secondary">{t('messages.start_conversation', 'Start the conversation!')}</Typography>
               </Stack>
             ) : messages.map((msg, idx) => {
+              /*
+               * Instagram's thread: runs of one sender sit close together with
+               * tightened inner corners, the time is a centred line between
+               * runs half an hour apart, and "Seen" sits under the last
+               * message sent. Delete appears on hover instead of a bin and a
+               * stamp under every bubble.
+               */
               const mine = isMe(msg);
+              const prev = messages[idx - 1];
+              const next = messages[idx + 1];
+              const newTime = !prev || dayjs(msg.createdAt).diff(dayjs(prev.createdAt), 'minute') >= 30;
+              const nextNewTime = !next || dayjs(next.createdAt).diff(dayjs(msg.createdAt), 'minute') >= 30;
+              const joinsPrev = Boolean(prev) && !newTime && isMe(prev) === mine;
+              const joinsNext = Boolean(next) && !nextNewTime && isMe(next) === mine;
+              const lastMine = mine && !messages.slice(idx + 1).some((later) => isMe(later));
+              const side = mine ? 'Right' : 'Left';
+              const corners = {
+                [`borderTop${side}Radius`]: joinsPrev ? 6 : 20,
+                [`borderBottom${side}Radius`]: joinsNext ? 6 : 20,
+              };
               return (
-                <Stack key={msg._id || idx} direction="row" sx={{ justifyContent: mine ? 'flex-end' : 'flex-start',  alignItems: "flex-end" }} spacing={1}>
-                  {!mine && <Avatar user={activeConv.partner} size={26} />}
-                  <Box sx={{ maxWidth: '70%' }}>
-                    {/* The photo is the message: no frame round it, and a click
-                        opens it full screen the way any chat app does. */}
-                    {msg.message_type === 'image' && msg.media_url && (
-                      <Box
-                        component="img"
-                        src={msg.media_url}
-                        alt={t('common.photo', 'Fotoğraf')}
-                        onClick={() => setViewerUrl(msg.media_url)}
-                        sx={{
-                          display: 'block',
-                          width: '100%',
-                          borderRadius: 3,
-                          mb: 0.5,
-                          maxHeight: 260,
-                          objectFit: 'cover',
-                          cursor: 'zoom-in',
-                        }}
-                      />
+                <Box key={msg._id || idx} sx={{ mt: joinsPrev ? 0.25 : 1.25 }}>
+                  {newTime && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 1.5, mb: 0.75 }}>
+                      {dayjs(msg.createdAt).format(dayjs(msg.createdAt).isSame(dayjs(), 'day') ? 'HH:mm' : 'D MMM HH:mm')}
+                    </Typography>
+                  )}
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                      justifyContent: mine ? 'flex-end' : 'flex-start',
+                      alignItems: 'flex-end',
+                      '&:hover .mm-msg-delete': { opacity: 1 },
+                    }}
+                  >
+                    {!mine && (
+                      <Box sx={{ width: 28, flexShrink: 0 }}>
+                        {!joinsNext && <Avatar user={activeConv.partner} size={28} />}
+                      </Box>
                     )}
-                    {msg.text && (
-                      <Paper elevation={0} sx={{ px: 1.75, py: 1.1, borderRadius: 2.5, bgcolor: mine ? 'primary.main' : 'background.paper', color: mine ? 'primary.contrastText' : 'text.primary', border: !mine ? 1 : 0, borderColor: 'divider' }}>
-                        <Typography variant="body2" sx={{ lineHeight: 1.5, wordBreak: 'break-word' }}>{msg.text}</Typography>
-                      </Paper>
+                    {mine && (
+                      <IconButton
+                        className="mm-msg-delete"
+                        size="small"
+                        aria-label={t('common.delete', 'Sil')}
+                        onClick={() => handleDeleteMessage(msg._id)}
+                        sx={{ opacity: 0, transition: 'opacity 120ms', color: 'text.secondary', alignSelf: 'center', '&:focus-visible': { opacity: 1 } }}
+                      >
+                        <Trash2 size={14} />
+                      </IconButton>
                     )}
-                    <Stack direction="row" sx={{ justifyContent: mine ? 'flex-end' : 'flex-start',  alignItems: "center" }} spacing={0.5} mt={0.5}>
-                      {mine && (
-                        <IconButton size="small" onClick={() => handleDeleteMessage(msg._id)} sx={{ p: 0.25, mr: 0.5, color: 'text.secondary', '&:hover': { color: 'error.main' } }}>
-                          <Trash2 size={14} />
-                        </IconButton>
+                    <Stack sx={{ maxWidth: { xs: '78%', md: '60%' }, alignItems: mine ? 'flex-end' : 'flex-start' }} spacing={0.25}>
+                      {msg.message_type === 'image' && msg.media_url && (
+                        <Box
+                          component="img"
+                          src={msg.media_url}
+                          alt={t('common.photo', 'Fotoğraf')}
+                          onClick={() => setViewerUrl(msg.media_url)}
+                          sx={{
+                            display: 'block',
+                            width: 240,
+                            maxWidth: '100%',
+                            height: 'auto',
+                            maxHeight: 380,
+                            objectFit: 'cover',
+                            borderRadius: '18px',
+                            bgcolor: 'action.hover',
+                            cursor: 'zoom-in',
+                          }}
+                        />
                       )}
-                      <Typography variant="caption" sx={{ fontSize: 10, color: 'text.secondary' }}>{dayjs(msg.createdAt).format('HH:mm')}</Typography>
-                      {mine && (msg.seen ? <CheckCheck size={12} color="#60a5fa" /> : <Check size={12} color="var(--mui-palette-text-disabled)" />)}
+                      {msg.text && (
+                        <Box
+                          sx={{
+                            px: 1.6,
+                            py: 1,
+                            borderRadius: '20px',
+                            ...corners,
+                            bgcolor: mine ? 'primary.main' : 'action.hover',
+                            color: mine ? 'primary.contrastText' : 'text.primary',
+                          }}
+                        >
+                          <Typography variant="body2" sx={{ fontSize: 14.5, lineHeight: 1.4, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                            {msg.text}
+                          </Typography>
+                        </Box>
+                      )}
                     </Stack>
-                  </Box>
-                </Stack>
+                  </Stack>
+                  {lastMine && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'right', mt: 0.5, mr: 0.5 }}>
+                      {msg.seen ? t('messages.seen', 'Görüldü') : t('messages.sent', 'Gönderildi')}
+                    </Typography>
+                  )}
+                </Box>
               );
             })}
             {partnerTyping && <Stack direction="row" sx={{ alignItems: "flex-end" }} spacing={1}><Avatar user={activeConv.partner} size={26} /><TypingDots /></Stack>}

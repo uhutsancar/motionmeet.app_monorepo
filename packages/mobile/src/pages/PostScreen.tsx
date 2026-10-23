@@ -11,6 +11,7 @@ import { getPost, getPosts } from '../api/endpoints';
 import PostCard from '../components/PostCard';
 import ScreenHeader from '../components/ScreenHeader';
 import { logHandledError } from '../utils/feedback';
+import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll';
 import type { NavigationScreenProps } from '../navigation/types';
 
 type PostScreenProps = NavigationScreenProps<{ postId?: string; post?: Post }>;
@@ -108,6 +109,8 @@ const PostScreen = ({ navigation, route }: PostScreenProps) => {
   }, [post]);
 
   const data = useMemo(() => (post ? [post, ...more] : []), [more, post]);
+  const listRef = useRef<FlatList<Post>>(null);
+  const { keyboardPadding, requestFocusedInputScroll } = useKeyboardAwareScroll(listRef, { onlyWhenRequested: true });
 
   const renderPost: ListRenderItem<Post> = useCallback(
     ({ item }) => (
@@ -115,9 +118,10 @@ const PostScreen = ({ navigation, route }: PostScreenProps) => {
         post={item}
         navigation={navigation}
         onUserPress={(userId) => navigation.navigate('Profile', { userId })}
+        onInputFocus={requestFocusedInputScroll}
       />
     ),
-    [navigation],
+    [navigation, requestFocusedInputScroll],
   );
 
   return (
@@ -134,6 +138,7 @@ const PostScreen = ({ navigation, route }: PostScreenProps) => {
         </View>
       ) : post ? (
         <FlatList
+          ref={listRef}
           data={data}
           renderItem={renderPost}
           keyExtractor={(item, index) => item._id || String(index)}
@@ -148,7 +153,7 @@ const PostScreen = ({ navigation, route }: PostScreenProps) => {
             if (nextCursor && !loadingMore) void loadMore(nextCursor);
           }}
           style={styles.list}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, keyboardPadding > 0 && { paddingBottom: 32 + keyboardPadding }]}
           ListFooterComponent={
             loadingMore ? <RNActivityIndicator color={theme.primary} style={styles.footer} /> : null
           }

@@ -91,22 +91,34 @@ export const createAppTheme = (mode: AppThemeMode) => {
         focus: focusRing,
       },
     },
+    /*
+     * The app's type is set the way Instagram and Hevy set theirs on the web:
+     * 14px running text, titles that stay under 24px and weights that stop at
+     * 700. Headings at 800 with -0.03em tracking made every panel title read
+     * like a marketing headline. The marketing pages set their own display
+     * sizes and are not affected.
+     */
     typography: {
       fontFamily: '"DM Sans", "Segoe UI", sans-serif',
       h1: { fontFamily: '"Manrope", "DM Sans", sans-serif', fontWeight: 800, letterSpacing: "-0.035em" },
       h2: { fontFamily: '"Manrope", "DM Sans", sans-serif', fontWeight: 800, letterSpacing: "-0.032em" },
-      h3: { fontFamily: '"Manrope", "DM Sans", sans-serif', fontWeight: 800, letterSpacing: "-0.03em", fontSize: "2rem" },
-      h4: { fontFamily: '"Manrope", "DM Sans", sans-serif', fontWeight: 800, letterSpacing: "-0.028em", fontSize: "1.75rem" },
-      h5: { fontFamily: '"Manrope", "DM Sans", sans-serif', fontWeight: 750, letterSpacing: "-0.024em", fontSize: "1.375rem" },
-      h6: { fontFamily: '"Manrope", "DM Sans", sans-serif', fontWeight: 750, letterSpacing: "-0.02em", fontSize: "1.0625rem" },
-      subtitle1: { fontWeight: 700 },
-      subtitle2: { fontWeight: 700 },
-      body1: { lineHeight: 1.55 },
-      body2: { lineHeight: 1.5, fontSize: "0.875rem" },
+      h3: { fontFamily: '"Manrope", "DM Sans", sans-serif', fontWeight: 700, letterSpacing: "-0.02em", fontSize: "1.5rem" },
+      h4: { fontFamily: '"Manrope", "DM Sans", sans-serif', fontWeight: 700, letterSpacing: "-0.018em", fontSize: "1.375rem" },
+      h5: { fontFamily: '"Manrope", "DM Sans", sans-serif', fontWeight: 700, letterSpacing: "-0.014em", fontSize: "1.1875rem" },
+      h6: { fontFamily: '"Manrope", "DM Sans", sans-serif', fontWeight: 700, letterSpacing: "-0.01em", fontSize: "1rem" },
+      subtitle1: { fontWeight: 600, fontSize: "0.9375rem" },
+      subtitle2: { fontWeight: 600, fontSize: "0.875rem" },
+      body1: { lineHeight: 1.5, fontSize: "0.9375rem" },
+      body2: { lineHeight: 1.45, fontSize: "0.875rem" },
+      caption: { fontSize: "0.75rem", lineHeight: 1.4 },
+      // Small tracked capitals over every block read as costume; the label
+      // role stays, set in sentence case at the caption size.
+      overline: { fontSize: "0.75rem", lineHeight: 1.4, fontWeight: 600, letterSpacing: 0, textTransform: "none" },
       button: {
         textTransform: "none",
-        fontWeight: 800,
-        letterSpacing: "-0.01em",
+        fontWeight: 600,
+        fontSize: "0.875rem",
+        letterSpacing: 0,
       },
     },
     // MUI multiplies numeric sx borderRadius values by this base. Keeping the
@@ -125,27 +137,39 @@ export const createAppTheme = (mode: AppThemeMode) => {
       MuiButton: {
         defaultProps: { disableElevation: true },
         styleOverrides: {
+          /*
+           * Instagram's buttons: a 32px slab, 8px corners, semibold label.
+           * `size="large"` is kept for the one action a screen exists for.
+           */
           root: {
-            borderRadius: 10,
-            minHeight: 40,
-            paddingInline: 16,
-            transition: "transform 180ms cubic-bezier(.16,1,.3,1), box-shadow 180ms ease, background-color 180ms ease",
-            "&:active": { transform: "translateY(1px)" },
+            borderRadius: 8,
+            minHeight: 34,
+            paddingInline: 14,
+            paddingBlock: 4,
+            lineHeight: 1.4,
+            transition: "background-color 160ms ease, opacity 160ms ease",
+            "&:active": { opacity: 0.8 },
           },
+          sizeSmall: { minHeight: 30, paddingInline: 12, fontSize: "0.8125rem" },
+          sizeLarge: { minHeight: 40, paddingInline: 18, fontSize: "0.9375rem" },
           containedPrimary: {
             boxShadow: "none",
             "&:hover": { boxShadow: "none" },
           },
+          // The secondary button is a soft grey fill with no outline, the way
+          // Instagram draws "Edit profile" and "Message".
           outlined: {
-            borderColor: colors.divider,
-            backgroundColor: mode === "dark" ? "rgba(18, 24, 39, 0.6)" : "rgba(255, 255, 255, 0.72)",
+            border: "none",
+            backgroundColor: colors.surfaceLight,
+            color: colors.textPrimary,
+            "&:hover": { border: "none", backgroundColor: colors.divider },
           },
         },
       },
       MuiPaper: {
         styleOverrides: {
           root: { backgroundImage: "none" },
-          rounded: { borderRadius: 16 },
+          rounded: { borderRadius: 12 },
           /*
            * An outlined panel gets the quiet rule, not the row separator.
            * MUI's default draws every card at full divider contrast, and a
@@ -153,7 +177,7 @@ export const createAppTheme = (mode: AppThemeMode) => {
            * edge is still there when you look for it and disappears when you
            * are reading what is inside.
            */
-          outlined: { border: `1px solid ${colors.dividerSoft}`, borderRadius: 16 },
+          outlined: { border: `1px solid ${colors.dividerSoft}`, borderRadius: 12 },
         },
       },
       MuiCard: {
@@ -161,19 +185,24 @@ export const createAppTheme = (mode: AppThemeMode) => {
           root: {
             backgroundImage: "none",
             border: `1px solid ${colors.dividerSoft}`,
-            borderRadius: 16,
+            borderRadius: 12,
             boxShadow: "none",
-            transition: "transform 180ms cubic-bezier(.16,1,.3,1), border-color 180ms ease, box-shadow 180ms ease",
+            transition: "border-color 160ms ease",
           },
         },
       },
+      // Fields are 40px, not Material's 56px: a form of five fields no longer
+      // fills the screen before the button.
       MuiTextField: {
-        defaultProps: { variant: "outlined" },
+        defaultProps: { variant: "outlined", size: "small" },
+      },
+      MuiInputBase: {
+        styleOverrides: { input: { fontSize: "0.9375rem" } },
       },
       MuiOutlinedInput: {
         styleOverrides: {
           root: {
-            borderRadius: 10,
+            borderRadius: 8,
             backgroundColor: colors.surfaceLight,
             transition: "background-color 160ms ease, box-shadow 160ms ease",
             "&:hover": { backgroundColor: colors.paper },
@@ -190,15 +219,15 @@ export const createAppTheme = (mode: AppThemeMode) => {
         },
       },
       MuiIconButton: {
-        styleOverrides: { root: { borderRadius: 10, transition: "transform 160ms ease, background-color 160ms ease", "&:active": { transform: "scale(.94)" } } },
+        styleOverrides: { root: { borderRadius: 8, transition: "background-color 160ms ease", "&:active": { opacity: 0.7 } } },
       },
       MuiChip: {
-        styleOverrides: { root: { borderRadius: 10, fontWeight: 700 } },
+        styleOverrides: { root: { borderRadius: 8, fontWeight: 600 } },
       },
       MuiDialog: {
         styleOverrides: {
           paper: {
-            borderRadius: 20,
+            borderRadius: 14,
             border: `1px solid ${colors.dividerSoft}`,
           },
         },
@@ -207,7 +236,9 @@ export const createAppTheme = (mode: AppThemeMode) => {
         styleOverrides: {
           root: {
             fontFamily: '"Manrope", "DM Sans", sans-serif',
-            fontWeight: 750,
+            fontWeight: 700,
+            fontSize: "1.0625rem",
+            paddingBlock: 14,
           },
         },
       },
@@ -218,7 +249,22 @@ export const createAppTheme = (mode: AppThemeMode) => {
         styleOverrides: { tooltip: { borderRadius: 10, fontSize: 12 } },
       },
       MuiAvatar: {
-        styleOverrides: { root: { fontWeight: 800 } },
+        styleOverrides: { root: { fontWeight: 600 } },
+      },
+      MuiTabs: {
+        styleOverrides: { root: { minHeight: 40 }, indicator: { height: 2 } },
+      },
+      MuiTab: {
+        styleOverrides: { root: { minHeight: 40, textTransform: "none", fontWeight: 600, fontSize: "0.875rem", paddingInline: 12 } },
+      },
+      MuiListItemButton: {
+        styleOverrides: { root: { borderRadius: 8 } },
+      },
+      MuiListItemText: {
+        styleOverrides: { primary: { fontSize: "0.875rem" }, secondary: { fontSize: "0.75rem" } },
+      },
+      MuiToggleButton: {
+        styleOverrides: { root: { textTransform: "none", fontWeight: 600, paddingBlock: 4, borderRadius: 8 } },
       },
       MuiCssBaseline: {
         styleOverrides: {

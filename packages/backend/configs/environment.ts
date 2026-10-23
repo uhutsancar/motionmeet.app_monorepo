@@ -16,10 +16,6 @@ export interface Environment {
   mediaUploadsEnabled: boolean;
   emailEnabled: boolean;
   scheduledJobsEnabled: boolean;
-  paddleEnabled: boolean;
-  paddleEnvironment: "sandbox" | "live" | null;
-  paddleApiKey: string | null;
-  paddleWebhookSecret: string | null;
 }
 
 const integerValue = (name: string, fallback: number, minimum: number, maximum: number): number => {
@@ -106,32 +102,6 @@ export const loadEnvironment = (): Environment => {
   if (mediaUploadsEnabled) requireCapabilityVariables("media", ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_BUCKET_NAME", "IMAGEKIT_PUBLIC_KEY", "IMAGEKIT_PRIVATE_KEY", "IMAGEKIT_URL_ENDPOINT"]);
   if (emailEnabled) requireCapabilityVariables("email", ["SMTP_USER", "SMTP_PASS", "SENDER_EMAIL"]);
 
-  const paddleEnabled = booleanValue("PADDLE_ENABLED", false);
-  let paddleEnvironment: "sandbox" | "live" | null = null;
-  let paddleApiKey: string | null = null;
-  let paddleWebhookSecret: string | null = null;
-  if (paddleEnabled) {
-    requireCapabilityVariables("paddle", ["PADDLE_ENVIRONMENT", "PADDLE_API_KEY", "PADDLE_WEBHOOK_SECRET"]);
-    const paddleEnvironmentValue = process.env.PADDLE_ENVIRONMENT?.trim();
-    if (paddleEnvironmentValue !== "sandbox" && paddleEnvironmentValue !== "live") {
-      throw new Error("PADDLE_ENVIRONMENT must be sandbox or live");
-    }
-    paddleEnvironment = paddleEnvironmentValue;
-    paddleApiKey = required("PADDLE_API_KEY");
-    paddleWebhookSecret = required("PADDLE_WEBHOOK_SECRET");
-    // Paddle prefixes every server-side key with which environment it belongs
-    // to (pdl_sdbx_apikey_... / pdl_live_apikey_...). Catching a mismatch here
-    // turns "sandbox key pointed at production config" into a boot failure
-    // instead of every sandbox-flavoured API call failing at request time.
-    const keyEnvironmentPrefix = paddleApiKey.startsWith("pdl_sdbx_") ? "sandbox" : paddleApiKey.startsWith("pdl_live_") ? "live" : null;
-    if (keyEnvironmentPrefix && keyEnvironmentPrefix !== paddleEnvironment) {
-      throw new Error(`PADDLE_API_KEY looks like a ${keyEnvironmentPrefix} key but PADDLE_ENVIRONMENT is ${paddleEnvironment}`);
-    }
-    if (nodeEnv === "production" && paddleEnvironment === "sandbox" && process.env.ALLOW_PADDLE_SANDBOX_IN_PRODUCTION !== "true") {
-      throw new Error("PADDLE_ENVIRONMENT must be live in production unless ALLOW_PADDLE_SANDBOX_IN_PRODUCTION=true");
-    }
-  }
-
   if (nodeEnv === "production") {
     if (Buffer.byteLength(jwtSecret, "utf8") < MIN_PRODUCTION_SECRET_LENGTH) {
       throw new Error(`JWT_SECRET must be at least ${MIN_PRODUCTION_SECRET_LENGTH} bytes in production`);
@@ -161,10 +131,6 @@ export const loadEnvironment = (): Environment => {
     mediaUploadsEnabled,
     emailEnabled,
     scheduledJobsEnabled: booleanValue("RUN_SCHEDULED_JOBS", true),
-    paddleEnabled,
-    paddleEnvironment,
-    paddleApiKey,
-    paddleWebhookSecret,
   };
   return cachedEnvironment;
 };

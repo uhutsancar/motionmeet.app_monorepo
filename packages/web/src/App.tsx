@@ -24,7 +24,6 @@ const Signup = lazy(() => import("./pages/Signup"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Features = lazy(() => import("./pages/Features"));
-const Pricing = lazy(() => import("./pages/Pricing"));
 const About = lazy(() => import("./pages/About"));
 const Feed = lazy(() => import("./pages/Feed"));
 const Explore = lazy(() => import("./pages/Explore"));
@@ -66,8 +65,8 @@ const NotFound = ({ authenticated }: { authenticated: boolean }) => {
 
   return (
     <Box sx={{ alignItems: "center", display: "flex", flexDirection: "column", minHeight: "100dvh", justifyContent: "center", p: 3, textAlign: "center" }}>
-      <Typography variant="overline" color="primary" sx={{ fontWeight: 800 }}>404</Typography>
-      <Typography variant="h3" sx={{ fontWeight: 900, mb: 1 }}>Page not found</Typography>
+      <Typography variant="overline" color="primary" sx={{ fontWeight: 700 }}>404</Typography>
+      <Typography variant="h3" sx={{ fontWeight: 700, mb: 1 }}>Page not found</Typography>
       <Typography color="text.secondary" sx={{ mb: 3 }}>The page you requested does not exist or has moved.</Typography>
       <Button variant="contained" endIcon={<ArrowForwardRounded />} onClick={() => navigate(authenticated ? "/feed" : "/")}>
         {authenticated ? "Go to feed" : "Go home"}
@@ -156,7 +155,8 @@ const AppContent = () => {
           <Route path="/sign-in/*" element={<Navigate to="/login" replace />} />
           <Route path="/sign-up/*" element={<Navigate to="/signup" replace />} />
           <Route path="/features" element={<Features />} />
-          <Route path="/pricing" element={<Pricing />} />
+          {/* MotionMeet has no paid plans; old links land on the home page. */}
+          <Route path="/pricing" element={<Navigate to="/" replace />} />
           <Route path="/about" element={<About />} />
           {/* A shared post link opens for anyone, signed in or not: the page
               itself decides how much of the post the reader may see. It sits

@@ -30,7 +30,6 @@ import {
   Bell,
   ChevronDown,
   ChevronRight,
-  CreditCard,
   ExternalLink,
   Globe,
   HelpCircle,
@@ -73,12 +72,11 @@ interface ToggleRowProps { label: string; subtitle?: string; value: boolean; onC
 interface LinkRowProps { label: string; subtitle?: string; onClick: () => void | Promise<void>; danger?: boolean; external?: boolean }
 interface FaqItemProps { question: string; answer: string }
 
-const Section = ({ icon: Icon, title, children = null }: SectionProps) => (
-  <Stack component="section" spacing={1.5} sx={{ mb: 2.5, breakInside: "avoid" }}>
-    <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-      <Icon size={20} color="currentColor" />
-      <Typography variant="h6" sx={{ fontWeight: 800 }}>{title}</Typography>
-    </Stack>
+// A section is named by a quiet grey label, as Instagram's settings are; the
+// icon prop is kept for the callers but no longer drawn beside every heading.
+const Section = ({ title, children = null }: SectionProps) => (
+  <Stack component="section" spacing={0.75} sx={{ mb: 2.5, breakInside: "avoid" }}>
+    <Typography variant="subtitle2" color="text.secondary" sx={{ px: 0.5 }}>{title}</Typography>
     <Paper variant="outlined" sx={{ overflow: "hidden" }}>
       <Stack divider={<Divider flexItem />}>{children}</Stack>
     </Paper>
@@ -88,7 +86,7 @@ const Section = ({ icon: Icon, title, children = null }: SectionProps) => (
 const ToggleRow = ({ label, subtitle = "", value, onChange }: ToggleRowProps) => (
   <Stack direction="row" spacing={2} sx={{ px: 2, py: 1.5, alignItems: "center", justifyContent: "space-between" }}>
     <Stack sx={{ minWidth: 0 }}>
-      <Typography variant="body2" sx={{ fontWeight: 700 }}>{label}</Typography>
+      <Typography variant="body2" sx={{ fontWeight: 600 }}>{label}</Typography>
       {subtitle && <Typography variant="caption" color="text.secondary">{subtitle}</Typography>}
     </Stack>
     <Switch checked={value} onChange={onChange} slotProps={{ input: { "aria-label": label } }} />
@@ -109,7 +107,7 @@ const LinkRow = ({ label, subtitle = "", onClick, danger = false, external = fal
 const FaqItem = ({ question, answer }: FaqItemProps) => (
   <Accordion disableGutters elevation={0} square sx={{ "&::before": { display: "none" } }}>
     <AccordionSummary expandIcon={<ChevronDown size={17} />}>
-      <Typography variant="body2" sx={{ fontWeight: 700 }}>{question}</Typography>
+      <Typography variant="body2" sx={{ fontWeight: 600 }}>{question}</Typography>
     </AccordionSummary>
     <AccordionDetails sx={{ pt: 0 }}>
       <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>{answer}</Typography>
@@ -191,34 +189,6 @@ const Settings = () => {
     }
   };
 
-  const [billingPending, setBillingPending] = useState(false);
-
-  /**
-   * Opens Paddle's own hosted billing page - MotionMeet never builds a
-   * cancel/update-card UI itself. Silently no-ops (toast only) when the
-   * user has never had a Paddle customer id assigned, since the backend
-   * returns 404 for that rather than an error worth alarming over.
-   */
-  const manageBilling = async () => {
-    try {
-      setBillingPending(true);
-      const token = await getToken();
-      if (!token) throw new Error("Your session has expired");
-      const { data } = await api.post<{ success: boolean; url?: string; message?: string }>(
-        API_ROUTES.payments.portalSession,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (!data.success || !data.url) throw new Error(data.message || "No billing account on file yet.");
-      window.open(data.url, "_blank", "noopener,noreferrer");
-    } catch (error: unknown) {
-      const failure = axios.isAxiosError<ApiFailure>(error) ? error.response?.data : undefined;
-      toast.error(failure?.message || (error instanceof Error ? error.message : "Billing portal is unavailable."));
-    } finally {
-      setBillingPending(false);
-    }
-  };
-
   const exportData = async () => {
     try {
       setAccountRequestPending(true);
@@ -293,7 +263,7 @@ const Settings = () => {
             <ListItemText
               primary={user?.full_name || user?.username || "—"}
               secondary={user?.email || ""}
-              slotProps={{ primary: { sx: { fontWeight: 800 } }, secondary: { variant: "caption" } }}
+              slotProps={{ primary: { sx: { fontWeight: 700 } }, secondary: { variant: "caption" } }}
             />
             <ChevronRight size={17} />
           </ListItemButton>
@@ -302,11 +272,11 @@ const Settings = () => {
         <Section icon={Monitor} title={t("settings.appearance", "Görünüm")}>
           <Stack direction="row" spacing={2} sx={{ p: 2, alignItems: "center", justifyContent: "space-between" }}>
             <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-              <Avatar variant="rounded" sx={{ bgcolor: "action.hover", color: "text.primary" }}>
-                {theme === "dark" ? <Moon size={20} /> : <Sun size={20} />}
-              </Avatar>
+              <Box sx={{ width: 24, display: "grid", placeItems: "center", color: "text.secondary" }}>
+                {theme === "dark" ? <Moon size={19} strokeWidth={1.75} /> : <Sun size={19} strokeWidth={1.75} />}
+              </Box>
               <Stack>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>{t("settings.theme", "Tema")}</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>{t("settings.theme", "Tema")}</Typography>
                 <Typography variant="caption" color="text.secondary">{theme === "dark" ? t("settings.dark", "Koyu") : t("settings.light", "Açık")}</Typography>
               </Stack>
             </Stack>
@@ -322,9 +292,9 @@ const Settings = () => {
           </Stack>
           <Stack direction="row" spacing={2} sx={{ p: 2, alignItems: "center", justifyContent: "space-between" }}>
             <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-              <Avatar variant="rounded" sx={{ bgcolor: "action.hover", color: "text.primary" }}><Globe size={20} /></Avatar>
+              <Box sx={{ width: 24, display: "grid", placeItems: "center", color: "text.secondary" }}><Globe size={19} strokeWidth={1.75} /></Box>
               <Stack>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>{t("settings.language", "Dil")}</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>{t("settings.language", "Dil")}</Typography>
                 <Typography variant="caption" color="text.secondary">{isTr ? t("settings.turkish", "Türkçe") : t("settings.english", "İngilizce")}</Typography>
               </Stack>
             </Stack>
@@ -375,20 +345,6 @@ const Settings = () => {
           />
         </Section>
 
-        <Section icon={CreditCard} title={t("settings.billing", "Faturalama")}>
-          <LinkRow
-            label={billingPending ? t("common.loading", "Yükleniyor…") : t("settings.manage_billing", "Faturamı Yönet")}
-            subtitle={t("settings.manage_billing_hint", "Planını, ödeme yöntemini ve faturalarını Paddle üzerinden yönet")}
-            onClick={manageBilling}
-            external
-          />
-          <LinkRow
-            label={t("pricing_page.title", "Planlar")}
-            subtitle={t("settings.plans_hint", "Mevcut planları ve fiyatları gör")}
-            onClick={() => navigate("/pricing")}
-          />
-        </Section>
-
         <Section icon={Lock} title={t("settings.privacy", "Gizlilik")}>
           <ToggleRow label={t("privacy.public_profile", "Genel Profil")} subtitle={t("privacy.public_sub", "Profiliniz herkes tarafından görülür")} value={privacyPrefs.publicProfile} onChange={() => togglePrivacy("publicProfile")} />
           <ToggleRow label={t("privacy.show_in_search", "Aramada Göster")} value={privacyPrefs.showInSearch} onChange={() => togglePrivacy("showInSearch")} />
@@ -412,10 +368,10 @@ const Settings = () => {
           </Stack>
         </Section>
 
-        <Paper variant="outlined" sx={{ borderColor: "rgba(229,72,77,.3)", overflow: "hidden", mb: 2.5, breakInside: "avoid" }}>
+        <Paper variant="outlined" sx={{ overflow: "hidden", mb: 2.5, breakInside: "avoid" }}>
           <ListItemButton onClick={() => signOut()} sx={{ color: "error.main", p: 2 }}>
-            <ListItemAvatar><Avatar variant="rounded" sx={{ bgcolor: "rgba(239,68,68,.1)", color: "error.main" }}><LogOut size={20} /></Avatar></ListItemAvatar>
-            <ListItemText primary={t("settings.logout", "Çıkış Yap")} slotProps={{ primary: { variant: "body2", sx: { fontWeight: 800 } } }} />
+            <Box sx={{ width: 24, mr: 2, display: "grid", placeItems: "center" }}><LogOut size={19} strokeWidth={1.75} /></Box>
+            <ListItemText primary={t("settings.logout", "Çıkış Yap")} slotProps={{ primary: { variant: "body2", sx: { fontWeight: 600 } } }} />
           </ListItemButton>
         </Paper>
         </Box>

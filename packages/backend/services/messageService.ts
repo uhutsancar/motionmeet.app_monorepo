@@ -24,8 +24,7 @@ const hydrateMessages = async (rows: Array<Row<"messages">>, transaction: Databa
 /**
  * A public account can be messaged by anyone it has not switched messages off
  * for. A private account needs a mutual follow, so both sides have opted in;
- * an existing accepted connection still counts, as does a plan that grants
- * `can_message_anyone`.
+ * an existing accepted connection still counts.
  *
  * Applied on the REST send path, the socket send path and the typing indicator,
  * so there is no route into a stranger's inbox.
@@ -33,11 +32,7 @@ const hydrateMessages = async (rows: Array<Row<"messages">>, transaction: Databa
 export const describeSendPermission = async (sender: InternalUser | undefined, recipientId: unknown): Promise<MessagePermission> => {
   const senderId = sender?.id;
   if (!senderId || !isUserId(recipientId)) return { allowed: false, reason: "invalid_recipient" };
-  const features = sender.plan && typeof sender.plan === "object" ? sender.plan.features : null;
-  return evaluateMessagePermission(
-    { id: senderId, role: sender.role, canMessageAnyone: Boolean(features?.can_message_anyone) },
-    recipientId,
-  );
+  return evaluateMessagePermission({ id: senderId, role: sender.role }, recipientId);
 };
 
 export const canSendToUser = async (sender: InternalUser | undefined, recipientId: unknown): Promise<boolean> =>
@@ -121,9 +116,14 @@ export const getMessageById = async (messageId: string): Promise<MessageAccess |
 export const deleteMessageById = async (message: MessageAccess): Promise<void> => withTransaction(async (transaction) => {
   const current = await transaction.selectFrom("messages").selectAll().where("id", "=", message.id).forUpdate().executeTakeFirst(); if (!current) return;
   const key = current.media_key || extractS3Key(current.media_url); if (key) await queueMediaDeletions([key], { transaction });
+  // Read before the delete: the foreign key from conversations.last_message_id
+  // is ON DELETE SET NULL, and PostgreSQL applies that action at once even on a
+  // deferred constraint. Read afterwards, the pointer was already null, the
+  // previous message was never promoted, and the whole thread vanished from
+  // the inbox (the list skips conversations without a last message).
+  const conversation = await transaction.selectFrom("conversations").select("last_message_id").where("id", "=", current.conversation_id).forUpdate().executeTakeFirst();
   await transaction.deleteFrom("messages").where("id", "=", current.id).execute();
   if (!current.seen) await transaction.updateTable("conversation_participants").set((expression) => ({ unread_count: expression.fn<number>("greatest", [expression("unread_count", "-", 1), expression.val(0)]) })).where("conversation_id", "=", current.conversation_id).where("user_id", "=", current.to_user_id).execute();
-  const conversation = await transaction.selectFrom("conversations").select("last_message_id").where("id", "=", current.conversation_id).executeTakeFirst();
   if (conversation?.last_message_id !== current.id) return;
   const previous = await transaction.selectFrom("messages").select(["id", "created_at"]).where("conversation_id", "=", current.conversation_id).orderBy("created_at", "desc").orderBy("id", "desc").executeTakeFirst();
   if (!previous) await transaction.deleteFrom("conversations").where("id", "=", current.conversation_id).execute();

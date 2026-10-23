@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { TextInput, Image, ActivityIndicator, StyleSheet, View } from 'react-native';
+import { TextInput, Image, StyleSheet, View } from 'react-native';
 import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
@@ -10,6 +10,7 @@ import { uploadMedia } from '../api/mediaUpload';
 import { useTheme, type MotionTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { FullScreenModal } from './ResponsiveModal';
+import ScreenHeader from './ScreenHeader';
 import KeyboardAwareScrollView from './KeyboardAwareScrollView';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { CONTENT_LIMITS, createOperationId, type PostType, type PostVisibility } from '@motionmeet/shared';
@@ -193,20 +194,17 @@ const CreatePostModal = ({ visible, onClose, onSuccess }: CreatePostModalProps) 
       backgroundColor={theme.background}
     >
       <Surface elevation={0} style={styles.container}>
-        <Surface elevation={0} style={styles.header}>
-          <TouchableRipple borderless onPress={handleClose} disabled={loading} style={styles.closeButton}>
-            <Ionicons name="close" size={28} color={theme.text} />
-          </TouchableRipple>
-          <Text
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.75}
-            style={styles.headerTitle}
-          >
-            {t('feed.create_post', 'Yeni Gönderi')}
-          </Text>
-        <View style={{ width: 40 }} />
-        </Surface>
+        {/* Instagram's new-post bar: close, the title, and "Share" as the
+            accent word at the edge. The 52pt purple button in a bar at the
+            foot of the modal sat under the keyboard - a modal window is not
+            resized when the keyboard opens. */}
+        <ScreenHeader
+          title={t('feed.create_post', 'Yeni gönderi')}
+          backIcon="close"
+          onBack={loading ? undefined : handleClose}
+          textAction={{ label: t('feed.post_action', 'Paylaş'), onPress: () => void handlePublish(), busy: loading }}
+          style={styles.header}
+        />
 
         <KeyboardAwareScrollView
           avoidKeyboard={false}
@@ -223,8 +221,8 @@ const CreatePostModal = ({ visible, onClose, onSuccess }: CreatePostModalProps) 
                 style={styles.avatar}
               />
             ) : (
-              <Surface elevation={0} style={[styles.avatar, { backgroundColor: theme.primarySoft, alignItems: 'center', justifyContent: 'center' }]}>
-                <Text style={{ color: theme.primary, fontWeight: '800', fontSize: 18 }}>
+              <Surface elevation={0} style={[styles.avatar, { backgroundColor: theme.surfaceLight, alignItems: 'center', justifyContent: 'center' }]}>
+                <Text style={{ color: theme.textSecondary, fontWeight: '500', fontSize: 16 }}>
                   {user?.full_name?.charAt(0)?.toUpperCase() || 'U'}
                 </Text>
               </Surface>
@@ -247,19 +245,19 @@ const CreatePostModal = ({ visible, onClose, onSuccess }: CreatePostModalProps) 
                   key={option.key}
                   onPress={() => setVisibility(option.key)}
                   disabled={loading}
-                  style={[styles.visibilityChip, active && { backgroundColor: theme.primarySoft, borderColor: theme.primary }]}
+                  style={[styles.visibilityChip, active && { backgroundColor: theme.primarySoft }]}
                   accessibilityRole="radio"
                   accessibilityState={{ selected: active }}
                   accessibilityLabel={`${t('feed.visibility_label', 'Who can see this')}: ${option.label}`}
                   borderless
                 >
                   <View style={styles.visibilityChipInner}>
-                    <Ionicons name={option.icon} size={13} color={active ? theme.primary : theme.textMuted} />
+                    <Ionicons name={option.icon} size={13} color={active ? theme.primary : theme.textSecondary} />
                     <Text
                       numberOfLines={1}
                       adjustsFontSizeToFit
                       minimumFontScale={0.75}
-                      style={{ color: active ? theme.primary : theme.textMuted, fontSize: 12, fontWeight: '700' }}
+                      style={{ color: active ? theme.primary : theme.text, fontSize: 12.5, fontWeight: '600' }}
                     >
                       {option.label}
                     </Text>
@@ -293,36 +291,29 @@ const CreatePostModal = ({ visible, onClose, onSuccess }: CreatePostModalProps) 
                     style={styles.removeButton}
                     onPress={() => removeImage(index)}
                     disabled={loading}
+                    accessibilityLabel={t('common.remove', 'Kaldır')}
                   >
-                    <Ionicons name="close-circle" size={28} color="#ef4444" />
+                    <Ionicons name="close" size={14} color="#FFFFFF" />
                   </TouchableRipple>
                 </Surface>
               ))}
             </Surface>
           )}
-        </KeyboardAwareScrollView>
 
-        <Surface elevation={0} style={styles.bottomBar}>
-          <TouchableRipple borderless
-            style={styles.imageButton}
+          {/* Adding photos is a row under the text, not a bar pinned to a
+              foot the keyboard covers. */}
+          <TouchableRipple
             onPress={pickImages}
             disabled={loading}
+            style={styles.addMediaRow}
+            accessibilityRole="button"
           >
-            <Ionicons name="image-outline" size={24} color={theme.textMuted} />
+            <View style={styles.addMediaInner}>
+              <Ionicons name="image-outline" size={20} color={theme.text} />
+              <Text style={styles.addMediaLabel}>{t('feed.add_photo', 'Fotoğraf ekle')}</Text>
+            </View>
           </TouchableRipple>
-
-          <TouchableRipple borderless
-            style={[styles.publishButton, { backgroundColor: loading ? theme.primary + '80' : theme.primary }]}
-            onPress={handlePublish}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.publishButtonText}>{t('feed.post_action', 'Paylaş')}</Text>
-            )}
-          </TouchableRipple>
-        </Surface>
+        </KeyboardAwareScrollView>
       </Surface>
     </FullScreenModal>
   );
@@ -334,27 +325,8 @@ const getStyles = (theme: MotionTheme, contentPadding: number, imageSize: number
     backgroundColor: theme.background,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.border,
-  },
-  closeButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    minWidth: 0,
-    textAlign: 'center',
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: theme.text,
   },
   content: {
     flex: 1,
@@ -378,17 +350,17 @@ const getStyles = (theme: MotionTheme, contentPadding: number, imageSize: number
     minWidth: 0,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   userName: {
-    fontSize: 16,
+    fontSize: 14.5,
     fontWeight: '600',
     color: theme.text,
   },
   username: {
-    fontSize: 14,
+    fontSize: 12.5,
     color: theme.textMuted,
   },
   visibilityRow: {
@@ -399,11 +371,9 @@ const getStyles = (theme: MotionTheme, contentPadding: number, imageSize: number
   visibilityChip: {
     flex: 1,
     minWidth: 0,
-    minHeight: 34,
+    minHeight: 30,
     justifyContent: 'center',
-    borderRadius: 9,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.border,
+    borderRadius: 15,
     backgroundColor: theme.surfaceLight,
   },
   visibilityChipInner: {
@@ -414,7 +384,7 @@ const getStyles = (theme: MotionTheme, contentPadding: number, imageSize: number
     paddingHorizontal: 6,
   },
   textInput: {
-    fontSize: 16,
+    fontSize: 15,
     color: theme.text,
     minHeight: 120,
     textAlignVertical: 'top',
@@ -435,36 +405,31 @@ const getStyles = (theme: MotionTheme, contentPadding: number, imageSize: number
   },
   removeButton: {
     position: 'absolute',
-    top: -8,
-    right: -8,
-    backgroundColor: theme.background,
-    borderRadius: 10,
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
   },
-  bottomBar: {
-    width: '100%',
-    maxWidth: 620,
-    alignSelf: 'center',
+  addMediaRow: {
+    marginTop: 16,
+    borderRadius: 8,
+  },
+  addMediaInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: contentPadding,
-    paddingVertical: 16,
-    borderTopWidth: 1,
+    gap: 10,
+    minHeight: 44,
+    paddingHorizontal: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: theme.border,
   },
-  imageButton: {
-    padding: 8,
-  },
-  publishButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  publishButtonText: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#fff',
-    textTransform: 'uppercase',
+  addMediaLabel: {
+    fontSize: 14.5,
+    color: theme.text,
   },
 });
 

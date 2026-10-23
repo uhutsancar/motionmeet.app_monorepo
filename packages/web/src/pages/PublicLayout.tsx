@@ -42,7 +42,6 @@ const PublicNavbar = () => {
 
   const navLinks = [
     { to: "/features", label: t("nav.features") },
-    { to: "/pricing", label: t("nav.pricing") },
     { to: "/about", label: t("nav.about") },
   ];
 
@@ -170,10 +169,7 @@ const PublicFooter = () => {
   const groups = [
     {
       title: t("footer.product"),
-      links: [
-        { label: t("footer.features"), to: "/features" },
-        { label: t("footer.pricing"), to: "/pricing" },
-      ],
+      links: [{ label: t("footer.features"), to: "/features" }],
     },
     {
       title: t("footer.company"),

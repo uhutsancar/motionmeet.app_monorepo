@@ -243,7 +243,7 @@ const Explore = () => {
 
       <Dialog open={Boolean(openPost)} onClose={() => setOpenPost(null)} fullWidth maxWidth="sm">
         <Stack direction="row" sx={{ p: 1, alignItems: "center", justifyContent: "space-between" }}>
-          <Typography sx={{ pl: 1.5, fontWeight: 800 }}>{t("explore.post_title", "Post")}</Typography>
+          <Typography sx={{ pl: 1.5, fontWeight: 700 }}>{t("explore.post_title", "Post")}</Typography>
           <IconButton onClick={() => setOpenPost(null)} aria-label={t("common.close", "Close")}>
             <CloseRounded />
           </IconButton>

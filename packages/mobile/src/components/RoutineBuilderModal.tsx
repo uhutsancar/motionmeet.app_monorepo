@@ -22,6 +22,7 @@ import {
 } from '@motionmeet/shared';
 import { API_URL } from '../config/environment';
 import { EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
+import { exerciseMeta, exerciseTitle } from '../utils/exerciseLabels';
 import {
   getUserFacingError,
   logHandledError,
@@ -43,7 +44,7 @@ interface SelectedExercise {
 
 const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }: RoutineBuilderModalProps) => {
   const { theme } = useTheme();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { getToken } = useAuthContext();
   const styles = getStyles(theme);
 
@@ -277,8 +278,8 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }: RoutineBuil
                             )}
                           </Surface>
                           <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text numberOfLines={2} style={{ color: theme.text, fontWeight: '500' }}>{ex.name}</Text>
-                            <Text numberOfLines={1} style={{ color: theme.textMuted, fontSize: 12 }}>{ex.muscleGroup} • {ex.equipment}</Text>
+                            <Text numberOfLines={2} style={{ color: theme.text, fontWeight: '500' }}>{exerciseTitle(ex.name, i18n.language)}</Text>
+                            <Text numberOfLines={1} style={{ color: theme.textMuted, fontSize: 12 }}>{exerciseMeta(ex, t, i18n.language)}</Text>
                           </View>
                         </Surface>
                         <Ionicons name="add-circle-outline" size={22} color={theme.primary} />
@@ -367,15 +368,15 @@ const RoutineBuilderModal = ({ visible, onClose, onRoutineCreated }: RoutineBuil
 const getStyles = (theme: MotionTheme) => StyleSheet.create({
   modalContent: { flex: 1, backgroundColor: theme.background },
   header: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.border },
-  headerTitle: { flex: 1, minWidth: 0, textAlign: 'center', color: theme.text, fontSize: 18, fontWeight: 'bold' },
+  headerTitle: { flex: 1, minWidth: 0, textAlign: 'center', color: theme.text, fontSize: 16.5, fontWeight: '700' },
   iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   saveBtn: { backgroundColor: theme.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-  saveBtnText: { color: '#fff', fontWeight: 'bold' },
+  saveBtnText: { color: '#fff', fontWeight: '700' },
   scroll: { flex: 1, padding: 20 },
   scrollContent: { width: '100%', maxWidth: 620, alignSelf: 'center', paddingBottom: 40 },
   inputGroup: { marginBottom: 4 },
   searchSection: { marginBottom: 4 },
-  label: { color: theme.text, fontWeight: 'bold', marginBottom: 8 },
+  label: { color: theme.text, fontWeight: '700', marginBottom: 8 },
   input: { backgroundColor: theme.surfaceLight, borderRadius: 12, padding: 12, color: theme.text, marginBottom: 20 },
   searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surfaceLight, borderRadius: 12, paddingHorizontal: 12, marginBottom: 10 },
   searchInt: { flex: 1, padding: 12, color: theme.text },
@@ -383,14 +384,14 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
   resItem: { flexDirection: 'row', justifyContent: 'space-between', padding: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
   exCard: { backgroundColor: theme.surfaceLight, borderRadius: 16, padding: 16, marginBottom: 16 },
   exCardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  exName: { flex: 1, minWidth: 0, color: theme.text, fontWeight: 'bold' },
+  exName: { flex: 1, minWidth: 0, color: theme.text, fontWeight: '700' },
   setRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   setText: { color: theme.textMuted, width: 20 },
   setFieldGroup: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 4 },
   setInt: { flex: 1, minWidth: 0, backgroundColor: theme.background, borderRadius: 8, padding: 6, textAlign: 'center', color: theme.text },
   setUnit: { maxWidth: 42, color: theme.textMuted, fontSize: 12 },
   addSetBtn: { marginTop: 10, alignSelf: 'center' },
-  addSetText: { color: theme.primary, fontWeight: 'bold', fontSize: 12 }
+  addSetText: { color: theme.primary, fontWeight: '700', fontSize: 12 }
 });
 
 export default RoutineBuilderModal;

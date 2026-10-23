@@ -1,12 +1,15 @@
 import React from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { List, Switch, Text, TouchableRipple } from 'react-native-paper';
+import { Switch, Text, TouchableRipple } from 'react-native-paper';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import Constants from 'expo-constants';
 import { useAuthContext } from '../context/AuthProvider';
 import { useTranslation } from 'react-i18next';
 import { useTheme, type MotionTheme } from '../context/ThemeContext';
 import ScreenHeader from '../components/ScreenHeader';
+import { useScrollEdge } from '../hooks/useScrollEdge';
+import { ICON, TYPE } from '../config/layout';
 import type { NavigationOnlyProps } from '../navigation/types';
 
 interface SettingsSectionProps extends React.PropsWithChildren {
@@ -15,7 +18,7 @@ interface SettingsSectionProps extends React.PropsWithChildren {
 }
 
 interface SettingsRowProps {
-  icon: React.ComponentProps<typeof List.Icon>['icon'];
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
   title: string;
   description?: string;
   onPress?: () => void;
@@ -49,7 +52,11 @@ const SettingsRow = ({ icon, title, description, onPress, right, theme, first }:
         !first && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border },
       ]}
     >
-      <List.Icon icon={icon} color={theme.textSecondary} style={styles.rowIcon} />
+      <MaterialCommunityIcons
+        name={icon}
+        size={ICON.row + 1}
+        color={theme.textSecondary}
+      />
       <View style={styles.rowText}>
         <Text style={[styles.rowTitle, { color: theme.text }]}>{title}</Text>
         {description ? (
@@ -60,7 +67,7 @@ const SettingsRow = ({ icon, title, description, onPress, right, theme, first }:
       </View>
       {right ||
         (onPress ? (
-          <List.Icon icon="chevron-right" color={theme.textMuted} style={styles.rowIcon} />
+          <MaterialCommunityIcons name="chevron-right" size={20} color={theme.textMuted} />
         ) : null)}
     </View>
   </TouchableRipple>
@@ -71,6 +78,7 @@ const Settings = ({ navigation }: NavigationOnlyProps) => {
   const { t, i18n } = useTranslation();
   const { theme, isDark, toggleTheme } = useTheme();
   const isTr = i18n.language.startsWith('tr');
+  const headerEdge = useScrollEdge();
 
   const languageControl = (
     <View style={[styles.languageSwitch, { backgroundColor: theme.surfaceLight }]}>
@@ -100,10 +108,19 @@ const Settings = ({ navigation }: NavigationOnlyProps) => {
       edges={['top', 'left', 'right']}
     >
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <ScreenHeader title={t('settings.title', 'Settings')} />
+      <ScreenHeader
+        title={t('settings.title', 'Settings')}
+        onBack={() => navigation.goBack()}
+        scrolled={headerEdge.scrolled}
+      />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        <SettingsSection title={t('settings.account', 'ACCOUNT').toUpperCase()} theme={theme}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
+        onScroll={headerEdge.onScroll}
+        scrollEventThrottle={headerEdge.scrollEventThrottle}
+      >
+        <SettingsSection title={t('settings.account', 'Hesap')} theme={theme}>
           <SettingsRow
             first
             icon="account-outline"
@@ -112,16 +129,9 @@ const Settings = ({ navigation }: NavigationOnlyProps) => {
             onPress={() => navigation.navigate('ProfileEdit')}
             theme={theme}
           />
-          <SettingsRow
-            icon="star-outline"
-            title={t('settings.plans', 'Plans & pricing')}
-            description={t('settings.plans_sub', 'Upgrade your experience')}
-            onPress={() => navigation.navigate('PricingScreen')}
-            theme={theme}
-          />
         </SettingsSection>
 
-        <SettingsSection title={t('settings.preferences', 'PREFERENCES').toUpperCase()} theme={theme}>
+        <SettingsSection title={t('settings.preferences', 'Tercihler')} theme={theme}>
           <SettingsRow
             first
             icon="bell-outline"
@@ -159,7 +169,7 @@ const Settings = ({ navigation }: NavigationOnlyProps) => {
           />
         </SettingsSection>
 
-        <SettingsSection title={t('settings.support', 'SUPPORT').toUpperCase()} theme={theme}>
+        <SettingsSection title={t('settings.support', 'Destek')} theme={theme}>
           <SettingsRow
             first
             icon="help-circle-outline"
@@ -205,28 +215,26 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 720,
     alignSelf: 'center',
+    paddingTop: 4,
     paddingBottom: 32,
-    gap: 26,
+    gap: 22,
   },
   section: {
-    gap: 6,
+    gap: 2,
   },
   sectionTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.1,
+    fontSize: 13,
+    fontWeight: '600',
     paddingHorizontal: 16,
+    paddingBottom: 2,
   },
   row: {
-    minHeight: 56,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    gap: 6,
-  },
-  rowIcon: {
-    margin: 0,
+    gap: 14,
   },
   rowText: {
     flex: 1,
@@ -234,11 +242,11 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   rowTitle: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: TYPE.row,
+    fontWeight: '400',
   },
   rowDescription: {
-    fontSize: 12,
+    fontSize: TYPE.meta,
   },
   languageSwitch: {
     flexDirection: 'row',
@@ -255,7 +263,7 @@ const styles = StyleSheet.create({
   },
   languageLabel: {
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   signOut: {
     minHeight: 48,
@@ -263,12 +271,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   signOutLabel: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: TYPE.row,
+    fontWeight: '600',
   },
   version: {
     textAlign: 'center',
-    fontSize: 10.5,
+    fontSize: 11,
   },
 });
 

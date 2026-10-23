@@ -47,6 +47,10 @@ export interface WorkoutStats {
     total: number;
   }>;
   muscleDistribution: Record<string, number>;
+  /** Completed sets per muscle group over the period, keyed like `muscleDistribution`. */
+  muscleSets?: Record<string, number>;
+  /** The same counts for the window just before the period (absent for the 12-week series). */
+  previousMuscleSets?: Record<string, number>;
   totalVolume: number;
   totalDuration: number;
   totalWorkouts: number;

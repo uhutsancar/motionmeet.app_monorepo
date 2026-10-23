@@ -1,7 +1,5 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
-import { database } from "../configs/database.js";
 import { findUserById } from "../repositories/userRepository.js";
-import { getOrCreateFreePlan } from "../utils/plans.js";
 import { verifyAccessToken } from "../utils/authTokens.js";
 import { isUserId } from "../utils/validation.js";
 
@@ -28,14 +26,8 @@ export const protect: RequestHandler = async (request: Request, response: Respon
 export const attachDbUser: RequestHandler = async (request, response, next) => {
   try {
     if (!request.userId) return void response.status(401).json({ success: false, message: "Not authenticated" });
-    let user = await findUserById(request.userId, { plan: true });
+    const user = await findUserById(request.userId);
     if (!user) return void response.status(404).json({ success: false, message: "User not found in database" });
-    if (!user.plan) {
-      const freePlan = await getOrCreateFreePlan();
-      await database.updateTable("users").set({ plan_id: freePlan.id, plan_status: "free" }).where("id", "=", request.userId).execute();
-      user = await findUserById(request.userId, { plan: true });
-      if (!user) return void response.status(404).json({ success: false, message: "User not found in database" });
-    }
     request.dbUser = user;
     next();
   } catch (error: unknown) {

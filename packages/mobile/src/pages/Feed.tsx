@@ -11,7 +11,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import {
   ActivityIndicator,
-  Avatar,
   Menu,
   Surface,
   Text,
@@ -31,14 +30,17 @@ import StoryComposer from '../components/StoryComposer';
 import SuggestedAthletes from '../components/SuggestedAthletes';
 import NearbyAthletes from '../components/NearbyAthletes';
 import MotionMark from '../components/MotionMark';
-import AdBanner from '../components/ads/AdBanner';
+import NativeAdCard from '../components/ads/NativeAdCard';
 import { useAdEntitlement } from '../hooks/useAdEntitlement';
-import { nextAdFrequency } from '../config/ads';
+import { createAdGapSequence, newAdSeed } from '../config/ads';
 import { logHandledError } from '../utils/feedback';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useUnreadMessages } from '../hooks/useUnreadMessages';
 import { useScrollToTopOnTabPress } from '../hooks/useScrollToTopOnTabPress';
-import { AVATAR, CARD } from '../config/layout';
+import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll';
+import { useActiveWorkoutDraft } from '../features/workout/useActiveWorkoutDraft';
+import { ICON, TYPE } from '../config/layout';
+import SoftButton from '../components/ui/SoftButton';
 import { MESSAGE_ICON } from '../config/icons';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import type { Post, PublicUser } from '@motionmeet/shared';
@@ -52,25 +54,29 @@ type FeedRow =
   | { type: 'ad'; id: string };
 
 /**
- * Inserts one ad row every 10-15 posts (re-rolled per gap), never right
- * before another special row (suggested/nearby), so two non-post rows never
- * land back to back. Client-side only - it runs after the real posts have
- * already been paginated, so it never affects the backend cursor.
+ * Inserts one sponsored row every 10-15 posts, with gaps drawn from `seed` so
+ * appending a page never moves an ad that is already on screen.
+ *
+ * An ad only goes between two posts: never next to a people rail, and never
+ * as the last row, because what follows the last row is not known until the
+ * next page arrives and an ad placed there would have to move. Client-side
+ * only - the backend cursor never sees these rows.
  */
-const insertAdRows = (rows: FeedRow[]): FeedRow[] => {
+const insertAdRows = (rows: FeedRow[], seed: number): FeedRow[] => {
+  const nextGap = createAdGapSequence(seed);
   const result: FeedRow[] = [];
   let postsSinceAd = 0;
   let adIndex = 0;
-  let gap = nextAdFrequency();
+  let gap = nextGap();
   rows.forEach((row, index) => {
     result.push(row);
     if (row.type !== 'post') return;
     postsSinceAd += 1;
     const next = rows[index + 1];
-    if (postsSinceAd >= gap && (!next || next.type === 'post')) {
-      result.push({ type: 'ad', id: `ad-${adIndex++}` });
+    if (postsSinceAd >= gap && next?.type === 'post') {
+      result.push({ type: 'ad', id: `ad-${seed}-${adIndex++}` });
       postsSinceAd = 0;
-      gap = nextAdFrequency();
+      gap = nextGap();
     }
   });
   return result;
@@ -94,7 +100,7 @@ const HeaderAction = ({ icon, badge, label, onPress }: HeaderActionProps) => {
       accessibilityLabel={badge > 0 ? `${label} (${badge})` : label}
       style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
     >
-      <Ionicons name={icon} size={23} color={theme.text} />
+      <Ionicons name={icon} size={ICON.header} color={theme.text} />
       {badge > 0 && (
         <View
           pointerEvents="none"
@@ -113,7 +119,7 @@ const HeaderAction = ({ icon, badge, label, onPress }: HeaderActionProps) => {
             borderColor: theme.surface,
           }}
         >
-          <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '900' }}>
+          <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '700' }}>
             {badge > 99 ? '99+' : badge}
           </Text>
         </View>
@@ -126,6 +132,7 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
   const { isNarrow } = useResponsiveLayout();
+  const activeWorkout = useActiveWorkoutDraft();
   const dispatch = useAppDispatch();
   const { getToken } = useAuthContext();
   const {
@@ -134,7 +141,6 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
     loading: postsLoading,
     loadingMore,
   } = useAppSelector((state) => state.posts);
-  const user = useAppSelector((state) => state.user.value);
   const { shouldShowAds } = useAdEntitlement();
   // Kept live by the socket, so a like or follow request badges the bell without
   // the screen polling for it.
@@ -145,8 +151,15 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<FeedMode>('discover');
   const [feedMenuVisible, setFeedMenuVisible] = useState(false);
+  // One per list generation: a refresh or a new feed reshuffles ad slots,
+  // loading the next page does not.
+  const [adSeed, setAdSeed] = useState(newAdSeed);
   const listRef = useRef<FlatList<FeedRow>>(null);
   useScrollToTopOnTabPress(listRef);
+  // A post's comment box sits inside the list; without this the keyboard
+  // covered it and comments were typed blind. Only the rows' own inputs are
+  // followed - the composers opened from here bring their own keyboards.
+  const { keyboardPadding, requestFocusedInputScroll } = useKeyboardAwareScroll(listRef, { onlyWhenRequested: true });
 
   /*
    * Switching feeds starts at the top of the new one.
@@ -165,6 +178,7 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
     setFeedMenuVisible(false);
     scrollToTop();
     setActiveTab(mode);
+    setAdSeed(newAdSeed());
   }, [scrollToTop]);
 
   const loadStaticData = useCallback(async () => {
@@ -205,6 +219,7 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
 
   const onRefresh = async () => {
     setRefreshing(true);
+    setAdSeed(newAdSeed());
     try {
       await Promise.all([loadStaticData(), loadPosts()]);
     } finally {
@@ -268,21 +283,22 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
         { type: 'nearby', id: 'nearby' },
       );
     }
-    return shouldShowAds ? insertAdRows(rows) : rows;
-  }, [posts, shouldShowAds]);
+    return shouldShowAds ? insertAdRows(rows, adSeed) : rows;
+  }, [adSeed, posts, shouldShowAds]);
 
   const renderItem: ListRenderItem<FeedRow> = useCallback(({ item: row }) => {
     if (row.type === 'suggested') return <SuggestedAthletes navigation={navigation} />;
     if (row.type === 'nearby') return <NearbyAthletes navigation={navigation} />;
-    if (row.type === 'ad') return <AdBanner />;
+    if (row.type === 'ad') return <NativeAdCard />;
     return (
       <PostCard
         post={row.item}
         onUserPress={handleUserPress}
         navigation={navigation}
+        onInputFocus={requestFocusedInputScroll}
       />
     );
-  }, [handleUserPress, navigation]);
+  }, [handleUserPress, navigation, requestFocusedInputScroll]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
@@ -291,14 +307,15 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
         style={{
           // Compact, and with no rule under it: the stories rail reads as the
           // top of the page rather than as a second band under a header bar.
-          minHeight: 52,
-          paddingHorizontal: 14,
+          minHeight: 48,
+          paddingLeft: 14,
+          paddingRight: 6,
           flexDirection: 'row',
           alignItems: 'center',
           backgroundColor: theme.background,
         }}
       >
-        <MotionMark size={26} />
+        <MotionMark size={24} />
         {/* One title that opens the feed picker, instead of two competing tabs. */}
         <View style={{ flex: 1, minWidth: 0, marginLeft: isNarrow ? 8 : 12 }}>
           <Menu
@@ -316,11 +333,11 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.7}
-                  style={{ flexShrink: 1, color: theme.text, fontSize: 17, fontWeight: '800' }}
+                  style={{ flexShrink: 1, color: theme.text, fontSize: 18, fontWeight: '700', letterSpacing: -0.2 }}
                 >
                   {activeTab === 'following' ? t('feed.home_title', 'Ana Sayfa') : t('feed.home_discover', 'Keşfet')}
                 </Text>
-                <Ionicons name="chevron-down" size={15} color={theme.text} />
+                <Ionicons name="chevron-down" size={14} color={theme.text} />
               </TouchableOpacity>
             }
           >
@@ -341,6 +358,14 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
         {/* Activity and messages sit together at the top right. Messages left
             the tab bar, so this is now the one place either is opened from. */}
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {/* Creating a post lives in the header, as Instagram's "+" does,
+              instead of a boxed "share an update" bar on top of the feed. */}
+          <HeaderAction
+            icon="add-circle-outline"
+            badge={0}
+            label={t('feed.create_post', 'Gönderi oluştur')}
+            onPress={() => setShowCreatePost(true)}
+          />
           <HeaderAction
             icon="heart-outline"
             badge={unreadCount}
@@ -380,105 +405,36 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
         initialNumToRender={3}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
         ListHeaderComponent={
-          <View style={{ paddingTop: 8, paddingBottom: 2 }}>
-            <Surface
-              elevation={0}
-              style={{
-                marginHorizontal: 12,
-                padding: CARD.padding,
-                borderRadius: CARD.radius,
-                borderWidth: StyleSheet.hairlineWidth,
-                borderColor: theme.border,
-                backgroundColor: theme.surface,
-              }}
-            >
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' }}>
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 9,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: theme.energySoft,
-                  }}
-                >
-                  <Ionicons name="barbell" size={20} color={theme.text} />
-                </View>
-                <View style={{ flex: 1, minWidth: 0, paddingHorizontal: 11 }}>
-                  <Text numberOfLines={2} style={{ color: theme.text, fontSize: 15, fontWeight: '800' }}>
-                    {t('feed.next_session', 'Your next session')}
-                  </Text>
-                  <Text style={{ color: theme.textMuted, fontSize: 12, lineHeight: 17, marginTop: 2 }}>
-                    {t('feed.next_session_hint', 'Choose a routine and start logging.')}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  activeOpacity={0.75}
-                  onPress={() => navigation.navigate('Routines')}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('feed.next_session', 'Start your next session')}
-                  style={{
-                    flexBasis: isNarrow ? '100%' : undefined,
-                    minHeight: 38,
-                    marginTop: isNarrow ? 10 : 0,
-                    paddingHorizontal: 13,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: 9,
-                    backgroundColor: theme.primary,
-                  }}
-                >
-                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>
-                    {t('common.start', 'Start')}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </Surface>
-
+          <View>
             <StoriesBar
               onAddStory={() => setShowStoryComposer(true)}
               navigation={navigation}
               onStoryDeleted={() => void loadStaticData()}
             />
 
-            <TouchableOpacity
-              activeOpacity={0.75}
-              onPress={() => setShowCreatePost(true)}
-              accessibilityRole="button"
-              accessibilityLabel={t('feed.create_post', 'Create post')}
-              style={{
-                minHeight: 50,
-                // The stories rail ends on a hairline. Without a fixed gap the
-                // composer sat right on top of it, and how stuck it looked
-                // depended on the device, so the spacing is a constant rather
-                // than whatever the rail happened to leave behind.
-                marginTop: CARD.gap,
-                marginHorizontal: 12,
-                marginBottom: CARD.gap,
-                paddingHorizontal: 10,
-                flexDirection: 'row',
-                alignItems: 'center',
-                borderRadius: CARD.radius,
-                borderWidth: StyleSheet.hairlineWidth,
-                borderColor: theme.border,
-                backgroundColor: theme.surface,
-              }}
-            >
-              {user?.profile_picture ? (
-                <Avatar.Image source={{ uri: user.profile_picture }} size={AVATAR.small} />
-              ) : (
-                <Avatar.Text
-                  label={user?.full_name?.charAt(0)?.toUpperCase() || 'U'}
-                  size={AVATAR.small}
-                  style={{ backgroundColor: theme.primary }}
-                />
-              )}
-              <Text numberOfLines={2} style={{ flex: 1, minWidth: 0, color: theme.textMuted, fontSize: 13, marginHorizontal: 11 }}>
-                {t('feed.share_progress', 'Share an update with your community')}
-              </Text>
-              <Ionicons name="image-outline" size={20} color={theme.textSecondary} />
-            </TouchableOpacity>
+            {/* The next session as one quiet line with a short button, not a
+                boxed card with a tinted icon tile. */}
+            <View style={[feedStyles.nextRow, { borderBottomColor: theme.border }]}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text numberOfLines={1} style={{ color: theme.text, fontSize: TYPE.body, fontWeight: '600' }}>
+                  {activeWorkout
+                    ? t('active_workout.in_progress', 'Devam eden antrenman')
+                    : t('feed.next_session', 'Your next session')}
+                </Text>
+                <Text numberOfLines={1} style={{ color: theme.textMuted, fontSize: TYPE.meta, marginTop: 1 }}>
+                  {activeWorkout
+                    ? activeWorkout.name
+                    : t('feed.next_session_hint', 'Choose a routine and start logging.')}
+                </Text>
+              </View>
+              <SoftButton
+                primary
+                fill={false}
+                icon={activeWorkout ? 'play' : undefined}
+                label={activeWorkout ? t('active_workout.resume', 'Devam et') : t('common.start', 'Start')}
+                onPress={() => navigation.navigate(activeWorkout ? 'ActiveWorkoutScreen' : 'Routines')}
+              />
+            </View>
           </View>
         }
         ListEmptyComponent={
@@ -490,26 +446,15 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
               </Text>
             </View>
           ) : (
-            <Surface
-              elevation={0}
-              style={{
-                marginHorizontal: 16,
-                padding: 24,
-                alignItems: 'center',
-                borderRadius: 12,
-                borderWidth: StyleSheet.hairlineWidth,
-                borderColor: theme.border,
-                backgroundColor: theme.surface,
-              }}
-            >
-              <Ionicons name="people-outline" size={28} color={theme.textMuted} />
-              <Text style={{ color: theme.text, fontSize: 15, fontWeight: '700', marginTop: 9 }}>
+            <View style={{ paddingHorizontal: 32, paddingVertical: 40, alignItems: 'center' }}>
+              <Ionicons name="people-outline" size={26} color={theme.textMuted} />
+              <Text style={{ color: theme.text, fontSize: TYPE.section, fontWeight: '600', marginTop: 10 }}>
                 {t('feed.no_posts', 'No posts yet')}
               </Text>
               <Text style={{ color: theme.textMuted, fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: 4 }}>
                 {t('feed.no_posts_hint', 'Follow athletes or share the first update.')}
               </Text>
-            </Surface>
+            </View>
           )
         }
         ListFooterComponent={
@@ -522,7 +467,7 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.4}
         style={{ flex: 1, width: '100%', maxWidth: 720, alignSelf: 'center' }}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={{ paddingBottom: 24 + keyboardPadding }}
       />
 
       <CreatePostModal
@@ -544,5 +489,16 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
     </SafeAreaView>
   );
 };
+
+const feedStyles = StyleSheet.create({
+  nextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+});
 
 export default Feed;

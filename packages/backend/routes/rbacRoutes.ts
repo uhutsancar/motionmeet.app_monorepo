@@ -2,9 +2,8 @@ import express from "express";
 import { database } from "../configs/database.js";
 import { attachDbUser, authorizeRole, protect } from "../middlewares/auth.js";
 import { serializeUser } from "../repositories/entities.js";
-import { updateUserPlan } from "../services/planService.js";
 import { parsePagination } from "../utils/pagination.js";
-import { isUserId, isUuid } from "../utils/validation.js";
+import { isUserId } from "../utils/validation.js";
 
 const router = express.Router();
 router.use(protect, attachDbUser, authorizeRole("superadmin"));
@@ -28,18 +27,6 @@ router.put("/users/:id/role", async (request, response, next) => {
     const updated = await database.updateTable("users").set({ role }).where("id", "=", request.params.id).returningAll().executeTakeFirst();
     if (!updated) return void response.status(404).json({ success: false, message: "User not found" });
     response.json({ success: true, user: serializeUser(updated) });
-  } catch (error: unknown) { next(error); }
-});
-
-router.put("/users/:id/plan", async (request, response, next) => {
-  try {
-    const body = request.body as Record<string, unknown>; const planId = body.planId;
-    if (!isUserId(request.params.id) || !isUuid(planId)) return void response.status(400).json({ success: false, message: "Invalid user or plan id" });
-    const plan = await database.selectFrom("plans").select("id").where("id", "=", planId).where("is_active", "=", true).executeTakeFirst();
-    if (!plan) return void response.status(404).json({ success: false, message: "Plan not found" });
-    const user = await updateUserPlan(request.params.id, plan.id);
-    if (!user) return void response.status(404).json({ success: false, message: "User not found" });
-    response.json({ success: true, user });
   } catch (error: unknown) { next(error); }
 });
 

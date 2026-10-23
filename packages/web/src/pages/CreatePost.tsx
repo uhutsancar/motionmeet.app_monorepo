@@ -168,7 +168,7 @@ const CreatePost = ({ onSuccess }: CreatePostProps) => {
               />
             </Box>
             <Stack>
-              <Typography variant="body2" sx={{ fontWeight: 800 }}>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
                 {user.full_name}
               </Typography>
               <Typography variant="caption" color="text.secondary">

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { ScrollView, StatusBar, Linking, LayoutAnimation, UIManager, Platform, TouchableOpacity, StyleSheet, View } from 'react-native';
+import { ScrollView, StatusBar, Linking, LayoutAnimation, UIManager, Platform, TouchableOpacity, StyleSheet } from 'react-native';
 import { Surface, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme, type MotionTheme } from '../context/ThemeContext';
+import ScreenHeader from '../components/ScreenHeader';
 import type { NavigationOnlyProps } from '../navigation/types';
 
 interface FaqEntry {
@@ -90,20 +91,7 @@ const SupportScreen = ({ navigation }: NavigationOnlyProps) => {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      <Surface elevation={0} style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </TouchableOpacity>
-        <Text
-          style={styles.headerTitle}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.75}
-        >
-          {t('settings.support', 'Destek')}
-        </Text>
-        <View style={{ width: 40 }} />
-      </Surface>
+      <ScreenHeader title={t('settings.support', 'Destek')} onBack={() => navigation.goBack()} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -169,7 +157,7 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
     minWidth: 0,
     paddingHorizontal: 8,
     textAlign: 'center',
-    fontSize: 18,
+    fontSize: 16.5,
     fontWeight: '700',
     color: theme.text,
   },

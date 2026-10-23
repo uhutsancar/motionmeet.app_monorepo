@@ -58,9 +58,6 @@ importers:
       '@motionmeet/shared':
         specifier: workspace:*
         version: link:../shared
-      '@paddle/paddle-node-sdk':
-        specifier: ^3.10.0
-        version: 3.10.0
       '@socket.io/redis-adapter':
         specifier: ^8.3.0
         version: 8.3.0(socket.io-adapter@2.5.8(bufferutil@4.1.0)(utf-8-validate@6.0.6))
@@ -287,9 +284,6 @@ importers:
       react-native:
         specifier: 0.81.5
         version: 0.81.5(@babel/core@7.29.7(supports-color@5.5.0))(@types/react@19.1.17)(bufferutil@4.1.0)(react@19.1.0)(supports-color@5.5.0)
-      react-native-chart-kit:
-        specifier: ^6.12.0
-        version: 6.12.3(react-native-svg@15.12.1(react-native@0.81.5(@babel/core@7.29.7(supports-color@5.5.0))(@types/react@19.1.17)(bufferutil@4.1.0)(react@19.1.0)(supports-color@5.5.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.7(supports-color@5.5.0))(@types/react@19.1.17)(bufferutil@4.1.0)(react@19.1.0)(supports-color@5.5.0))(react@19.1.0)
       react-native-gesture-handler:
         specifier: ~2.28.0
         version: 2.28.0(react-native@0.81.5(@babel/core@7.29.7(supports-color@5.5.0))(@types/react@19.1.17)(bufferutil@4.1.0)(react@19.1.0)(supports-color@5.5.0))(react@19.1.0)
@@ -1852,10 +1846,6 @@ packages:
     peerDependenciesMeta:
       '@types/react':
         optional: true
-
-  '@paddle/paddle-node-sdk@3.10.0':
-    resolution: {integrity: sha512-njqp+L6e/2aR99EYh/Ulyu6B9sIyVERTFclGOznKmLZcy11pAwHoHyIgq1BUH1ybQH+YmJQmrrUQC/Rfg8JAAw==}
-    engines: {node: '>=20'}
 
   '@popperjs/core@2.11.8':
     resolution: {integrity: sha512-P1st0aksCrn9sGZhp8GMYwBnQsbvAWsZAX44oXNNvLHGqAOcoVxmjZiohstwQ7SqKnbR47akdNi+uleWD8+g6A==}
@@ -4841,10 +4831,6 @@ packages:
     resolution: {integrity: sha512-gDKb8aZMDeD/tZWs9P6+q0J9Mwkdl6xMV8TjnGP3qJVJ06bdMgkbBlLU8IdfOsIsFz2BW1rNVT3XuNEl8zPAvw==}
     engines: {node: '>=8'}
 
-  paths-js@0.4.11:
-    resolution: {integrity: sha512-3mqcLomDBXOo7Fo+UlaenG6f71bk1ZezPQy2JCmYHy2W2k5VKpP+Jbin9H0bjXynelTbglCqdFhSEkeIkKTYUA==}
-    engines: {node: '>=0.11.0'}
-
   pg-cloudflare@1.4.0:
     resolution: {integrity: sha512-Vo7z/6rrQYxpNRylp4Tlob2elzbh+N/MOQbxFVWCxS7oEx6jF53GTJFxK2WWpKuBRkmiin4Mt+xofFDjx09R0A==}
 
@@ -4901,9 +4887,6 @@ packages:
   pngjs@3.4.0:
     resolution: {integrity: sha512-NCrCHhWmnQklfH4MtJMRjZ2a8c80qXeMlQMv2uVp9ISJMTt562SbGd6n2oq0PaPgKm7Z6pL9E2UlLIhC+SHL3w==}
     engines: {node: '>=4.0.0'}
-
-  point-in-polygon@1.1.0:
-    resolution: {integrity: sha512-3ojrFwjnnw8Q9242TzgXuTD+eKiutbzyslcq1ydfu82Db2y+Ogbmyrkpv0Hgj31qwT3lbS9+QAAO/pIQM35XRw==}
 
   possible-typed-array-names@1.1.0:
     resolution: {integrity: sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg==}
@@ -5067,13 +5050,6 @@ packages:
 
   react-is@19.2.7:
     resolution: {integrity: sha512-kZFnouyVv7eP/Phmrlo9FK+zcAdriZJvzxXHF1Sl1P377WSGe2G/JxVolhTrB/jeV47lKImhNUsijjHAAbcl/A==}
-
-  react-native-chart-kit@6.12.3:
-    resolution: {integrity: sha512-Wc7akObFaa7wAF42JGSvmd25OUpngLy412aIgJIjkmOMy3jBoPEX/yu8OPiSV3F2bSliWqlAcaqOrxuKIJy5Iw==}
-    peerDependencies:
-      react: '> 16.7.0'
-      react-native: '>= 0.50.0'
-      react-native-svg: '> 6.4.1'
 
   react-native-gesture-handler@2.28.0:
     resolution: {integrity: sha512-0msfJ1vRxXKVgTgvL+1ZOoYw3/0z1R+Ked0+udoJhyplC2jbVKIJ8Z1bzWdpQRCV3QcQ87Op0zJVE5DhKK2A0A==}
@@ -7722,8 +7698,6 @@ snapshots:
       react-is: 19.2.7
     optionalDependencies:
       '@types/react': 19.2.17
-
-  '@paddle/paddle-node-sdk@3.10.0': {}
 
   '@popperjs/core@2.11.8': {}
 
@@ -11222,8 +11196,6 @@ snapshots:
 
   path-type@4.0.0: {}
 
-  paths-js@0.4.11: {}
-
   pg-cloudflare@1.4.0:
     optional: true
 
@@ -11274,8 +11246,6 @@ snapshots:
       xmlbuilder: 15.1.1
 
   pngjs@3.4.0: {}
-
-  point-in-polygon@1.1.0: {}
 
   possible-typed-array-names@1.1.0: {}
 
@@ -11438,14 +11408,6 @@ snapshots:
   react-is@18.3.1: {}
 
   react-is@19.2.7: {}
-
-  react-native-chart-kit@6.12.3(react-native-svg@15.12.1(react-native@0.81.5(@babel/core@7.29.7(supports-color@5.5.0))(@types/react@19.1.17)(bufferutil@4.1.0)(react@19.1.0)(supports-color@5.5.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.7(supports-color@5.5.0))(@types/react@19.1.17)(bufferutil@4.1.0)(react@19.1.0)(supports-color@5.5.0))(react@19.1.0):
-    dependencies:
-      paths-js: 0.4.11
-      point-in-polygon: 1.1.0
-      react: 19.1.0
-      react-native: 0.81.5(@babel/core@7.29.7(supports-color@5.5.0))(@types/react@19.1.17)(bufferutil@4.1.0)(react@19.1.0)(supports-color@5.5.0)
-      react-native-svg: 15.12.1(react-native@0.81.5(@babel/core@7.29.7(supports-color@5.5.0))(@types/react@19.1.17)(bufferutil@4.1.0)(react@19.1.0)(supports-color@5.5.0))(react@19.1.0)
 
   react-native-gesture-handler@2.28.0(react-native@0.81.5(@babel/core@7.29.7(supports-color@5.5.0))(@types/react@19.1.17)(bufferutil@4.1.0)(react@19.1.0)(supports-color@5.5.0))(react@19.1.0):
     dependencies:

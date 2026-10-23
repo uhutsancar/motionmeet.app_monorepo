@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Linking,
   StyleSheet,
   View,
+  type TextInput as NativeTextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Surface, Text, TextInput, TouchableRipple } from 'react-native-paper';
@@ -40,6 +41,11 @@ const Login = () => {
   });
 
   const styles = useMemo(() => createStyles(theme), [theme]);
+  // Each field's return key moves to the next one and the last one submits,
+  // so the form can be filled without reaching past the keyboard.
+  const usernameRef = useRef<NativeTextInput>(null);
+  const emailRef = useRef<NativeTextInput>(null);
+  const passwordRef = useRef<NativeTextInput>(null);
 
   const updateField = (field: keyof LoginFormData, value: string) => {
     setFormData((current) => ({ ...current, [field]: value }));
@@ -168,9 +174,14 @@ const Login = () => {
                     value={formData.full_name}
                     onChangeText={(text) => updateField('full_name', text)}
                     autoComplete="name"
+                    textContentType="name"
+                    returnKeyType="next"
+                    submitBehavior="submit"
+                    onSubmitEditing={() => usernameRef.current?.focus()}
                     left={<TextInput.Icon icon="account-outline" />}
                   />
                   <TextInput
+                    ref={usernameRef}
                     label={t('auth.username')}
                     mode="outlined"
                     style={styles.input}
@@ -178,12 +189,18 @@ const Login = () => {
                     value={formData.username}
                     onChangeText={(text) => updateField('username', text)}
                     autoCapitalize="none"
-                    autoComplete="username"
+                    autoCorrect={false}
+                    autoComplete="username-new"
+                    textContentType="username"
+                    returnKeyType="next"
+                    submitBehavior="submit"
+                    onSubmitEditing={() => emailRef.current?.focus()}
                     left={<TextInput.Icon icon="at" />}
                   />
                 </>
               )}
               <TextInput
+                ref={emailRef}
                 label={t('auth.email')}
                 mode="outlined"
                 style={styles.input}
@@ -192,10 +209,16 @@ const Login = () => {
                 onChangeText={(text) => updateField('email', text)}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                autoCorrect={false}
                 autoComplete="email"
+                textContentType="emailAddress"
+                returnKeyType="next"
+                submitBehavior="submit"
+                onSubmitEditing={() => passwordRef.current?.focus()}
                 left={<TextInput.Icon icon="email-outline" />}
               />
               <TextInput
+                ref={passwordRef}
                 label={t('auth.password')}
                 mode="outlined"
                 style={styles.input}
@@ -203,6 +226,11 @@ const Login = () => {
                 value={formData.password}
                 onChangeText={(text) => updateField('password', text)}
                 secureTextEntry={!passwordVisible}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType={isLogin ? 'go' : 'done'}
+                onSubmitEditing={() => { if (!loading) void handleSubmit(); }}
+                textContentType={isLogin ? 'password' : 'newPassword'}
                 autoComplete={isLogin ? 'current-password' : 'new-password'}
                 left={<TextInput.Icon icon="lock-outline" />}
                 right={(
@@ -269,7 +297,7 @@ const createStyles = (theme: MotionTheme) => StyleSheet.create({
   brandTag: {
     color: theme.textMuted,
     fontSize: 9,
-    fontWeight: '800',
+    fontWeight: '700',
     letterSpacing: 1.05,
     marginBottom: 26,
   },
@@ -279,14 +307,14 @@ const createStyles = (theme: MotionTheme) => StyleSheet.create({
   eyebrow: {
     color: theme.primary,
     fontSize: 11,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 1.25,
     marginBottom: 9,
   },
   title: {
     color: theme.text,
     fontSize: 29,
-    fontWeight: '900',
+    fontWeight: '700',
     lineHeight: 38,
     letterSpacing: -1.1,
     marginBottom: 10,
@@ -327,7 +355,7 @@ const createStyles = (theme: MotionTheme) => StyleSheet.create({
   segmentText: {
     color: theme.textMuted,
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   segmentTextActive: {
     color: theme.text,
@@ -356,7 +384,7 @@ const createStyles = (theme: MotionTheme) => StyleSheet.create({
   },
   submitLabel: {
     fontSize: 15,
-    fontWeight: '900',
+    fontWeight: '700',
     letterSpacing: 0,
   },
   legal: {

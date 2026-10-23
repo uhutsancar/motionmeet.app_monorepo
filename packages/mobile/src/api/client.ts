@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { API_URL } from '../config/environment';
 
 const api = axios.create({
@@ -46,10 +46,37 @@ api.interceptors.request.use(
   }
 );
 
+type RetriableConfig = InternalAxiosRequestConfig & { retryCount?: number };
+
+const NETWORK_RETRIES = 2;
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 // Response interceptor for handling errors
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error: AxiosError) => {
+    /*
+     * A read that never reached the server is tried again, twice, before the
+     * screen hears about it. Tab screens load once when they are first built;
+     * a request that fell into a dropped connection at that moment used to
+     * leave the exercise catalogue "empty" until the app was restarted. Only
+     * GETs are retried, and only when there was no response at all, so a
+     * write is never sent twice and a real error from the server still
+     * reaches the screen at once.
+     */
+    const config = error.config as RetriableConfig | undefined;
+    const retryCount = config?.retryCount ?? 0;
+    if (
+      config
+      && (config.method ?? 'get').toLowerCase() === 'get'
+      && error.code === 'ERR_NETWORK'
+      && !error.response
+      && retryCount < NETWORK_RETRIES
+    ) {
+      config.retryCount = retryCount + 1;
+      await wait(600 * (retryCount + 1) ** 2);
+      return api(config);
+    }
     // Expected request failures are handled by the calling screen. Logging
     // them with console.error opens React Native's LogBox over the user UI.
     return Promise.reject(error);

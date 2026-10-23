@@ -66,7 +66,7 @@ const LicensesScreen = ({ navigation }: NavigationOnlyProps) => {
             elevation={0}
             style={{ padding: 15, borderRadius: 12, gap: 9, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border, backgroundColor: theme.surface }}
           >
-            <Text style={{ color: theme.text, fontSize: 14.5, fontWeight: '800' }}>{notice.title}</Text>
+            <Text style={{ color: theme.text, fontSize: 14.5, fontWeight: '700' }}>{notice.title}</Text>
             <Text style={{ color: theme.textSecondary, fontSize: 12.5, lineHeight: 18 }}>{notice.body}</Text>
             <View style={{ padding: 10, borderRadius: 9, backgroundColor: theme.surfaceLight }}>
               <Text selectable style={{ color: theme.textMuted, fontSize: 11, lineHeight: 16 }}>{notice.attribution}</Text>

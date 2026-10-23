@@ -225,7 +225,7 @@ const MuscleDistribution = () => {
           {summaryItems.map((item) => (
             <Paper key={item.label} variant="outlined" sx={{ p: 2.25 }}>
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>{item.label}</Typography>
-              <Typography variant="h5" sx={{ mt: 0.5, fontWeight: 800 }}>
+              <Typography variant="h5" sx={{ mt: 0.5, fontWeight: 700 }}>
                 {Number(item.value).toLocaleString()}{" "}
                 {item.unit && <Typography component="span" variant="caption" color="text.secondary">{item.unit}</Typography>}
               </Typography>

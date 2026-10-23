@@ -3,19 +3,17 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
-import UserCard from './UserCard';
+import UserCard, { PEOPLE_CARD_WIDTH } from './UserCard';
 import { useAuthContext } from '../context/AuthProvider';
 import { getSuggestedUsers } from '../api/endpoints';
 import { logHandledError } from '../utils/feedback';
-import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { FEED_GUTTER, feedCarouselCardWidth } from '../config/layout';
+import { FEED_GUTTER } from '../config/layout';
 import type { PublicUser } from '@motionmeet/shared';
 import type { NavigationOnlyProps } from '../navigation/types';
 
 const SuggestedAthletes = ({ navigation }: NavigationOnlyProps) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
-  const { usableWidth } = useResponsiveLayout();
   const [users, setUsers] = useState<PublicUser[]>([]);
   const [loading, setLoading] = useState(true);
   const { getToken } = useAuthContext();
@@ -41,8 +39,6 @@ const SuggestedAthletes = ({ navigation }: NavigationOnlyProps) => {
 
   if (loading || users.length === 0) return null;
 
-  const cardWidth = feedCarouselCardWidth(usableWidth);
-
   return (
     // Full bleed like the posts around it. The section used to be a bordered
     // card that carried more bordered cards, which read as a card inside a card.
@@ -57,8 +53,9 @@ const SuggestedAthletes = ({ navigation }: NavigationOnlyProps) => {
           <UserCard
             key={user._id}
             user={user}
-            width={cardWidth}
+            width={PEOPLE_CARD_WIDTH}
             onPress={() => navigation.navigate('Profile', { userId: user._id })}
+            onDismiss={(dismissed) => setUsers((current) => current.filter((item) => item._id !== dismissed._id))}
           />
         ))}
       </ScrollView>
@@ -69,23 +66,21 @@ const SuggestedAthletes = ({ navigation }: NavigationOnlyProps) => {
 // Theme colours are applied inline above; these stay static.
 const styles = StyleSheet.create({
   section: {
-    paddingTop: 14,
-    paddingBottom: 14,
-    marginBottom: 8,
+    paddingTop: 12,
+    paddingBottom: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   title: {
     paddingHorizontal: FEED_GUTTER,
     marginBottom: 10,
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: -0.2,
+    fontSize: 14,
+    fontWeight: '600',
   },
   // Padding lives on the content, not the ScrollView, so the row still scrolls
   // edge to edge while the first card lines up with the posts above it.
   scrollContent: {
     paddingHorizontal: FEED_GUTTER,
-    gap: 10,
+    gap: 8,
   },
 });
 

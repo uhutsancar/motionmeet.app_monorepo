@@ -14,9 +14,12 @@ import { getExerciseHistory, getExerciseStats } from '../api/endpoints';
 import { useAuthContext } from '../context/AuthProvider';
 import { Text, Surface, Button } from 'react-native-paper';
 import { logHandledError } from '../utils/feedback';
+import { exerciseMeta, exerciseTitle } from '../utils/exerciseLabels';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { CARD } from '../config/layout';
 import dayjs from '../utils/dayjs';
+import LineChart from '../components/charts/LineChart';
+import { formatWeight } from '../utils/format';
 import ScreenHeader from '../components/ScreenHeader';
 import type { ExerciseSessionEntry, ExerciseStats } from '@motionmeet/shared';
 import type { BaseNavigationScreenProps, ExerciseDetailRouteParams } from '../navigation/types';
@@ -29,7 +32,7 @@ const ExerciseDetail = ({ route, navigation }: BaseNavigationScreenProps) => {
   const { exercise } = route.params as ExerciseDetailRouteParams;
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
-  const { horizontalPadding, isNarrow } = useResponsiveLayout({
+  const { horizontalPadding } = useResponsiveLayout({
     minTwoColumnWidth: 420,
   });
   const styles = getStyles(theme);
@@ -41,6 +44,7 @@ const ExerciseDetail = ({ route, navigation }: BaseNavigationScreenProps) => {
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
   const { getToken } = useAuthContext();
 
   useEffect(() => {
@@ -50,7 +54,7 @@ const ExerciseDetail = ({ route, navigation }: BaseNavigationScreenProps) => {
         if (!token) throw new Error('Authentication required');
         const data = await getExerciseStats(exercise._id, token);
         if (data.success) {
-          setStats(data);
+          setStats(data.stats ?? null);
         }
       } catch (error) {
         logHandledError('load-exercise-stats', error);
@@ -107,7 +111,8 @@ const ExerciseDetail = ({ route, navigation }: BaseNavigationScreenProps) => {
   ];
 
   const chartPoints = (stats?.history || []).slice(-12);
-  const maxChartWeight = Math.max(...chartPoints.map((point) => point.maxWeight), 1);
+  const pointIndex = selectedPoint ?? chartPoints.length - 1;
+  const point = chartPoints[pointIndex];
 
   const pageContentStyle = [
     styles.scrollContent,
@@ -135,7 +140,7 @@ const ExerciseDetail = ({ route, navigation }: BaseNavigationScreenProps) => {
     <Button
       mode="contained"
       style={styles.logButton}
-      contentStyle={{ height: 44 }}
+      contentStyle={{ height: 40 }}
       labelStyle={styles.logButtonText}
       buttonColor={theme.primary}
       onPress={startWorkout}
@@ -146,7 +151,7 @@ const ExerciseDetail = ({ route, navigation }: BaseNavigationScreenProps) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <ScreenHeader title={exercise.name} onBack={() => navigation.goBack()} />
+      <ScreenHeader title={exerciseTitle(exercise.name, i18n.language)} onBack={() => navigation.goBack()} />
 
       {/* Tabs. The underline follows the pager, and the pager follows a tap,
           so the three panes can also just be swiped through by hand. */}
@@ -161,13 +166,13 @@ const ExerciseDetail = ({ route, navigation }: BaseNavigationScreenProps) => {
               }}
               accessibilityRole="tab"
               accessibilityState={{ selected: active }}
-              style={[styles.tabItem, active && { borderBottomColor: theme.primary }]}
+              style={[styles.tabItem, active && { borderBottomColor: theme.text }]}
             >
               <Text
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.8}
-                style={{ color: active ? theme.primary : theme.textMuted, fontWeight: '700', fontSize: 14 }}
+                style={{ color: active ? theme.text : theme.textMuted, fontWeight: '600', fontSize: 13.5 }}
               >
                 {tab.label}
               </Text>
@@ -188,9 +193,9 @@ const ExerciseDetail = ({ route, navigation }: BaseNavigationScreenProps) => {
             {renderMedia()}
 
             <Surface elevation={0} style={styles.infoSection}>
-              <Text variant="headlineSmall" style={styles.title}>{exercise.name}</Text>
+              <Text variant="headlineSmall" style={styles.title}>{exerciseTitle(exercise.name, i18n.language)}</Text>
               <Text variant="bodyMedium" style={styles.subtitle}>
-                {t('exercises.primary_muscle', 'Birincil')}: {exercise.muscleGroup} • {exercise.equipment}
+                {t('exercises.primary_muscle', 'Birincil')}: {exerciseMeta(exercise, t, i18n.language)}
               </Text>
             </Surface>
 
@@ -200,36 +205,43 @@ const ExerciseDetail = ({ route, navigation }: BaseNavigationScreenProps) => {
                 <ActivityIndicator color={theme.primary} style={{ marginTop: 16 }} />
               ) : (
                 <>
-                  <Surface elevation={0} style={[styles.statsGrid, isNarrow && styles.statsGridNarrow]}>
-                    <Surface style={[styles.statBox, isNarrow && styles.statBoxNarrow]} elevation={0}>
-                      <Text variant="labelMedium" style={styles.statLabel}>{t('exercises.personal_record', 'Personal Record')}</Text>
-                      <Text variant="titleLarge" style={styles.statValue}>
-                        {stats?.personalRecord || 0} <Text variant="bodySmall" style={{ color: theme.textMuted }}>kg</Text>
+                  {/* Two plain figures and the heaviest set of each session as
+                      a line, the way Hevy charts a lift's progress: the boxed
+                      tiles and the unlabelled mini bars said less with more. */}
+                  <View style={styles.figures}>
+                    <View style={styles.figure}>
+                      <Text style={styles.figureValue}>
+                        {formatWeight(stats?.personalRecord || 0, i18n.language)}
+                        <Text style={styles.figureUnit}> kg</Text>
                       </Text>
-                    </Surface>
-                    <Surface style={[styles.statBox, isNarrow && styles.statBoxNarrow]} elevation={0}>
-                      <Text variant="labelMedium" style={styles.statLabel}>{t('exercises.total_sessions', 'Total Sessions')}</Text>
-                      <Text variant="titleLarge" style={styles.statValue}>{stats?.totalSessions || 0}</Text>
-                    </Surface>
-                  </Surface>
-
-                  {chartPoints.length > 0 && (
-                    <View style={styles.chartRow}>
-                      {chartPoints.map((point) => (
-                        <View key={point.date} style={styles.chartColumn}>
-                          <View
-                            style={[
-                              styles.chartBar,
-                              {
-                                height: Math.max(4, (point.maxWeight / maxChartWeight) * 64),
-                                backgroundColor: theme.primary,
-                              },
-                            ]}
-                          />
-                        </View>
-                      ))}
+                      <Text style={styles.figureLabel}>{t('exercises.personal_record', 'Personal Record')}</Text>
                     </View>
-                  )}
+                    <View style={styles.figure}>
+                      <Text style={styles.figureValue}>{stats?.totalSessions || 0}</Text>
+                      <Text style={styles.figureLabel}>{t('exercises.total_sessions', 'Total Sessions')}</Text>
+                    </View>
+                  </View>
+
+                  {chartPoints.length > 1 && point ? (
+                    <View style={{ marginTop: 18 }}>
+                      <Text style={styles.figureLabel}>
+                        {t('exercises.heaviest_set', 'En ağır set')} · {dayjs(point.date).format('D MMM')}
+                      </Text>
+                      <Text style={[styles.figureValue, { marginBottom: 8 }]}>
+                        {formatWeight(point.maxWeight, i18n.language)}
+                        <Text style={styles.figureUnit}> kg</Text>
+                      </Text>
+                      <LineChart
+                        data={chartPoints.map((item) => ({ key: item.date, label: dayjs(item.date).format('D MMM'), value: item.maxWeight }))}
+                        selectedIndex={pointIndex}
+                        onSelect={setSelectedPoint}
+                        zeroBased={false}
+                        formatTick={(value) => formatWeight(value, i18n.language)}
+                        height={150}
+                        accessibilityLabel={t('exercises.progress_chart', 'Seanslara göre en ağır set')}
+                      />
+                    </View>
+                  ) : null}
                 </>
               )}
             </Surface>
@@ -306,13 +318,13 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
   header: { backgroundColor: theme.background, elevation: 0 },
   tabBar: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.border,
     backgroundColor: theme.background,
   },
   tabItem: {
     flex: 1,
-    minHeight: 44,
+    minHeight: 40,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 6,
@@ -323,58 +335,38 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
   mediaContainer: { width: '100%', aspectRatio: 16 / 10, marginTop: 12 },
   media: { flex: 1, borderRadius: CARD.radius, backgroundColor: '#FFFFFF' },
   placeholderMedia: { flex: 1, borderRadius: CARD.radius, justifyContent: 'center', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border },
-  infoSection: { marginTop: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: theme.border, backgroundColor: 'transparent' },
-  title: { fontWeight: 'bold', color: theme.text, marginBottom: 3 },
-  subtitle: { color: theme.textMuted, fontWeight: '500' },
+  infoSection: { marginTop: 14, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border, backgroundColor: 'transparent' },
+  title: { fontWeight: '700', color: theme.text, marginBottom: 2, fontSize: 19 },
+  subtitle: { color: theme.textMuted, fontSize: 13 },
   section: { marginTop: 16, backgroundColor: 'transparent' },
-  sectionTitle: { fontWeight: 'bold', color: theme.text, marginBottom: 10 },
+  sectionTitle: { fontWeight: '700', color: theme.text, marginBottom: 8, fontSize: 15 },
   bodyText: { color: theme.text, lineHeight: 23, opacity: 0.9 },
-  statsGrid: { flexDirection: 'row', gap: CARD.gap, marginTop: 4, backgroundColor: 'transparent' },
-  statsGridNarrow: { flexDirection: 'column' },
-  statBox: {
-    flex: 1,
-    borderRadius: CARD.radius,
-    padding: CARD.padding,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.border,
-    backgroundColor: theme.surface,
-  },
-  statBoxNarrow: { flex: 0, width: '100%' },
-  statLabel: { fontWeight: '700', color: theme.textMuted, marginBottom: 4 },
-  statValue: { fontWeight: '900', color: theme.text },
-  chartRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 5,
-    height: 72,
-    marginTop: 14,
-  },
-  chartColumn: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },
-  chartBar: { width: '100%', maxWidth: 20, borderRadius: 3 },
+  figures: { flexDirection: 'row', marginTop: 2 },
+  figure: { flex: 1 },
+  figureValue: { fontSize: 19, fontWeight: '700', color: theme.text, fontVariant: ['tabular-nums'] },
+  figureUnit: { fontSize: 13, fontWeight: '500', color: theme.textMuted },
+  figureLabel: { fontSize: 12, color: theme.textMuted, marginTop: 1 },
   historyCard: {
-    borderRadius: CARD.radius,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.border,
-    backgroundColor: theme.surface,
-    padding: CARD.padding,
-    marginBottom: CARD.gap,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.border,
   },
-  historyTitle: { color: theme.text, fontSize: 15, fontWeight: '800' },
+  historyTitle: { color: theme.text, fontSize: 14.5, fontWeight: '600' },
   historyDate: { color: theme.textMuted, fontSize: 12, marginTop: 2 },
   historyHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 12,
     paddingBottom: 6,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.border,
   },
-  historyColumnLabel: { color: theme.textMuted, fontSize: 11, fontWeight: '700' },
+  historyColumnLabel: { color: theme.textMuted, fontSize: 11, fontWeight: '500' },
   historySetRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 7 },
   historySetIndex: { color: theme.textMuted, fontSize: 13, fontWeight: '700', width: 26 },
   historySetValue: { color: theme.text, fontSize: 14, fontWeight: '600', marginLeft: 12 },
-  logButton: { marginTop: 18, borderRadius: 100 },
-  logButtonText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+  logButton: { marginTop: 18, borderRadius: 8 },
+  logButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });
 
 export default ExerciseDetail;

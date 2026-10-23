@@ -18,6 +18,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useAuthContext } from '../context/AuthProvider';
 import { useTheme, type MotionTheme } from '../context/ThemeContext';
+import { useKeyboardInset } from '../hooks/useKeyboardInset';
 import { discoverUsers } from '../api/endpoints';
 import { logHandledError } from '../utils/feedback';
 import { mediaVariantUrl, type PublicUser } from '@motionmeet/shared';
@@ -57,6 +58,8 @@ const toRecent = (user: SearchablePerson): RecentEntry => ({
 const SearchScreen = ({ navigation }: NavigationOnlyProps) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
+  // The list under the search field keeps its last rows above the keyboard.
+  const keyboard = useKeyboardInset();
   const { getToken } = useAuthContext();
   const styles = useMemo(() => getStyles(theme), [theme]);
 
@@ -252,6 +255,7 @@ const SearchScreen = ({ navigation }: NavigationOnlyProps) => {
           keyExtractor={(item) => item._id}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
+          contentContainerStyle={{ paddingBottom: 16 + keyboard.height }}
           ListHeaderComponent={
             recents.length > 0 ? (
               <View style={styles.sectionHeader}>
@@ -284,6 +288,7 @@ const SearchScreen = ({ navigation }: NavigationOnlyProps) => {
           keyExtractor={(item) => item._id}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
+          contentContainerStyle={{ paddingBottom: 16 + keyboard.height }}
           ListEmptyComponent={
             searching ? (
               <ActivityIndicator color={theme.primary} style={{ marginTop: 40 }} />
@@ -339,7 +344,7 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 6,
   },
-  sectionTitle: { color: theme.text, fontSize: 15, fontWeight: '800' },
+  sectionTitle: { color: theme.text, fontSize: 15, fontWeight: '700' },
   sectionAction: { color: theme.primary, fontSize: 13, fontWeight: '700' },
   // Full bleed, like every people list in the app: no card, no side gutter
   // beyond the text inset.
@@ -352,7 +357,7 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
   },
   avatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: theme.surfaceLight },
   avatarFallback: { alignItems: 'center', justifyContent: 'center' },
-  avatarLetter: { color: theme.text, fontSize: 18, fontWeight: '800' },
+  avatarLetter: { color: theme.textSecondary, fontSize: 17, fontWeight: '500' },
   rowBody: { flex: 1, minWidth: 0 },
   rowName: { color: theme.text, fontSize: 14.5, fontWeight: '700' },
   rowHandle: { color: theme.textMuted, fontSize: 12.5, marginTop: 1 },

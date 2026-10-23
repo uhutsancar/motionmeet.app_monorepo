@@ -24,6 +24,16 @@ const getMediaUrl = (url: string): string | null => {
     return resolvePublicMediaUrl(url);
 };
 
+/**
+ * Resuming another routine's session swaps the router state on the same URL;
+ * keying by routine remounts the session instead of mixing the two.
+ */
+const ActiveWorkoutRoute = () => {
+    const location = useLocation();
+    const { routine } = (location.state ?? {}) as { routine?: Routine };
+    return <ActiveWorkout key={routine?._id ?? 'none'} />;
+};
+
 const ActiveWorkout = () => {
     const { t } = useTranslation();
     const location = useLocation();
@@ -58,10 +68,10 @@ const ActiveWorkout = () => {
                             {paused ? <Play size={20} /> : <Pause size={20} />}
                         </IconButton>
                         <Stack>
-                            <Typography variant="overline" sx={{ fontSize: '0.65rem', fontWeight: 900, color: 'text.secondary', lineHeight: 1 }}>
+                            <Typography variant="overline" sx={{ fontSize: '0.75rem', fontWeight: 600, color: 'text.secondary', lineHeight: 1 }}>
                                 {paused ? t('active_workout.paused', 'Duraklatıldı') : t('active_workout.active', 'Aktif')}
                             </Typography>
-                            <Typography variant="h5" sx={{ fontWeight: 900, color: paused ? 'primary.main' : 'text.primary', fontFamily: 'monospace' }}>
+                            <Typography variant="h5" sx={{ fontWeight: 700, color: paused ? 'primary.main' : 'text.primary', fontFamily: 'monospace' }}>
                                 {formatTime(elapsed)}
                             </Typography>
                         </Stack>
@@ -69,7 +79,7 @@ const ActiveWorkout = () => {
 
                     <Stack direction="row" spacing={{ xs: 2, sm: 4 }} sx={{ alignItems: "center", overflowX: 'auto', px: 1 }}>
                         <Stack sx={{ alignItems: "center" }}>
-                            <Typography variant="overline" sx={{ fontSize: '0.65rem', fontWeight: 900, color: 'text.secondary', lineHeight: 1 }}>
+                            <Typography variant="overline" sx={{ fontSize: '0.75rem', fontWeight: 600, color: 'text.secondary', lineHeight: 1 }}>
                                 {t('statistics.volume', 'Hacim')}
                             </Typography>
                             <Typography variant="subtitle1" fontWeight="bold">
@@ -78,7 +88,7 @@ const ActiveWorkout = () => {
                         </Stack>
                         <Divider orientation="vertical" flexItem sx={{ height: 32, alignSelf: 'center' }} />
                         <Stack sx={{ alignItems: "center" }}>
-                            <Typography variant="overline" sx={{ fontSize: '0.65rem', fontWeight: 900, color: 'text.secondary', lineHeight: 1 }}>
+                            <Typography variant="overline" sx={{ fontSize: '0.75rem', fontWeight: 600, color: 'text.secondary', lineHeight: 1 }}>
                                 {t('statistics.sets', 'Set')}
                             </Typography>
                             <Typography variant="subtitle1" fontWeight="bold">{totalSetsCompleted}</Typography>
@@ -127,10 +137,10 @@ const ActiveWorkout = () => {
                             <Box sx={{ p: { xs: 1, sm: 2 } }}>
                                 {/* Columns Header */}
                                 <Stack direction="row" sx={{ alignItems: "center", px: 1, py: 1, mb: 1 }}>
-                                    <Typography variant="overline" sx={{ width: 40, textAlign: 'center', fontSize: '0.65rem', fontWeight: 900 }}>Set</Typography>
-                                    <Typography variant="overline" sx={{ flex: 1, minWidth: 60, textAlign: 'center', fontSize: '0.65rem', fontWeight: 900, display: { xs: 'none', sm: 'block' } }}>Önceki</Typography>
-                                    <Typography variant="overline" sx={{ flex: 1, textAlign: 'center', fontSize: '0.65rem', fontWeight: 900 }}>kg</Typography>
-                                    <Typography variant="overline" sx={{ flex: 1, textAlign: 'center', fontSize: '0.65rem', fontWeight: 900 }}>Tekrar</Typography>
+                                    <Typography variant="overline" sx={{ width: 40, textAlign: 'center', fontSize: '0.75rem', fontWeight: 600 }}>Set</Typography>
+                                    <Typography variant="overline" sx={{ flex: 1, minWidth: 60, textAlign: 'center', fontSize: '0.75rem', fontWeight: 600, display: { xs: 'none', sm: 'block' } }}>Önceki</Typography>
+                                    <Typography variant="overline" sx={{ flex: 1, textAlign: 'center', fontSize: '0.75rem', fontWeight: 600 }}>kg</Typography>
+                                    <Typography variant="overline" sx={{ flex: 1, textAlign: 'center', fontSize: '0.75rem', fontWeight: 600 }}>Tekrar</Typography>
                                     <Box sx={{ width: 48, display: 'flex', justifyContent: 'center' }}><CheckCircle2 size={16} opacity={0.5} /></Box>
                                 </Stack>
 
@@ -169,12 +179,11 @@ const ActiveWorkout = () => {
                                             <TextField
                                                 variant="outlined"
                                                 size="small"
-                                                type="number"
                                                 placeholder="0"
                                                 value={set.weight || ''}
                                                 onChange={(e) => updateSet(exIdx, setIdx, 'weight', e.target.value)}
                                                 disabled={set.completed}
-                                                slotProps={{ htmlInput: { style: { textAlign: 'center', fontWeight: 'bold' } } }}
+                                                slotProps={{ htmlInput: { inputMode: 'decimal', 'aria-label': `Set ${setIdx + 1} weight`, style: { textAlign: 'center', fontWeight: 'bold' } } }}
                                                 sx={{
                                                     '& .MuiOutlinedInput-root': {
                                                         borderRadius: 2,
@@ -193,12 +202,11 @@ const ActiveWorkout = () => {
                                             <TextField
                                                 variant="outlined"
                                                 size="small"
-                                                type="number"
                                                 placeholder="0"
                                                 value={set.reps || ''}
                                                 onChange={(e) => updateSet(exIdx, setIdx, 'reps', e.target.value)}
                                                 disabled={set.completed}
-                                                slotProps={{ htmlInput: { style: { textAlign: 'center', fontWeight: 'bold' } } }}
+                                                slotProps={{ htmlInput: { inputMode: 'numeric', 'aria-label': `Set ${setIdx + 1} reps`, style: { textAlign: 'center', fontWeight: 'bold' } } }}
                                                 sx={{
                                                     '& .MuiOutlinedInput-root': {
                                                         borderRadius: 2,
@@ -289,7 +297,7 @@ const ActiveWorkout = () => {
                     onClick={finishWorkout}
                     sx={{
                         width: '100%', maxWidth: 'sm', py: 2, borderRadius: 4,
-                        fontWeight: 900, fontSize: '1rem', textTransform: 'uppercase',
+                        fontWeight: 700, fontSize: '1rem', textTransform: 'uppercase',
                         boxShadow: 3
                     }}
                 >
@@ -316,4 +324,4 @@ const ActiveWorkout = () => {
     );
 };
 
-export default ActiveWorkout;
+export default ActiveWorkoutRoute;

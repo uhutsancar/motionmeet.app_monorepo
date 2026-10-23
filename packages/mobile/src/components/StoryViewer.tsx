@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 // instantiate on some Android devices and would leave stories blank.
 import {
   Animated,
+  AppState,
   Easing,
   Image,
   Keyboard,
@@ -208,7 +209,23 @@ const StoryViewer = ({
   const storyId = currentStory?._id ?? '';
   const liked = likeOverrides[storyId] ?? Boolean(currentStory?.liked);
 
-  const paused = viewersOpen || replyFocused || heldDown || sendingReply;
+  /*
+   * Time only runs while the story can actually be seen. A backgrounded app
+   * or a locked phone stops the bar, and a photo's five seconds start when
+   * the photo has arrived, not when its request went out - otherwise a slow
+   * connection spent the whole segment on a blank screen and moved on.
+   */
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active');
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => setAppActive(state === 'active'));
+    return () => subscription.remove();
+  }, []);
+  const [loadedImageUrl, setLoadedImageUrl] = useState<string | null>(null);
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
+  const currentMediaUrl = typeof currentStory?.media_url === 'string' ? currentStory.media_url.trim() : '';
+  const waitingForImage = currentStory?.media_type === 'image' && Boolean(currentMediaUrl) && loadedImageUrl !== currentMediaUrl;
+
+  const paused = viewersOpen || replyFocused || heldDown || sendingReply || !appActive || waitingForImage;
 
   const clearTimer = useCallback(() => {
     animationRef.current?.stop();
@@ -314,10 +331,11 @@ const StoryViewer = ({
     // Opening on a different group is a different viewing; the caller decides.
   }, [clearTimer, resetProgress, startGroup, startIndex, storyGroups, visible]);
 
-  // Opening someone else's story counts as a view exactly once per session.
+  // Opening someone else's story counts as a view exactly once per session,
+  // and only once its picture is on screen.
   useEffect(() => {
     const storyId = currentStory?._id;
-    if (!visible || !storyId || isOwnStory || recordedViewsRef.current.has(storyId)) return;
+    if (!visible || !storyId || isOwnStory || waitingForImage || recordedViewsRef.current.has(storyId)) return;
     recordedViewsRef.current.add(storyId);
     void (async () => {
       try {
@@ -327,7 +345,7 @@ const StoryViewer = ({
         logHandledError('mark-story-viewed', error);
       }
     })();
-  }, [currentStory?._id, getToken, isOwnStory, visible]);
+  }, [currentStory?._id, getToken, isOwnStory, visible, waitingForImage]);
 
   /**
    * Runs the bar for the segment on screen.
@@ -556,9 +574,24 @@ const StoryViewer = ({
     >
       <View style={styles.container}>
         <View style={[styles.storyContent, { backgroundColor }]} onLayout={onFrameLayout}>
+          {currentStory.media_type === 'image' && mediaUrl && failedImageUrl === mediaUrl && (
+            <Text style={styles.mediaFailed}>
+              {t('story.media_failed', 'Bu hikaye yüklenemedi. Geçmek için dokun.')}
+            </Text>
+          )}
+          {/* A freshly posted photo can take seconds to come back from the
+              CDN; without this the stickers sat on a black frame looking
+              like the picture had been lost. */}
+          {waitingForImage && failedImageUrl !== mediaUrl && (
+            <ActivityIndicator color="#FFFFFF" style={styles.mediaLoading} />
+          )}
           {currentStory.media_type === 'image' && mediaUrl && (
             <Image
               source={{ uri: mediaUrl }}
+              onLoad={() => setLoadedImageUrl(mediaUrl)}
+              // A broken picture stays paused rather than being "watched"
+              // blind; a tap moves on as usual.
+              onError={() => setFailedImageUrl(mediaUrl)}
               style={StyleSheet.absoluteFill}
               /*
                * Contain, not cover: nothing in a story may be cropped away.
@@ -944,6 +977,16 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     overflow: 'hidden',
   },
+  mediaLoading: { position: 'absolute', alignSelf: 'center', top: '48%' },
+  mediaFailed: {
+    position: 'absolute',
+    left: 32,
+    right: 32,
+    top: '45%',
+    color: '#FFFFFF',
+    fontSize: 15,
+    textAlign: 'center',
+  },
   legacyText: {
     position: 'absolute',
     left: 0,
@@ -951,7 +994,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     fontSize: 30,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: '#FFFFFF',
     textAlign: 'center',
     textAlignVertical: 'center',
@@ -1020,7 +1063,7 @@ const styles = StyleSheet.create({
   avatarPlaceholderText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   userName: {
     fontSize: 15,
@@ -1139,7 +1182,7 @@ const styles = StyleSheet.create({
   viewersTitle: {
     color: '#FFFFFF',
     fontSize: 15.5,
-    fontWeight: '800',
+    fontWeight: '700',
     marginTop: 6,
     marginBottom: 10,
   },

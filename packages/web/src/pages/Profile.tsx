@@ -4,18 +4,13 @@ import {
   Avatar,
   Box,
   Button,
-  Card,
-  CardActionArea,
-  Chip,
   IconButton,
   Paper,
   Stack,
-  ToggleButton,
-  ToggleButtonGroup,
   Typography,
   useTheme,
 } from "@mui/material";
-import { Calendar as CalendarIcon, Dumbbell, LineChart, Lock, MapPin, Ruler, Send as MessageIcon, Share2, Target, TrendingUp, Trophy } from "lucide-react";
+import { Calendar as CalendarIcon, Dumbbell, LineChart, Lock, MapPin, Ruler, Share2, Target, Trophy } from "lucide-react";
 import dayjs, { setDayjsLocale } from "../utils/dayjs";
 import axios from "axios";
 import { useEffect, useRef, useState } from "react";
@@ -37,7 +32,7 @@ import { createPost } from "~/api/endpoints";
 import FollowButton from "~/components/FollowButton";
 import Loading from "~/components/Loading";
 import ProfileModal from "~/components/ProfileModal";
-import { EmptyState, PageShell, SectionHeader } from "~/components/AppPage";
+import { EmptyState, PageShell } from "~/components/AppPage";
 import { setRelationship } from "~/features/relationships/relationshipsSlice";
 
 const Profile = () => {
@@ -316,83 +311,121 @@ const Profile = () => {
   };
 
   return (
-    <PageShell maxWidth={1120}>
-      <Paper variant="outlined" sx={{ overflow: "hidden" }}>
+    <PageShell maxWidth={935}>
+      {/* Instagram's profile header: a large round picture on the left, the
+          username with its one or two buttons, the counts as a single line of
+          text, then the name and bio. No panel around it, no gradient band
+          standing in for a missing cover photo. */}
+      {user.cover_photo && (
         <Box
-          sx={{
-            position: "relative",
-            height: { xs: 112, sm: 156 },
-            background: "linear-gradient(115deg, rgba(101,88,245,.28), rgba(59,130,246,.18), rgba(0,169,143,.18))",
-          }}
+          component="img"
+          src={user.cover_photo}
+          alt=""
+          sx={{ width: "100%", height: { xs: 110, sm: 160 }, display: "block", objectFit: "cover", borderRadius: 3 }}
+        />
+      )}
+      <Stack
+        direction="row"
+        spacing={{ xs: 2.5, sm: 6 }}
+        sx={{ alignItems: { xs: "center", sm: "flex-start" }, px: { xs: 0.5, sm: 4 }, pt: { xs: 1, sm: 2 } }}
+      >
+        <Avatar
+          src={user.profile_picture || undefined}
+          alt={user.full_name}
+          sx={{ width: { xs: 80, sm: 150 }, height: { xs: 80, sm: 150 }, fontSize: { xs: 30, sm: 52 }, fontWeight: 500, bgcolor: "action.hover", color: "text.secondary" }}
         >
-          {user.cover_photo && (
-            <Box
-              component="img"
-              src={user.cover_photo}
-              alt=""
-              sx={{ width: "100%", height: "100%", display: "block", objectFit: "cover" }}
-            />
-          )}
-          <Box sx={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, transparent 45%, rgba(9,10,13,.34))" }} />
-        </Box>
-        <Stack
-          direction={{ xs: "column", sm: "row" }}
-          spacing={2}
-          sx={{
-            p: { xs: 2, sm: 3 },
-            pt: { xs: 0, sm: 0 },
-            alignItems: "center",
-            justifyContent: "space-between",
-            textAlign: { xs: "center", sm: "left" },
-          }}
-        >
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={2.5} sx={{ alignItems: "center", mt: { xs: -5, sm: -4 } }}>
-            <Box sx={{ position: "relative" }}>
-              <Avatar src={user.profile_picture || undefined} alt={user.full_name} variant="rounded" sx={{ width: 88, height: 88, borderRadius: 3, fontSize: 30, fontWeight: 800, border: 4, borderColor: "background.paper", bgcolor: "background.paper", boxShadow: 3 }}>
-                {user.full_name?.charAt(0).toUpperCase() || "U"}
-              </Avatar>
-            </Box>
-            <Stack spacing={1}>
-              <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: { xs: "center", sm: "flex-start" }, flexWrap: "wrap" }}>
-                <Typography variant="h5" sx={{ fontWeight: 900 }}>
-                  {user.full_name || user.username}
-                </Typography>
-                {publicProfile?.isPrivate && (
-                  <Chip icon={<Lock size={13} />} size="small" label={t("profile.private_account", "Private account")} sx={{ fontWeight: 700 }} />
+          {user.full_name?.charAt(0).toUpperCase() || "U"}
+        </Avatar>
+        <Stack spacing={{ xs: 1, sm: 2 }} sx={{ minWidth: 0, flex: 1 }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap", rowGap: 1 }}>
+            <Typography sx={{ fontSize: { xs: 18, sm: 20 }, fontWeight: 400, mr: 1 }} noWrap>
+              {user.username || user.full_name}
+            </Typography>
+            {publicProfile?.isPrivate && <Lock size={15} />}
+            {isOwnProfile ? (
+              <Stack direction="row" spacing={1} sx={{ display: { xs: "none", sm: "flex" } }}>
+                <Button variant="outlined" size="small" onClick={() => setShowEdit(true)}>
+                  {t("profile.edit_profile")}
+                </Button>
+                <Button variant="outlined" size="small" onClick={() => navigate("/settings")}>
+                  {t("settings.title", "Ayarlar")}
+                </Button>
+              </Stack>
+            ) : (
+              <Stack direction="row" spacing={1} sx={{ display: { xs: "none", sm: "flex" } }}>
+                <FollowButton
+                  userId={publicProfile?._id}
+                  seed={{
+                    isFollowing: Boolean(publicProfile?.isFollowing),
+                    isFollowedBy: Boolean(publicProfile?.isFollowedBy),
+                    requestSent: Boolean(publicProfile?.requestSent),
+                    requestReceived: Boolean(publicProfile?.requestReceived),
+                  }}
+                />
+                {publicProfile?.canMessage !== false && (
+                  <Button variant="outlined" size="small" onClick={() => navigate(`/messages/${publicProfile?._id}`)}>
+                    {t("common.message_action", "Message")}
+                  </Button>
+                )}
+                {!user.isConnection && (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    disabled={relationshipLoading || user.connectionPending}
+                    onClick={() => updateRelationship(API_ROUTES.user_extras.connect)}
+                  >
+                    {user.connectionPending ? t("profile.connection_pending", "Pending") : t("profile.connect", "Connect")}
+                  </Button>
                 )}
               </Stack>
-              {profileLocation && (
-                <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", justifyContent: { xs: "center", sm: "flex-start" }, color: "text.secondary" }}>
-                  <MapPin size={14} />
-                  <Typography variant="caption">{profileLocation}</Typography>
-                </Stack>
-              )}
-              <Stack direction="row" spacing={2} divider={<Box sx={{ width: "1px", height: 32, bgcolor: "divider" }} />} sx={{ alignItems: "center", flexWrap: "wrap" }}>
-                {profileStats.map((stat) => (
-                  <Stack
-                    key={stat.label}
-                    onClick={stat.route ? () => navigate(stat.route as string) : undefined}
-                    sx={stat.route ? { cursor: "pointer" } : undefined}
-                  >
-                    <Typography variant="h6" color={stat.highlight ? "primary.main" : "text.primary"} sx={{ fontWeight: 900, lineHeight: 1 }}>
-                      {stat.value}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                      {stat.label}
-                    </Typography>
-                  </Stack>
-                ))}
-              </Stack>
-            </Stack>
+            )}
           </Stack>
+          <Stack direction="row" spacing={{ xs: 2, sm: 4 }}>
+            {profileStats.map((stat) => (
+              <Typography
+                key={stat.label}
+                variant="body2"
+                onClick={stat.route ? () => navigate(stat.route as string) : undefined}
+                sx={{ cursor: stat.route ? "pointer" : "default", fontSize: { xs: 13.5, sm: 15 } }}
+              >
+                <Box component="span" sx={{ fontWeight: 600 }}>{stat.value}</Box> {stat.label}
+              </Typography>
+            ))}
+          </Stack>
+          <Box sx={{ display: { xs: "none", sm: "block" } }}>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>{user.full_name}</Typography>
+            {user.bio && <Typography variant="body2" sx={{ whiteSpace: "pre-line" }}>{user.bio}</Typography>}
+            {profileLocation && (
+              <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", color: "text.secondary", mt: 0.25 }}>
+                <MapPin size={13} />
+                <Typography variant="caption">{profileLocation}</Typography>
+              </Stack>
+            )}
+          </Box>
+        </Stack>
+      </Stack>
+      {/* On a phone the name, bio and buttons drop under the picture row, as
+          Instagram's mobile web does. */}
+      <Box sx={{ display: { xs: "block", sm: "none" }, px: 0.5 }}>
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>{user.full_name}</Typography>
+        {user.bio && <Typography variant="body2" sx={{ whiteSpace: "pre-line" }}>{user.bio}</Typography>}
+        {profileLocation && (
+          <Typography variant="caption" color="text.secondary">{profileLocation}</Typography>
+        )}
+        <Stack direction="row" spacing={0.75} sx={{ mt: 1.5 }}>
           {isOwnProfile ? (
-            <Button variant="outlined" onClick={() => setShowEdit(true)} sx={{ width: { xs: "100%", sm: "auto" } }}>
-              {t("profile.edit_profile")}
-            </Button>
+            <>
+              <Button fullWidth variant="outlined" size="small" onClick={() => setShowEdit(true)}>
+                {t("profile.edit_profile")}
+              </Button>
+              <Button fullWidth variant="outlined" size="small" onClick={() => navigate("/settings")}>
+                {t("settings.title", "Ayarlar")}
+              </Button>
+            </>
           ) : (
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ width: { xs: "100%", sm: "auto" } }}>
+            <>
               <FollowButton
-                size="medium"
+                fullWidth
                 userId={publicProfile?._id}
                 seed={{
                   isFollowing: Boolean(publicProfile?.isFollowing),
@@ -402,29 +435,14 @@ const Profile = () => {
                 }}
               />
               {publicProfile?.canMessage !== false && (
-                <Button
-                  variant="outlined"
-                  startIcon={<MessageIcon size={16} />}
-                  onClick={() => navigate(`/messages/${publicProfile?._id}`)}
-                >
+                <Button fullWidth variant="outlined" size="small" onClick={() => navigate(`/messages/${publicProfile?._id}`)}>
                   {t("common.message_action", "Message")}
                 </Button>
               )}
-              {!user.isConnection && (
-                <Button
-                  variant="outlined"
-                  disabled={relationshipLoading || user.connectionPending}
-                  onClick={() => updateRelationship(API_ROUTES.user_extras.connect)}
-                >
-                  {user.connectionPending
-                    ? t("profile.connection_pending", "Pending")
-                    : t("profile.connect", "Connect")}
-                </Button>
-              )}
-            </Stack>
+            </>
           )}
         </Stack>
-      </Paper>
+      </Box>
 
       {contentLocked ? (
         <EmptyState
@@ -435,124 +453,111 @@ const Profile = () => {
         />
       ) : (
         <>
-        <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
-          <Stack direction="row" spacing={1.5} sx={{ mb: 3, alignItems: "flex-start" }}>
-            <Avatar variant="rounded" sx={{ bgcolor: "action.hover", color: "primary.main" }}>
-              <TrendingUp size={20} />
-            </Avatar>
-            <Stack>
-              <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 800, lineHeight: 1.5 }}>
-                {t("profile.weekly_activity")}
+        <Paper variant="outlined" sx={{ p: { xs: 2, sm: 2.5 } }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: "baseline", justifyContent: "space-between" }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: "baseline" }}>
+              <Typography sx={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                {currentAmount}
               </Typography>
-              <Stack direction="row" spacing={1} sx={{ alignItems: "baseline" }}>
-                <Typography variant="h4" sx={{ fontWeight: 900 }}>
-                  {currentAmount}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 700 }}>
-                  {currentUnit}
-                </Typography>
-              </Stack>
+              <Typography variant="body2" color="text.secondary">
+                {currentUnit}
+              </Typography>
             </Stack>
+            <Typography variant="caption" color="text.secondary">
+              {t("profile.weekly_activity")}
+            </Typography>
           </Stack>
 
-          <Box sx={{ width: "100%", height: 192 }}>
+          <Box sx={{ width: "100%", height: 168, mt: 2 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <XAxis dataKey="name" stroke={theme.palette.text.disabled} fontSize={10} fontWeight="bold" tickLine={false} axisLine={false} tickMargin={10} />
+              <BarChart data={chartData} barCategoryGap="30%">
+                <XAxis dataKey="name" stroke={theme.palette.text.disabled} fontSize={11} tickLine={false} axisLine={false} tickMargin={8} />
                 <Tooltip
                   cursor={{ fill: theme.palette.action.hover }}
-                  contentStyle={{ backgroundColor: theme.palette.background.paper, color: theme.palette.text.primary, border: `1px solid ${theme.palette.divider}`, borderRadius: 12, boxShadow: theme.shadows[3] }}
-                  itemStyle={{ fontWeight: 700, color: theme.palette.text.primary }}
+                  contentStyle={{ backgroundColor: theme.palette.background.paper, color: theme.palette.text.primary, border: `1px solid ${theme.palette.divider}`, borderRadius: 8, boxShadow: "none", fontSize: 12 }}
+                  itemStyle={{ fontWeight: 600, color: theme.palette.text.primary }}
                 />
-                <Bar dataKey="amt" fill={theme.palette.primary.main} radius={[6, 6, 0, 0]}>
+                <Bar dataKey="amt" fill={theme.palette.primary.main} radius={[3, 3, 0, 0]} maxBarSize={22}>
                   {chartData.map((entry, index) => (
-                    <Cell key={`${entry.name}-${index}`} fill={theme.palette.primary.main} fillOpacity={index === chartData.length - 1 ? 1 : 0.3} />
+                    <Cell key={`${entry.name}-${index}`} fill={theme.palette.primary.main} fillOpacity={index === chartData.length - 1 ? 1 : 0.35} />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </Box>
 
-          <ToggleButtonGroup
-            exclusive
-            size="small"
-            value={activeStatTab}
-            onChange={(_, value) => value && setActiveStatTab(value)}
-            sx={{ mt: 3, bgcolor: "action.hover", p: 0.5, borderRadius: 2, "& .MuiToggleButton-root": { border: 0, borderRadius: 1.5, px: 2.5, fontWeight: 700 } }}
-          >
+          <Stack direction="row" spacing={0.75} sx={{ mt: 2 }}>
             {["duration", "volume", "reps"].map((tab) => (
-              <ToggleButton key={tab} value={tab}>
+              <Button
+                key={tab}
+                size="small"
+                variant={activeStatTab === tab ? "contained" : "outlined"}
+                onClick={() => setActiveStatTab(tab as typeof activeStatTab)}
+                sx={{ borderRadius: 99, minWidth: 0, px: 1.75 }}
+              >
                 {t(`profile.${tab}`)}
-              </ToggleButton>
+              </Button>
             ))}
-          </ToggleButtonGroup>
+          </Stack>
         </Paper>
 
-        {isOwnProfile && <Stack spacing={1.5}>
-          <Stack direction="row" spacing={1} sx={{ px: 1, alignItems: "center" }}>
-            <Target size={16} />
-            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>
-              {t("profile.insights")}
-            </Typography>
-          </Stack>
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, 1fr)", sm: "repeat(3, 1fr)", md: "repeat(6, 1fr)" }, gap: 2 }}>
+        {/* Hevy's dashboard: the places people go from a profile as short
+            soft buttons, not a grid of cards with an icon in a tinted tile. */}
+        {isOwnProfile && (
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, 1fr)", sm: "repeat(3, 1fr)" }, gap: 1 }}>
             {insights.map(({ label, icon: Icon, route }) => (
-              <Card key={label} variant="outlined">
-                <CardActionArea onClick={() => navigate(route)} sx={{ p: 2, height: "100%" }}>
-                  <Stack spacing={1.5} sx={{ alignItems: "center" }}>
-                    <Avatar variant="rounded" sx={{ bgcolor: "action.hover", color: "text.secondary" }}>
-                      <Icon size={20} />
-                    </Avatar>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, textAlign: "center" }}>
-                      {label}
-                    </Typography>
-                  </Stack>
-                </CardActionArea>
-              </Card>
+              <Button
+                key={label}
+                variant="outlined"
+                onClick={() => navigate(route)}
+                startIcon={<Icon size={17} />}
+                sx={{ justifyContent: "flex-start", minHeight: 40, px: 1.5 }}
+              >
+                <Box component="span" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</Box>
+              </Button>
             ))}
           </Box>
-        </Stack>}
+        )}
 
-        <Stack spacing={2}>
-          <SectionHeader
-            title={t("profile.workouts")}
-            description="Your latest completed sessions"
-            action={<Chip label={user?.statistics?.totalWorkouts ?? visibleWorkouts.length} size="small" />}
-          />
+        <Stack spacing={1}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, px: 0.5 }}>
+            {t("profile.recent_workouts", "Son antrenmanlar")}
+          </Typography>
 
           {visibleWorkouts.length > 0 ? (
-            visibleWorkouts.map((workout) => (
-              <Paper key={workout._id} variant="outlined" sx={{ p: { xs: 2, sm: 2.5 } }}>
-                <Stack spacing={2}>
-                  <Stack direction="row" spacing={2} sx={{ alignItems: "center", justifyContent: "space-between" }}>
-                    <Typography variant="h6" sx={{ fontWeight: 800 }}>
+            <Paper variant="outlined" sx={{ overflow: "hidden" }}>
+              {visibleWorkouts.map((workout, index) => (
+                <Stack
+                  key={workout._id}
+                  direction="row"
+                  spacing={2}
+                  sx={{
+                    px: 2,
+                    py: 1.25,
+                    alignItems: "center",
+                    borderTop: index ? 1 : 0,
+                    borderColor: "divider",
+                  }}
+                >
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
                       {workout.name}
                     </Typography>
-                    <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-                      <IconButton
-                        onClick={() => shareWorkout(workout)}
-                        disabled={sharingWorkoutId === workout._id}
-                        title={t("feed.share", "Share to feed")}
-                      >
-                        <Share2 size={18} />
-                      </IconButton>
-                      <Stack sx={{ alignItems: "flex-end" }}>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>
-                          {t("profile.history")}
-                        </Typography>
-                        <Typography variant="caption" sx={{ fontWeight: 700 }}>
-                          {dayjs(workout.startTime).format("MMM DD, YYYY")}
-                        </Typography>
-                      </Stack>
-                    </Stack>
-                  </Stack>
-                  <Stack direction="row" spacing={3}>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>• {workout.durationMinutes} min</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>• {workout.volumeKg} kg</Typography>
-                  </Stack>
+                    <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+                      {dayjs(workout.startTime).format("D MMM YYYY")} · {workout.durationMinutes} {t("common.minutes_short", "dk")} · {workout.volumeKg} kg
+                    </Typography>
+                  </Box>
+                  <IconButton
+                    size="small"
+                    onClick={() => shareWorkout(workout)}
+                    disabled={sharingWorkoutId === workout._id}
+                    title={t("feed.share", "Share to feed")}
+                  >
+                    <Share2 size={17} />
+                  </IconButton>
                 </Stack>
-              </Paper>
-            ))
+              ))}
+            </Paper>
           ) : (
             <EmptyState
               icon={Dumbbell}
@@ -563,6 +568,7 @@ const Profile = () => {
           {isOwnProfile && workoutCursor && (
             <Button
               variant="outlined"
+              size="small"
               onClick={loadMoreWorkouts}
               disabled={loadingMoreWorkouts}
               sx={{ alignSelf: "center" }}

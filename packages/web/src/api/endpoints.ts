@@ -17,7 +17,6 @@ import {
   type NearbyUser,
   type Notification,
   type PersonalRecord,
-  type Plan,
   type ProfileLocation,
   type ProfileLocationSource,
   type ProfileLocationVisibility,
@@ -58,10 +57,10 @@ interface RoutinesResponse extends BasicResponse { routines: Routine[]; nextCurs
 interface RoutineResponse extends BasicResponse { routine: Routine }
 interface ExercisesResponse extends BasicResponse { exercises: Exercise[]; total: number | null; nextCursor: string | null; limit: number; skip: number }
 interface ExerciseResponse extends BasicResponse { exercise: Exercise }
-interface ExerciseStatsResponse extends BasicResponse, ExerciseStats {}
+/** The server nests the aggregates under `stats`; reading them from the top level showed 0 kg and 0 sessions for every movement. */
+interface ExerciseStatsResponse extends BasicResponse { stats?: ExerciseStats }
 interface ExerciseHistoryResponse extends BasicResponse { history: ExerciseSessionEntry[] }
 interface RecordsResponse extends BasicResponse { records: PersonalRecord[] }
-interface PlansResponse extends BasicResponse { plans: Plan[] }
 interface MetadataResponse extends BasicResponse { data: Array<{ code: string; name: string }> }
 interface RelationshipResponse extends BasicResponse { relationship: RelationshipState; action?: 'followed' | 'requested' | 'already_requested' | 'already_following' }
 interface FollowRequestsResponse extends BasicResponse { items: Array<{ user: PublicUser; createdAt: string }>; nextCursor: string | null }
@@ -676,21 +675,6 @@ export const getExerciseHistory = async (exerciseId: string, token: Token, limit
 
 export const getPersonalRecords = async (token: Token): Promise<RecordsResponse> => {
   const { data } = await api.get<RecordsResponse>(API_ROUTES.exercise.records, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  return data;
-};
-
-// PLANS
-export const getPlans = async (token: Token): Promise<PlansResponse> => {
-  const { data } = await api.get<PlansResponse>(API_ROUTES.plan.base, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  return data;
-};
-
-export const updatePlan = async (planId: string, token: Token): Promise<UserResponse> => {
-  const { data } = await api.post<UserResponse>(API_ROUTES.plan.update, { planId }, {
     headers: { Authorization: `Bearer ${token}` }
   });
   return data;

@@ -30,19 +30,18 @@ const transformedUrl = (purpose: UploadPurpose, key: string, contentType: string
   return imagekit.url({ path: cleanKey, transformation: transformations[purpose], transformationPosition: "query" });
 };
 
-interface ReservationInput { userId: string; purpose: unknown; fileName: unknown; contentType: unknown; size: unknown; maxUploadMb?: unknown }
-export const createUploadReservation = async ({ userId, purpose, fileName, contentType, size, maxUploadMb = -1 }: ReservationInput) => {
+interface ReservationInput { userId: string; purpose: unknown; fileName: unknown; contentType: unknown; size: unknown }
+export const createUploadReservation = async ({ userId, purpose, fileName, contentType, size }: ReservationInput) => {
   if (process.env.MEDIA_UPLOADS_ENABLED === "false") throw Object.assign(new Error("Media uploads are disabled"), { status: 503 });
   if (!isPurpose(purpose) || typeof contentType !== "string") return null;
-  const rules = PURPOSES[purpose]; const numericSize = Number(size); const planLimit = Number(maxUploadMb);
-  const effectiveMaxBytes = Math.min(rules.maxBytes, Number.isFinite(planLimit) && planLimit >= 0 ? planLimit * 1024 * 1024 : rules.maxBytes);
-  if (typeof fileName !== "string" || !fileName.trim() || fileName.length > 255 || !rules.types.has(contentType) || !Number.isSafeInteger(numericSize) || numericSize < 1 || numericSize > effectiveMaxBytes) return null;
+  const rules = PURPOSES[purpose]; const numericSize = Number(size);
+  if (typeof fileName !== "string" || !fileName.trim() || fileName.length > 255 || !rules.types.has(contentType) || !Number.isSafeInteger(numericSize) || numericSize < 1 || numericSize > rules.maxBytes) return null;
   if (!process.env.AWS_BUCKET_NAME || !imagekit) throw Object.assign(new Error("Media service is not configured"), { status: 503 });
   const safeName = path.basename(fileName).replace(/[^A-Za-z0-9._-]/g, "-").slice(-120);
   const key = `${purpose}/${userId}/${Date.now()}-${randomUUID()}-${safeName}`; const expiresIn = 300;
   const [{ PutObjectCommand }, { getSignedUrl }, s3Client] = await Promise.all([loadS3Commands(), loadS3Presigner(), getS3Client()]);
   const uploadUrl = await getSignedUrl(s3Client, new PutObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: key, Body: undefined, ContentLength: numericSize, ContentType: contentType }), { expiresIn });
-  await database.insertInto("upload_reservations").values({ legacy_mongo_id: null, object_key: key, user_id: userId, purpose, content_type: contentType, max_bytes: effectiveMaxBytes, expires_at: new Date(Date.now() + 3_600_000) }).execute();
+  await database.insertInto("upload_reservations").values({ legacy_mongo_id: null, object_key: key, user_id: userId, purpose, content_type: contentType, max_bytes: rules.maxBytes, expires_at: new Date(Date.now() + 3_600_000) }).execute();
   return { key, uploadUrl, expiresIn, headers: { "Content-Type": contentType } };
 };
 

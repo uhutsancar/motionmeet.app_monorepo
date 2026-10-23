@@ -220,7 +220,7 @@ const Connections = () => {
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, 1fr)", sm: "repeat(5, 1fr)" }, gap: 1.5 }}>
         {TABS.map((tab) => (
           <Paper key={tab.key} variant="outlined" sx={{ p: 1.5, textAlign: "center", borderRadius: 2.5 }}>
-            <Typography variant="h6" color="primary.main" sx={{ fontWeight: 900, lineHeight: 1.2 }}>
+            <Typography variant="h6" color="primary.main" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
               {pages[tab.key].loaded
                 ? `${pages[tab.key].items.length}${pages[tab.key].nextCursor ? "+" : ""}`
                 : "—"}
@@ -275,7 +275,7 @@ const Connections = () => {
                     {(user.full_name || user.username || "?").charAt(0).toUpperCase()}
                   </Avatar>
                   <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="body2" noWrap sx={{ fontWeight: 800 }}>{user.full_name}</Typography>
+                    <Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>{user.full_name}</Typography>
                     <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>@{user.username}</Typography>
                   </Box>
                 </Stack>

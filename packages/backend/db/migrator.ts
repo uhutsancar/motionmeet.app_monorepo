@@ -11,6 +11,8 @@ import * as storyOverlays from "./migrations/008_story_overlays.js";
 import * as userSearchIndexes from "./migrations/009_user_search_indexes.js";
 import * as storyLikes from "./migrations/010_story_likes.js";
 import * as paddleBilling from "./migrations/011_paddle_billing.js";
+import * as retireBilling from "./migrations/012_retire_billing.js";
+import * as repairConversationLastMessage from "./migrations/013_repair_conversation_last_message.js";
 
 const migrationProvider: MigrationProvider = {
   async getMigrations() {
@@ -26,6 +28,8 @@ const migrationProvider: MigrationProvider = {
       "009_user_search_indexes": userSearchIndexes,
       "010_story_likes": storyLikes,
       "011_paddle_billing": paddleBilling,
+      "012_retire_billing": retireBilling,
+      "013_repair_conversation_last_message": repairConversationLastMessage,
     };
   },
 };

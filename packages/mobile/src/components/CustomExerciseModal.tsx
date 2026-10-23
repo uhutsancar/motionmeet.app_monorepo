@@ -120,8 +120,8 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }: CustomExer
     },
     headerTitle: {
       color: theme.text,
-      fontSize: 18,
-      fontWeight: 'bold',
+      fontSize: 16.5,
+      fontWeight: '700',
     },
     formContent: {
       width: '100%',
@@ -192,7 +192,7 @@ const CustomExerciseModal = ({ visible, onClose, onExerciseCreated }: CustomExer
                 disabled={saving}
                 buttonColor={theme.primary}
                 style={{ borderRadius: 20 }}
-                labelStyle={{ fontSize: 14, fontWeight: 'bold' }}
+                labelStyle={{ fontSize: 14, fontWeight: '700' }}
               >
                 {!saving && t('exercises.create', 'Oluştur')}
               </Button>

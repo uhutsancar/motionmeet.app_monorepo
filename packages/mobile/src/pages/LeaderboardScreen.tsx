@@ -1,28 +1,34 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, ScrollView, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  Surface,
-  Text,
-} from 'react-native-paper';
 import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from '../context/AuthProvider';
 import { getPersonalRecords } from '../api/endpoints';
 import ScreenHeader from '../components/ScreenHeader';
+import dayjs from '../utils/dayjs';
+import { logHandledError } from '../utils/feedback';
+import { capitalizeFirst, formatNumber, formatWeight } from '../utils/format';
 import type { PersonalRecord } from '@motionmeet/shared';
 import type { NavigationOnlyProps } from '../navigation/types';
 
-const ACCENTS = ['#3b82f6', '#eab308', '#ef4444', '#10b981'];
-
+/**
+ * The heaviest completed set for each movement, newest record first.
+ *
+ * Sorted by date rather than weight: ranking a deadlift against a curl says
+ * nothing, while "what did I just beat" is the question a person opens this
+ * with. Each row is the movement and the set itself - weight, then reps -
+ * in text colours only; the old trophy badges cycled four colours that meant
+ * nothing.
+ */
 const LeaderboardScreen = ({ navigation }: NavigationOnlyProps) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const language = i18n.language;
   const { theme } = useTheme();
   const { getToken } = useAuthContext();
   const [records, setRecords] = useState<PersonalRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -32,89 +38,92 @@ const LeaderboardScreen = ({ navigation }: NavigationOnlyProps) => {
         if (!token) throw new Error('Authentication required');
         const data = await getPersonalRecords(token);
         if (active && data.success) setRecords(data.records || []);
+      } catch (error) {
+        logHandledError('load-personal-records', error);
+        if (active) setFailed(true);
       } finally {
         if (active) setLoading(false);
       }
     };
-    loadRecords();
+    void loadRecords();
     return () => {
       active = false;
     };
   }, [getToken]);
 
+  const sorted = useMemo(
+    () => [...records].sort((left, right) => dayjs(right.recordedAt).valueOf() - dayjs(left.recordedAt).valueOf()),
+    [records],
+  );
+  const latest = sorted[0];
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
-      <ScreenHeader
-        title={t('statistics.records', 'Personal Records')}
-        onBack={() => navigation.goBack()}
-      />
+      <ScreenHeader title={t('statistics.records', 'Kişisel rekorlar')} onBack={() => navigation.goBack()} />
 
       {loading ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator color={theme.primary} />
-        </View>
+        <View style={styles.state}><ActivityIndicator color={theme.textMuted} /></View>
       ) : (
-        <ScrollView
-          contentContainerStyle={{
-            width: '100%',
-            maxWidth: 720,
-            alignSelf: 'center',
-            padding: 16,
-            paddingBottom: 40,
-          }}
-          showsVerticalScrollIndicator={false}
-        >
-          <Surface elevation={0} style={{ backgroundColor: theme.surfaceLight, borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border }}>
-            <Text style={{ fontSize: 14, color: theme.textMuted, lineHeight: 20 }}>
-              {t('statistics.records_desc', 'Your strongest completed set for each exercise.')}
-            </Text>
-          </Surface>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <Text style={[styles.lead, { color: theme.textSecondary }]}>
+            {failed
+              ? t('stats.load_failed', 'İstatistikler yüklenemedi.')
+              : latest
+                ? t('stats.records_lead', {
+                    count: sorted.length,
+                    date: dayjs(latest.recordedAt).format('D MMMM'),
+                    defaultValue: '{{count}} harekette rekorun var. Sonuncusu {{date}} tarihinde.',
+                  })
+                : t('statistics.log_more_workouts', 'Rekorlarını burada görmek için antrenman tamamla.')}
+          </Text>
 
-          {records.length === 0 ? (
-            <View style={{ alignItems: 'center', paddingVertical: 64 }}>
-              <Ionicons name="trophy-outline" size={48} color={theme.textMuted} />
-              <Text style={{ color: theme.text, fontWeight: '800', marginTop: 14 }}>
-                {t('statistics.no_records_yet', 'No records yet')}
-              </Text>
-              <Text style={{ color: theme.textMuted, textAlign: 'center', marginTop: 6 }}>
-                {t('statistics.log_more_workouts', 'Complete workouts to see your records here.')}
-              </Text>
-            </View>
-          ) : records.map((record, index) => {
-            const accent = ACCENTS[index % ACCENTS.length];
-            return (
-              <Surface key={record.exerciseId} elevation={1} style={{ backgroundColor: theme.surface, borderRadius: 18, padding: 18, marginBottom: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <View style={{ width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginRight: 12, backgroundColor: `${accent}20` }}>
-                    <Ionicons name="trophy-outline" size={22} color={accent} />
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text numberOfLines={2} style={{ color: theme.text, fontSize: 16, fontWeight: '800' }}>{record.name}</Text>
-                    <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 3 }}>
-                      {new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(record.recordedAt))}
+          {sorted.length > 0 && (
+            <View style={[styles.list, { borderTopColor: theme.border }]}>
+              {sorted.map((record) => (
+                <View key={record.exerciseId} style={[styles.row, { borderBottomColor: theme.border }]}>
+                  <View style={styles.name}>
+                    <Text numberOfLines={2} style={[styles.title, { color: theme.text }]}>
+                      {capitalizeFirst(record.name, language)}
+                    </Text>
+                    <Text style={[styles.date, { color: theme.textMuted }]}>
+                      {dayjs(record.recordedAt).format('D MMM YYYY')}
                     </Text>
                   </View>
-                  <View style={{ alignItems: 'flex-end', flexShrink: 1, maxWidth: '40%' }}>
-                    <Text
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.7}
-                      style={{ color: accent, fontSize: 20, fontWeight: '900' }}
-                    >
-                      {record.value} kg
-                    </Text>
-                    <Text style={{ color: theme.textMuted, fontSize: 11 }}>
-                      {record.reps} {t('routines.reps', 'reps').toLowerCase()}
-                    </Text>
-                  </View>
+                  <Text style={[styles.weight, { color: theme.text }]}>
+                    {formatWeight(record.value, language)}
+                    <Text style={[styles.unit, { color: theme.textMuted }]}> kg</Text>
+                    <Text style={[styles.reps, { color: theme.textSecondary }]}>  × {formatNumber(record.reps, language)}</Text>
+                  </Text>
                 </View>
-              </Surface>
-            );
-          })}
+              ))}
+            </View>
+          )}
         </ScrollView>
       )}
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  content: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingBottom: 40 },
+  lead: { fontSize: 14, lineHeight: 20, paddingHorizontal: 16, paddingTop: 8 },
+  list: { marginTop: 18, borderTopWidth: StyleSheet.hairlineWidth },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 64,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  name: { flex: 1, minWidth: 0 },
+  title: { fontSize: 15, fontWeight: '600' },
+  date: { fontSize: 12.5, marginTop: 3 },
+  weight: { fontSize: 15.5, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  unit: { fontSize: 13, fontWeight: '500' },
+  reps: { fontSize: 14, fontWeight: '600' },
+  state: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+});
 
 export default LeaderboardScreen;

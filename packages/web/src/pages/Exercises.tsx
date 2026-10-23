@@ -117,7 +117,7 @@ const Exercises = () => {
         const token = await getToken();
         if (!token) throw new Error("Authentication required");
         const data = await getExerciseStats(token, selectedExercise._id);
-        if (active && data.success) setExerciseStats({ personalRecord: data.personalRecord, totalSessions: data.totalSessions, history: data.history });
+        if (active && data.success && data.stats) setExerciseStats(data.stats);
       } catch (error) {
         console.error("Error fetching exercise stats:", error);
       } finally {
@@ -242,7 +242,7 @@ const Exercises = () => {
               <Stack direction={{ xs: "column", sm: "row" }} spacing={2.5} sx={{ alignItems: { sm: "center" } }}>
                 <ExerciseImage gifUrl={selectedExercise.gifUrl} size={96} />
                 <Box sx={{ minWidth: 0 }}>
-                  <Typography variant="h5" sx={{ fontWeight: 800 }}>{selectedExercise.name}</Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 700 }}>{selectedExercise.name}</Typography>
                   <Stack direction="row" useFlexGap sx={{ mt: 1, flexWrap: "wrap", gap: 0.75 }}>
                     <Chip label={t(`muscle_groups.${selectedExercise.muscleGroup}`, selectedExercise.muscleGroup)} color="primary" size="small" />
                     <Chip label={t(`equipment.${selectedExercise.equipment}`, selectedExercise.equipment)} variant="outlined" size="small" />
@@ -255,9 +255,9 @@ const Exercises = () => {
                 onChange={(_, value: DetailTab) => setDetailTab(value)}
                 sx={{ mt: 2, minHeight: 42, borderBottom: 1, borderColor: "divider" }}
               >
-                <Tab value="summary" label={t("exercises.tab_summary", "Summary")} sx={{ fontWeight: 700, minHeight: 42 }} />
-                <Tab value="history" label={t("exercises.tab_history", "History")} sx={{ fontWeight: 700, minHeight: 42 }} />
-                <Tab value="instructions" label={t("exercises.tab_instructions", "Instructions")} sx={{ fontWeight: 700, minHeight: 42 }} />
+                <Tab value="summary" label={t("exercises.tab_summary", "Summary")} />
+                <Tab value="history" label={t("exercises.tab_history", "History")} />
+                <Tab value="instructions" label={t("exercises.tab_instructions", "Instructions")} />
               </Tabs>
 
               {detailTab === "summary" && (
@@ -280,7 +280,7 @@ const Exercises = () => {
                   </Box>
 
                   <Box sx={{ mt: 2.5 }}>
-                    <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 800 }}>{t("exercises.progress_history", "Progress history")}</Typography>
+                    <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 700 }}>{t("exercises.progress_history", "Progress history")}</Typography>
                     <Paper variant="outlined" sx={{ p: 2 }}>
                       <Box sx={{ height: 220 }}>
                         {statsLoading ? (
@@ -295,7 +295,7 @@ const Exercises = () => {
                                   active && payload?.length ? (
                                     <Paper elevation={3} sx={{ p: 1.5, border: 1, borderColor: "divider" }}>
                                       <Typography variant="caption" color="text.secondary">{dayjs(payload[0].payload.date).format("MMM DD, YYYY")}</Typography>
-                                      <Typography variant="body2" color="primary.main" sx={{ fontWeight: 800 }}>{payload[0].value} kg</Typography>
+                                      <Typography variant="body2" color="primary.main" sx={{ fontWeight: 700 }}>{payload[0].value} kg</Typography>
                                     </Paper>
                                   ) : null
                                 )}
@@ -330,7 +330,7 @@ const Exercises = () => {
                     <Stack spacing={1.5}>
                       {history.map((session) => (
                         <Paper key={`${session.workoutId}-${session.performedAt}`} variant="outlined" sx={{ p: 2 }}>
-                          <Typography variant="body2" noWrap sx={{ fontWeight: 800 }}>{session.workoutName}</Typography>
+                          <Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>{session.workoutName}</Typography>
                           <Typography variant="caption" color="text.secondary">
                             {dayjs(session.performedAt).format("D MMM YYYY, HH:mm")}
                           </Typography>
@@ -372,7 +372,7 @@ const Exercises = () => {
         <Paper variant="outlined" sx={{ order: { xs: 1, md: 2 }, p: 2, minWidth: 0 }}>
           <Stack direction="row" sx={{ mb: 1.5, alignItems: "center", justifyContent: "space-between" }}>
             <Box>
-              <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{t("exercises.library", "Library")}</Typography>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t("exercises.library", "Library")}</Typography>
               <Typography variant="caption" color="text.secondary">{exercises.length} movements</Typography>
             </Box>
           </Stack>

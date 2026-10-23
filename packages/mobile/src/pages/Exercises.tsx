@@ -5,7 +5,10 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Image,
   FlatList,
+  Pressable,
+  RefreshControl,
   StyleSheet,
+  TextInput,
   TouchableOpacity,
   View,
   type ListRenderItem,
@@ -13,10 +16,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
-  Searchbar,
   Surface,
   Text,
 } from 'react-native-paper';
+import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { resolvePublicMediaUrl, type Exercise } from '@motionmeet/shared';
@@ -32,9 +35,12 @@ import { useEquipment } from '../hooks/useEquipment';
 import { API_URL } from '../config/environment';
 import { BottomSheetModal } from '../components/ResponsiveModal';
 import { logHandledError } from '../utils/feedback';
+import { exerciseMeta, exerciseTitle } from '../utils/exerciseLabels';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useScrollToTopOnTabPress } from '../hooks/useScrollToTopOnTabPress';
-import { EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
+import { CONTROL, EXERCISE_THUMB, TYPE, exerciseThumbStyle } from '../config/layout';
+import { useScrollEdge } from '../hooks/useScrollEdge';
+import { useKeyboardInset } from '../hooks/useKeyboardInset';
 import type { NavigationOnlyProps } from '../navigation/types';
 
 type FilterType = 'muscle' | 'equipment';
@@ -46,7 +52,7 @@ interface FilterOption {
 
 const Exercises = ({ navigation }: NavigationOnlyProps) => {
   const { theme } = useTheme();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { getToken } = useAuthContext();
   const { data: muscleGroupsList } = useMuscleGroups();
   const { data: equipmentListItems } = useEquipment();
@@ -66,13 +72,19 @@ const Exercises = ({ navigation }: NavigationOnlyProps) => {
   const [filterType, setFilterType] = useState<FilterType | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const requestSequenceRef = useRef(0);
+  const headerEdge = useScrollEdge();
+  // The list under the search field keeps its last rows above the keyboard.
+  const keyboard = useKeyboardInset();
 
   const fetchExercises = useCallback(async (cursor: string | null = null, requestId: number | null = null) => {
     const activeRequestId = requestId ?? ++requestSequenceRef.current;
     try {
       if (cursor) setLoadingMore(true);
       else setLoading(true);
+      setFailed(false);
       const params: Record<string, string | number | boolean | undefined> = {};
       if (searchQuery) params.search = searchQuery;
       if (muscleFilter !== 'all') params.muscleGroup = muscleFilter;
@@ -100,11 +112,15 @@ const Exercises = ({ navigation }: NavigationOnlyProps) => {
     } catch (error) {
       if (requestSequenceRef.current === activeRequestId) {
         logHandledError('load-exercises', error);
+        // A failed first page is said out loud with a way to try again,
+        // instead of reading as "no exercises match".
+        if (!cursor) setFailed(true);
       }
     } finally {
       if (requestSequenceRef.current === activeRequestId) {
         setLoading(false);
         setLoadingMore(false);
+        setRefreshing(false);
       }
     }
   }, [equipmentFilter, getToken, muscleFilter, searchQuery]);
@@ -116,6 +132,18 @@ const Exercises = ({ navigation }: NavigationOnlyProps) => {
     setNextCursor(null);
     const timer = setTimeout(() => fetchExercises(null, requestId), 400);
     return () => clearTimeout(timer);
+  }, [fetchExercises]);
+
+  // Coming back to the tab reloads a catalogue that never arrived, so a
+  // connection that dropped when the tab was first built heals by itself.
+  // Only a failed load is retried: an empty result for a search is an answer.
+  const retryOnFocus = useRef<() => void>(() => undefined);
+  retryOnFocus.current = () => { if (failed) void fetchExercises(null); };
+  useFocusEffect(useCallback(() => { retryOnFocus.current(); }, []));
+
+  const refresh = useCallback(() => {
+    setRefreshing(true);
+    void fetchExercises(null);
   }, [fetchExercises]);
 
   const loadMoreExercises = useCallback(() => {
@@ -173,10 +201,10 @@ const Exercises = ({ navigation }: NavigationOnlyProps) => {
         accessibilityRole="button"
         accessibilityState={{ selected: isActive }}
         style={{
-          minHeight: 58,
+          minHeight: 52,
           flexDirection: 'row',
           alignItems: 'center',
-          gap: 14,
+          gap: 12,
           paddingHorizontal: 18,
           borderBottomWidth: StyleSheet.hairlineWidth,
           borderBottomColor: theme.border,
@@ -185,11 +213,11 @@ const Exercises = ({ navigation }: NavigationOnlyProps) => {
         {isAll ? (
           // "Everything" is not a thing to draw, so the slot is held open and
           // the names below stay on one line with the ones that are.
-          <View style={{ width: 34, height: 34 }} />
+          <View style={{ width: 32, height: 32 }} />
         ) : filterType === 'equipment' ? (
-          <EquipmentAvatar code={item} size={34} selected={isActive} />
+          <EquipmentAvatar code={item} size={32} selected={isActive} />
         ) : (
-          <MuscleAvatar code={item} size={34} selected={isActive} />
+          <MuscleAvatar code={item} size={32} selected={isActive} />
         )}
 
         <Text
@@ -198,14 +226,14 @@ const Exercises = ({ navigation }: NavigationOnlyProps) => {
             flex: 1,
             minWidth: 0,
             color: isActive ? theme.primary : theme.text,
-            fontSize: 15,
-            fontWeight: isActive ? '800' : '600',
+            fontSize: TYPE.row,
+            fontWeight: isActive ? '600' : '400',
           }}
         >
           {filterLabel(filterType, item)}
         </Text>
 
-        {isActive ? <Ionicons name="checkmark" size={19} color={theme.primary} /> : null}
+        {isActive ? <Ionicons name="checkmark" size={18} color={theme.primary} /> : null}
       </TouchableOpacity>
     );
   };
@@ -214,24 +242,20 @@ const Exercises = ({ navigation }: NavigationOnlyProps) => {
     const imageUrl = resolvePublicMediaUrl(item.gifUrl, API_URL);
 
     return (
-      <TouchableOpacity
-        activeOpacity={0.72}
+      <Pressable
         onPress={() => navigation.navigate('ExerciseDetail', { exercise: item })}
-        style={{
-          minHeight: 76,
-          marginHorizontal: horizontalPadding,
-          paddingVertical: 10,
-          paddingHorizontal: 12,
+        style={({ pressed }) => ({
+          minHeight: 60,
+          paddingVertical: 8,
+          paddingHorizontal: horizontalPadding,
           flexDirection: 'row',
           alignItems: 'center',
-          backgroundColor: theme.surface,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.border,
-        }}
+          backgroundColor: pressed ? theme.surfaceLight : 'transparent',
+        })}
       >
         <View
           style={{
-            ...exerciseThumbStyle(EXERCISE_THUMB.large),
+            ...exerciseThumbStyle(EXERCISE_THUMB.medium),
             overflow: 'hidden',
             alignItems: 'center',
             justifyContent: 'center',
@@ -241,25 +265,26 @@ const Exercises = ({ navigation }: NavigationOnlyProps) => {
           {imageUrl ? (
             <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
           ) : (
-            <Ionicons name="barbell" size={24} color={theme.textMuted} />
+            <Ionicons name="barbell-outline" size={19} color={theme.textMuted} />
           )}
         </View>
-        <View style={{ flex: 1, paddingHorizontal: 12 }}>
-          <Text style={{ color: theme.text, fontSize: 14, fontWeight: '700' }} numberOfLines={1}>
-            {item.name}
+        <View style={{ flex: 1, minWidth: 0, paddingLeft: 12 }}>
+          <Text style={{ color: theme.text, fontSize: TYPE.row, fontWeight: '600' }} numberOfLines={1}>
+            {exerciseTitle(item.name, i18n.language)}
           </Text>
-          <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 4 }} numberOfLines={1}>
-            {item.muscleGroup || t('exercises.muscle', 'Muscle')} · {item.equipment || t('exercises.equipment', 'Equipment')}
+          <Text style={{ color: theme.textMuted, fontSize: TYPE.meta, marginTop: 2 }} numberOfLines={1}>
+            {exerciseMeta(item, t, i18n.language)}
           </Text>
         </View>
-        <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
-      </TouchableOpacity>
+      </Pressable>
     );
   };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
       <ScreenHeader
+        large
+        scrolled={headerEdge.scrolled}
         title={t('menu.exercises', 'Exercises')}
         actions={[
           {
@@ -270,23 +295,38 @@ const Exercises = ({ navigation }: NavigationOnlyProps) => {
         ]}
       />
 
-      <View style={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: horizontalPadding, paddingTop: 4 }}>
-        <Searchbar
-          placeholder={t('exercises.search', 'Search exercises')}
-          onChangeText={setSearchQuery}
-          value={searchQuery}
+      <View style={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: horizontalPadding, paddingTop: 2, paddingBottom: 8 }}>
+        <View
           style={{
-            height: 44,
-            borderRadius: 14,
+            height: CONTROL.field,
+            borderRadius: 10,
+            paddingHorizontal: 10,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
             backgroundColor: theme.surfaceLight,
-            elevation: 0,
           }}
-          inputStyle={{ minHeight: 0, color: theme.text, fontSize: 14 }}
-          placeholderTextColor={theme.textMuted}
-          iconColor={theme.textMuted}
-        />
+        >
+          <Ionicons name="search" size={17} color={theme.textMuted} />
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder={t('exercises.search', 'Search exercises')}
+            placeholderTextColor={theme.textMuted}
+            returnKeyType="search"
+            autoCorrect={false}
+            style={{ flex: 1, minWidth: 0, color: theme.text, fontSize: TYPE.body, paddingVertical: 0 }}
+          />
+          {searchQuery ? (
+            <Pressable onPress={() => setSearchQuery('')} hitSlop={10} accessibilityRole="button" accessibilityLabel={t('common.clear', 'Temizle')}>
+              <Ionicons name="close-circle" size={17} color={theme.textMuted} />
+            </Pressable>
+          ) : null}
+        </View>
 
-        <View style={{ flexDirection: 'row', gap: 10, marginTop: 10, marginBottom: 16 }}>
+        {/* Two filters as chips, like Hevy's "Any equipment / Any muscle":
+            grey until one is chosen, then the chosen value in the accent. */}
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
           {([
             { type: 'equipment', value: equipmentFilter, icon: 'barbell-outline' },
             { type: 'muscle', value: muscleFilter, icon: 'body-outline' },
@@ -297,54 +337,40 @@ const Exercises = ({ navigation }: NavigationOnlyProps) => {
                 key={filter.type}
                 activeOpacity={0.72}
                 onPress={() => openFilter(filter.type)}
+                accessibilityRole="button"
                 style={{
                   flex: 1,
-                  minHeight: 42,
-                  paddingHorizontal: 11,
+                  height: CONTROL.height,
+                  paddingHorizontal: 12,
                   flexDirection: 'row',
                   alignItems: 'center',
-                  borderRadius: 10,
-                  borderWidth: StyleSheet.hairlineWidth,
-                  borderColor: active ? theme.primary : theme.border,
-                  backgroundColor: active ? theme.primarySoft : theme.surface,
+                  justifyContent: 'center',
+                  gap: 5,
+                  borderRadius: CONTROL.radius,
+                  backgroundColor: active ? theme.primarySoft : theme.surfaceLight,
                 }}
               >
-                <Ionicons
-                  name={filter.icon}
-                  size={17}
-                  color={active ? theme.primary : theme.textSecondary}
-                />
                 <Text
                   numberOfLines={1}
                   style={{
-                    flex: 1,
-                    marginHorizontal: 7,
-                    color: active ? theme.primary : theme.textSecondary,
-                    fontSize: 12,
-                    fontWeight: '700',
+                    flexShrink: 1,
+                    color: active ? theme.primary : theme.text,
+                    fontSize: 13,
+                    fontWeight: '600',
                   }}
                 >
                   {filterLabel(filter.type, filter.value)}
                 </Text>
-                <Ionicons name="chevron-down" size={15} color={theme.textMuted} />
+                <Ionicons name="chevron-down" size={13} color={active ? theme.primary : theme.textMuted} />
               </TouchableOpacity>
             );
           })}
         </View>
-
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-          <Text style={{ color: theme.text, fontSize: 15, fontWeight: '800' }}>
-            {t('exercises.all_exercises', 'All exercises')}
-          </Text>
-          <Text style={{ color: theme.textMuted, fontSize: 12, fontWeight: '700' }}>
-            {exercises.length}
-          </Text>
-        </View>
       </View>
 
-      {loading ? (
+      {loading && !refreshing ? (
         <View style={{ flex: 1, justifyContent: 'center' }}>
-          <ActivityIndicator color={theme.primary} />
+          <ActivityIndicator color={theme.textMuted} />
         </View>
       ) : (
         <FlatList
@@ -352,42 +378,61 @@ const Exercises = ({ navigation }: NavigationOnlyProps) => {
           data={exercises}
           keyExtractor={(item) => item._id}
           renderItem={renderExercise}
+          onScroll={headerEdge.onScroll}
+          scrollEventThrottle={headerEdge.scrollEventThrottle}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={theme.textMuted} />}
           style={{ width: '100%', maxWidth: 720, alignSelf: 'center' }}
-          contentContainerStyle={{ paddingBottom: 30 }}
+          contentContainerStyle={{ paddingBottom: 30 + keyboard.height }}
           showsVerticalScrollIndicator={false}
           onEndReached={loadMoreExercises}
           onEndReachedThreshold={0.35}
+          ListHeaderComponent={
+            exercises.length ? (
+              // No counter beside the heading: the list pages in by cursor, so
+              // the only number available was "rows loaded so far".
+              <Text style={{ color: theme.textMuted, fontSize: 13, fontWeight: '600', paddingHorizontal: horizontalPadding, paddingTop: 6, paddingBottom: 4 }}>
+                {searchQuery || muscleFilter !== 'all' || equipmentFilter !== 'all'
+                  ? t('exercises.results', 'Sonuçlar')
+                  : t('exercises.all_exercises', 'All exercises')}
+              </Text>
+            ) : null
+          }
           ListFooterComponent={
             loadingMore ? (
               <ActivityIndicator
                 size="small"
-                color={theme.primary}
+                color={theme.textMuted}
                 style={{ paddingVertical: 18 }}
               />
             ) : null
           }
           ListEmptyComponent={
-            <Surface
-              elevation={0}
-              style={{
-                marginHorizontal: horizontalPadding,
-                marginTop: 4,
-                padding: 24,
-                alignItems: 'center',
-                borderRadius: 12,
-                borderWidth: StyleSheet.hairlineWidth,
-                borderColor: theme.border,
-                backgroundColor: theme.surface,
-              }}
-            >
-              <Ionicons name="search-outline" size={27} color={theme.textMuted} />
-              <Text style={{ marginTop: 10, color: theme.text, fontSize: 15, fontWeight: '700' }}>
-                {t('exercises.not_found', 'No exercises found')}
-              </Text>
-              <Text style={{ marginTop: 4, color: theme.textMuted, fontSize: 12, textAlign: 'center' }}>
-                {t('exercises.try_filters', 'Try another search or clear a filter.')}
-              </Text>
-            </Surface>
+            failed ? (
+              <View style={{ alignItems: 'center', paddingHorizontal: 32, paddingTop: 48 }}>
+                <Ionicons name="cloud-offline-outline" size={26} color={theme.textMuted} />
+                <Text style={{ marginTop: 10, color: theme.text, fontSize: TYPE.section, fontWeight: '600' }}>
+                  {t('exercises.load_failed', 'Egzersizler yüklenemedi')}
+                </Text>
+                <Text style={{ marginTop: 4, color: theme.textMuted, fontSize: 13, textAlign: 'center' }}>
+                  {t('common.check_connection', 'Bağlantını kontrol edip tekrar dene.')}
+                </Text>
+                <Pressable onPress={() => void fetchExercises(null)} hitSlop={8} style={{ marginTop: 14 }} accessibilityRole="button">
+                  <Text style={{ color: theme.primary, fontSize: 14, fontWeight: '600' }}>{t('common.retry', 'Tekrar dene')}</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={{ alignItems: 'center', paddingHorizontal: 32, paddingTop: 48 }}>
+                <Ionicons name="search-outline" size={26} color={theme.textMuted} />
+                <Text style={{ marginTop: 10, color: theme.text, fontSize: TYPE.section, fontWeight: '600' }}>
+                  {t('exercises.not_found', 'No exercises found')}
+                </Text>
+                <Text style={{ marginTop: 4, color: theme.textMuted, fontSize: 13, textAlign: 'center' }}>
+                  {t('exercises.try_filters', 'Try another search or clear a filter.')}
+                </Text>
+              </View>
+            )
           }
         />
       )}
@@ -409,8 +454,8 @@ const Exercises = ({ navigation }: NavigationOnlyProps) => {
             backgroundColor: theme.surface,
           }}
         >
-          <View style={{ padding: 18, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-            <Text style={{ color: theme.text, fontSize: 19, fontWeight: '800' }}>
+          <View style={{ paddingHorizontal: 18, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border }}>
+            <Text style={{ color: theme.text, fontSize: TYPE.section + 1, fontWeight: '700' }}>
               {filterType === 'muscle'
                 ? t('exercises.select_muscle', 'Select muscle group')
                 : t('exercises.select_equipment', 'Select equipment')}

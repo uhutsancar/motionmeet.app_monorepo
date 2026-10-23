@@ -1,27 +1,23 @@
-import React, { useMemo, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Image,
-  View,
+  Pressable,
   StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type KeyboardTypeOptions,
+  type TextInputProps,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
-import {
-  Avatar,
-  Button,
-  Surface,
-  Text,
-  TextInput,
-  TouchableRipple,
-} from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { useAuthContext } from '../context/AuthProvider';
 import { useTheme } from '../context/ThemeContext';
 import { uploadMedia } from '../api/mediaUpload';
 import { updateUser } from '../features/user/userSlice';
 import KeyboardAwareScrollView from '../components/KeyboardAwareScrollView';
-import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import {
   getUserFacingError,
   logHandledError,
@@ -31,6 +27,8 @@ import {
 import type { ImagePickerAsset } from 'expo-image-picker';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import ScreenHeader from '../components/ScreenHeader';
+import { useScrollEdge } from '../hooks/useScrollEdge';
+import { TYPE } from '../config/layout';
 import type { NavigationOnlyProps } from '../navigation/types';
 
 const ALLOWED_IMAGE_TYPES = new Set([
@@ -43,6 +41,8 @@ const ALLOWED_IMAGE_TYPES = new Set([
   'image/heif',
 ]);
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const AVATAR_SIZE = 84;
+const LABEL_WIDTH = 104;
 
 const validateAsset = (asset: ImagePickerAsset): void => {
   if (!asset?.uri) throw new Error('Please select a valid image.');
@@ -54,13 +54,43 @@ const validateAsset = (asset: ImagePickerAsset): void => {
   }
 };
 
+interface FieldRowProps extends TextInputProps {
+  label: string;
+  inputRef?: React.Ref<TextInput>;
+  keyboardType?: KeyboardTypeOptions;
+}
+
+/**
+ * One line of the form, the way Instagram's edit screen draws it: the label in
+ * a fixed column, the value beside it, a hairline under the value only. No box
+ * around the field and no box around the form.
+ */
+const FieldRow = ({ label, inputRef, multiline, ...input }: FieldRowProps) => {
+  const { theme } = useTheme();
+  return (
+    <View style={styles.fieldRow}>
+      <Text style={[styles.fieldLabel, { color: theme.text }]} numberOfLines={1}>{label}</Text>
+      <View style={[styles.fieldValue, { borderBottomColor: theme.border }]}>
+        <TextInput
+          ref={inputRef}
+          {...input}
+          multiline={multiline}
+          placeholderTextColor={theme.textMuted}
+          style={[styles.input, multiline && styles.multiline, { color: theme.text }]}
+          textAlignVertical={multiline ? 'top' : 'center'}
+        />
+      </View>
+    </View>
+  );
+};
+
 const ProfileEditScreen = ({ navigation }: NavigationOnlyProps) => {
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.user.value);
   const { getToken } = useAuthContext();
   const { theme } = useTheme();
   const { t } = useTranslation();
-  const { horizontalPadding, isNarrow } = useResponsiveLayout();
+  const headerEdge = useScrollEdge();
   const [profileAsset, setProfileAsset] = useState<ImagePickerAsset | null>(null);
   const [coverAsset, setCoverAsset] = useState<ImagePickerAsset | null>(null);
   const [saving, setSaving] = useState(false);
@@ -71,22 +101,16 @@ const ProfileEditScreen = ({ navigation }: NavigationOnlyProps) => {
     weight: String(user?.weight || ''),
     height: String(user?.height || ''),
   });
+  const usernameRef = useRef<TextInput>(null);
+  const bioRef = useRef<TextInput>(null);
+  const weightRef = useRef<TextInput>(null);
+  const heightRef = useRef<TextInput>(null);
   // Location is not part of this form. It is chosen from the dataset on its own
   // screen and written by the backend, so it is only shown here as a link.
   const locationLabel = user?.location || '';
 
   const profilePreview = profileAsset?.uri || user?.profile_picture || '';
   const coverPreview = coverAsset?.uri || user?.cover_photo || '';
-  const inputTheme = useMemo(
-    () => ({
-      colors: {
-        primary: theme.primary,
-        background: theme.surfaceLight,
-        onSurfaceVariant: theme.textMuted,
-      },
-    }),
-    [theme],
-  );
 
   const updateField = (field: keyof typeof form) => (value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -143,8 +167,8 @@ const ProfileEditScreen = ({ navigation }: NavigationOnlyProps) => {
         full_name: form.full_name.trim(),
         username: form.username.trim(),
         bio: form.bio.trim(),
-        weight: form.weight.trim() || 0,
-        height: form.height.trim() || 0,
+        weight: form.weight.trim().replace(',', '.') || 0,
+        height: form.height.trim().replace(',', '.') || 0,
         ...(uploadedProfileKey ? { uploadedProfileKey } : {}),
         ...(uploadedCoverKey ? { uploadedCoverKey } : {}),
       };
@@ -169,205 +193,176 @@ const ProfileEditScreen = ({ navigation }: NavigationOnlyProps) => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right', 'bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
       <ScreenHeader
         title={t('profile.edit_profile', 'Edit profile')}
+        backIcon="close"
         onBack={saving ? undefined : () => navigation.goBack()}
+        scrolled={headerEdge.scrolled}
+        textAction={{ label: t('common.save', 'Kaydet'), onPress: () => void saveProfile(), busy: saving }}
       />
 
-        <KeyboardAwareScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            width: '100%',
-            maxWidth: 720,
-            alignSelf: 'center',
-            paddingHorizontal: horizontalPadding,
-            paddingTop: 16,
-            paddingBottom: 40,
-            gap: 16,
-          }}
-          extraScrollHeight={28}
-        >
-          <Surface
-            elevation={0}
-            style={{
-              overflow: 'hidden',
-              borderRadius: 16,
-              borderWidth: StyleSheet.hairlineWidth,
-              borderColor: theme.border,
-              backgroundColor: theme.surface,
-            }}
+      <KeyboardAwareScrollView
+        showsVerticalScrollIndicator={false}
+        onScroll={headerEdge.onScroll}
+        scrollEventThrottle={headerEdge.scrollEventThrottle}
+        contentContainerStyle={styles.content}
+        extraScrollHeight={24}
+      >
+        {/* The picture first, centred, with one text link under it - the only
+            thing on the screen that is not a line of the form. */}
+        <View style={styles.photo}>
+          <Pressable
+            onPress={() => void pickImage('profile')}
+            accessibilityRole="button"
+            accessibilityLabel={t('profile.change_photo', 'Change profile photo')}
+            style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
           >
-            <TouchableRipple onPress={() => pickImage('cover')}>
-              <View style={{ height: 150, backgroundColor: theme.primarySoft }}>
-                {coverPreview ? (
-                  <Image source={{ uri: coverPreview }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                ) : (
-                  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ color: theme.textMuted, fontWeight: '700' }}>
-                      {t('profile.add_cover', 'Add cover photo')}
-                    </Text>
-                  </View>
-                )}
-                <View
-                  style={{
-                    position: 'absolute',
-                    right: 12,
-                    bottom: 12,
-                    maxWidth: '76%',
-                    paddingHorizontal: 12,
-                    paddingVertical: 7,
-                    borderRadius: 10,
-                    backgroundColor: theme.overlay,
-                  }}
-                >
-                  <Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>
-                    {t('profile.change_cover', 'Change cover')}
-                  </Text>
-                </View>
+            {profilePreview ? (
+              <Image source={{ uri: profilePreview }} style={[styles.avatar, { backgroundColor: theme.surfaceLight }]} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarEmpty, { backgroundColor: theme.surfaceLight }]}>
+                <Text style={{ color: theme.textSecondary, fontSize: 32, fontWeight: '500' }}>
+                  {form.full_name.charAt(0).toUpperCase() || 'U'}
+                </Text>
               </View>
-            </TouchableRipple>
+            )}
+          </Pressable>
+          <Pressable onPress={() => void pickImage('profile')} hitSlop={8} accessibilityRole="button">
+            <Text style={[styles.photoLink, { color: theme.primary }]}>
+              {t('profile.change_photo', 'Change profile photo')}
+            </Text>
+          </Pressable>
+        </View>
 
-            <View style={{ alignItems: 'center', marginTop: -44, paddingBottom: 18 }}>
-              <TouchableRipple
-                borderless
-                onPress={() => pickImage('profile')}
-                style={{ borderRadius: 50 }}
-              >
-                {profilePreview ? (
-                  <Avatar.Image
-                    source={{ uri: profilePreview }}
-                    size={92}
-                    style={{ backgroundColor: theme.surface, borderWidth: 4, borderColor: theme.surface }}
-                  />
-                ) : (
-                  <Avatar.Text
-                    label={form.full_name.charAt(0).toUpperCase() || 'U'}
-                    size={92}
-                    style={{ backgroundColor: theme.primary, borderWidth: 4, borderColor: theme.surface }}
-                  />
-                )}
-              </TouchableRipple>
-              {/* The accepted formats and size limit are enforced on upload and
-                  surfaced as an error there, so the form stays uncluttered. */}
-              <Text style={{ marginTop: 8, color: theme.primary, fontSize: 12, fontWeight: '800' }}>
-                {t('profile.change_photo', 'Change profile photo')}
-              </Text>
-            </View>
-          </Surface>
+        <View style={[styles.form, { borderTopColor: theme.border }]}>
+          <FieldRow
+            label={t('profile.full_name', 'Full name')}
+            value={form.full_name}
+            onChangeText={updateField('full_name')}
+            maxLength={100}
+            textContentType="name"
+            autoComplete="name"
+            returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => usernameRef.current?.focus()}
+          />
+          <FieldRow
+            label={t('profile.username', 'Username')}
+            inputRef={usernameRef}
+            value={form.username}
+            onChangeText={updateField('username')}
+            autoCapitalize="none"
+            autoCorrect={false}
+            maxLength={30}
+            textContentType="username"
+            returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => bioRef.current?.focus()}
+          />
+          <FieldRow
+            label={t('profile.bio', 'Bio')}
+            inputRef={bioRef}
+            value={form.bio}
+            onChangeText={updateField('bio')}
+            placeholder={t('profile.bio_placeholder', 'Kendinden kısaca bahset')}
+            multiline
+            maxLength={500}
+          />
 
-          <Surface
-            elevation={0}
-            style={{
-              padding: 16,
-              gap: 13,
-              borderRadius: 16,
-              borderWidth: StyleSheet.hairlineWidth,
-              borderColor: theme.border,
-              backgroundColor: theme.surface,
-            }}
-          >
-            <TextInput
-              mode="outlined"
-              label={t('profile.full_name', 'Full name')}
-              value={form.full_name}
-              onChangeText={updateField('full_name')}
-              maxLength={100}
-              theme={inputTheme}
-              textColor={theme.text}
-            />
-            <TextInput
-              mode="outlined"
-              label={t('profile.username', 'Username')}
-              value={form.username}
-              onChangeText={updateField('username')}
-              autoCapitalize="none"
-              maxLength={30}
-              theme={inputTheme}
-              textColor={theme.text}
-            />
-            <TextInput
-              mode="outlined"
-              label={t('profile.bio', 'Bio')}
-              value={form.bio}
-              onChangeText={updateField('bio')}
-              multiline
-              numberOfLines={4}
-              maxLength={500}
-              theme={inputTheme}
-              textColor={theme.text}
-            />
-            {/* A validated place from the world city list, not free text: the
-                label on a profile is rendered by the backend from the record
-                the member picked. */}
-            <TouchableRipple
-              onPress={() => navigation.navigate('LocationPickerScreen', { source: 'profile_update' })}
-              disabled={saving}
-              style={{ borderRadius: 4 }}
-            >
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 11,
-                  minHeight: 56,
-                  paddingHorizontal: 14,
-                  borderRadius: 4,
-                  borderWidth: StyleSheet.hairlineWidth,
-                  borderColor: theme.border,
-                  backgroundColor: theme.surfaceLight,
-                }}
-              >
-                <Ionicons name="location-outline" size={19} color={theme.textMuted} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ color: theme.textMuted, fontSize: 11 }}>{t('profile.location', 'Location')}</Text>
-                  <Text numberOfLines={1} style={{ color: locationLabel ? theme.text : theme.textMuted, fontSize: 14.5, marginTop: 1 }}>
-                    {locationLabel || t('location.not_set', 'Not set')}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={17} color={theme.textMuted} />
-              </View>
-            </TouchableRipple>
-            <View style={{ flexDirection: isNarrow ? 'column' : 'row', gap: 12 }}>
-              <TextInput
-                mode="outlined"
-                label={t('profile.weight', 'Weight (kg)')}
-                value={form.weight}
-                onChangeText={updateField('weight')}
-                keyboardType="decimal-pad"
-                style={{ flex: 1 }}
-                theme={inputTheme}
-                textColor={theme.text}
-              />
-              <TextInput
-                mode="outlined"
-                label={t('profile.height', 'Height (cm)')}
-                value={form.height}
-                onChangeText={updateField('height')}
-                keyboardType="decimal-pad"
-                style={{ flex: 1 }}
-                theme={inputTheme}
-                textColor={theme.text}
-              />
-            </View>
-          </Surface>
-
-          <Button
-            mode="contained"
-            onPress={saveProfile}
-            loading={saving}
+          {/* A validated place from the world city list, not free text: the
+              label on a profile is rendered by the backend from the record
+              the member picked. */}
+          <Pressable
+            onPress={() => navigation.navigate('LocationPickerScreen', { source: 'profile_update' })}
             disabled={saving}
-            buttonColor={theme.primary}
-            textColor="#FFFFFF"
-            style={{ borderRadius: 12 }}
-            contentStyle={{ minHeight: 52 }}
-            labelStyle={{ fontSize: 15, fontWeight: '900' }}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.fieldRow, pressed && { opacity: 0.7 }]}
           >
-            {saving ? t('common.saving', 'Saving...') : t('profile.save_changes', 'Save changes')}
-          </Button>
-        </KeyboardAwareScrollView>
+            <Text style={[styles.fieldLabel, { color: theme.text }]} numberOfLines={1}>
+              {t('profile.location', 'Location')}
+            </Text>
+            <View style={[styles.fieldValue, styles.linkValue, { borderBottomColor: theme.border }]}>
+              <Text numberOfLines={1} style={[styles.input, { flex: 1, color: locationLabel ? theme.text : theme.textMuted }]}>
+                {locationLabel || t('location.not_set', 'Not set')}
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
+            </View>
+          </Pressable>
+
+          <FieldRow
+            label={t('profile.weight', 'Weight (kg)')}
+            inputRef={weightRef}
+            value={form.weight}
+            onChangeText={updateField('weight')}
+            keyboardType="decimal-pad"
+            placeholder="–"
+            returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => heightRef.current?.focus()}
+          />
+          <FieldRow
+            label={t('profile.height', 'Height (cm)')}
+            inputRef={heightRef}
+            value={form.height}
+            onChangeText={updateField('height')}
+            keyboardType="decimal-pad"
+            placeholder="–"
+            returnKeyType="done"
+            onSubmitEditing={() => void saveProfile()}
+          />
+        </View>
+
+        {/* The cover is optional and secondary, so it is a row, not a banner
+            that takes the top of the screen. */}
+        <Pressable
+          onPress={() => void pickImage('cover')}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.coverRow, { borderColor: theme.border }, pressed && { backgroundColor: theme.surfaceLight }]}
+        >
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[styles.coverTitle, { color: theme.text }]}>{t('profile.cover_photo', 'Kapak fotoğrafı')}</Text>
+            <Text style={[styles.coverHint, { color: theme.textMuted }]} numberOfLines={1}>
+              {coverPreview ? t('profile.change_cover', 'Change cover') : t('profile.add_cover', 'Add cover photo')}
+            </Text>
+          </View>
+          {coverPreview ? (
+            <Image source={{ uri: coverPreview }} style={[styles.coverThumb, { backgroundColor: theme.surfaceLight }]} resizeMode="cover" />
+          ) : (
+            <Ionicons name="image-outline" size={20} color={theme.textMuted} />
+          )}
+        </Pressable>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  content: { width: '100%', maxWidth: 640, alignSelf: 'center', paddingBottom: 40 },
+  photo: { alignItems: 'center', paddingTop: 12, paddingBottom: 16, gap: 10 },
+  avatar: { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 },
+  avatarEmpty: { alignItems: 'center', justifyContent: 'center' },
+  photoLink: { fontSize: TYPE.button, fontWeight: '600' },
+  form: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 4 },
+  fieldRow: { flexDirection: 'row', alignItems: 'flex-start', paddingLeft: 16, minHeight: 48 },
+  fieldLabel: { width: LABEL_WIDTH, fontSize: TYPE.body, paddingTop: 14 },
+  fieldValue: { flex: 1, minWidth: 0, marginRight: 16, borderBottomWidth: StyleSheet.hairlineWidth },
+  linkValue: { flexDirection: 'row', alignItems: 'center', minHeight: 48, gap: 6 },
+  input: { fontSize: TYPE.body + 0.5, paddingVertical: 13, paddingHorizontal: 0 },
+  multiline: { minHeight: 64, maxHeight: 140, paddingTop: 13 },
+  coverRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  coverTitle: { fontSize: TYPE.body, fontWeight: '500' },
+  coverHint: { fontSize: TYPE.meta, marginTop: 2 },
+  coverThumb: { width: 64, height: 36, borderRadius: 6 },
+});
 
 export default ProfileEditScreen;

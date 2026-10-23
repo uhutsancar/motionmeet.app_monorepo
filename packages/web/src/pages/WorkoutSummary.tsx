@@ -233,7 +233,7 @@ const WorkoutSummary = () => {
                             <ArrowLeft size={24} />
                         </IconButton>
                         <Stack>
-                            <Typography variant="overline" sx={{ fontSize: '0.65rem', fontWeight: 900, color: 'text.secondary', lineHeight: 1 }}>
+                            <Typography variant="overline" sx={{ fontSize: '0.75rem', fontWeight: 600, color: 'text.secondary', lineHeight: 1 }}>
                                 {t('workout_summary.title', 'ANTRENMAN ÖZETİ')}
                             </Typography>
                             <Typography variant="subtitle1" fontWeight="bold">

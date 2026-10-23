@@ -274,7 +274,7 @@ const Nearby = () => {
       <Paper variant="outlined" sx={{ p: 2 }}>
         <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="body2" sx={{ fontWeight: 800 }}>
+            <Typography variant="body2" sx={{ fontWeight: 700 }}>
               {t("nearby.feature_title", "Show athletes near me")}
             </Typography>
             <Typography variant="caption" color="text.secondary">
@@ -311,14 +311,14 @@ const Nearby = () => {
             </Button>
           )}
         >
-          <AlertTitle sx={{ fontWeight: 800 }}>{notice.title}</AlertTitle>
+          <AlertTitle sx={{ fontWeight: 700 }}>{notice.title}</AlertTitle>
           {notice.body}
         </Alert>
       )}
 
       {enabled && (
         <Stack spacing={1}>
-          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>
+          <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>
             {t("nearby.radius", "Radius")}
           </Typography>
           <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
@@ -345,7 +345,7 @@ const Nearby = () => {
         ) : !enabled || users.length === 0 ? (
           <Stack spacing={1} sx={{ minHeight: 220, alignItems: "center", justifyContent: "center", textAlign: "center", p: 3 }}>
             <Compass size={28} />
-            <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{emptyCopy.title}</Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{emptyCopy.title}</Typography>
             <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 380 }}>{emptyCopy.body}</Typography>
           </Stack>
         ) : (
@@ -365,7 +365,7 @@ const Nearby = () => {
                     {(user.full_name || "U").charAt(0).toUpperCase()}
                   </Avatar>
                   <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="body2" noWrap sx={{ fontWeight: 800 }}>{user.full_name}</Typography>
+                    <Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>{user.full_name}</Typography>
                     <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>@{user.username}</Typography>
                     {user.approximateArea && (
                       <Typography variant="caption" color="text.disabled" noWrap sx={{ display: "block" }}>

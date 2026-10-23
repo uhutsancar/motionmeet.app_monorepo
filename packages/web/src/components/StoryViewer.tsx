@@ -268,7 +268,7 @@ const StoryViewer = ({ stories, open, onClose, onDeleted }: StoryViewerProps) =>
                 p: 4,
                 color: "common.white",
                 fontSize: 30,
-                fontWeight: 800,
+                fontWeight: 700,
                 textAlign: "center",
               }}
             >
@@ -462,7 +462,7 @@ const StoryViewer = ({ stories, open, onClose, onDeleted }: StoryViewerProps) =>
       >
         <Box sx={{ p: 2, height: "100%", overflowY: "auto" }}>
           <Box sx={{ width: 40, height: 4, mx: "auto", mb: 1.5, borderRadius: 2, bgcolor: "divider" }} />
-          <Typography sx={{ mb: 1.5, fontWeight: 800 }}>
+          <Typography sx={{ mb: 1.5, fontWeight: 700 }}>
             {t("feed.story_viewers", "Viewed by")}
             {viewers.length ? ` · ${viewers.length}` : ""}
           </Typography>

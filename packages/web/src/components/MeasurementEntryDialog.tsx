@@ -167,7 +167,7 @@ const MeasurementEntryDialog = ({ open, existing, onClose, onSaved }: Measuremen
 
   return (
     <Dialog open={open} onClose={saving ? undefined : onClose} fullWidth maxWidth="sm">
-      <DialogTitle sx={{ fontWeight: 800 }}>
+      <DialogTitle sx={{ fontWeight: 700 }}>
         {existing ? t("measurements.edit", "Edit measurement") : t("measurements.add", "Add measurement")}
       </DialogTitle>
       <DialogContent dividers>
@@ -180,7 +180,7 @@ const MeasurementEntryDialog = ({ open, existing, onClose, onSaved }: Measuremen
             <ChevronLeftRounded />
           </IconButton>
           <Box sx={{ flex: 1, minWidth: 0, textAlign: "center" }}>
-            <Typography variant="body2" noWrap sx={{ fontWeight: 900 }}>
+            <Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>
               {dateFormatter.format(dayKeyToDate(dayKey))}
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>

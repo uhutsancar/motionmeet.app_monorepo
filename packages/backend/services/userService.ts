@@ -35,11 +35,11 @@ const withRelationships = async <T extends SummaryRow>(rows: T[], viewerId: stri
     ...(states.get(row.id) ?? { isFollowing: false, isFollowedBy: false, requestSent: false, requestReceived: false }),
   }));
 };
-export const getUserById = (userId: string): Promise<InternalUser | null> => findUserById(userId, { plan: true });
+export const getUserById = (userId: string): Promise<InternalUser | null> => findUserById(userId);
 
 export const getUserByIdWithPassword = async (userId: string): Promise<InternalUser | null> => {
   const row = await database.selectFrom("users").selectAll().where("id", "=", userId).executeTakeFirst();
-  return row ? serializeUser(row, null, true) : null;
+  return row ? serializeUser(row, true) : null;
 };
 export const checkUsernameTaken = async (username: string, excludeUserId: string): Promise<boolean> => Boolean(await database.selectFrom("users").select("id").where("username", "=", username).where("id", "!=", excludeUserId).executeTakeFirst());
 

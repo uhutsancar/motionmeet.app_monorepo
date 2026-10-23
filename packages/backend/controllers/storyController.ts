@@ -1,3 +1,4 @@
+import { USAGE_LIMITS, usageLimitFor } from "../configs/usageLimits.js";
 import imagekit from "../configs/imageKit.js";
 import type { RequestHandler } from "express";
 
@@ -103,12 +104,7 @@ export const addUserStory: RequestHandler = async (req, res, next) => {
 
     let story;
     try {
-      const quotaLimit =
-        req.dbUser?.role === "superadmin"
-          ? -1
-          : req.dbUser?.plan && typeof req.dbUser.plan === "object"
-            ? req.dbUser.plan.features.max_stories_per_day
-            : -1;
+      const quotaLimit = usageLimitFor(req.dbUser, USAGE_LIMITS.storiesPerDay);
       story = await storyService.createStory(
         {
           user: req.userId,

@@ -36,6 +36,12 @@ interface StoryComposerProps {
   visible: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  /**
+   * A picture to start from instead of opening the gallery, such as a
+   * workout card. The author still adds text, moves things and decides
+   * whether to post; the picture can be swapped like any other.
+   */
+  initialMedia?: ImagePickerAsset | null;
 }
 
 interface StoryVideoPreviewProps {
@@ -53,7 +59,7 @@ const StoryVideoPreview = ({ uri }: StoryVideoPreviewProps) => {
     <VideoView
       player={player}
       style={StyleSheet.absoluteFill}
-      contentFit="cover"
+      contentFit="contain"
       nativeControls={false}
       surfaceType="textureView"
       accessibilityLabel="Story video"
@@ -88,7 +94,7 @@ const newTextOverlay = (): StoryOverlay => ({
  * stored as fractions of the frame, so the same story reads identically on
  * every screen size.
  */
-const StoryComposer = ({ visible, onClose, onSuccess }: StoryComposerProps) => {
+const StoryComposer = ({ visible, onClose, onSuccess, initialMedia }: StoryComposerProps) => {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { frameWidth, frameHeight, onFrameLayout } = useStoryFrame();
@@ -179,8 +185,12 @@ const StoryComposer = ({ visible, onClose, onSuccess }: StoryComposerProps) => {
     }
     if (launchedRef.current) return;
     launchedRef.current = true;
+    if (initialMedia) {
+      setMedia(initialMedia);
+      return;
+    }
     void pickMedia({ closeOnCancel: true });
-  }, [pickMedia, reset, visible]);
+  }, [initialMedia, pickMedia, reset, visible]);
 
   const commitOverlay = useCallback((next: StoryOverlay) => {
     setOverlays((current) => current.map((overlay) => (overlay.id === next.id ? next : overlay)));
@@ -285,7 +295,10 @@ const StoryComposer = ({ visible, onClose, onSuccess }: StoryComposerProps) => {
             isVideo ? (
               <StoryVideoPreview uri={media.uri} />
             ) : (
-              <Image source={{ uri: media.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+              // Contain, like the viewer: the draft has to show exactly what
+              // will be posted, and a phone taller than 9:16 would otherwise
+              // crop the edges off a share card's text.
+              <Image source={{ uri: media.uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />
             )
           ) : (
             <View style={styles.pending}>
@@ -466,7 +479,7 @@ const styles = StyleSheet.create({
   aaLabel: {
     color: '#FFFFFF',
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   trashZone: {
     position: 'absolute',
@@ -536,7 +549,7 @@ const styles = StyleSheet.create({
   shareAvatarLetter: {
     color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   sharePillLabel: {
     flex: 1,

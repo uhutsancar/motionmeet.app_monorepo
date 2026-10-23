@@ -30,7 +30,6 @@ const publicUser = (user: InternalUser) => ({
   username: user.username,
   full_name: user.full_name,
   profile_picture: user.profile_picture,
-  plan: user.plan,
   bio: user.bio,
   privacy: user.privacy,
 });

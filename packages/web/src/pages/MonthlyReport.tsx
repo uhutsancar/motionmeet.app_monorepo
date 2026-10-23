@@ -176,7 +176,7 @@ const MonthlyReport = () => {
             <Box sx={{ flex: 1, overflowY: 'auto', pb: 10, width: '100%', maxWidth: 1180, mx: 'auto' }}>
                 {/* Title */}
                 <Box sx={{ px: 3, pt: 4, pb: 1 }}>
-                    <Typography variant="h5" sx={{ fontWeight: 800 }}>{monthName}</Typography>
+                    <Typography variant="h5" sx={{ fontWeight: 700 }}>{monthName}</Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                         {statsData?.totalWorkouts ?? 0} {t('monthly_report.workouts', 'Antrenmanlar').toLowerCase()}
                     </Typography>
@@ -257,7 +257,7 @@ const MonthlyReport = () => {
                                     <Typography variant="caption" sx={{ fontWeight: 600 }}>{card.label}</Typography>
                                     <ChevronRightRounded sx={{ fontSize: 16, color: 'text.secondary' }} />
                                 </Stack>
-                                <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                                <Typography variant="h6" sx={{ fontWeight: 700 }}>
                                     {card.value?.toLocaleString() ?? 0}
                                     {card.unit && <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>{card.unit}</Typography>}
                                 </Typography>
@@ -289,7 +289,7 @@ const MonthlyReport = () => {
                         </Box>
                         <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, px: 1.25, py: 0.75, borderRadius: 2, bgcolor: alpha('#ef4444', 0.1) }}>
                             <LocalFireDepartmentRounded sx={{ fontSize: 22, color: '#ef4444' }} />
-                            <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
                             {t('monthly_report.day_streak', { count: statsData?.currentStreakDays ?? 0, defaultValue: `${statsData?.currentStreakDays ?? 0} day streak` })}
                             </Typography>
                         </Stack>

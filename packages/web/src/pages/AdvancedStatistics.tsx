@@ -31,7 +31,7 @@ const ChartTooltip = ({ active, payload, label, unit }: ChartTooltipProps) => {
   return (
     <Paper elevation={3} sx={{ p: 1.5, border: 1, borderColor: "divider" }}>
       <Typography variant="caption" color="text.secondary">{label}</Typography>
-      <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
         {Number(payload[0].value || 0).toLocaleString()}{" "}
         <Typography component="span" variant="caption" color="text.secondary">{unit}</Typography>
       </Typography>
@@ -47,7 +47,7 @@ const Metric = ({ icon: Icon, label, value, unit, color }: MetricProps) => (
       </Box>
       <Box>
         <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>{label}</Typography>
-        <Typography variant="h6" sx={{ mt: 0.15, fontWeight: 800 }}>
+        <Typography variant="h6" sx={{ mt: 0.15, fontWeight: 700 }}>
           {Number(value || 0).toLocaleString()}{" "}
           <Typography component="span" variant="caption" color="text.secondary">{unit}</Typography>
         </Typography>
@@ -60,7 +60,7 @@ const ChartCard = ({ icon: Icon, title, children, color = "primary.main" }: Char
   <Paper variant="outlined" sx={{ p: { xs: 2, sm: 2.5 }, minWidth: 0 }}>
     <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 2 }}>
       <Box sx={{ color, display: "flex" }}><Icon size={18} /></Box>
-      <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{title}</Typography>
+      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{title}</Typography>
     </Stack>
     {children}
   </Paper>

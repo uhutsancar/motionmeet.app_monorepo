@@ -26,7 +26,7 @@ const AppToast = () => {
         borderColor: theme.border,
       },
       contentContainerStyle: { paddingHorizontal: 14 },
-      text1Style: { color: theme.text, fontSize: 14, fontWeight: '800' },
+      text1Style: { color: theme.text, fontSize: 14, fontWeight: '700' },
       text2Style: { color: theme.textSecondary, fontSize: 12, lineHeight: 17 },
       text2NumberOfLines: 3,
     };

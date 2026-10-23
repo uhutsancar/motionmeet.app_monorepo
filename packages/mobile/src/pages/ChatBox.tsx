@@ -35,10 +35,11 @@ import {
 } from '../features/messages/messagesSlice';
 import dayjs from '../utils/dayjs';
 
-import { Avatar, Text, IconButton, Surface, ActivityIndicator, useTheme as usePaperTheme, TouchableRipple } from 'react-native-paper';
+import { Avatar, Text, Surface, ActivityIndicator, useTheme as usePaperTheme, TouchableRipple } from 'react-native-paper';
 import { getUserFacingError, showError } from '../utils/feedback';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { KeyboardResponsiveView } from '../components/KeyboardAwareScrollView';
+import { useKeyboardInset } from '../hooks/useKeyboardInset';
 import MediaViewer from '../components/MediaViewer';
 import { ensureMediaLibraryPermission } from '../utils/permissions';
 import { CONTENT_LIMITS, createOperationId } from '@motionmeet/shared';
@@ -50,7 +51,7 @@ import { useAppDispatch, useAppSelector } from '../store/hooks';
 
 interface ChatBoxProps {
   route?: { params?: { userId?: string; user?: PublicUser | UserProfile } };
-  navigation: { goBack: () => void };
+  navigation: { goBack: () => void; navigate?: (screen: string, params?: object) => void };
 }
 interface UploadCache { signature: string; key: string }
 
@@ -67,15 +68,6 @@ const MESSAGE_LIST_MAX_WIDTH = 720;
 const MESSAGE_LIST_PADDING = 12;
 /** Avatar column reserved on the partner's side, including its gutter. */
 const AVATAR_SLOT_WIDTH = 34;
-/**
- * A photo in a conversation is not put in a frame.
- *
- * The bubble used to pad the picture and draw a border round it, which read as
- * a card with a photo inside rather than as the photo itself. The picture now
- * runs to the bubble's own rounded edge, and the timestamp floats over the
- * corner of it the way every chat app does it.
- */
-const MEDIA_BUBBLE_PADDING = 0;
 /** The composer grows to roughly five lines, then scrolls inside its pill. */
 const COMPOSER_MIN_HEIGHT = 42;
 const COMPOSER_MAX_HEIGHT = 124;
@@ -97,10 +89,13 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
     220,
     Math.min(usableWidth, MESSAGE_LIST_MAX_WIDTH) - MESSAGE_LIST_PADDING * 2,
   );
-  const bubbleMaxWidth = Math.round((rowWidth - AVATAR_SLOT_WIDTH) * 0.92);
-  const messageMediaWidth = Math.min(264, bubbleMaxWidth - MEDIA_BUBBLE_PADDING * 2);
+  // Instagram keeps a quarter of the row free beside the longest bubble, so a
+  // reply never reads as a full-width block.
+  const bubbleMaxWidth = Math.round((rowWidth - AVATAR_SLOT_WIDTH) * 0.78);
+  const messageMediaWidth = Math.min(236, bubbleMaxWidth);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const s = getStyles(theme, paperTheme, insets);
+  const keyboard = useKeyboardInset();
 
   const currentUser = useAppSelector((state) => state.user.value);
   const connections = useAppSelector((state) => state.connections.connections);
@@ -272,6 +267,14 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
     }
   }, [messages, partnerTyping]);
 
+  // Opening the keyboard shrinks the list from the bottom; the latest messages
+  // are brought back into view rather than left behind the composer.
+  useEffect(() => {
+    if (!keyboard.visible || messages.length === 0) return undefined;
+    const timer = setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 120);
+    return () => clearTimeout(timer);
+  }, [keyboard.visible, messages.length]);
+
   const loadOlderMessages = useCallback(async () => {
     if (!nextCursor || loadingOlder) return;
     setLoadingOlder(true);
@@ -324,13 +327,18 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
       }
       return;
     }
+    // Sent as it was taken, the way Instagram sends a photo: the forced 4:3
+    // crop screen cut every portrait in half before it reached the chat.
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'], allowsEditing: true, aspect: [4, 3], quality: 0.8,
+      mediaTypes: ['images'], allowsEditing: false, quality: 0.8,
     });
     if (!result.canceled) {
       setImage(result.assets[0]);
       pendingOperationIdRef.current = null;
       uploadCacheRef.current = null;
+      // The preview row takes room above the field; keep the latest message
+      // in view above it.
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 150);
     }
   };
 
@@ -438,122 +446,119 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
     );
   };
 
+  /*
+   * Messages are laid out the way Instagram's direct messages are: runs of
+   * one sender sit 2pt apart with their inner corners tightened, a new sender
+   * starts 10pt lower, and the time is a centred line between runs that are
+   * half an hour apart rather than a stamp squeezed into every bubble. The
+   * stamp is what broke long messages - it shared a wrapping row with the text,
+   * so the text was measured against what the stamp left over.
+   */
+  const timeLabel = (iso: string | Date | undefined): string => {
+    const at = dayjs(iso);
+    if (at.isSame(dayjs(), 'day')) return `${t('messages.today', 'Bugün')} ${at.format('HH:mm')}`;
+    if (at.isSame(dayjs().subtract(1, 'day'), 'day')) return `${t('messages.yesterday', 'Dün')} ${at.format('HH:mm')}`;
+    return at.format(at.isSame(dayjs(), 'year') ? 'D MMM HH:mm' : 'D MMM YYYY HH:mm');
+  };
+  const lastMineIndex = (() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) if (isMine(messages[index])) return index;
+    return -1;
+  })();
+
   const renderMessage: ListRenderItem<Message> = ({ item: msg, index }) => {
     const mine = isMine(msg);
     const prevMsg = messages[index - 1];
-    const showAvatar = !mine && (!prevMsg || isMine(prevMsg));
-
+    const nextMsg = messages[index + 1];
+    const newTime = !prevMsg || dayjs(msg.createdAt).diff(dayjs(prevMsg.createdAt), 'minute') >= 30;
+    const nextNewTime = !nextMsg || dayjs(nextMsg.createdAt).diff(dayjs(msg.createdAt), 'minute') >= 30;
+    const joinsPrev = Boolean(prevMsg) && !newTime && isMine(prevMsg) === mine;
+    const joinsNext = Boolean(nextMsg) && !nextNewTime && isMine(nextMsg) === mine;
+    // The partner's picture sits beside the last message of their run.
+    const showAvatar = !mine && !joinsNext;
     const hasMedia = msg.message_type === 'image' && Boolean(msg.media_url);
+    const corners = mine
+      ? { borderTopRightRadius: joinsPrev ? 6 : 20, borderBottomRightRadius: joinsNext ? 6 : 20 }
+      : { borderTopLeftRadius: joinsPrev ? 6 : 20, borderBottomLeftRadius: joinsNext ? 6 : 20 };
+    const onLongPress = mine ? () => handleDeleteMessage(msg._id) : undefined;
 
     return (
-      // Plain views on purpose: Paper's Surface splits a style across two nested
-      // layers on iOS, so `maxWidth` and `alignItems` land on different boxes and
-      // the bubble ends up measured against the wrong parent.
-      <View style={[s.msgRow, mine ? s.msgRowRight : s.msgRowLeft]}>
-        {!mine && (
-          <View style={s.avatarSlot}>
-            {showAvatar && user?.profile_picture
-              ? <Avatar.Image source={{ uri: user.profile_picture }} size={28} />
-              : null}
-          </View>
-        )}
-        <TouchableRipple
-          style={[
-            s.bubble,
-            { maxWidth: bubbleMaxWidth },
-            hasMedia ? s.bubbleMedia : s.bubblePlain,
-            mine ? s.bubbleMine : s.bubbleTheirs,
-            // A photo is the message. It keeps the bubble's rounded corner but
-            // loses its outline, and with no caption to sit on it loses the
-            // plate behind it too.
-            hasMedia && s.bubbleMediaFrameless,
-            hasMedia && !msg.text && s.bubbleMediaBare,
-          ]}
-          onLongPress={mine ? () => handleDeleteMessage(msg._id) : undefined}
-          rippleColor="rgba(0, 0, 0, .1)"
-        >
-          <View>
+      <View>
+        {newTime ? <Text style={s.timeDivider}>{timeLabel(msg.createdAt)}</Text> : null}
+        <View style={[s.msgRow, mine ? s.msgRowRight : s.msgRowLeft, { marginTop: joinsPrev ? 2 : 10 }]}>
+          {!mine && (
+            <View style={s.avatarSlot}>
+              {showAvatar ? <PartnerAvatar user={user} size={28} /> : null}
+            </View>
+          )}
+          <View style={[s.msgColumn, { maxWidth: bubbleMaxWidth }, mine ? s.alignEnd : s.alignStart]}>
             {hasMedia && msg.media_url ? (
-              <Pressable
+              <ChatPhoto
+                uri={msg.media_url}
+                width={messageMediaWidth}
                 onPress={() => setViewerUri(msg.media_url)}
-                accessibilityRole="imagebutton"
-                accessibilityLabel={t('common.photo', 'Fotoğraf')}
-              >
-                <Image
-                  source={{ uri: msg.media_url }}
-                  style={[
-                    s.msgImage,
-                    { width: messageMediaWidth, height: Math.round(messageMediaWidth * 0.82) },
-                  ]}
-                  resizeMode="cover"
-                />
-                {/* A picture with no caption carries its own stamp, so the
-                    bubble does not have to grow a strip underneath it just to
-                    hold the time. */}
-                {!msg.text && (
-                  <View style={s.mediaStamp}>
-                    <Text style={s.mediaStampText}>
-                      {dayjs(msg.createdAt).format('HH:mm')}
-                      {mine ? (msg.seen ? ' ✓✓' : ' ✓') : ''}
-                    </Text>
-                  </View>
-                )}
-              </Pressable>
+                onLongPress={onLongPress}
+                label={t('common.photo', 'Fotoğraf')}
+              />
             ) : null}
-            {/* Text and stamp share one wrapping row. A short message keeps the
-                stamp beside it on a single line; a long one pushes the stamp to
-                its own line, which is how the chat apps people know behave. */}
-            <View
-              style={[
-                s.bubbleBody,
-                hasMedia && s.bubbleBodyWithMedia,
-                hasMedia && !msg.text && s.bubbleBodyHidden,
-              ]}
-            >
-              {msg.text ? (
-                <Text
-                  style={[
-                    s.bubbleText,
-                    // With an image above, the bubble is already as wide as the
-                    // photo, so the caption fills the line and keeps the stamp
-                    // pinned right instead of both floating over there together.
-                    hasMedia && s.bubbleTextWithMedia,
-                    { color: mine ? '#FFFFFF' : theme.text },
-                  ]}
-                >
-                  {msg.text}
-                </Text>
-              ) : null}
-              <Text
-                style={[
-                  s.bubbleMeta,
-                  { color: mine ? 'rgba(255,255,255,0.72)' : theme.textMuted },
+            {msg.text ? (
+              <Pressable
+                onLongPress={onLongPress}
+                delayLongPress={350}
+                style={({ pressed }) => [
+                  s.bubble,
+                  mine ? s.bubbleMine : s.bubbleTheirs,
+                  corners,
+                  hasMedia && { marginTop: 2 },
+                  pressed && onLongPress ? { opacity: 0.85 } : null,
                 ]}
               >
-                {dayjs(msg.createdAt).format('HH:mm')}
-                {mine ? (msg.seen ? ' ✓✓' : ' ✓') : ''}
-              </Text>
-            </View>
+                <Text selectable style={[s.bubbleText, { color: mine ? '#FFFFFF' : theme.text }]}>
+                  {msg.text}
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
-        </TouchableRipple>
+        </View>
+        {index === lastMineIndex ? (
+          <Text style={s.receipt}>
+            {msg.seen ? t('messages.seen', 'Görüldü') : t('messages.sent', 'Gönderildi')}
+          </Text>
+        ) : null}
       </View>
     );
   };
 
   const renderTyping = () => (
-    <View style={[s.msgRow, s.msgRowLeft]}>
+    <View style={[s.msgRow, s.msgRowLeft, { marginTop: 10 }]}>
       <View style={s.avatarSlot}>
-        {user?.profile_picture
-          ? <Avatar.Image source={{ uri: user.profile_picture }} size={28} />
-          : null}
+        <PartnerAvatar user={user} size={28} />
       </View>
-      <View style={[s.bubble, s.bubblePlain, s.bubbleTheirs, { paddingVertical: 12 }]}>
+      <View style={[s.bubble, s.bubbleTheirs, { paddingVertical: 13 }]}>
         <View style={{ flexDirection: 'row', gap: 4 }}>
           {[0, 1, 2].map(i => (
-            <View key={i} style={[s.typingDot, { opacity: 0.5 + i * 0.2 }]} />
+            <View key={i} style={[s.typingDot, { opacity: 0.45 + i * 0.2 }]} />
           ))}
         </View>
       </View>
+    </View>
+  );
+
+  const openProfile = () => {
+    if (user?._id && navigation.navigate) navigation.navigate('Profile', { userId: user._id });
+  };
+
+  // An empty conversation introduces the person, as Instagram's does, instead
+  // of leaving a blank screen above the composer.
+  const renderEmpty = () => (
+    <View style={s.emptyChat}>
+      <PartnerAvatar user={user} size={88} />
+      <Text style={s.emptyName} numberOfLines={1}>{user?.full_name || user?.username}</Text>
+      <Text style={s.emptyHandle} numberOfLines={1}>@{user?.username} · MotionMeet</Text>
+      {navigation.navigate ? (
+        <Pressable onPress={openProfile} style={({ pressed }) => [s.emptyButton, pressed && { opacity: 0.7 }]} accessibilityRole="button">
+          <Text style={s.emptyButtonLabel}>{t('messages.view_profile', 'Profili gör')}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 
@@ -584,24 +589,21 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
               </TouchableRipple>
             </>
           ) : (
-            <ActivityIndicator color={theme.primary} />
+            <ActivityIndicator color={theme.textMuted} />
           )}
         </Surface>
       </SafeAreaView>
     );
   }
 
+  const canSend = !sending && (Boolean(text.trim()) || Boolean(image));
+
   return (
     <SafeAreaView style={s.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      {/* A plain row rather than Appbar.Header.
-          Appbar.Content lays its title out against whatever sits on either
-          side of it, so with a back button and an avatar on the left and
-          nothing on the right the name drifted off centre while its subtitle
-          lined up against a different edge again. Here the avatar and the name
-          are one group that starts where the back button ends, which is also
-          where every messaging app people already use puts them. */}
+      {/* Back, then the person as one tappable group that opens their
+          profile - where every messaging app people already use puts them. */}
       <View style={s.header}>
         <Pressable
           onPress={() => navigation.goBack()}
@@ -610,34 +612,27 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
           accessibilityRole="button"
           accessibilityLabel={t('common.back', 'Geri')}
         >
-          <Ionicons name="chevron-back" size={26} color={theme.text} />
+          <Ionicons name="chevron-back" size={25} color={theme.text} />
         </Pressable>
 
-        <View style={s.headerIdentity}>
-          <View style={s.headerAvContainer}>
-            {user.profile_picture
-              ? <Avatar.Image source={{ uri: user.profile_picture }} size={38} />
-              : <Avatar.Text
-                  label={(user.full_name || user.username || '?').charAt(0).toUpperCase()}
-                  size={38}
-                  style={{ backgroundColor: theme.primarySoft }}
-                  labelStyle={{ color: theme.primary, fontWeight: '800' }}
-                />
-            }
-          </View>
+        <Pressable
+          onPress={openProfile}
+          disabled={!navigation.navigate}
+          style={({ pressed }) => [s.headerIdentity, pressed && { opacity: 0.7 }]}
+          accessibilityRole="button"
+        >
+          <PartnerAvatar user={user} size={32} />
           <View style={s.headerText}>
             <Text numberOfLines={1} style={s.headerName}>{user.full_name || user.username}</Text>
-            {/* Presence is gone from here on purpose.
-                A socket that reconnects a beat late, or a partner on a phone
-                that has just locked, made the header say "Çevrimdışı" while
-                their message was still arriving — a line that is wrong exactly
-                when it is being read. The handle is always true, and when they
-                are typing that is the only live state worth showing. */}
+            {/* Presence is gone from here on purpose: a socket that reconnects
+                a beat late made the header say "offline" while a message was
+                still arriving. The handle is always true; typing is the only
+                live state worth showing. */}
             <Text numberOfLines={1} style={s.headerStatus}>
               {partnerTyping ? t('messages.typing', 'yazıyor...') : `@${user.username}`}
             </Text>
           </View>
-        </View>
+        </Pressable>
       </View>
 
       <KeyboardResponsiveView
@@ -645,7 +640,7 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
         avoidOnAndroid
       >
         {initialLoading ? (
-          <Surface elevation={0} style={s.loader}><ActivityIndicator color={theme.primary} /></Surface>
+          <Surface elevation={0} style={s.loader}><ActivityIndicator color={theme.textMuted} /></Surface>
         ) : (
           <FlatList
             ref={flatListRef}
@@ -655,88 +650,154 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
             style={s.messageList}
             contentContainerStyle={s.msgList}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            ListEmptyComponent={renderEmpty}
             ListHeaderComponent={
               nextCursor ? (
-                <TouchableRipple
+                <Pressable
                   onPress={loadOlderMessages}
                   disabled={loadingOlder}
-                  style={{ alignSelf: 'center', padding: 12, marginBottom: 8 }}
+                  style={{ alignSelf: 'center', padding: 10 }}
+                  accessibilityRole="button"
                 >
                   {loadingOlder
-                    ? <ActivityIndicator size="small" color={theme.primary} />
-                    : <Text style={{ color: theme.primary }}>{t('common.load_more', 'Load older messages')}</Text>
+                    ? <ActivityIndicator size="small" color={theme.textMuted} />
+                    : <Text style={{ color: theme.primary, fontSize: 13, fontWeight: '600' }}>{t('messages.load_older', 'Önceki mesajlar')}</Text>
                   }
-                </TouchableRipple>
+                </Pressable>
               ) : null
             }
             ListFooterComponent={partnerTyping ? renderTyping : null}
           />
         )}
 
-        <Surface style={{ backgroundColor: theme.surface }} elevation={2}>
+        {/* Instagram's composer: one soft pill holding the photo button, the
+            field and a "Send" word that appears once there is something to
+            send. The bottom padding clears the navigation bar only while the
+            keyboard is down - with it up, that gap was a 48pt empty band
+            between the field and the keys. */}
+        <View style={[s.composer, { paddingBottom: keyboard.visible ? 8 : (insets.bottom || 0) + 8 }]}>
           {image && (
-            <View style={s.imagePreview}>
-              <View style={s.previewMedia}>
+            <View style={s.previewRow}>
+              <View>
                 <Image source={{ uri: image.uri }} style={s.previewImg} />
-                <IconButton
-                  icon="close-circle"
-                  iconColor="#ef4444"
-                  size={24}
+                <Pressable
                   disabled={sending}
                   onPress={() => {
                     setImage(null);
                     pendingOperationIdRef.current = null;
                     uploadCacheRef.current = null;
                   }}
+                  hitSlop={8}
                   style={s.removeImg}
-                />
+                  accessibilityRole="button"
+                  accessibilityLabel={t('common.remove', 'Kaldır')}
+                >
+                  <Ionicons name="close" size={14} color="#FFFFFF" />
+                </Pressable>
               </View>
             </View>
           )}
-          <View style={[s.inputBar, { paddingBottom: Math.max(insets.bottom || 0, 10) }]}>
-            {/* A plain RN input inside our own pill. Paper's outlined field
-                manages its own height and ignored maxHeight once multiline, so
-                a long draft grew the field instead of scrolling inside it. */}
-            <View style={s.inputPill}>
-              <IconButton
-                icon="image-outline"
-                iconColor={theme.textMuted}
-                size={22}
-                onPress={pickImage}
-                disabled={sending}
-                style={s.attachBtn}
-                accessibilityLabel={t('feed.select_media', 'Select media')}
-              />
-              <TextInput
-                style={s.input}
-                placeholder={t('messages.type_message', 'Message...')}
-                placeholderTextColor={theme.textMuted}
-                value={text}
-                onChangeText={handleTextChange}
-                editable={!sending}
-                multiline
-                scrollEnabled
-                maxLength={CONTENT_LIMITS.message}
-                keyboardAppearance={isDark ? 'dark' : 'light'}
-                underlineColorAndroid="transparent"
-                accessibilityLabel={t('messages.type_message', 'Message...')}
-              />
-            </View>
-            <IconButton
-              icon="send"
-              iconColor="#fff"
-              size={20}
-              onPress={handleSend}
-              disabled={sending || (!text.trim() && !image)}
-              style={[s.sendBtn, (sending || (!text.trim() && !image)) && { opacity: 0.4 }]}
-              containerColor={theme.primary}
+          <View style={s.inputPill}>
+            <Pressable
+              onPress={pickImage}
+              disabled={sending}
+              style={({ pressed }) => [s.attachBtn, pressed && { opacity: 0.75 }]}
+              accessibilityRole="button"
+              accessibilityLabel={t('feed.select_media', 'Select media')}
+            >
+              <Ionicons name="image" size={17} color="#FFFFFF" />
+            </Pressable>
+            {/* A plain RN input: Paper's outlined field ignored maxHeight once
+                multiline, so a long draft grew the field instead of scrolling. */}
+            <TextInput
+              style={s.input}
+              placeholder={t('messages.type_message', 'Message...')}
+              placeholderTextColor={theme.textMuted}
+              value={text}
+              onChangeText={handleTextChange}
+              editable={!sending}
+              multiline
+              scrollEnabled
+              maxLength={CONTENT_LIMITS.message}
+              keyboardAppearance={isDark ? 'dark' : 'light'}
+              underlineColorAndroid="transparent"
+              accessibilityLabel={t('messages.type_message', 'Message...')}
             />
+            {sending ? (
+              <ActivityIndicator size="small" color={theme.primary} style={s.sendSlot} />
+            ) : canSend ? (
+              <Pressable
+                onPress={handleSend}
+                hitSlop={6}
+                style={({ pressed }) => [s.sendSlot, pressed && { opacity: 0.6 }]}
+                accessibilityRole="button"
+                accessibilityLabel={t('messages.send', 'Gönder')}
+              >
+                <Text style={s.sendLabel}>{t('messages.send', 'Gönder')}</Text>
+              </Pressable>
+            ) : null}
           </View>
-        </Surface>
+        </View>
       </KeyboardResponsiveView>
 
       <MediaViewer uri={viewerUri} onClose={() => setViewerUri(null)} />
     </SafeAreaView>
+  );
+};
+
+/** The partner's picture, or their initial on a grey disc. */
+const PartnerAvatar = ({ user, size }: { user: PublicUser | UserProfile | null; size: number }) => {
+  const { theme } = useTheme();
+  if (user?.profile_picture) return <Avatar.Image source={{ uri: user.profile_picture }} size={size} />;
+  return (
+    <Avatar.Text
+      label={(user?.full_name || user?.username || '?').charAt(0).toUpperCase()}
+      size={size}
+      style={{ backgroundColor: theme.surfaceLight }}
+      color={theme.textSecondary}
+      labelStyle={{ fontWeight: '500', fontSize: Math.round(size * 0.42) }}
+    />
+  );
+};
+
+interface ChatPhotoProps {
+  uri: string;
+  width: number;
+  label: string;
+  onPress: () => void;
+  onLongPress?: () => void;
+}
+
+/**
+ * A photo in a conversation at its own shape. The old frame cropped every
+ * picture to a fixed landscape box, so a portrait photo lost its top and
+ * bottom; the ratio is read when the image loads and held between a tall
+ * portrait and a wide panorama so one odd file cannot take over the thread.
+ */
+const ChatPhoto = ({ uri, width, label, onPress, onLongPress }: ChatPhotoProps) => {
+  const { theme } = useTheme();
+  const [ratio, setRatio] = useState(1.25);
+  return (
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={350}
+      accessibilityRole="imagebutton"
+      accessibilityLabel={label}
+      style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}
+    >
+      <Image
+        source={{ uri }}
+        onLoad={(event) => {
+          const { width: w, height: h } = event.nativeEvent.source ?? {};
+          if (w && h) setRatio(Math.min(1.6, Math.max(0.6, h / w)));
+        }}
+        style={{ width, height: Math.round(width * ratio), borderRadius: 18, backgroundColor: theme.surfaceLight }}
+        resizeMode="cover"
+      />
+    </Pressable>
   );
 };
 
@@ -745,120 +806,121 @@ const getStyles = (theme: MotionTheme, _paperTheme: MD3Theme, _insets: EdgeInset
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 56,
+    height: 52,
     paddingRight: 12,
     backgroundColor: theme.background,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.border,
   },
   headerBack: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
-  // Avatar and name travel together, so the two lines share one left edge.
   headerIdentity: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headerAvContainer: { position: 'relative' },
   headerText: { flex: 1, minWidth: 0 },
-  headerName: { fontSize: 16, fontWeight: '800', color: theme.text, letterSpacing: -0.3 },
-  headerStatus: { fontSize: 12, color: theme.textMuted, marginTop: 1, fontWeight: '500' },
-  loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  headerName: { fontSize: 15, fontWeight: '600', color: theme.text },
+  headerStatus: { fontSize: 12, color: theme.textMuted },
+  loader: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'transparent' },
   messageList: { width: '100%', maxWidth: MESSAGE_LIST_MAX_WIDTH, alignSelf: 'center' },
   msgList: {
     width: '100%',
     paddingHorizontal: MESSAGE_LIST_PADDING,
-    paddingVertical: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
     flexGrow: 1,
   },
-  msgRow: { marginBottom: 8, flexDirection: 'row', alignItems: 'flex-end' },
+  timeDivider: {
+    alignSelf: 'center',
+    marginTop: 16,
+    marginBottom: 4,
+    fontSize: 11.5,
+    color: theme.textMuted,
+    fontVariant: ['tabular-nums'],
+  },
+  msgRow: { flexDirection: 'row', alignItems: 'flex-end' },
   msgRowRight: { justifyContent: 'flex-end' },
   msgRowLeft: { justifyContent: 'flex-start' },
-  avatarSlot: { width: 28, marginRight: AVATAR_SLOT_WIDTH - 28 },
+  avatarSlot: { width: AVATAR_SLOT_WIDTH, alignItems: 'flex-start' },
+  msgColumn: { flexShrink: 1 },
+  alignEnd: { alignItems: 'flex-end' },
+  alignStart: { alignItems: 'flex-start' },
   bubble: {
-    flexShrink: 1,
-    borderRadius: 18,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, shadowRadius: 2, elevation: 1,
+    borderRadius: 20,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
   },
-  bubblePlain: { paddingHorizontal: 12, paddingVertical: 7 },
-  bubbleMedia: { padding: MEDIA_BUBBLE_PADDING },
-  bubbleMediaFrameless: { borderWidth: 0, overflow: 'hidden' },
-  bubbleMediaBare: { backgroundColor: 'transparent', elevation: 0, shadowOpacity: 0 },
-  bubbleMine: {
-    backgroundColor: theme.primary,
-    borderBottomRightRadius: 5,
+  bubbleMine: { backgroundColor: theme.primary },
+  bubbleTheirs: { backgroundColor: theme.surfaceLight },
+  bubbleText: { fontSize: 15, lineHeight: 20 },
+  receipt: {
+    alignSelf: 'flex-end',
+    marginTop: 3,
+    marginRight: 4,
+    fontSize: 11.5,
+    color: theme.textMuted,
   },
-  bubbleTheirs: {
-    backgroundColor: theme.surface,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
-    borderBottomLeftRadius: 5,
+  typingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.textMuted, marginHorizontal: 1 },
+  emptyChat: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 40, gap: 4 },
+  emptyName: { marginTop: 10, fontSize: 17, fontWeight: '700', color: theme.text },
+  emptyHandle: { fontSize: 13, color: theme.textMuted },
+  emptyButton: {
+    marginTop: 14,
+    height: 32,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    justifyContent: 'center',
+    backgroundColor: theme.surfaceLight,
   },
-  // flexWrap keeps the stamp beside a short message and drops it below a long
-  // one; flexShrink on the text is what lets the line break instead of the row.
-  bubbleBody: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'flex-end',
-    justifyContent: 'flex-end',
-  },
-  bubbleBodyWithMedia: { paddingHorizontal: 10, paddingTop: 5, paddingBottom: 4 },
-  bubbleBodyHidden: { display: 'none' },
-  bubbleText: { flexShrink: 1, fontSize: 15.5, lineHeight: 21, fontWeight: '500' },
-  bubbleTextWithMedia: { flexGrow: 1 },
-  bubbleMeta: { fontSize: 10.5, lineHeight: 18, marginLeft: 8, fontWeight: '600' },
-  msgImage: { borderRadius: 18 },
-  /* The stamp rides on the photo rather than under it, over a soft scrim so it
-     stays readable on a light picture without needing a bar of its own. */
-  mediaStamp: {
-    position: 'absolute',
-    right: 8,
-    bottom: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 11,
-    backgroundColor: 'rgba(0,0,0,0.42)',
-  },
-  mediaStampText: { color: '#FFFFFF', fontSize: 10.5, fontWeight: '700' },
-  typingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.textMuted, marginHorizontal: 2 },
-  imagePreview: {
-    width: '100%', maxWidth: MESSAGE_LIST_MAX_WIDTH, alignSelf: 'center',
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12,
-    borderTopWidth: 1, borderTopColor: theme.border,
-  },
-  previewMedia: { width: 60, height: 60, position: 'relative' },
-  previewImg: { width: 60, height: 60, borderRadius: 12 },
-  removeImg: { position: 'absolute', top: -14, right: -14, backgroundColor: theme.surface, borderRadius: 12 },
-  inputBar: {
-    width: '100%', maxWidth: MESSAGE_LIST_MAX_WIDTH, alignSelf: 'center',
-    flexDirection: 'row', alignItems: 'flex-end',
-    paddingHorizontal: MESSAGE_LIST_PADDING, paddingTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border,
-    gap: 8,
-  },
-  inputPill: {
-    // minWidth:0 lets the pill shrink inside the row instead of pushing the
-    // send button off narrow screens.
-    flex: 1, minWidth: 0,
-    flexDirection: 'row', alignItems: 'flex-end',
-    minHeight: COMPOSER_MIN_HEIGHT + 4,
-    paddingLeft: 2, paddingRight: 8,
-    borderRadius: (COMPOSER_MIN_HEIGHT + 4) / 2,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
+  emptyButtonLabel: { fontSize: 13.5, fontWeight: '600', color: theme.text },
+  composer: {
+    width: '100%',
+    maxWidth: MESSAGE_LIST_MAX_WIDTH,
+    alignSelf: 'center',
+    paddingHorizontal: MESSAGE_LIST_PADDING,
+    paddingTop: 6,
     backgroundColor: theme.background,
   },
-  attachBtn: { width: 34, height: 34, margin: 0, marginBottom: 4, marginLeft: 2 },
+  previewRow: { flexDirection: 'row', paddingHorizontal: 4, paddingBottom: 8 },
+  previewImg: { width: 56, height: 56, borderRadius: 10, backgroundColor: theme.surfaceLight },
+  removeImg: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  inputPill: {
+    // minWidth:0 lets the pill shrink inside the row on narrow screens.
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    minHeight: COMPOSER_MIN_HEIGHT + 2,
+    paddingLeft: 5,
+    paddingRight: 6,
+    borderRadius: (COMPOSER_MIN_HEIGHT + 2) / 2,
+    backgroundColor: theme.surfaceLight,
+  },
+  attachBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    marginBottom: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.primary,
+  },
   input: {
     flex: 1, minWidth: 0,
     color: theme.text,
-    fontSize: 15.5,
-    minHeight: COMPOSER_MIN_HEIGHT,
+    fontSize: 15,
+    minHeight: COMPOSER_MIN_HEIGHT + 2,
     maxHeight: COMPOSER_MAX_HEIGHT,
-    paddingTop: 11, paddingBottom: 11, paddingHorizontal: 4,
+    paddingTop: 12, paddingBottom: 12, paddingHorizontal: 10,
     ...Platform.select({ android: { textAlignVertical: 'top' as const } }),
   },
-  sendBtn: {
-    width: COMPOSER_MIN_HEIGHT + 4, height: COMPOSER_MIN_HEIGHT + 4,
-    borderRadius: (COMPOSER_MIN_HEIGHT + 4) / 2,
-    shadowColor: theme.primary, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 6, elevation: 4,
-    margin: 0,
-  },
+  sendSlot: { height: COMPOSER_MIN_HEIGHT + 2, justifyContent: 'center', paddingHorizontal: 8 },
+  sendLabel: { fontSize: 15, fontWeight: '600', color: theme.primary },
 });
 
 export default ChatBox;

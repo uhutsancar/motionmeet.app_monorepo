@@ -1,18 +1,16 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef } from 'react';
 import {
-  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
-  TextInput,
   type NativeSyntheticEvent,
   type ScrollViewProps,
   type StyleProp,
   type TargetedEvent,
   type ViewStyle,
-  findNodeHandle,
 } from 'react-native';
+import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll';
 
 interface KeyboardResponsiveViewProps extends React.PropsWithChildren {
   style?: StyleProp<ViewStyle>;
@@ -36,12 +34,8 @@ interface KeyboardResponsiveViewProps extends React.PropsWithChildren {
 interface KeyboardAwareScrollViewProps extends ScrollViewProps {
   avoidKeyboard?: boolean;
   extraScrollHeight?: number;
-  keyboardVerticalOffset?: number;
   onFocus?: (event: NativeSyntheticEvent<TargetedEvent>) => void;
 }
-
-const keyboardShowEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-const keyboardHideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
 
 export const KeyboardResponsiveView = ({
   children,
@@ -69,20 +63,24 @@ const isIOS = Platform.OS === 'ios';
  * full keyboard height measured from the bottom of the screen, while the view
  * itself starts below the navigation header - the header height was counted
  * twice and threw the content far past the keyboard, hiding the very field the
- * user had tapped. Android has no such native handling, so it keeps the manual
- * scroll and padding on top of adjustResize.
+ * user had tapped.
+ *
+ * Android is handled by `useKeyboardAwareScroll`: verified on a device, the
+ * sign-in form moved 10px and the focused password field stayed under the
+ * keyboard until the content was padded and scrolled by hand.
  */
 const KeyboardAwareScrollView = React.forwardRef<ScrollView, KeyboardAwareScrollViewProps>(({
   avoidKeyboard = true,
   contentContainerStyle,
   extraScrollHeight = 20,
-  keyboardVerticalOffset = 0,
   onContentSizeChange,
   onFocus,
   ...props
 }, forwardedRef) => {
   const localRef = useRef<ScrollView | null>(null);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const { keyboardHeight, keyboardPadding, scheduleFocusedInputScroll } = useKeyboardAwareScroll(localRef, {
+    extraScrollHeight,
+  });
   const flattenedContentStyle = StyleSheet.flatten(contentContainerStyle) || {};
   const basePaddingBottom =
     typeof flattenedContentStyle.paddingBottom === 'number'
@@ -95,94 +93,31 @@ const KeyboardAwareScrollView = React.forwardRef<ScrollView, KeyboardAwareScroll
     else if (forwardedRef) forwardedRef.current = node;
   }, [forwardedRef]);
 
-  const scrollFocusedInputIntoView = useCallback((target?: number | null) => {
-    let nodeHandle = target;
-    if (!nodeHandle) {
-      const inputRef = TextInput.State.currentlyFocusedInput ? TextInput.State.currentlyFocusedInput() : null;
-      // The focused input and findNodeHandle's parameter are the same host
-      // instance at runtime; React Native types them as unrelated shapes, so the
-      // hop through unknown is what the compiler needs to accept it.
-      nodeHandle = inputRef
-        ? findNodeHandle(inputRef as unknown as Parameters<typeof findNodeHandle>[0])
-        : null;
-    }
-    if (!nodeHandle) return;
-
-    const scrollResponder = localRef.current?.getScrollResponder();
-    scrollResponder?.scrollResponderScrollNativeHandleToKeyboard?.(
-      nodeHandle,
-      extraScrollHeight,
-      true,
-    );
-  }, [extraScrollHeight]);
-
-  const scheduleFocusedInputScroll = useCallback((target?: number | null) => {
-    requestAnimationFrame(() => {
-      setTimeout(() => scrollFocusedInputIntoView(target), Platform.OS === 'android' ? 80 : 20);
-    });
-  }, [scrollFocusedInputIntoView]);
-
-  useEffect(() => {
-    // iOS adjusts its own insets and scrolls the focused field into view.
-    if (isIOS) return;
-    const showSubscription = Keyboard.addListener(keyboardShowEvent, (event) => {
-      setKeyboardHeight(event.endCoordinates?.height || 0);
-      scheduleFocusedInputScroll();
-    });
-    const hideSubscription = Keyboard.addListener(keyboardHideEvent, () => {
-      setKeyboardHeight(0);
-    });
-
-    return () => {
-      showSubscription.remove();
-      hideSubscription.remove();
-    };
-  }, [scheduleFocusedInputScroll]);
-
-  const scrollView = (
-    <ScrollView
-        {...props}
-        ref={setRefs}
-        keyboardShouldPersistTaps={props.keyboardShouldPersistTaps || 'handled'}
-        keyboardDismissMode={props.keyboardDismissMode || (isIOS ? 'interactive' : 'on-drag')}
-        automaticallyAdjustKeyboardInsets={isIOS}
-        contentContainerStyle={[
-          contentContainerStyle,
-          {
-            paddingBottom:
-              basePaddingBottom +
-              (!isIOS && keyboardHeight > 0 ? extraScrollHeight : 0),
-          },
-        ]}
-        onFocus={(event) => {
-          onFocus?.(event);
-          if (!isIOS) scheduleFocusedInputScroll();
-        }}
-        onContentSizeChange={(contentWidth, contentHeight) => {
-          onContentSizeChange?.(contentWidth, contentHeight);
-          if (!isIOS && keyboardHeight > 0) scheduleFocusedInputScroll();
-        }}
-    />
-  );
-
-  // On iOS the native insets above already do the avoiding; adding a
-  // KeyboardAvoidingView here is what double-counted the header height.
-  if (!avoidKeyboard || isIOS) return scrollView;
-
+  // iOS avoids through its native insets and Android through the padding
+  // below; a KeyboardAvoidingView on top of either counts the keyboard twice.
   return (
-    <KeyboardResponsiveView
-      style={styles.flex}
-      keyboardVerticalOffset={keyboardVerticalOffset}
-    >
-      {scrollView}
-    </KeyboardResponsiveView>
+    <ScrollView
+      {...props}
+      ref={setRefs}
+      keyboardShouldPersistTaps={props.keyboardShouldPersistTaps || 'handled'}
+      keyboardDismissMode={props.keyboardDismissMode || (isIOS ? 'interactive' : 'on-drag')}
+      automaticallyAdjustKeyboardInsets={isIOS}
+      contentContainerStyle={[
+        contentContainerStyle,
+        { paddingBottom: basePaddingBottom + (avoidKeyboard ? keyboardPadding : 0) },
+      ]}
+      onFocus={(event) => {
+        onFocus?.(event);
+        scheduleFocusedInputScroll();
+      }}
+      onContentSizeChange={(contentWidth, contentHeight) => {
+        onContentSizeChange?.(contentWidth, contentHeight);
+        if (keyboardHeight > 0) scheduleFocusedInputScroll();
+      }}
+    />
   );
 });
 
 KeyboardAwareScrollView.displayName = 'KeyboardAwareScrollView';
-
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-});
 
 export default KeyboardAwareScrollView;

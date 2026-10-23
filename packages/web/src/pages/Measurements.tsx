@@ -169,7 +169,7 @@ const Measurements = () => {
           </Stack>
 
           <Paper variant="outlined" sx={{ p: { xs: 2, sm: 2.5 } }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
               {t(activeConfig.labelKey, activeConfig.fallback)}{" "}
               <Typography component="span" variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
                 {activeConfig.unit}
@@ -207,7 +207,7 @@ const Measurements = () => {
             </Box>
           </Paper>
 
-          <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{t("measurements.latest", "Latest values")}</Typography>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t("measurements.latest", "Latest values")}</Typography>
           <Paper variant="outlined" sx={{ overflow: "hidden" }}>
             {summaries.map((summary) => (
               <Stack
@@ -228,7 +228,7 @@ const Measurements = () => {
               >
                 <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: summary.metric.color, flexShrink: 0 }} />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body2" noWrap sx={{ fontWeight: 800 }}>
+                  <Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>
                     {t(summary.metric.labelKey, summary.metric.fallback)}
                   </Typography>
                   <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
@@ -238,11 +238,11 @@ const Measurements = () => {
                   </Typography>
                 </Box>
                 <Stack sx={{ alignItems: "flex-end" }}>
-                  <Typography variant="body2" sx={{ fontWeight: 900 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
                     {summary.latestValue === null ? "-" : `${formatMetricValue(summary.latestValue)} ${summary.metric.unit}`}
                   </Typography>
                   {summary.delta !== null && summary.delta !== 0 && (
-                    <Typography variant="caption" sx={{ fontWeight: 800, color: summary.delta > 0 ? "success.main" : "error.main" }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: summary.delta > 0 ? "success.main" : "error.main" }}>
                       {`${summary.delta > 0 ? "+" : ""}${formatMetricValue(summary.delta)} ${summary.metric.unit}`}
                     </Typography>
                   )}
@@ -251,14 +251,14 @@ const Measurements = () => {
             ))}
           </Paper>
 
-          <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{t("measurements.history", "History")}</Typography>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t("measurements.history", "History")}</Typography>
           <Stack spacing={1.5}>
             {measurements.map((entry) => {
               const logged = MEASUREMENT_METRICS.filter((metric) => typeof entry[metric.key] === "number");
               return (
                 <Paper key={entry.id} variant="outlined" sx={{ p: 2 }}>
                   <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "space-between" }}>
-                    <Typography variant="body2" sx={{ fontWeight: 900 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
                       {dateFormatter.format(dayKeyToDate(entry.measuredOn))}
                     </Typography>
                     <Stack direction="row">
@@ -280,7 +280,7 @@ const Measurements = () => {
                         <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontWeight: 700, fontSize: 10 }}>
                           {t(metric.labelKey, metric.fallback)}
                         </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 900 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
                           {`${formatMetricValue(entry[metric.key])} ${metric.unit}`}
                         </Typography>
                       </Box>

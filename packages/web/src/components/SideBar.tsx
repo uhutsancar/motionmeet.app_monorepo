@@ -15,6 +15,7 @@ import Typography from "@mui/material/Typography";
 import { alpha } from "@mui/material/styles";
 import { useMediaQuery, useTheme } from "@mui/material";
 import { useNavigate } from "react-router";
+import { useTranslation } from "react-i18next";
 import motionmeetLogo from "~/assets/motionmeet_logo.svg";
 import { useAuthContext } from "../context/AuthProvider";
 import { useAppTheme } from "../context/appThemeContext";
@@ -25,6 +26,7 @@ interface SideBarProps { sideBarOpen: boolean; setSideBarOpen: (open: boolean) =
 
 const SideBar = ({ sideBarOpen, setSideBarOpen, unreadCount = 0 }: SideBarProps) => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const user = useAppSelector((state) => state.user.value);
   const { signOut } = useAuthContext();
   const { theme: themeMode, toggleTheme } = useAppTheme();
@@ -67,23 +69,17 @@ const SideBar = ({ sideBarOpen, setSideBarOpen, unreadCount = 0 }: SideBarProps)
             onClick={() => goTo("/feed")}
             sx={{ borderRadius: 2, gap: 1, px: 0.25, py: 0.25 }}
           >
-            <Box component="img" src={motionmeetLogo} alt="" sx={{ height: 36, width: 36 }} />
-            <Box sx={{ textAlign: "left" }}>
-              <Typography
-                sx={{
-                  fontFamily: '"Manrope", sans-serif',
-                  fontSize: 17,
-                  fontWeight: 800,
-                  letterSpacing: "-0.04em",
-                  lineHeight: 1.1,
-                }}
-              >
-                MotionMeet
-              </Typography>
-              <Typography sx={{ color: "text.disabled", fontSize: 10, fontWeight: 800, letterSpacing: "0.12em" }}>
-                MOVE WITH PURPOSE
-              </Typography>
-            </Box>
+            <Box component="img" src={motionmeetLogo} alt="" sx={{ height: 30, width: 30 }} />
+            <Typography
+              sx={{
+                fontFamily: '"Manrope", sans-serif',
+                fontSize: 18,
+                fontWeight: 700,
+                letterSpacing: "-0.03em",
+              }}
+            >
+              MotionMeet
+            </Typography>
           </ButtonBase>
           {!desktop && (
             <IconButton aria-label="Close navigation" onClick={() => setSideBarOpen(false)}>
@@ -97,8 +93,8 @@ const SideBar = ({ sideBarOpen, setSideBarOpen, unreadCount = 0 }: SideBarProps)
           startIcon={<AddRounded />}
           onClick={() => goTo("/routines")}
           sx={{
-            mb: 3,
-            minHeight: 44,
+            mb: 2,
+            minHeight: 38,
             justifyContent: "flex-start",
             bgcolor: "info.main",
             color: "#12182A",
@@ -106,26 +102,18 @@ const SideBar = ({ sideBarOpen, setSideBarOpen, unreadCount = 0 }: SideBarProps)
             "&:hover": { bgcolor: "#C8F768", boxShadow: "none" },
           }}
         >
-          Start a workout
+          {t("feed.start_workout", "Antrenmana başla")}
         </Button>
 
         <Box className="no-scrollbar" sx={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-          <Typography
-            variant="overline"
-            sx={{ display: "block", px: 1, mb: 0.75, color: "text.disabled", fontSize: 10, fontWeight: 800, letterSpacing: "0.12em" }}
-          >
-            Workspace
-          </Typography>
           <MenuItems setSideBarOpen={setSideBarOpen} unreadCount={unreadCount} />
         </Box>
 
         <Box
           sx={{
             mt: 1.5,
-            p: 1,
-            borderRadius: 2.5,
-            bgcolor: (muiTheme) => alpha(muiTheme.palette.action.hover, 0.55),
-            border: 1,
+            pt: 1.5,
+            borderTop: 1,
             borderColor: "divider",
           }}
         >
@@ -137,10 +125,10 @@ const SideBar = ({ sideBarOpen, setSideBarOpen, unreadCount = 0 }: SideBarProps)
               <Avatar
                 src={user?.profile_picture}
                 alt={user?.username}
-                sx={{ width: 38, height: 38, bgcolor: "primary.main" }}
+                sx={{ width: 32, height: 32, bgcolor: "action.hover", color: "text.secondary" }}
               />
               <Box sx={{ minWidth: 0, textAlign: "left" }}>
-                <Typography variant="body2" noWrap sx={{ fontWeight: 800 }}>
+                <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
                   {user?.full_name || user?.username}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>

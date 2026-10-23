@@ -1,6 +1,6 @@
 import { Box, Button, CircularProgress, Stack, Tab, Tabs } from "@mui/material";
 import { Dumbbell, Newspaper } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
@@ -28,16 +28,37 @@ const Feed = () => {
   const [mode, setMode] = useState<FeedMode>("discover");
   // Only the very first load blanks the page; a mode switch keeps the shell.
   const [ready, setReady] = useState(false);
+  // Set when an automatic next-page load fails, so a dead connection does not
+  // retry in a loop; the Load more button clears it.
+  const [autoLoadPaused, setAutoLoadPaused] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
-  const load = useCallback(async (options: { cursor?: string | null; mode: FeedMode }) => {
+  const load = useCallback(async (options: { cursor?: string | null; mode: FeedMode }): Promise<boolean> => {
     const token = await getToken();
-    if (!token) return;
+    if (!token) return false;
     try {
       await dispatch(fetchPosts({ token, cursor: options.cursor ?? null, mode: options.mode })).unwrap();
+      return true;
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : t("feed.load_failed", "Feed could not be loaded"));
+      return false;
     }
   }, [dispatch, getToken, t]);
+
+  // The next page is fetched as the reader nears the end, well before the
+  // button would come into view. The button stays as the keyboard and
+  // screen-reader route, and as the retry after a failure.
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !nextCursor || loadingMore || autoLoadPaused || typeof IntersectionObserver === "undefined") return undefined;
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      observer.disconnect();
+      void load({ cursor: nextCursor, mode }).then((ok) => { if (!ok) setAutoLoadPaused(true); });
+    }, { rootMargin: "800px 0px" });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [autoLoadPaused, load, loadingMore, mode, nextCursor]);
 
   useEffect(() => {
     let active = true;
@@ -55,10 +76,10 @@ const Feed = () => {
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: { xs: "minmax(0, 720px)", xl: "minmax(0, 2fr) minmax(292px, 1fr)" },
+          gridTemplateColumns: { xs: "minmax(0, 640px)", lg: "minmax(0, 640px) 320px" },
           justifyContent: "center",
           alignItems: "start",
-          gap: 3,
+          gap: { lg: 6 },
         }}
       >
         <Stack spacing={2} sx={{ minWidth: 0 }}>
@@ -84,8 +105,8 @@ const Feed = () => {
             onChange={(_, value: FeedMode) => setMode(value)}
             sx={{ minHeight: 40, borderBottom: 1, borderColor: "divider" }}
           >
-            <Tab value="discover" label={t("feed.home_discover", "Discover")} sx={{ fontWeight: 700, minHeight: 40 }} />
-            <Tab value="following" label={t("feed.home_following", "Following")} sx={{ fontWeight: 700, minHeight: 40 }} />
+            <Tab value="discover" label={t("feed.home_discover", "Discover")} />
+            <Tab value="following" label={t("feed.home_following", "Following")} />
           </Tabs>
 
           <StoriesBar />
@@ -111,10 +132,14 @@ const Feed = () => {
             />
           )}
 
+          <div ref={sentinelRef} aria-hidden="true" />
           {nextCursor && (
             <Button
               variant="outlined"
-              onClick={() => load({ cursor: nextCursor, mode })}
+              onClick={() => {
+                setAutoLoadPaused(false);
+                void load({ cursor: nextCursor, mode });
+              }}
               disabled={loadingMore}
               startIcon={loadingMore ? <CircularProgress size={16} /> : null}
               sx={{ alignSelf: "center" }}
@@ -126,7 +151,7 @@ const Feed = () => {
 
         <Stack
           spacing={2}
-          sx={{ display: { xs: "none", xl: "flex" }, position: "sticky", top: 24, minWidth: 0 }}
+          sx={{ display: { xs: "none", lg: "flex" }, position: "sticky", top: 24, minWidth: 0 }}
         >
           <QuickProfile />
           <SuggestedAthletes />

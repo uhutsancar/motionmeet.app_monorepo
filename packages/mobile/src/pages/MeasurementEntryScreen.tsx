@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import KeyboardAwareScrollView from '../components/KeyboardAwareScrollView';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Surface, Text, TextInput, TouchableRipple } from 'react-native-paper';
+import { Surface, Text, TextInput, TouchableRipple } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import Toast from 'react-native-toast-message';
+import ScreenHeader from '../components/ScreenHeader';
 import type { BodyMeasurement, BodyMeasurementMetric } from '@motionmeet/shared';
 import { getMeasurements, saveMeasurement, type SaveMeasurementPayload } from '../api/endpoints';
 import { useAuthContext } from '../context/AuthProvider';
@@ -152,25 +154,19 @@ const MeasurementEntryScreen = ({ navigation, route }: MeasurementEntryProps) =>
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <Surface elevation={0} style={styles.header}>
-        <TouchableRipple borderless style={styles.iconBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="close" size={24} color={theme.text} />
-        </TouchableRipple>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {existing ? t('measurements.edit', 'Edit measurement') : t('measurements.add', 'Add measurement')}
-        </Text>
-        <View style={styles.iconBtn} />
-      </Surface>
+      <ScreenHeader
+        title={existing ? t('measurements.edit', 'Edit measurement') : t('measurements.add', 'Add measurement')}
+        backIcon="close"
+        onBack={() => navigation.goBack()}
+        textAction={{ label: t('common.save', 'Save'), onPress: () => void onSave(), busy: saving }}
+      />
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
-      >
-        <ScrollView
+        <KeyboardAwareScrollView
+          style={styles.flex}
           contentContainerStyle={[styles.content, { paddingHorizontal: horizontalPadding }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          extraScrollHeight={24}
         >
           <Surface elevation={0} style={styles.dateCard}>
             <TouchableRipple
@@ -247,18 +243,7 @@ const MeasurementEntryScreen = ({ navigation, route }: MeasurementEntryProps) =>
             {t('measurements.upsert_hint', 'Saving again for the same day updates that entry.')}
           </Text>
 
-          <Button
-            mode="contained"
-            loading={saving}
-            disabled={saving}
-            onPress={onSave}
-            style={styles.saveButton}
-            contentStyle={styles.saveButtonContent}
-          >
-            {t('common.save', 'Save')}
-          </Button>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 };
@@ -277,7 +262,7 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
     borderBottomColor: theme.border,
   },
   iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { flex: 1, textAlign: 'center', color: theme.text, fontSize: 17, fontWeight: '900' },
+  headerTitle: { flex: 1, textAlign: 'center', color: theme.text, fontSize: 17, fontWeight: '700' },
   content: { paddingTop: 12, paddingBottom: 132 },
   dateCard: {
     flexDirection: 'row',
@@ -292,7 +277,7 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
   dateArrow: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   dateArrowDisabled: { opacity: 0.4 },
   dateLabelWrap: { flex: 1, minWidth: 0, alignItems: 'center' },
-  dateLabel: { color: theme.text, fontSize: 14, fontWeight: '900' },
+  dateLabel: { color: theme.text, fontSize: 14, fontWeight: '700' },
   dateHint: { color: theme.textMuted, fontSize: 10.5, fontWeight: '700', marginTop: 2 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14, columnGap: CARD.gap },
   gridNarrow: { columnGap: 8 },

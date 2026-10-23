@@ -1,32 +1,48 @@
 // React Native's Image is used on purpose: Expo Go ships its own native
 // expo-image build, and when it disagrees with the version installed here the
 // view renders blank instead of erroring, so exercise photos and GIFs vanish.
-import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Image, View, Alert } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { StyleSheet, Image, View, Alert, AppState, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, Surface, TextInput, Button, IconButton, TouchableRipple } from 'react-native-paper';
-const formatTime = (seconds: number): string => {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-};
+import { Text, TextInput, IconButton, TouchableRipple } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useAuthContext } from '../context/AuthProvider';
 import { getExerciseHistory } from '../api/endpoints';
-import { logHandledError } from '../utils/feedback';
+import { logHandledError, showInfo } from '../utils/feedback';
+import { exerciseMeta, exerciseTitle } from '../utils/exerciseLabels';
+import { formatNumber, formatWeight } from '../utils/format';
 import { useTheme } from '../context/ThemeContext';
+import { useAppSelector } from '../store/hooks';
+import SoftButton from '../components/ui/SoftButton';
 import ExercisePickerModal from '../components/ExercisePickerModal';
 import KeyboardAwareScrollView from '../components/KeyboardAwareScrollView';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { CARD, EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
+import { EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
 import type { Exercise, ExerciseSessionEntry, ExerciseSet } from '@motionmeet/shared';
-import { resolvePublicMediaUrl } from '@motionmeet/shared';
-import type { ActiveWorkoutExercise, WorkoutSummaryData } from '../types/workoutDraft';
+import { createOperationId, elapsedWorkoutSeconds, parseDecimalInput, resolvePublicMediaUrl } from '@motionmeet/shared';
+import type { ActiveWorkoutExercise, ActiveWorkoutSet, WorkoutSummaryData } from '../types/workoutDraft';
+import {
+  clearActiveWorkoutDraft,
+  createActiveWorkoutDraft,
+  loadActiveWorkoutDraft,
+  saveActiveWorkoutDraft,
+  updateActiveWorkoutDraft,
+  type ActiveWorkoutDraft,
+} from '../features/workout/activeWorkoutDraft';
 import { API_URL } from '../config/environment';
 import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation/native';
+
+const formatTime = (seconds: number): string => {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+};
+
+/** How long typing may pause before the draft is written to storage. */
+const DRAFT_SAVE_DELAY_MS = 400;
 
 interface IncomingRoutineExercise {
   exerciseId?: string | Exercise | null;
@@ -42,10 +58,32 @@ interface IncomingRoutine { name?: string; exercises?: IncomingRoutineExercise[]
 type PreviousSet = ExerciseSessionEntry['sets'][number];
 interface ActiveWorkoutProps { navigation: NavigationProp<ParamListBase>; route: RouteProp<ParamListBase> }
 
+const exercisesFromRoutine = (routine: IncomingRoutine | undefined): ActiveWorkoutExercise[] =>
+  (routine?.exercises ?? []).map((entry) => {
+    const exercise = typeof entry.exerciseId === 'object' ? entry.exerciseId : null;
+    return {
+      id: exercise?._id || (typeof entry.exerciseId === 'string' ? entry.exerciseId : '') || entry.id || entry._id || '',
+      name: exercise?.name || entry.exerciseName || entry.name || 'Exercise',
+      muscleGroup: exercise?.muscleGroup || entry.muscleGroup || '',
+      equipment: exercise?.equipment || entry.equipment || '',
+      imageUrl: resolvePublicMediaUrl(exercise?.gifUrl || exercise?.imageUrl, API_URL) ?? undefined,
+      sets: entry.sets.map((set) => ({
+        reps: set.reps ? String(set.reps) : '',
+        weight: set.weight ? String(set.weight) : '',
+        done: false,
+        setType: set.setType || 'normal',
+      })),
+    };
+  });
+
+const repsOf = (set: ActiveWorkoutSet): number => Math.round(parseDecimalInput(set.reps) ?? 0);
+const weightOf = (set: ActiveWorkoutSet): number => parseDecimalInput(set.weight) ?? 0;
+
 const ActiveWorkoutScreen = ({ navigation, route }: ActiveWorkoutProps) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { theme, isDark } = useTheme();
   const { getToken } = useAuthContext();
+  const ownerId = useAppSelector((state) => state.user.value?._id ?? null);
   const kbAppearance = isDark ? 'dark' : 'light';
   const { horizontalPadding, isNarrow } = useResponsiveLayout();
   const setFieldWidth = isNarrow ? 46 : 56;
@@ -58,90 +96,141 @@ const ActiveWorkoutScreen = ({ navigation, route }: ActiveWorkoutProps) => {
   const routeParams = route.params as { routine?: IncomingRoutine } | undefined;
   const routine = routeParams?.routine;
 
-  // Initialize exercises from routine or empty
-  const [exercises, setExercises] = useState<ActiveWorkoutExercise[]>(() => {
-    if (routine?.exercises?.length) {
-      return routine.exercises.map(e => {
-        const exercise = typeof e.exerciseId === 'object' ? e.exerciseId : null;
-        return {
-        id: exercise?._id || (typeof e.exerciseId === 'string' ? e.exerciseId : '') || e.id || e._id || '',
-        name: exercise?.name || e.exerciseName || e.name || 'Exercise',
-        muscleGroup: exercise?.muscleGroup || e.muscleGroup || '',
-        equipment: exercise?.equipment || e.equipment || '',
-        imageUrl: resolvePublicMediaUrl(exercise?.gifUrl || exercise?.imageUrl, API_URL) ?? undefined,
-        sets: e.sets.map(s => ({
-          reps: s.reps ? String(s.reps) : '',
-          weight: s.weight ? String(s.weight) : '',
-          done: false,
-          setType: s.setType || 'normal'
-        }))
-      }});
-    }
-    return [];
-  });
-
-  const [workoutName, setWorkoutName] = useState(routine?.name || t('workout.my_workout', 'Antrenmanım'));
+  const [exercises, setExercises] = useState<ActiveWorkoutExercise[]>([]);
+  const [workoutName, setWorkoutName] = useState('');
   const [workoutNote, setWorkoutNote] = useState('');
   const [pickerVisible, setPickerVisible] = useState(false);
-  
-  // ── Real Timer ───────────────────────────────────────────────────
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const startTimeRef = useRef(Date.now());
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  /**
+   * Identity and start time of the session on screen. Null until the stored
+   * draft has been read, so nothing is written over it before then.
+   */
+  const [session, setSession] = useState<Pick<ActiveWorkoutDraft, 'draftId' | 'startedAt' | 'saveOperationId'> | null>(null);
+
+  const applyDraft = useCallback((draft: ActiveWorkoutDraft) => {
+    setExercises(draft.exercises);
+    setWorkoutName(draft.name);
+    setWorkoutNote(draft.note);
+    setSession({ draftId: draft.draftId, startedAt: draft.startedAt, saveOperationId: draft.saveOperationId });
+  }, []);
+
+  // ── Restore or start ─────────────────────────────────────────────
+  // A routine passed in means "start this"; no routine means "carry on".
+  // Starting while another workout is unfinished asks first instead of
+  // silently replacing the one that already has sets in it.
+  const restoredForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ownerId || restoredForRef.current === ownerId) return;
+    restoredForRef.current = ownerId;
+    const startFresh = () => {
+      const draft = createActiveWorkoutDraft(ownerId, routine?.name || t('workout.my_workout', 'Antrenmanım'), exercisesFromRoutine(routine));
+      applyDraft(draft);
+      void saveActiveWorkoutDraft(draft).catch((error) => logHandledError('save-workout-draft', error));
+    };
+    loadActiveWorkoutDraft(ownerId)
+      .then((stored) => {
+        if (!stored) return startFresh();
+        if (!routine) return applyDraft(stored);
+        Alert.alert(
+          t('active_workout.unfinished_title', 'Devam eden bir antrenmanın var'),
+          t('active_workout.unfinished_body', { name: stored.name, defaultValue: '"{{name}}" henüz bitmedi. Ona devam edebilir ya da silip yenisini başlatabilirsin.' }),
+          [
+            { text: t('active_workout.resume', 'Devam et'), onPress: () => applyDraft(stored) },
+            { text: t('active_workout.discard_and_start', 'Sil ve yenisini başlat'), style: 'destructive', onPress: startFresh },
+          ],
+          { cancelable: false },
+        );
+      })
+      .catch((error) => {
+        logHandledError('load-workout-draft', error);
+        startFresh();
+      });
+  }, [applyDraft, ownerId, routine, t]);
+
+  // ── Persist ──────────────────────────────────────────────────────
+  const latestDraftRef = useRef<ActiveWorkoutDraft | null>(null);
+  latestDraftRef.current = session && ownerId
+    ? { version: 1, ownerId, ...session, updatedAt: Date.now(), name: workoutName, note: workoutNote, exercises }
+    : null;
+
+  const flushDraft = useCallback(() => {
+    const draft = latestDraftRef.current;
+    if (draft) void updateActiveWorkoutDraft(draft).catch((error) => logHandledError('save-workout-draft', error));
+  }, []);
 
   useEffect(() => {
-    timerRef.current = setInterval(() => {
-      setElapsedSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
-    }, 1000);
+    if (!session) return undefined;
+    const timer = setTimeout(flushDraft, DRAFT_SAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [exercises, flushDraft, session, workoutName, workoutNote]);
+
+  // The OS may kill a backgrounded app without warning, so the pending write
+  // cannot wait for the debounce.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') flushDraft();
+    });
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      subscription.remove();
+      flushDraft();
     };
-  }, []);
+  }, [flushDraft]);
+
+  // ── Timer ────────────────────────────────────────────────────────
+  // Always derived from the start instant, so it is right after a restore,
+  // a locked screen or the app coming back from the background.
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const startedAt = session?.startedAt ?? null;
+  useEffect(() => {
+    if (startedAt === null) return undefined;
+    setElapsedSeconds(elapsedWorkoutSeconds(startedAt));
+    const timer = setInterval(() => setElapsedSeconds(elapsedWorkoutSeconds(startedAt)), 1000);
+    return () => clearInterval(timer);
+  }, [startedAt]);
 
   // ── Previous performance ─────────────────────────────────────────
   // The last logged session per exercise fills the "previous" column so the
-  // athlete can see what to beat without leaving the screen.
+  // athlete can see what to beat without leaving the screen. Keyed on the
+  // exercise ids only, so typing into a set does not refetch or drop a
+  // request that is still on its way; an id whose request failed is forgotten
+  // so the next change can try it again.
   const [previousSets, setPreviousSets] = useState<Record<string, PreviousSet[]>>({});
   const requestedPreviousRef = useRef<Set<string>>(new Set());
+  const exerciseIdsKey = exercises.map((exercise) => exercise.id).join('|');
 
   useEffect(() => {
-    const pending = exercises
-      .map((exercise) => exercise.id)
-      .filter((id): id is string => Boolean(id) && !requestedPreviousRef.current.has(id));
+    const pending = exerciseIdsKey
+      .split('|')
+      .filter((id) => Boolean(id) && !requestedPreviousRef.current.has(id));
     if (pending.length === 0) return;
     pending.forEach((id) => requestedPreviousRef.current.add(id));
 
-    let cancelled = false;
     const loadPrevious = async () => {
-      try {
-        const token = await getToken();
-        if (!token) return;
-        const entries = await Promise.all(pending.map(async (id) => {
-          try {
-            const data = await getExerciseHistory(id, token, 1);
-            return [id, data.success ? (data.history[0]?.sets ?? []) : []] as const;
-          } catch {
-            return [id, [] as PreviousSet[]] as const;
-          }
-        }));
-        if (!cancelled) setPreviousSets((current) => ({ ...current, ...Object.fromEntries(entries) }));
-      } catch (error) {
-        logHandledError('load-previous-sets', error);
+      const token = await getToken();
+      const entries = await Promise.all(pending.map(async (id) => {
+        if (!token) return [id, null] as const;
+        try {
+          const data = await getExerciseHistory(id, token, 1);
+          return [id, data.success ? (data.history[0]?.sets ?? []) : null] as const;
+        } catch {
+          return [id, null] as const;
+        }
+      }));
+      const loaded: Array<[string, PreviousSet[]]> = [];
+      for (const [id, sets] of entries) {
+        if (sets) loaded.push([id, sets]);
+        else requestedPreviousRef.current.delete(id);
       }
+      if (loaded.length) setPreviousSets((current) => ({ ...current, ...Object.fromEntries(loaded) }));
     };
-    void loadPrevious();
-    return () => { cancelled = true; };
-  }, [exercises, getToken]);
-
-
+    loadPrevious().catch((error) => logHandledError('load-previous-sets', error));
+  }, [exerciseIdsKey, getToken]);
 
   // ── Dynamic Stats ────────────────────────────────────────────────
   const totalVolume = exercises.reduce((total, ex) =>
-    total + ex.sets.filter(s => s.done).reduce((t, s) =>
-      t + (parseFloat(s.weight) || 0) * (parseInt(s.reps) || 0), 0), 0
+    total + ex.sets.filter(s => s.done).reduce((sum, s) => sum + weightOf(s) * repsOf(s), 0), 0
   );
 
-  const totalSets = exercises.reduce((t, ex) => t + ex.sets.filter(s => s.done).length, 0);
+  const totalSets = exercises.reduce((sum, ex) => sum + ex.sets.filter(s => s.done).length, 0);
 
   // ── Set Operations ────────────────────────────────────────────────
   /**
@@ -175,22 +264,46 @@ const ActiveWorkoutScreen = ({ navigation, route }: ActiveWorkoutProps) => {
     }));
   };
 
+  /** Replaces one set without touching the objects other rows still hold. */
+  const updateSet = (exIndex: number, setIndex: number, patch: Partial<ActiveWorkoutSet>) => {
+    setExercises((current) => current.map((exercise, index) => (
+      index !== exIndex
+        ? exercise
+        : { ...exercise, sets: exercise.sets.map((set, position) => (position === setIndex ? { ...set, ...patch } : set)) }
+    )));
+  };
+
+  /**
+   * Ticking a set with no reps typed takes last session's numbers for that
+   * row, the way the placeholder column suggests. With nothing to take, the
+   * tick is refused: a set of zero reps is a typo, not a logged set.
+   */
   const toggleSet = (exIndex: number, setIndex: number) => {
-    const newEx = [...exercises];
-    newEx[exIndex].sets[setIndex].done = !newEx[exIndex].sets[setIndex].done;
-    setExercises(newEx);
+    const exercise = exercises[exIndex];
+    const set = exercise?.sets[setIndex];
+    if (!exercise || !set) return;
+    if (set.done) return updateSet(exIndex, setIndex, { done: false });
+    if (parseDecimalInput(set.reps) !== null) return updateSet(exIndex, setIndex, { done: true });
+    const previous = previousSets[exercise.id]?.[setIndex];
+    if (previous?.reps) {
+      return updateSet(exIndex, setIndex, {
+        done: true,
+        reps: String(previous.reps),
+        weight: set.weight || (previous.weight ? String(previous.weight) : ''),
+      });
+    }
+    showInfo(
+      t('active_workout.reps_needed_title', 'Tekrar sayısı gir'),
+      t('active_workout.reps_needed_body', 'Seti tamamlamak için önce kaç tekrar yaptığını yaz.'),
+    );
   };
 
   const updateSetField = (exIndex: number, setIndex: number, field: 'reps' | 'weight', val: string) => {
-    const newEx = [...exercises];
-    newEx[exIndex].sets[setIndex][field] = val;
-    setExercises(newEx);
+    updateSet(exIndex, setIndex, { [field]: val });
   };
 
   const removeExercise = (exIndex: number) => {
-    const newEx = [...exercises];
-    newEx.splice(exIndex, 1);
-    setExercises(newEx);
+    setExercises((current) => current.filter((_, index) => index !== exIndex));
   };
 
   const addExercise = (exercise: Exercise) => {
@@ -212,6 +325,7 @@ const ActiveWorkoutScreen = ({ navigation, route }: ActiveWorkoutProps) => {
 
   // ── Finish ────────────────────────────────────────────────────────
   const handleFinish = () => {
+    if (!session || !ownerId) return;
     if (totalSets === 0) {
       Alert.alert(
         t('common.error', 'Error'),
@@ -219,7 +333,14 @@ const ActiveWorkoutScreen = ({ navigation, route }: ActiveWorkoutProps) => {
       );
       return;
     }
-    if (timerRef.current) clearInterval(timerRef.current);
+    const operationId = session.saveOperationId ?? createOperationId('workout');
+    if (!session.saveOperationId) {
+      setSession({ ...session, saveOperationId: operationId });
+      void updateActiveWorkoutDraft({
+        version: 1, ownerId, ...session, saveOperationId: operationId, updatedAt: Date.now(),
+        name: workoutName, note: workoutNote, exercises,
+      }).catch((error) => logHandledError('save-workout-draft', error));
+    }
     const workoutData: WorkoutSummaryData = {
       name: workoutName,
       note: workoutNote,
@@ -234,13 +355,13 @@ const ActiveWorkoutScreen = ({ navigation, route }: ActiveWorkoutProps) => {
         imageUrl: ex.imageUrl,
         sets: ex.sets.filter(s => s.done).map(s => ({
           setType: s.setType || 'normal',
-          weight: parseFloat(s.weight) || 0,
-          reps: parseInt(s.reps) || 0,
+          weight: weightOf(s),
+          reps: repsOf(s),
           completed: s.done
         }))
       })).filter(ex => ex.sets.length > 0)
     };
-    navigation.navigate('WorkoutSummaryScreen', { workoutData });
+    navigation.navigate('WorkoutSummaryScreen', { workoutData, operationId, startedAt: session.startedAt });
   };
 
   const handleCancel = () => {
@@ -250,31 +371,50 @@ const ActiveWorkoutScreen = ({ navigation, route }: ActiveWorkoutProps) => {
       [
         { text: t('common.no', 'Hayır'), style: 'cancel' },
         { text: t('common.yes', 'Evet'), style: 'destructive', onPress: () => {
-          if (timerRef.current) clearInterval(timerRef.current);
+          // Dropped first so the unmount flush has nothing left to write back.
+          latestDraftRef.current = null;
+          setSession(null);
+          if (ownerId) void clearActiveWorkoutDraft(ownerId).catch((error) => logHandledError('clear-workout-draft', error));
           navigation.goBack();
         }}
       ]
     );
   };
 
+  if (!session) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={theme.primary} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right', 'bottom']}>
       {/* Header */}
-      <Surface elevation={2} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, paddingVertical: 8, backgroundColor: theme.surface }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-          <IconButton icon="chevron-down" size={28} iconColor={theme.text} onPress={() => navigation.goBack()} accessibilityLabel={t('common.close', 'Close workout')} />
-          <View style={{ marginLeft: 4 }}>
-            <Text variant="titleLarge" style={{ fontWeight: '900', color: theme.text, fontVariant: ['tabular-nums'] }}>{formatTime(elapsedSeconds)}</Text>
-            <View style={{ flexDirection: 'row', gap: 12, marginTop: 2 }}>
-              <Text variant="labelSmall" style={{ color: theme.textMuted }}>Hacim <Text style={{ color: theme.text, fontWeight: 'bold' }}>{totalVolume.toFixed(0)} kg</Text></Text>
-              <Text variant="labelSmall" style={{ color: theme.textMuted }}>Set <Text style={{ color: theme.text, fontWeight: 'bold' }}>{totalSets}</Text></Text>
-            </View>
-          </View>
+      {/* Hevy's bar: minimise on the left, the clock and running totals in
+          the middle, a short Finish at the edge. Flat, with one hairline -
+          the elevated slab drew a shadow across the whole screen. */}
+      <View style={{ height: 52, flexDirection: 'row', alignItems: 'center', paddingLeft: 4, paddingRight: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border }}>
+        {/* Minimises rather than ends: the workout keeps running and the
+            Routines tab offers the way back. */}
+        <IconButton icon="chevron-down" size={24} iconColor={theme.text} onPress={() => navigation.goBack()} accessibilityLabel={t('active_workout.minimize', 'Antrenmanı küçült')} style={{ margin: 0 }} />
+        <View style={{ flex: 1, minWidth: 0, marginLeft: 2 }}>
+          <Text style={{ fontSize: 17, fontWeight: '700', color: theme.text, fontVariant: ['tabular-nums'] }}>{formatTime(elapsedSeconds)}</Text>
+          <Text numberOfLines={1} style={{ fontSize: 12, color: theme.textMuted, marginTop: 1, fontVariant: ['tabular-nums'] }}>
+            {formatNumber(Math.round(totalVolume), i18n.language)} {t('common.kg', 'kg')}
+            {'  ·  '}
+            {t('monthly_report.sets_count', { count: totalSets, defaultValue: '{{count}} set' })}
+          </Text>
         </View>
-        <Button mode="contained" onPress={handleFinish} disabled={totalSets === 0} style={{ borderRadius: 12, marginRight: 8 }} labelStyle={{ fontWeight: 'bold' }}>
-          {t('workout.finish', 'Bitir')}
-        </Button>
-      </Surface>
+        <SoftButton
+          primary
+          fill={false}
+          dimmed={totalSets === 0}
+          label={t('workout.finish', 'Bitir')}
+          onPress={handleFinish}
+        />
+      </View>
 
         <KeyboardAwareScrollView
           contentContainerStyle={{
@@ -283,7 +423,7 @@ const ActiveWorkoutScreen = ({ navigation, route }: ActiveWorkoutProps) => {
             alignSelf: 'center',
             paddingHorizontal: horizontalPadding,
             paddingBottom: 40,
-            paddingTop: 16,
+            paddingTop: 10,
           }}
           extraScrollHeight={28}
           showsVerticalScrollIndicator={false}
@@ -295,7 +435,7 @@ const ActiveWorkoutScreen = ({ navigation, route }: ActiveWorkoutProps) => {
           value={workoutName}
           onChangeText={setWorkoutName}
           placeholder={t('workout.name_placeholder', 'Antrenman Adı')}
-          style={{ backgroundColor: 'transparent', fontSize: 24, fontWeight: 'bold', marginBottom: 8, paddingHorizontal: 0 }}
+          style={{ backgroundColor: 'transparent', fontSize: 18, fontWeight: '700', marginBottom: 0, paddingHorizontal: 0, height: 44 }}
           textColor={theme.text}
           placeholderTextColor={theme.textMuted}
           underlineColor="transparent"
@@ -304,21 +444,23 @@ const ActiveWorkoutScreen = ({ navigation, route }: ActiveWorkoutProps) => {
         />
 
         <TextInput
-          mode="outlined"
+          mode="flat"
           placeholder={t('workout.add_workout_note', 'Antrenman notu ekle')}
           value={workoutNote}
           onChangeText={setWorkoutNote}
-          style={{ backgroundColor: theme.surfaceLight, width: '100%', minWidth: 0, fontSize: 14, marginBottom: 14 }}
+          multiline
+          style={{ backgroundColor: 'transparent', width: '100%', minWidth: 0, fontSize: 14, marginBottom: 12, paddingHorizontal: 0, minHeight: 36 }}
           textColor={theme.text}
           placeholderTextColor={theme.textMuted}
-          outlineStyle={{ borderColor: 'transparent', borderRadius: 12 }}
+          underlineColor="transparent"
+          activeUnderlineColor="transparent"
           accessibilityLabel={t('workout.add_workout_note', 'Workout note')}
         />
 
         {exercises.length === 0 && (
           <View style={{ alignItems: 'center', paddingVertical: 40 }}>
-            <Ionicons name="barbell-outline" size={48} color={theme.border} />
-            <Text style={{ color: theme.textMuted, marginTop: 12, textAlign: 'center' }}>
+            <Ionicons name="barbell-outline" size={30} color={theme.textMuted} />
+            <Text style={{ color: theme.textMuted, marginTop: 10, textAlign: 'center', fontSize: 13.5 }}>
               {t('workout.no_exercises_yet', 'Egzersiz eklenmedi')}
             </Text>
           </View>
@@ -326,7 +468,7 @@ const ActiveWorkoutScreen = ({ navigation, route }: ActiveWorkoutProps) => {
 
         {/* Exercises */}
         {exercises.map((ex, exIndex) => (
-          <Surface key={exIndex} elevation={0} style={{ marginBottom: 12, borderRadius: CARD.radius, padding: isNarrow ? 10 : CARD.padding, backgroundColor: theme.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border }}>
+          <View key={ex.id || `exercise-${exIndex}`} style={{ paddingTop: 12, paddingBottom: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 8 }}>
                 {ex.imageUrl ? (
@@ -341,11 +483,10 @@ const ActiveWorkoutScreen = ({ navigation, route }: ActiveWorkoutProps) => {
                   </View>
                 )}
                 <Text
-                  variant="titleMedium"
                   numberOfLines={2}
-                  style={{ flex: 1, color: theme.primary, fontWeight: 'bold' }}
+                  style={{ flex: 1, color: theme.primary, fontWeight: '600', fontSize: 15 }}
                 >
-                  {ex.name}
+                  {exerciseTitle(ex.name, i18n.language)}
                 </Text>
               </View>
               <IconButton
@@ -363,21 +504,21 @@ const ActiveWorkoutScreen = ({ navigation, route }: ActiveWorkoutProps) => {
             </View>
 
             {ex.muscleGroup ? (
-              <Text variant="bodySmall" style={{ color: theme.textMuted, marginBottom: 10 }}>{ex.muscleGroup} • {ex.equipment}</Text>
+              <Text variant="bodySmall" style={{ color: theme.textMuted, marginBottom: 10 }}>{exerciseMeta(ex, t, i18n.language)}</Text>
             ) : null}
 
             {/* Sets header */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: setRowGap, marginBottom: 6, paddingHorizontal: 4 }}>
-              <Text variant="labelSmall" style={{ color: theme.textMuted, fontWeight: '700', width: 28, textAlign: 'center' }}>
+              <Text variant="labelSmall" style={{ color: theme.textMuted, fontWeight: '500', width: 28, textAlign: 'center' }}>
                 {t('workout.set_column', 'SET')}
               </Text>
-              <Text variant="labelSmall" numberOfLines={1} style={{ color: theme.textMuted, fontWeight: '700', flex: 1, minWidth: 0, textAlign: 'center' }}>
+              <Text variant="labelSmall" numberOfLines={1} style={{ color: theme.textMuted, fontWeight: '500', flex: 1, minWidth: 0, textAlign: 'center' }}>
                 {t('workout.previous_column', 'ÖNCEKİ')}
               </Text>
-              <Text variant="labelSmall" style={{ color: theme.textMuted, fontWeight: '700', width: setFieldWidth, textAlign: 'center' }}>
+              <Text variant="labelSmall" style={{ color: theme.textMuted, fontWeight: '500', width: setFieldWidth, textAlign: 'center' }}>
                 {t('common.kg', 'KG')}
               </Text>
-              <Text variant="labelSmall" numberOfLines={1} style={{ color: theme.textMuted, fontWeight: '700', width: setFieldWidth, textAlign: 'center' }}>
+              <Text variant="labelSmall" numberOfLines={1} style={{ color: theme.textMuted, fontWeight: '500', width: setFieldWidth, textAlign: 'center' }}>
                 {t('workout.reps_column', 'TEKRAR')}
               </Text>
               <View style={{ width: 30, alignItems: 'center' }}>
@@ -388,12 +529,12 @@ const ActiveWorkoutScreen = ({ navigation, route }: ActiveWorkoutProps) => {
             {ex.sets.map((s, setIndex) => {
               const previous = previousSets[ex.id]?.[setIndex];
               const previousLabel = previous
-                ? `${previous.weight}${t('common.kg', 'kg')} x ${previous.reps}`
+                ? `${formatWeight(Number(previous.weight) || 0, i18n.language)} kg × ${previous.reps}`
                 : '—';
               return (
               <View key={setIndex} style={{ flexDirection: 'row', alignItems: 'center', gap: setRowGap, paddingVertical: 4, paddingHorizontal: 4, borderRadius: 8, backgroundColor: s.done ? doneGreen : 'transparent', marginBottom: 3 }}>
                 <View style={{ width: 28, alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ color: s.done ? doneText : theme.text, fontWeight: '700' }}>{setIndex + 1}</Text>
+                    <Text style={{ color: s.done ? doneText : theme.text, fontWeight: '600' }}>{setIndex + 1}</Text>
                 </View>
                 <Text
                   numberOfLines={1}
@@ -406,7 +547,7 @@ const ActiveWorkoutScreen = ({ navigation, route }: ActiveWorkoutProps) => {
                 <TextInput
                   mode="outlined"
                   dense
-                  keyboardType="numeric"
+                  keyboardType="decimal-pad"
                   placeholder="-"
                   value={s.weight}
                   onChangeText={(val) => updateSetField(exIndex, setIndex, 'weight', val)}
@@ -420,7 +561,7 @@ const ActiveWorkoutScreen = ({ navigation, route }: ActiveWorkoutProps) => {
                 <TextInput
                   mode="outlined"
                   dense
-                  keyboardType="numeric"
+                  keyboardType="number-pad"
                   placeholder="-"
                   value={s.reps}
                   onChangeText={(val) => updateSetField(exIndex, setIndex, 'reps', val)}
@@ -449,42 +590,34 @@ const ActiveWorkoutScreen = ({ navigation, route }: ActiveWorkoutProps) => {
 
             <TouchableRipple
               onPress={() => addSet(exIndex)}
-              style={{ marginTop: 8, minHeight: 38, borderRadius: 8, backgroundColor: theme.surfaceLight, alignItems: 'center', justifyContent: 'center' }}
+              style={{ marginTop: 8, minHeight: 32, borderRadius: 8, backgroundColor: theme.surfaceLight, alignItems: 'center', justifyContent: 'center' }}
               accessibilityRole="button"
               accessibilityLabel={t('workout.add_set', 'Set Ekle')}
               borderless
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Ionicons name="add" size={16} color={theme.text} />
-                <Text style={{ color: theme.text, fontWeight: '700', fontSize: 13 }}>{t('workout.add_set', 'Set Ekle')}</Text>
+                <Text style={{ color: theme.text, fontWeight: '600', fontSize: 13 }}>{t('workout.add_set', 'Set Ekle')}</Text>
               </View>
             </TouchableRipple>
-          </Surface>
+          </View>
         ))}
 
-        <Button
-            mode="outlined"
-            icon="plus"
+        <View style={{ gap: 8, marginTop: 4, marginBottom: 16 }}>
+          <SoftButton
+            large
+            primary
+            icon="add"
+            label={t('active_workout.add_exercise', 'Egzersiz Ekle')}
             onPress={() => setPickerVisible(true)}
-            style={{ borderRadius: 14, marginBottom: 12, borderStyle: 'dashed' }}
-            contentStyle={{ minHeight: 50 }}
-            textColor={theme.primary}
-        >
-            {t('active_workout.add_exercise', 'Egzersiz Ekle')}
-        </Button>
-
-        <Surface elevation={0} style={{ borderRadius: 14, backgroundColor: theme.surface, marginTop: 4, marginBottom: 16 }}>
-          <Button
-              mode="text"
-              textColor="#ef4444"
-              onPress={handleCancel}
-              style={{ borderRadius: 14 }}
-              contentStyle={{ minHeight: 50 }}
-              labelStyle={{ fontWeight: 'bold' }}
-          >
-              {t('workout.cancel_workout', 'Antrenmanı İptal Et')}
-          </Button>
-        </Surface>
+          />
+          <SoftButton
+            large
+            danger
+            label={t('workout.cancel_workout', 'Antrenmanı İptal Et')}
+            onPress={handleCancel}
+          />
+        </View>
         </KeyboardAwareScrollView>
       <ExercisePickerModal
         visible={pickerVisible}

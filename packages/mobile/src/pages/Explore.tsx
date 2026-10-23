@@ -19,11 +19,12 @@ import { useAuthContext } from '../context/AuthProvider';
 import { useTheme } from '../context/ThemeContext';
 import { getPosts } from '../api/endpoints';
 import { logHandledError } from '../utils/feedback';
+import SuggestedAthletes from '../components/SuggestedAthletes';
 import PostViewerModal from '../components/PostViewerModal';
 import { mediaVariantUrl, type Post } from '@motionmeet/shared';
 import { useScrollToTopOnTabPress } from '../hooks/useScrollToTopOnTabPress';
 import { useAdEntitlement } from '../hooks/useAdEntitlement';
-import { nextAdFrequency } from '../config/ads';
+import { createAdGapSequence, newAdSeed } from '../config/ads';
 import NativeAdTile from '../components/ads/NativeAdTile';
 import type { NavigationOnlyProps } from '../navigation/types';
 
@@ -36,23 +37,26 @@ type GridItem =
   | { type: 'ad'; id: string };
 
 /**
- * Interleaves one ad tile every 10-15 post tiles. `postIndex` keeps each
- * post tile pointed at its real position in `posts`, so opening the viewer
- * still works once ad tiles have shifted everything after them - the
- * viewer slices `posts` directly and never sees an ad tile at all.
+ * Interleaves one ad tile every 10-15 post tiles, with gaps drawn from `seed`
+ * so loading the next page never moves a tile already on screen, and never
+ * as the last cell for the same reason. `postIndex` keeps each post tile
+ * pointed at its real position in `posts`, so opening the viewer still works
+ * once ad tiles have shifted everything after them - the viewer slices
+ * `posts` directly and never sees an ad tile at all.
  */
-const withAdTiles = (posts: Post[]): GridItem[] => {
+const withAdTiles = (posts: Post[], seed: number): GridItem[] => {
+  const nextGap = createAdGapSequence(seed);
   const result: GridItem[] = [];
   let sincePost = 0;
-  let gap = nextAdFrequency();
+  let gap = nextGap();
   let adIndex = 0;
   posts.forEach((post, postIndex) => {
     result.push({ type: 'post', post, postIndex });
     sincePost += 1;
-    if (sincePost >= gap) {
-      result.push({ type: 'ad', id: `ad-${adIndex++}` });
+    if (sincePost >= gap && postIndex < posts.length - 1) {
+      result.push({ type: 'ad', id: `ad-${seed}-${adIndex++}` });
       sincePost = 0;
-      gap = nextAdFrequency();
+      gap = nextGap();
     }
   });
   return result;
@@ -91,6 +95,12 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
   /* The index the reader opened, not the post itself: the viewer needs
      everything from there on so it can keep scrolling into the grid. */
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [adSeed, setAdSeed] = useState(newAdSeed);
+  /** Ad cells that came back empty, dropped so the grid has no blank squares. */
+  const [unfilledAds, setUnfilledAds] = useState<ReadonlySet<string>>(() => new Set());
+  const markAdUnfilled = useCallback((id: string) => {
+    setUnfilledAds((current) => (current.has(id) ? current : new Set(current).add(id)));
+  }, []);
   const gridRef = useRef<FlatList<GridItem>>(null);
   useScrollToTopOnTabPress(gridRef);
 
@@ -126,6 +136,8 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
 
   const onRefresh = async () => {
     setRefreshing(true);
+    setAdSeed(newAdSeed());
+    setUnfilledAds(new Set());
     try {
       await loadPosts();
     } finally {
@@ -138,9 +150,9 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
       StyleSheet.create({
         screen: { flex: 1, backgroundColor: theme.background },
         nearbyButton: {
-          width: 40,
-          height: 40,
-          borderRadius: 20,
+          width: 36,
+          height: 36,
+          borderRadius: 10,
           alignItems: 'center',
           justifyContent: 'center',
           backgroundColor: theme.surfaceLight,
@@ -148,9 +160,10 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
         searchRow: {
           flexDirection: 'row',
           alignItems: 'center',
-          gap: 10,
-          paddingHorizontal: 14,
-          paddingVertical: 10,
+          gap: 8,
+          paddingHorizontal: 12,
+          paddingTop: 6,
+          paddingBottom: 8,
         },
         searchField: {
           flex: 1,
@@ -158,12 +171,12 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
           flexDirection: 'row',
           alignItems: 'center',
           gap: 8,
-          height: 40,
-          paddingHorizontal: 13,
-          borderRadius: 12,
+          height: 36,
+          paddingHorizontal: 11,
+          borderRadius: 10,
           backgroundColor: theme.surfaceLight,
         },
-        searchLabel: { flex: 1, minWidth: 0, color: theme.textMuted, fontSize: 15 },
+        searchLabel: { flex: 1, minWidth: 0, color: theme.textMuted, fontSize: 14 },
         tile: {
           width: tileSize,
           height: tileSize,
@@ -179,7 +192,7 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
           paddingVertical: 60,
           paddingHorizontal: 32,
         },
-        emptyTitle: { color: theme.text, fontSize: 15, fontWeight: '700' },
+        emptyTitle: { color: theme.text, fontSize: 15, fontWeight: '600' },
         emptyHint: {
           color: theme.textMuted,
           fontSize: 12.5,
@@ -202,14 +215,22 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
   );
 
   const gridItems = useMemo<GridItem[]>(
-    () => (shouldShowAds ? withAdTiles(posts) : posts.map((post, postIndex) => ({ type: 'post', post, postIndex }))),
-    [posts, shouldShowAds],
+    () => (shouldShowAds
+      ? withAdTiles(posts, adSeed).filter((item) => item.type !== 'ad' || !unfilledAds.has(item.id))
+      : posts.map((post, postIndex) => ({ type: 'post', post, postIndex }))),
+    [adSeed, posts, shouldShowAds, unfilledAds],
   );
 
   const renderTile: ListRenderItem<GridItem> = useCallback(
     ({ item, index }) => {
       const tileStyle = [styles.tile, (index + 1) % COLUMNS === 0 && styles.tileLast];
-      if (item.type === 'ad') return <NativeAdTile size={tileSize} />;
+      if (item.type === 'ad') {
+        return (
+          <View style={tileStyle}>
+            <NativeAdTile size={tileSize} onUnavailable={() => markAdUnfilled(item.id)} />
+          </View>
+        );
+      }
 
       const post = item.post;
       const media = firstMedia(post);
@@ -238,7 +259,7 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
         </Pressable>
       );
     },
-    [styles, t, tileSize],
+    [markAdUnfilled, styles, t, tileSize],
   );
 
   return (
@@ -250,7 +271,7 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
           accessibilityRole="search"
           accessibilityLabel={t('explore.search_placeholder', 'Ara')}
         >
-          <Ionicons name="search" size={17} color={theme.textMuted} />
+          <Ionicons name="search" size={16} color={theme.textMuted} />
           <Text style={styles.searchLabel}>{t('explore.search_placeholder', 'Ara')}</Text>
         </Pressable>
         {/* Meeting people is what this app is for, and finding the ones nearby
@@ -263,7 +284,7 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
           accessibilityRole="button"
           accessibilityLabel={t('nearby.title', 'Yakındakiler')}
         >
-          <Ionicons name="location-outline" size={19} color={theme.text} />
+          <Ionicons name="location-outline" size={18} color={theme.text} />
         </Pressable>
       </View>
 
@@ -287,14 +308,19 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
           loading ? (
             <ActivityIndicator color={theme.primary} style={{ marginTop: 48 }} />
           ) : (
-            <View style={styles.empty}>
-              <Ionicons name="images-outline" size={28} color={theme.textMuted} />
-              <Text style={styles.emptyTitle}>
-                {t('explore.empty', 'Henuz kesfedilecek bir sey yok')}
-              </Text>
-              <Text style={styles.emptyHint}>
-                {t('explore.empty_hint', 'Ilk gorseli sen paylas ya da birilerini takip et.')}
-              </Text>
+            <View>
+              <View style={styles.empty}>
+                <Ionicons name="images-outline" size={26} color={theme.textMuted} />
+                <Text style={styles.emptyTitle}>
+                  {t('explore.empty', 'Henuz kesfedilecek bir sey yok')}
+                </Text>
+                <Text style={styles.emptyHint}>
+                  {t('explore.empty_hint', 'Ilk gorseli sen paylas ya da birilerini takip et.')}
+                </Text>
+              </View>
+              {/* Nothing to browse yet is the moment to find people to follow,
+                  so the empty grid offers them rather than a blank page. */}
+              <SuggestedAthletes navigation={navigation} />
             </View>
           )
         }

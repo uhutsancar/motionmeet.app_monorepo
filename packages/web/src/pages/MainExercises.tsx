@@ -66,11 +66,11 @@ const MainExercises = () => {
                 spacing={2}
                 sx={{ px: 2, py: 1.75, alignItems: "center", borderBottom: 1, borderColor: "divider", "&:last-of-type": { borderBottom: 0 } }}
               >
-                <Avatar sx={{ width: 40, height: 40, bgcolor: "action.hover", color: "primary.main", fontWeight: 900, fontSize: 14 }}>
+                <Avatar sx={{ width: 40, height: 40, bgcolor: "action.hover", color: "primary.main", fontWeight: 700, fontSize: 14 }}>
                   #{index + 1}
                 </Avatar>
                 <Stack sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
                     {t(`statistics.ex_${key}`, item.name)}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">

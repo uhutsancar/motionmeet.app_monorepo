@@ -1,84 +1,62 @@
-import { Box, Card, CardActionArea, Stack, Typography } from "@mui/material";
-import { ActivitySquare, ArrowUpRight, Award, BarChart3, Calendar, Dumbbell } from "lucide-react";
+import { Box, ButtonBase, Paper, Stack, Typography } from "@mui/material";
+import { ActivitySquare, Award, Calendar, ChevronRight, Dumbbell, Grid3x3, ListOrdered, Ruler } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import { PageHeader, PageShell } from "~/components/AppPage";
 
+/**
+ * The statistics home: one list of the reports, each a plain row with a grey
+ * outline icon and a line about what is inside. It used to be four 156px
+ * cards with an icon in a tinted tile, a coloured accent per card and an
+ * English "View details" link on each.
+ */
 const Statistics = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const menuItems = [
-    {
-      title: t("statistics.advanced", "Advanced Statistics"),
-      subtitle: t("statistics.advanced_desc", "Volume, set and rep details"),
-      icon: ActivitySquare,
-      color: "primary.main",
-      route: "/statistics/history",
-    },
-    {
-      title: t("statistics.muscle_dist", "Muscle Distribution"),
-      subtitle: t("statistics.muscle_dist_desc", "See which muscles you trained"),
-      icon: Dumbbell,
-      color: "secondary.main",
-      route: "/statistics/muscle-distribution",
-    },
-    {
-      title: t("statistics.records", "Personal Records"),
-      subtitle: t("statistics.records_desc", "Your 1RM and strongest sets"),
-      icon: Award,
-      color: "warning.main",
-      route: "/statistics/records",
-    },
-    {
-      title: t("statistics.monthly_report", "Monthly Report"),
-      subtitle: t("statistics.monthly_desc", "A summary of your monthly training"),
-      icon: Calendar,
-      color: "info.main",
-      route: "/statistics/monthly-report",
-    },
+  const reports = [
+    { title: t("statistics.monthly_report", "Aylık rapor"), subtitle: t("statistics.monthly_desc", "Takvim, devamlılık ve ayın özeti"), icon: Calendar, route: "/statistics/monthly-report" },
+    { title: t("statistics.advanced", "Gelişmiş istatistikler"), subtitle: t("statistics.advanced_desc", "Hacim, set, tekrar ve süre"), icon: ActivitySquare, route: "/statistics/history" },
+    { title: t("statistics.records", "Kişisel rekorlar"), subtitle: t("statistics.records_desc", "Tamamladığın en güçlü setler"), icon: Award, route: "/statistics/records" },
+    { title: t("statistics.main_exercises", "Ana egzersizler"), subtitle: t("statistics.main_ex_desc", "En çok yaptığın hareketler"), icon: ListOrdered, route: "/statistics/main-exercises" },
+    { title: t("statistics.muscle_dist", "Kas dağılımı"), subtitle: t("statistics.muscle_dist_desc", "Setlerin kas gruplarına dağılımı"), icon: Dumbbell, route: "/statistics/muscle-distribution" },
+    { title: t("statistics.muscle_load", "Kas yükü"), subtitle: t("statistics.muscle_load_desc", "Hangi kası ne zaman çalıştırdın"), icon: Grid3x3, route: "/statistics/muscle-load" },
+    { title: t("measurements.title", "Ölçümler"), subtitle: t("measurements.settings_hint", "Kilo, yağ oranı ve çevre ölçüleri"), icon: Ruler, route: "/measurements" },
   ];
 
   return (
-    <PageShell maxWidth={1120}>
-      <PageHeader
-        icon={BarChart3}
-        eyebrow="YOUR PROGRESS"
-        title={t("statistics.title", "Statistics")}
-        description="Review your training volume, consistency and personal bests."
-      />
+    <PageShell maxWidth={720}>
+      <PageHeader title={t("statistics.title", "İstatistikler")} />
 
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" }, gap: 2 }}>
-        {menuItems.map(({ title, subtitle, icon: Icon, color, route }) => (
-          <Card key={route} variant="outlined" sx={{ position: "relative", minHeight: 156 }}>
-            <CardActionArea onClick={() => navigate(route)} sx={{ p: 2.5, height: "100%" }}>
-              <Stack direction="row" spacing={2} sx={{ height: "100%", alignItems: "flex-start" }}>
-                <Box
-                  sx={{
-                    width: 42,
-                    height: 42,
-                    flexShrink: 0,
-                    display: "grid",
-                    placeItems: "center",
-                    borderRadius: 2.5,
-                    bgcolor: "action.hover",
-                    color,
-                  }}
-                >
-                  <Icon size={21} />
-                </Box>
-                <Stack spacing={0.6} sx={{ minWidth: 0, flex: 1 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{title}</Typography>
-                  <Typography variant="body2" color="text.secondary">{subtitle}</Typography>
-                  <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", mt: "auto", pt: 1.5, color: "primary.main" }}>
-                    <Typography variant="caption" sx={{ fontWeight: 800 }}>View details</Typography>
-                    <ArrowUpRight size={14} />
-                  </Stack>
-                </Stack>
-              </Stack>
-            </CardActionArea>
-          </Card>
+      <Paper variant="outlined" sx={{ overflow: "hidden" }}>
+        {reports.map(({ title, subtitle, icon: Icon, route }, index) => (
+          <ButtonBase
+            key={route}
+            onClick={() => navigate(route)}
+            sx={{
+              width: "100%",
+              justifyContent: "flex-start",
+              textAlign: "left",
+              px: 2,
+              py: 1.25,
+              gap: 1.75,
+              borderTop: index ? 1 : 0,
+              borderColor: "divider",
+              "&:hover": { bgcolor: "action.hover" },
+            }}
+          >
+            <Box sx={{ color: "text.secondary", display: "grid", placeItems: "center" }}>
+              <Icon size={19} strokeWidth={1.75} />
+            </Box>
+            <Stack sx={{ minWidth: 0, flex: 1 }}>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>{title}</Typography>
+              <Typography variant="caption" color="text.secondary" noWrap>{subtitle}</Typography>
+            </Stack>
+            <Box sx={{ color: "text.disabled", display: "grid", placeItems: "center" }}>
+              <ChevronRight size={17} />
+            </Box>
+          </ButtonBase>
         ))}
-      </Box>
+      </Paper>
     </PageShell>
   );
 };

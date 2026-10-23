@@ -185,7 +185,7 @@ const ProfileModal = ({ setShowEdit }: ProfileModalProps) => {
   return (
     <Dialog open onClose={() => !saving && setShowEdit(false)} fullWidth maxWidth="sm">
       <Box component="form" onSubmit={handleSaveProfile}>
-        <DialogTitle sx={{ fontWeight: 800 }}>{t("profile.edit_profile")}</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>{t("profile.edit_profile")}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2.5}>
             <Stack spacing={1}>

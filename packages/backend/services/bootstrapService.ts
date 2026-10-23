@@ -1,6 +1,5 @@
 import { sql } from "kysely";
 import { database } from "../configs/database.js";
-import { ensureDefaultPlans } from "../utils/plans.js";
 
 export const MUSCLE_GROUP_DEFAULTS = [
   { code: "chest", name: "Chest", order: 1 }, { code: "back", name: "Back", order: 2 },
@@ -34,20 +33,17 @@ const insertLookups = async (table: "equipment" | "muscle_groups", entries: read
  * skip the upsert entirely to avoid unnecessary round-trips on every restart.
  */
 export const ensureApplicationData = async (): Promise<void> => {
-  const [planRow, mgRow, eqRow] = await Promise.all([
-    sql<{ count: string }>`select count(*)::text as count from plans where slug in ('free','pro','premium')`.execute(database),
+  const [mgRow, eqRow] = await Promise.all([
     sql<{ count: string }>`select count(*)::text as count from muscle_groups`.execute(database),
     sql<{ count: string }>`select count(*)::text as count from equipment`.execute(database),
   ]);
 
-  const plansOk = Number(planRow.rows[0]?.count ?? 0) >= 3;
   const mgOk = Number(mgRow.rows[0]?.count ?? 0) >= MUSCLE_GROUP_DEFAULTS.length;
   const eqOk = Number(eqRow.rows[0]?.count ?? 0) >= EQUIPMENT_DEFAULTS.length;
 
-  if (plansOk && mgOk && eqOk) return; // fast-path: nothing to do
+  if (mgOk && eqOk) return; // fast-path: nothing to do
 
   await Promise.all([
-    plansOk ? Promise.resolve() : ensureDefaultPlans(),
     mgOk ? Promise.resolve() : insertLookups("muscle_groups", MUSCLE_GROUP_DEFAULTS),
     eqOk ? Promise.resolve() : insertLookups("equipment", EQUIPMENT_DEFAULTS),
   ]);

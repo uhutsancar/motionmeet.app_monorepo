@@ -75,7 +75,7 @@ const NearbyAthletes = () => {
   return (
     <Stack spacing={1.25}>
       <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
           {t("nearby.section", "Nearby")}
         </Typography>
         <Button size="small" endIcon={<ChevronRightRounded />} onClick={() => navigate("/nearby")}>

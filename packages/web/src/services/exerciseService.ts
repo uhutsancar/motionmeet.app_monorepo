@@ -3,7 +3,8 @@ import { API_ROUTES, type Exercise, type ExerciseStats, type PersonalRecord } fr
 
 export interface ExerciseFilters { search?: string; muscleGroup?: string; equipment?: string; cursor?: string | null; limit?: number }
 export interface ExercisesResponse { success: boolean; message?: string; exercises: Exercise[]; total: number | null; nextCursor: string | null; limit: number; skip: number }
-export interface ExerciseStatsResponse extends ExerciseStats { success: boolean }
+/** The server nests the aggregates under `stats`; reading them from the top level showed 0 kg and 0 sessions for every movement. */
+export interface ExerciseStatsResponse { success: boolean; stats?: ExerciseStats }
 export interface PersonalRecordsResponse { success: boolean; records: PersonalRecord[] }
 
 export const getExercises = async (

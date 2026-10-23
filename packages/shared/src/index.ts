@@ -21,12 +21,6 @@ export const API_ROUTES = Object.freeze({
   workout: Object.freeze({ base: "/api/workout", stats: "/api/workout/stats", shareCard: (workoutId: string) => `/api/workout/${workoutId}/share-card` }),
   routine: Object.freeze({ base: "/api/routine" }),
   exercise: Object.freeze({ base: "/api/exercise", byId: (exerciseId: string) => `/api/exercise/${exerciseId}`, records: "/api/exercise/records", stats: (exerciseId: string) => `/api/exercise/${exerciseId}/stats`, history: (exerciseId: string) => `/api/exercise/${exerciseId}/history` }),
-  plan: Object.freeze({ base: "/api/plans", update: "/api/plans/update" }),
-  payments: Object.freeze({
-    checkoutIntent: "/api/payments/checkout-intent",
-    subscription: "/api/payments/subscription",
-    portalSession: "/api/payments/portal-session",
-  }),
   user_extras: Object.freeze({ update: "/api/user/update", profiles: "/api/user/profiles", discover: "/api/user/discover", follow: "/api/user/follow", unfollow: "/api/user/unfollow", connect: "/api/user/connect", accept: "/api/user/accept", remove_connection: "/api/user/connection", connections: "/api/user/connections", recent_messages: "/api/user/recent-messages", suggested: "/api/user/suggested", relationship: (userId: string) => `/api/user/${userId}/relationship` }),
   followRequest: Object.freeze({
     /** Ask to follow someone; answers with the resulting relationship state. */
@@ -75,6 +69,27 @@ export const hasValidPasswordByteLength = (value: unknown): value is string => {
   const byteLength = getUtf8ByteLength(value);
   return byteLength >= AUTH_LIMITS.passwordMinBytes && byteLength <= AUTH_LIMITS.passwordMaxBytes;
 };
+
+/**
+ * Reads a set's weight or reps the way it is typed on a phone. A Turkish
+ * keyboard offers a comma, so "12,5" and "12.5" are both twelve and a half.
+ * An empty or unreadable field is `null`, never 0, so a blank cell cannot pass
+ * for a logged zero.
+ */
+export const parseDecimalInput = (value: string): number | null => {
+  const normalized = value.trim().replace(",", ".");
+  if (!/^(\d+\.?\d*|\.\d+)$/.test(normalized)) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+/**
+ * Seconds a workout has been running, derived from when it started rather than
+ * counted tick by tick: a throttled background tab or a locked phone skips
+ * ticks, but the clock keeps moving.
+ */
+export const elapsedWorkoutSeconds = (startedAt: number, now: number = Date.now()): number =>
+  Math.max(0, Math.floor((now - startedAt) / 1000));
 
 export const createOperationId = (prefix = "op"): string => {
   const randomPart = globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;

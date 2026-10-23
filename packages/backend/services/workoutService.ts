@@ -15,17 +15,24 @@ export interface WorkoutInput {
 export const countUserWorkoutsFromDate = async (userId: string, startDate: Date, transaction: DatabaseTransaction | typeof database = database): Promise<number> =>
   Number((await transaction.selectFrom("workouts").select((expression) => expression.fn.countAll<number>().as("count")).where("user_id", "=", userId).where("created_at", ">=", startDate).executeTakeFirst())?.count ?? 0);
 
+/**
+ * Two statements whatever the size of the session: one for the exercises,
+ * one for every set. Row-by-row inserts cost a round trip per set inside the
+ * transaction - sixty for a ten-exercise, five-set workout. The returned ids
+ * are matched by position, not by row order, which SQL does not promise.
+ */
 const insertWorkoutExercises = async (workoutId: string, exercises: WorkoutExerciseInput[], transaction: DatabaseTransaction): Promise<void> => {
-  for (const [position, exercise] of exercises.entries()) {
-    const child = await transaction.insertInto("workout_exercises").values({
-      legacy_mongo_id: null, workout_id: workoutId, exercise_id: exercise.exerciseId, position,
-      exercise_name: exercise.exerciseName, muscle_group: exercise.muscleGroup, equipment: exercise.equipment,
-    }).returning("id").executeTakeFirstOrThrow();
-    for (const [setPosition, set] of exercise.sets.entries()) await transaction.insertInto("workout_sets").values({
-      legacy_mongo_id: null, workout_exercise_id: child.id, position: setPosition, set_type: set.setType ?? "normal",
-      reps: set.reps, weight: set.weight, completed: set.completed,
-    }).execute();
-  }
+  if (!exercises.length) return;
+  const children = await transaction.insertInto("workout_exercises").values(exercises.map((exercise, position) => ({
+    legacy_mongo_id: null, workout_id: workoutId, exercise_id: exercise.exerciseId, position,
+    exercise_name: exercise.exerciseName, muscle_group: exercise.muscleGroup, equipment: exercise.equipment,
+  }))).returning(["id", "position"]).execute();
+  const idByPosition = new Map(children.map((child) => [child.position, child.id]));
+  const sets = exercises.flatMap((exercise, position) => exercise.sets.map((set, setPosition) => ({
+    legacy_mongo_id: null, workout_exercise_id: idByPosition.get(position)!, position: setPosition, set_type: set.setType ?? "normal",
+    reps: set.reps, weight: set.weight, completed: set.completed,
+  })));
+  if (sets.length) await transaction.insertInto("workout_sets").values(sets).execute();
 };
 
 const uniqueViolation = (error: unknown): boolean => Boolean(error && typeof error === "object" && "code" in error && error.code === "23505");

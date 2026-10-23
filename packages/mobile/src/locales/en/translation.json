@@ -33,7 +33,9 @@
         "confirm": "Confirm",
         "remove": "Remove",
         "add": "Add",
-        "clear": "Clear"
+        "clear": "Clear",
+        "check_connection": "Check your connection and try again.",
+        "hide": "Hide"
     },
     "auth": {
         "session_expired": "Your session has expired.",
@@ -81,6 +83,8 @@
     "routines": {
         "title": "Routines",
         "start_empty": "Start Empty Workout",
+        "quick_start": "Quick start",
+        "routines_section": "Routines",
         "new_routine": "New Routine",
         "discover": "Discover",
         "start_routine": "Start Routine",
@@ -103,7 +107,7 @@
         "name_required": "Name is required",
         "add_exercises_first": "Add exercises first",
         "routine_created": "Routine created!",
-        "add_set": "ADD SET",
+        "add_set": "Add set",
         "workout": "Workout",
         "exercise": "Exercise",
         "ready_title": "Ready to train?",
@@ -112,7 +116,8 @@
         "quick_workout": "Quick workout",
         "no_routines_hint": "Create a repeatable plan for your next session.",
         "create_failed": "Routine could not be created.",
-        "create": "Create routine"
+        "create": "Create routine",
+        "load_failed": "Couldn't load routines."
     },
     "feed": {
         "discover": "Discover",
@@ -188,7 +193,11 @@
         "share_failed": "Could not share this post",
         "story_create_failed": "Story could not be created.",
         "share_private_hint": "This post is not public, so it has no shareable link.",
-        "link_copied": "Link copied"
+        "link_copied": "Link copied",
+        "followers_count_one": "{{count}} follower",
+        "followers_count_other": "{{count}} followers",
+        "suggested_for_you": "Suggested for you",
+        "add_photo": "Add photo"
     },
     "exercises": {
         "search": "Search Exercises",
@@ -226,8 +235,12 @@
         "tab_instructions": "Instructions",
         "primary_muscle": "Primary",
         "no_history": "No sessions logged for this exercise yet",
-        "weight_and_reps": "WEIGHT AND REPS",
-        "set_label": "SET"
+        "weight_and_reps": "Weight and reps",
+        "set_label": "SET",
+        "load_failed": "Couldn't load exercises",
+        "results": "Results",
+        "heaviest_set": "Heaviest set",
+        "progress_chart": "Heaviest set by session"
     },
     "muscle_groups": {
         "chest": "Chest",
@@ -317,14 +330,16 @@
         "add_username": "add username",
         "add_location": "Add location",
         "joined": "Joined",
-        "more_exercises": "more exercises"
+        "more_exercises": "more exercises",
+        "share_message": "{{name}} on MotionMeet: {{url}}",
+        "share_profile": "Share profile"
     },
     "settings": {
         "title": "Settings",
         "language": "Language",
         "theme": "Theme",
         "logout": "Sign Out",
-        "appearance": "APPEARANCE",
+        "appearance": "Appearance",
         "dark": "Dark",
         "light": "Light",
         "turkish": "Turkish",
@@ -337,9 +352,7 @@
         "support": "Support",
         "privacy_security": "Privacy and Security",
         "help_support": "Help and Support",
-        "plans": "Plans and pricing",
-        "plans_sub": "Upgrade your experience",
-        "preferences": "PREFERENCES",
+        "preferences": "Preferences",
         "notifications_sub": "Reminders and activity",
         "visibility": "Visibility",
         "save_failed": "Setting could not be saved",
@@ -365,7 +378,16 @@
         "invalid_conversation": "Invalid conversation",
         "typing": "typing…",
         "start_new_chat": "Start a new chat",
-        "user_load_failed": "Conversation user could not be loaded"
+        "user_load_failed": "Conversation user could not be loaded",
+        "message": "Message",
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "seen": "Seen",
+        "sent": "Sent",
+        "send": "Send",
+        "view_profile": "View profile",
+        "load_older": "Earlier messages",
+        "sent_photo": "Sent a photo"
     },
     "connections": {
         "accept": "Accept",
@@ -394,7 +416,7 @@
         "sets_per_muscle": "Sets per muscle group",
         "sets_desc": "Number of sets performed for each muscle group.",
         "muscle_dist_chart": "Muscle distribution (Chart)",
-        "muscle_dist_desc": "Compare your current and previous muscle distributions.",
+        "muscle_dist_desc": "How your sets split across muscle groups",
         "muscle_dist_body": "Muscle load grid",
         "muscle_body_desc": "Compare each muscle group's share of your training.",
         "main_exercises": "Main exercises",
@@ -422,7 +444,7 @@
         "log_more_workouts": "Complete workouts to see your records here.",
         "last_7_days": "Last 7 days",
         "last_30_days": "Last 30 days",
-        "last_year": "Last year",
+        "last_year": "Last 12 months",
         "muscle_dist": "Muscle distribution",
         "current": "Current",
         "current_period": "Current period",
@@ -437,7 +459,8 @@
         "reports": "Reports",
         "reports_desc": "Open a report for detailed training insights.",
         "view_details": "View details",
-        "more_insights": "More insights"
+        "more_insights": "More insights",
+        "muscle_load": "Muscle load"
     },
     "menu": {
         "exercises": "Exercises",
@@ -452,7 +475,62 @@
         "online": "Online",
         "offline": "Offline"
     },
+    "stats": {
+        "weekly_activity": "Weekly activity",
+        "this_week": "This week",
+        "last_12_weeks": "Last 12 weeks",
+        "weeks_summary": "{{count}} workouts in the last 12 weeks, {{weeks}} active weeks",
+        "all_stats": "All",
+        "load_failed": "Statistics could not be loaded.",
+        "workouts": "Workouts",
+        "duration": "Duration",
+        "volume": "Volume",
+        "sets": "Sets",
+        "reps": "Reps",
+        "reps_count": "{{count}} reps",
+        "weekly_chart_a11y": "Weekly chart of the last 12 weeks",
+        "sets_by_muscle": "Sets by muscle group",
+        "muscle_leader": "{{name}} got the most work: {{share}} of your sets.",
+        "no_sets_period": "No completed sets in this period.",
+        "muscles_30_days": "Muscle groups · last 30 days",
+        "top_exercises": "Highest-volume movements",
+        "records_lead_one": "You hold a record in {{count}} movement. The latest is from {{date}}.",
+        "records_lead_other": "You hold records in {{count}} movements. The latest is from {{date}}.",
+        "main_exercises_lead": "Sorted by total volume.",
+        "muscle_load_all": "Every muscle group got work this period.",
+        "muscle_load_idle": "No sets for: {{names}}.",
+        "scale_less": "Less",
+        "scale_more": "More",
+        "previous_7_days": "Previous 7 days",
+        "previous_30_days": "Previous 30 days",
+        "previous_12_months": "Previous 12 months",
+        "avg_duration": "Average duration",
+        "avg_reps": "Average reps",
+        "avg_sets": "Average sets",
+        "avg_volume": "Average volume",
+        "consistency": "Training calendar",
+        "consistency_days": "{{days}} training days in the last 16 weeks",
+        "consistency_streak": "{{days}} days in 16 weeks · {{weeks}} weeks in a row",
+        "consistency_a11y": "{{days}} training days in the last 16 weeks",
+        "less": "Less",
+        "more": "More",
+        "per_workout": "Per workout",
+        "rest_day": "Rest day",
+        "this_week_lower": "this week"
+    },
+    "ads": {
+        "sponsored": "Sponsored",
+        "sponsored_by": "Sponsored · {{sponsor}}"
+    },
     "active_workout": {
+        "in_progress": "Workout in progress",
+        "resume": "Resume",
+        "minimize": "Minimise workout",
+        "unfinished_title": "You have a workout in progress",
+        "unfinished_body": "\"{{name}}\" isn't finished yet. Carry on with it, or discard it and start the new one.",
+        "discard_and_start": "Discard and start new",
+        "reps_needed_title": "Enter your reps",
+        "reps_needed_body": "Type how many reps you did before ticking the set.",
         "active": "Active",
         "paused": "Paused",
         "add_set": "+ Add Set",
@@ -461,6 +539,11 @@
         "complete_one_set": "Complete at least one set before finishing."
     },
     "workout": {
+        "exercises_count_one": "{{count}} exercise",
+        "exercises_count_other": "{{count}} exercises",
+        "set_letter_warmup": "W",
+        "set_letter_failure": "F",
+        "weight_reps": "Weight × reps",
         "saved": "Workout saved!",
         "discard_title": "Discard Workout",
         "discard_msg": "This workout won't be saved. Are you sure?",
@@ -527,6 +610,21 @@
         "only_me": "Only Me"
     },
     "monthly_report": {
+        "lead": "You trained on {{days}} days this month. Current streak: {{streak}} days.",
+        "lead_days": "You trained on {{days}} days this month.",
+        "active_days_count": "{{count}} active days",
+        "best_day": "Best day",
+        "by_day": "By day",
+        "sets_count": "{{count}} sets",
+        "workouts_count": "{{count}} workouts",
+        "daily_chart": "Daily chart for the month",
+        "daily_details": "Day-by-day details",
+        "records": "Records this month",
+        "this_month": "This month",
+        "previous_month": "Last month",
+        "no_records": "No new records this month yet.",
+        "workout_days": "Training days",
+        "trained": "trained",
         "title": "{{month}} Report",
         "summary": "Summary",
         "workouts": "Workouts",
@@ -577,7 +675,10 @@
             "oct": "O",
             "nov": "N",
             "dec": "D"
-        }
+        },
+        "running_chart": "Running total through the month",
+        "that_day": "that day",
+        "until_day": "Total up to {{day}}"
     },
     "notifications": {
         "general": "General",
@@ -597,10 +698,10 @@
         "in_app_message_sub": "Show an in-app notification for new messages"
     },
     "privacy": {
-        "profile_section": "PROFILE VISIBILITY",
-        "workout_section": "WORKOUT",
-        "social_section": "SOCIAL",
-        "legal_section": "LEGAL",
+        "profile_section": "Profile visibility",
+        "workout_section": "Workout",
+        "social_section": "Social",
+        "legal_section": "Legal",
         "public_profile": "Public Profile",
         "public_sub": "Your profile is visible to everyone",
         "open_profile": "Open profile",
@@ -628,23 +729,6 @@
         "export_data": "Export my data",
         "export_failed": "Data could not be exported."
     },
-    "pricing_page": {
-        "load_error": "Plans could not be loaded.",
-        "upgrade_success": "Your plan has been updated.",
-        "upgrade_err": "Failed to update plan.",
-        "unlimited_workouts": "Unlimited workouts",
-        "workout_limit": "{{count}} workouts per month",
-        "unlimited_routines": "Unlimited routines",
-        "routine_limit": "{{count}} routines",
-        "direct_messaging": "Direct messaging",
-        "premium_analytics": "Premium analytics and content",
-        "plans_title": "Plans and features",
-        "production_subtitle": "Only plans currently available in MotionMeet are shown here.",
-        "free_name": "Free",
-        "current_plan": "Current plan",
-        "checkout_soon": "Checkout coming soon",
-        "select_plan": "Select plan"
-    },
     "support": {
         "contact_section": "CONTACT",
         "faq_section": "FREQUENTLY ASKED QUESTIONS",
@@ -660,9 +744,11 @@
         "faq4_q": "Which platforms does the app support?",
         "faq4_a": "MotionMeet is available on iOS, Android, and Web.",
         "faq5_q": "I'm not receiving notifications, what should I do?",
-        "faq5_a": "Make sure notifications are enabled in Settings > Notifications and check your device permission settings."
+        "faq5_a": "Make sure notifications are enabled in Settings > Notifications and check your device permission settings.",
+        "subtitle": "FAQs and contact"
     },
     "measurements": {
+        "settings_hint": "Weight, body fat and circumferences",
         "title": "Measurements",
         "add": "Add measurement",
         "edit": "Edit measurement",
@@ -815,6 +901,7 @@
         "locations_body": "Country, region and city names used by the location picker come from the Countries States Cities Database, licensed under the Open Database License (ODbL) v1.0."
     },
     "story": {
+        "media_failed": "This story couldn't load. Tap to move on.",
         "done": "Done",
         "align": "Alignment",
         "text_background": "Text background",
@@ -837,7 +924,10 @@
         "like_failed": "Reaction could not be saved",
         "unreact": "Remove reaction",
         "font": "Text style",
-        "text_color": "Text colour"
+        "text_color": "Text colour",
+        "location_nearby": "Nearby",
+        "location_search": "Search location",
+        "location_use_typed": "Add with this name"
     },
     "explore": {
         "search_placeholder": "Search",

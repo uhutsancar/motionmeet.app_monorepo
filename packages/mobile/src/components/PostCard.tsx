@@ -1,4 +1,4 @@
-import React, { useState, useRef, memo, useMemo, useCallback } from 'react';
+import React, { useState, useRef, memo, useMemo, useCallback, useEffect } from 'react';
 import {
   Alert,
   Animated,
@@ -35,6 +35,7 @@ import { Surface, TouchableRipple, Text } from 'react-native-paper';
 import * as Clipboard from 'expo-clipboard';
 import { getUserFacingError, logHandledError, showError, showInfo, showSuccess } from '../utils/feedback';
 import { WEB_URL } from '../config/environment';
+import { formatNumber } from '../utils/format';
 import {
   CONTENT_LIMITS,
   buildPostShareUrl,
@@ -44,7 +45,8 @@ import {
   type Post,
   type Workout,
 } from '@motionmeet/shared';
-import { useAppSelector } from '../store/hooks';
+import { useAppDispatch, useAppSelector } from '../store/hooks';
+import { postLikeSynced } from '../features/posts/postsSlice';
 import type { NavigationLike } from '../navigation/types';
 
 const POST_PADDING = 16;
@@ -65,6 +67,8 @@ interface PostCardProps {
   navigation: NavigationLike;
   onDelete?: (postId: string) => void;
   showDelete?: boolean;
+  /** The comment box took focus; the list around the card lifts it above the keyboard. */
+  onInputFocus?: () => void;
 }
 
 type CarouselItem =
@@ -87,10 +91,10 @@ const PostVideo = ({ source, style }: PostVideoProps) => {
   );
 };
 
-const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigation, onDelete: _onDelete, showDelete: _showDelete = false }: PostCardProps) => {
+const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigation, onDelete: _onDelete, showDelete: _showDelete = false, onInputFocus }: PostCardProps) => {
   const { t, i18n } = useTranslation();
   const { theme, isDark } = useTheme();
-  const { usableWidth, isNarrow, height: screenHeight } = useResponsiveLayout();
+  const { usableWidth, height: screenHeight } = useResponsiveLayout();
   // The feed list is capped at 720, so the media fills the same usable width.
   const carouselWidth = Math.max(1, Math.min(usableWidth, 720));
   const workout = post.workout && typeof post.workout === 'object' ? post.workout : null;
@@ -131,6 +135,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
     ? `${durationHours}${t('common.hours_short', 'h')} ${durationMinutes % 60}${t('common.min', 'min')}`
     : `${durationMinutes} ${t('common.min', 'min')}`;
   const currentUser = useAppSelector((state) => state.user.value);
+  const dispatch = useAppDispatch();
   const { getToken } = useAuthContext();
   // Seeded from the feed payload so the button is correct on first paint, then
   // kept in step with every other follow button through the shared store.
@@ -145,7 +150,21 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
 
   const [likeCount, setLikeCount] = useState(post.like_count ?? 0);
   const [isLiked, setIsLiked] = useState(Boolean(post.liked_by_me));
+  // Separate flags: sending a comment must not freeze the heart, and the
+  // other way round.
+  const likeInFlightRef = useRef(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  /*
+   * The card keeps its own copy so a tap answers instantly, but the post it
+   * was given is the truth: when a refresh or another card showing the same
+   * post changes it, the copy follows - unless this card's own request is
+   * still on its way, in which case its answer is the newer one.
+   */
+  useEffect(() => {
+    if (likeInFlightRef.current) return;
+    setIsLiked(Boolean(post.liked_by_me));
+    setLikeCount(post.like_count ?? 0);
+  }, [post.like_count, post.liked_by_me]);
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [comments, setComments] = useState<Comment[]>(post.comments || []);
@@ -185,27 +204,25 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
   const s = useMemo(() => StyleSheet.create({
     card: {
       backgroundColor: theme.background,
-      marginBottom: 8,
-      paddingTop: 12,
-      paddingBottom: 4,
+      paddingTop: 10,
+      paddingBottom: 6,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: theme.border,
       overflow: 'hidden',
     },
     userSection: {
       flexDirection: 'row',
-      flexWrap: isNarrow ? 'wrap' : 'nowrap',
+      flexWrap: 'nowrap',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: POST_PADDING,
-      marginBottom: 8,
+      marginBottom: 10,
       backgroundColor: 'transparent'
     },
     userInfoLeft: {
       flexDirection: 'row',
       alignItems: 'center',
-      flex: isNarrow ? undefined : 1,
-      width: isNarrow ? '100%' : undefined,
+      flex: 1,
       minWidth: 0,
     },
     avatar: {
@@ -218,17 +235,17 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
     avatarPlaceholder: {
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: theme.primarySoft,
+      backgroundColor: theme.surfaceLight,
     },
     avatarPlaceholderText: {
-      color: theme.primary,
-      fontSize: 16,
-      fontWeight: '900',
+      color: theme.textSecondary,
+      fontSize: 14,
+      fontWeight: '600',
     },
     userInfo: {
       flex: 1,
       minWidth: 0,
-      marginLeft: 12,
+      marginLeft: 10,
       backgroundColor: 'transparent'
     },
     nameContainer: {
@@ -239,37 +256,33 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
     },
     username: {
       flexShrink: 1,
-      fontSize: 15,
-      fontWeight: '700',
+      fontSize: 14,
+      fontWeight: '600',
       color: theme.text,
     },
     timestamp: {
       flexShrink: 1,
       fontSize: 12,
       color: theme.textMuted,
-      fontWeight: '600',
-      marginTop: 2,
+      marginTop: 1,
     },
+    /* Instagram's follow on a post is a word in the accent beside the name,
+       not a filled button competing with the photo. */
     followBtn: {
       flexShrink: 0,
-      alignSelf: isNarrow ? 'flex-end' : 'center',
-      maxWidth: 104,
-      minHeight: 34,
+      alignSelf: 'center',
+      maxWidth: 120,
+      minHeight: 32,
       justifyContent: 'center',
-      paddingVertical: 6,
-      paddingHorizontal: 12,
-      marginTop: isNarrow ? 8 : 0,
-      borderRadius: 9,
-      backgroundColor: theme.primarySoft,
+      paddingHorizontal: 8,
+      marginLeft: 4,
     },
     followBtnText: {
       color: theme.primary,
-      fontWeight: '800',
-      fontSize: 12,
+      fontWeight: '600',
+      fontSize: 13.5,
     },
-    followingBtn: {
-      backgroundColor: theme.surfaceLight,
-    },
+    followingBtn: {},
     followingBtnText: {
       color: theme.textMuted,
     },
@@ -280,14 +293,14 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
       backgroundColor: 'transparent'
     },
     workoutTitle: {
-      fontSize: 18,
-      fontWeight: 'bold',
+      fontSize: 15,
+      fontWeight: '700',
       color: theme.text,
     },
     content: {
-      fontSize: 15,
-      color: theme.textMuted,
-      lineHeight: 22,
+      fontSize: 14,
+      color: theme.text,
+      lineHeight: 20,
     },
     statsHeaderRow: {
       flexDirection: 'row',
@@ -305,23 +318,18 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
        own, and the plate is only just bigger than the type it holds. */
     statBox: {
       justifyContent: 'center',
-      backgroundColor: theme.surfaceLight,
-      borderRadius: 8,
-      paddingHorizontal: 11,
-      paddingVertical: 6,
+      paddingRight: 16,
     },
     statLabel: {
       color: theme.textMuted,
-      fontSize: 10,
-      lineHeight: 13,
-      fontWeight: '700',
-      letterSpacing: 0.3,
+      fontSize: 12,
+      lineHeight: 15,
     },
     statValue: {
       color: theme.text,
       fontSize: 14.5,
       lineHeight: 19,
-      fontWeight: '800',
+      fontWeight: '600',
     },
     statSmall: {
       fontSize: 12,
@@ -443,35 +451,35 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
     actionsBar: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: POST_PADDING,
-      paddingTop: 12,
-      paddingBottom: 8,
+      paddingHorizontal: POST_PADDING - 6,
+      paddingTop: 6,
+      paddingBottom: 2,
       backgroundColor: 'transparent'
     },
     actionLeftGroup: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
+      gap: 4,
       backgroundColor: 'transparent'
     },
     actionButton: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      minWidth: 42,
+      gap: 6,
+      minWidth: 40,
       minHeight: 40,
       justifyContent: 'center',
       borderRadius: 8,
-      paddingHorizontal: 7,
+      paddingHorizontal: 6,
     },
     actionText: {
-      fontSize: 15,
+      fontSize: 13.5,
       color: theme.text,
       fontWeight: '600',
     },
     likedByContainer: {
       paddingHorizontal: POST_PADDING,
-      paddingBottom: 16,
+      paddingBottom: 10,
       backgroundColor: 'transparent'
     },
     likedByText: {
@@ -481,7 +489,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
     commentsSection: {
       paddingHorizontal: POST_PADDING,
       paddingTop: 8,
-      borderTopWidth: 1,
+      borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: theme.border,
       marginHorizontal: 4,
       backgroundColor: 'transparent'
@@ -505,11 +513,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
       backgroundColor: 'transparent'
     },
     commentBubble: {
-      backgroundColor: theme.surfaceLight,
-      borderRadius: 16,
-      padding: 10,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.border,
+      paddingVertical: 2,
     },
     commentUser: {
       color: theme.text,
@@ -518,8 +522,8 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
       marginBottom: 2,
     },
     commentText: {
-      color: theme.textSecondary,
-      fontSize: 14,
+      color: theme.text,
+      fontSize: 13.5,
       lineHeight: 18,
     },
     commentTime: {
@@ -533,13 +537,12 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
       alignItems: 'flex-end',
       gap: 10,
       backgroundColor: theme.surfaceLight,
-      borderRadius: 10,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      marginTop: 8,
-      marginBottom: 16,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.border,
+      borderRadius: 18,
+      paddingLeft: 14,
+      paddingRight: 4,
+      paddingVertical: 4,
+      marginTop: 6,
+      marginBottom: 12,
     },
     commentInput: {
       flex: 1,
@@ -549,16 +552,17 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
       paddingTop: 0,
       paddingBottom: 0,
       minHeight: 24,
+      paddingVertical: 6,
     },
     commentSendBtn: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
+      width: 30,
+      height: 30,
+      borderRadius: 15,
       backgroundColor: theme.primary,
       justifyContent: 'center',
       alignItems: 'center',
     },
-  }), [carouselWidth, centerWorkoutRows, isNarrow, mediaSlideHeight, theme, workoutSlideHeight]);
+  }), [carouselWidth, centerWorkoutRows, mediaSlideHeight, theme, workoutSlideHeight]);
 
   setDayjsLocale(i18n.language);
 
@@ -566,13 +570,13 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
   if (!postUser) return null;
 
   const handleLike = async () => {
-    if (isProcessing) return;
+    if (likeInFlightRef.current) return;
     const willLike = !isLiked;
     // Optimistic update
     setIsLiked(willLike);
     setLikeCount((prev) => prev + (willLike ? 1 : -1));
     try {
-      setIsProcessing(true);
+      likeInFlightRef.current = true;
       const token = await getToken();
       if (!token) throw new Error('Authentication required');
       const data = willLike
@@ -581,6 +585,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
       if (data.success) {
         setIsLiked(data.liked);
         setLikeCount(data.like_count);
+        dispatch(postLikeSynced({ postId: post._id, liked_by_me: data.liked, like_count: data.like_count }));
       } else {
         // Revert optimistic update
         setIsLiked(!willLike);
@@ -598,7 +603,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
         getUserFacingError(error, t('feed.failed_like', 'Gönderi beğenilemedi')),
       );
     } finally {
-      setIsProcessing(false);
+      likeInFlightRef.current = false;
     }
   };
 
@@ -912,7 +917,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
           </Surface>
           <Surface elevation={0} style={s.statBox}>
              <Text style={s.statLabel}>{t('feed.volume', 'Hacim')}</Text>
-             <Text style={s.statValue}>{(workout?.volumeKg || 0).toLocaleString()} <Text style={s.statSmall}>kg</Text></Text>
+             <Text style={s.statValue}>{formatNumber(workout?.volumeKg || 0, i18n.language)} <Text style={s.statSmall}>kg</Text></Text>
           </Surface>
         </Surface>
       )}
@@ -998,7 +1003,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
       {likeCount > 0 && (
         <Surface elevation={0} style={s.likedByContainer}>
             <Text style={s.likedByText}>
-              {t('feed.liked_by', 'Liked by')} <Text style={{fontWeight: 'bold'}}>{likeCount}</Text> {t('feed.people', 'people')}
+              {t('feed.liked_by', 'Liked by')} <Text style={{fontWeight: '700'}}>{likeCount}</Text> {t('feed.people', 'people')}
             </Text>
         </Surface>
       )}
@@ -1050,6 +1055,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
               placeholderTextColor={theme.textMuted}
               value={commentText}
               onChangeText={setCommentText}
+              onFocus={onInputFocus}
               multiline
               maxLength={CONTENT_LIMITS.comment}
               keyboardAppearance={isDark ? 'dark' : 'light'}
@@ -1061,7 +1067,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
               style={[s.commentSendBtn, !commentText.trim() && { opacity: 0.5 }]}
               borderless
             >
-              <Ionicons name="send" size={20} color="#fff" />
+              <Ionicons name="arrow-up" size={18} color="#fff" />
             </TouchableRipple>
           </Surface>
         </Surface>

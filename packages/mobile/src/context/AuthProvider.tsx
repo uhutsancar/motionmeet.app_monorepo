@@ -19,6 +19,7 @@ import {
   type RegistrationInput,
 } from '@motionmeet/shared';
 import { clearSessionState, store } from '../store/store';
+import { clearShareCardCache } from '../utils/shareCardCache';
 
 const ACCESS_TOKEN_KEY = 'motionmeet_access_token';
 const REFRESH_TOKEN_KEY = 'motionmeet_refresh_token';
@@ -275,6 +276,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       // Local sign-out must still complete if the server is unavailable.
     } finally {
       await clearSession();
+      await clearShareCardCache();
     }
   }, [clearSession]);
 

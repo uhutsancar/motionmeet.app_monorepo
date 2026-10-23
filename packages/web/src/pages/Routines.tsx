@@ -76,10 +76,11 @@ const Routines = () => {
             },
           })}
           sx={{
-            p: 2.5,
+            px: 2,
+            py: 1.5,
             display: "flex",
             alignItems: "center",
-            gap: 2,
+            gap: 1.75,
             textAlign: "left",
             color: "text.primary",
             cursor: "pointer",
@@ -87,11 +88,11 @@ const Routines = () => {
             "&:hover": { borderColor: "primary.main", bgcolor: "action.hover" },
           }}
         >
-          <Box sx={{ width: 42, height: 42, flexShrink: 0, display: "grid", placeItems: "center", borderRadius: 2.5, bgcolor: "primary.main", color: "primary.contrastText" }}>
-            <PlayCircle size={21} />
+          <Box sx={{ flexShrink: 0, display: "grid", placeItems: "center", color: "primary.main" }}>
+            <PlayCircle size={22} strokeWidth={1.75} />
           </Box>
           <Box sx={{ minWidth: 0, flex: 1 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{t("routines.start_empty", "Quick workout")}</Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t("routines.start_empty", "Quick workout")}</Typography>
             <Typography variant="body2" color="text.secondary">{t("routines.start_empty_desc", "Start a session without a routine")}</Typography>
           </Box>
           <ArrowRight size={18} />
@@ -101,10 +102,11 @@ const Routines = () => {
           component="button"
           variant="outlined"
           sx={{
-            p: 2.5,
+            px: 2,
+            py: 1.5,
             display: "flex",
             alignItems: "center",
-            gap: 2,
+            gap: 1.75,
             textAlign: "left",
             color: "text.primary",
             cursor: "pointer",
@@ -112,11 +114,11 @@ const Routines = () => {
             "&:hover": { borderColor: "secondary.main", bgcolor: "action.hover" },
           }}
         >
-          <Box sx={{ width: 42, height: 42, flexShrink: 0, display: "grid", placeItems: "center", borderRadius: 2.5, bgcolor: "action.hover", color: "secondary.main" }}>
-            <Search size={21} />
+          <Box sx={{ flexShrink: 0, display: "grid", placeItems: "center", color: "text.secondary" }}>
+            <Search size={21} strokeWidth={1.75} />
           </Box>
           <Box sx={{ minWidth: 0, flex: 1 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{t("routines.discover", "Discover")}</Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t("routines.discover", "Discover")}</Typography>
             <Typography variant="body2" color="text.secondary">{t("routines.discover_desc", "Explore community favourites")}</Typography>
           </Box>
           <ArrowRight size={18} />
@@ -138,12 +140,12 @@ const Routines = () => {
                   spacing={2}
                   sx={{ alignItems: { xs: "stretch", sm: "center" } }}
                 >
-                  <Box sx={{ width: 44, height: 44, flexShrink: 0, display: "grid", placeItems: "center", borderRadius: 2.5, bgcolor: "action.hover", color: "primary.main" }}>
-                    <FileText size={21} />
+                  <Box sx={{ flexShrink: 0, display: { xs: "none", sm: "grid" }, placeItems: "center", color: "text.secondary" }}>
+                    <FileText size={20} strokeWidth={1.75} />
                   </Box>
                   <Box sx={{ minWidth: 0, flex: 1 }}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                      <Typography variant="subtitle1" noWrap sx={{ fontWeight: 800 }}>{routine.name}</Typography>
+                      <Typography variant="subtitle1" noWrap sx={{ fontWeight: 700 }}>{routine.name}</Typography>
                       <Typography variant="caption" color="text.secondary">{routine.exercises.length} exercises</Typography>
                     </Stack>
                     <Stack direction="row" useFlexGap sx={{ flexWrap: "wrap", gap: 0.75, mt: 0.8 }}>

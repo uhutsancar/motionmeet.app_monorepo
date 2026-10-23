@@ -100,7 +100,7 @@ const RecentMessages = () => {
   return (
     <Card variant="outlined">
       <CardContent sx={{ p: 2.5, "&:last-child": { pb: 2.5 } }}>
-        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 800 }}>
+        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
           {t("chat.recent_messages", "Recent Messages")}
         </Typography>
         <List disablePadding sx={{ maxHeight: 260, overflowY: "auto" }}>

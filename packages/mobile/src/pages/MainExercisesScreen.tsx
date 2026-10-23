@@ -1,5 +1,5 @@
-import React, { useCallback, useState, useEffect, useMemo } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 // expo-image, like every other exercise thumbnail in the app: it recycles views
 // and keeps a memory + disk cache where React Native's Image does not.
 import { Image } from 'expo-image';
@@ -7,156 +7,159 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
-import { useAuthContext } from "../context/AuthProvider";
+import { useAuthContext } from '../context/AuthProvider';
 import endpoints from '../api/endpoints';
-import { Surface, Text, ActivityIndicator } from 'react-native-paper';
 import { EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
 import { API_URL } from '../config/environment';
 import { mediaVariantUrl, resolvePublicMediaUrl, type WorkoutStats } from '@motionmeet/shared';
 import type { NavigationOnlyProps } from '../navigation/types';
 import { logHandledError } from '../utils/feedback';
+import { capitalizeFirst, formatNumber } from '../utils/format';
 import ScreenHeader from '../components/ScreenHeader';
+import PillTabs from '../components/ui/PillTabs';
 
 type ExerciseBreakdown = WorkoutStats['exerciseBreakdown'][number];
+type StatsPeriod = 'week' | 'month' | 'year';
 
+/**
+ * The movements that carried the period, heaviest total volume first.
+ *
+ * One row per movement: its place, its picture, the name, the sets and reps
+ * under it, and the volume on the right where the eye lands when scanning
+ * down. A bodyweight movement has no volume to show, so it shows its reps
+ * there instead of a misleading "0 kg".
+ */
 const MainExercisesScreen = ({ navigation }: NavigationOnlyProps) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const language = i18n.language;
   const { theme } = useTheme();
   const { getToken } = useAuthContext();
-  
+  const [period, setPeriod] = useState<StatsPeriod>('month');
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [exercises, setExercises] = useState<ExerciseBreakdown[]>([]);
 
-  const fetchStats = useCallback(async () => {
-    try {
-      const token = await getToken();
-      if (!token) throw new Error('Authentication required');
-      const data = await endpoints.getWorkoutStats('month', token);
-      if (data.success && data.exerciseBreakdown) {
-        setExercises(data.exerciseBreakdown);
-      }
-    } catch (error) {
-      logHandledError('main-exercises-stats', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [getToken]);
-
   useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
+    let active = true;
+    const load = async () => {
+      setLoading(true);
+      setFailed(false);
+      try {
+        const token = await getToken();
+        if (!token) throw new Error('Authentication required');
+        const data = await endpoints.getWorkoutStats(period, token);
+        if (active) setExercises(data.success ? data.exerciseBreakdown ?? [] : []);
+      } catch (error) {
+        logHandledError('main-exercises-stats', error);
+        if (active) setFailed(true);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    void load();
+    return () => { active = false; };
+  }, [getToken, period]);
 
-  const styles = useMemo(() => StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.background },
-    header: {
-      backgroundColor: theme.background,
-      borderBottomWidth: 1, 
-      borderBottomColor: theme.border,
-      elevation: 0,
-    },
-    headerTitle: { fontSize: 17, fontWeight: '700', color: theme.text },
-    content: {
-      width: '100%',
-      maxWidth: 720,
-      alignSelf: 'center',
-      padding: 16,
-      paddingBottom: 40,
-    },
-    list: { backgroundColor: theme.surface, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border, overflow: 'hidden' },
-    listItem: {
-      flexDirection: 'row', alignItems: 'center', padding: 16,
-      borderBottomWidth: 1, borderBottomColor: theme.border,
-      backgroundColor: 'transparent'
-    },
-    // The artwork carries the rank rather than replacing it: the number says
-    // where the movement sits in the month, the picture says which movement it
-    // is, and a list of five identical badges said only the first of those.
-    artworkWrap: { marginRight: 14, position: 'relative' },
-    artwork: {
-      ...exerciseThumbStyle(EXERCISE_THUMB.large),
-      backgroundColor: '#FFFFFF',
-      alignItems: 'center',
-      justifyContent: 'center',
-      overflow: 'hidden',
-    },
-    artworkFallback: { backgroundColor: theme.primary + '20' },
-    artworkImage: { width: '100%', height: '100%' },
-    rankBadge: {
-      position: 'absolute',
-      left: -4,
-      top: -4,
-      minWidth: 21,
-      height: 21,
-      paddingHorizontal: 5,
-      borderRadius: 11,
-      backgroundColor: theme.primary,
-      borderWidth: 2,
-      borderColor: theme.surface,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    rankText: { fontWeight: '900', fontSize: 10.5, lineHeight: 13, color: '#FFFFFF' },
-    itemInfo: { flex: 1, minWidth: 0, backgroundColor: 'transparent' },
-    itemName: { fontWeight: '600', color: theme.text, marginBottom: 4 },
-    itemValue: { color: theme.textMuted },
-    emptyState: { alignItems: 'center', marginTop: 60, backgroundColor: 'transparent' },
-    emptyText: { marginTop: 12, color: theme.textMuted }
-  }), [theme]);
+  const nameOf = (item: ExerciseBreakdown) => {
+    const key = item.name.toLowerCase().replace(/[\s-]/g, '_').replace('pull_up', 'pullup');
+    return capitalizeFirst(String(t(`statistics.ex_${key}`, item.name)), language);
+  };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <ScreenHeader
-        title={t('statistics.main_exercises', 'Ana egzersizler')}
-        onBack={() => navigation.goBack()}
-      />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top', 'left', 'right']}>
+      <ScreenHeader title={t('statistics.main_exercises', 'Ana egzersizler')} onBack={() => navigation.goBack()} />
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <PillTabs
+          tabs={[
+            { key: 'week', label: t('statistics.last_7_days', 'Son 7 gün') },
+            { key: 'month', label: t('statistics.last_30_days', 'Son 30 gün') },
+            { key: 'year', label: t('statistics.last_year', 'Son 12 ay') },
+          ]}
+          selected={period}
+          onSelect={setPeriod}
+        />
 
-      <ScrollView contentContainerStyle={styles.content}>
         {loading ? (
-          <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 50 }} />
-        ) : exercises.length === 0 ? (
-          <Surface style={styles.emptyState} elevation={0}>
-             <Ionicons name="barbell-outline" size={48} color={theme.textMuted} />
-             <Text variant="bodyLarge" style={styles.emptyText}>{t('common.no_data', 'Veri bulunamadı')}</Text>
-          </Surface>
+          <View style={styles.state}><ActivityIndicator color={theme.textMuted} /></View>
+        ) : failed || exercises.length === 0 ? (
+          <Text style={[styles.lead, { color: theme.textMuted }]}>
+            {failed ? t('stats.load_failed', 'İstatistikler yüklenemedi.') : t('stats.no_sets_period', 'Bu dönemde tamamlanmış set yok.')}
+          </Text>
         ) : (
-          <Surface style={styles.list} elevation={0}>
-             {exercises.map((item, index) => {
-                const tKey = item.name.toLowerCase().replace(/[\s-]/g, '_').replace('pull_up', 'pullup');
-                const translatedName = String(t(`statistics.ex_${tKey}`, item.name));
+          <>
+            <Text style={[styles.lead, { color: theme.textSecondary }]}>
+              {t('stats.main_exercises_lead', 'Toplam hacme göre sıralı.')}
+            </Text>
+            <View style={[styles.list, { borderTopColor: theme.border }]}>
+              {exercises.map((item, index) => {
                 const artwork = resolvePublicMediaUrl(item.gifUrl || item.imageUrl, API_URL);
+                const hasVolume = (item.volume || 0) > 0;
                 return (
-                <Surface key={index} style={[styles.listItem, index === exercises.length - 1 && { borderBottomWidth: 0 }]} elevation={0}>
-                    <Surface style={styles.artworkWrap} elevation={0}>
-                        <Surface style={[styles.artwork, !artwork && styles.artworkFallback]} elevation={0}>
-                            {artwork ? (
-                              <Image
-                                source={{ uri: mediaVariantUrl(artwork, 'thumb') }}
-                                style={styles.artworkImage}
-                                contentFit="cover"
-                                cachePolicy="memory-disk"
-                                recyclingKey={item.exerciseId || item.name}
-                              />
-                            ) : (
-                              <Ionicons name="barbell" size={22} color={theme.primary} />
-                            )}
-                        </Surface>
-                        <Surface style={styles.rankBadge} elevation={0}>
-                            <Text style={styles.rankText}>{index + 1}</Text>
-                        </Surface>
-                    </Surface>
-                    <Surface style={styles.itemInfo} elevation={0}>
-                        <Text variant="titleMedium" numberOfLines={2} style={styles.itemName}>{translatedName}</Text>
-                        <Text variant="bodyMedium" style={styles.itemValue}>
-                          {(item.volume || 0).toLocaleString()} {t('common.kg', 'kg')} · {(item.reps || 0).toLocaleString()} {t('routines.reps', 'reps').toLowerCase()} · {item.sets || 0} {t('statistics.sets', 'sets').toLowerCase()}
-                        </Text>
-                    </Surface>
-                </Surface>
-             )})}
-          </Surface>
+                  <View key={item.exerciseId || item.name} style={[styles.row, { borderBottomColor: theme.border }]}>
+                    <Text style={[styles.rank, { color: theme.textMuted }]}>{index + 1}</Text>
+                    <View style={[styles.artwork, { backgroundColor: artwork ? '#FFFFFF' : theme.surfaceLight }]}>
+                      {artwork ? (
+                        <Image
+                          source={{ uri: mediaVariantUrl(artwork, 'thumb') }}
+                          style={StyleSheet.absoluteFill}
+                          contentFit="cover"
+                          cachePolicy="memory-disk"
+                          recyclingKey={item.exerciseId || item.name}
+                        />
+                      ) : (
+                        <Ionicons name="barbell-outline" size={20} color={theme.textMuted} />
+                      )}
+                    </View>
+                    <View style={styles.name}>
+                      <Text numberOfLines={2} style={[styles.title, { color: theme.text }]}>{nameOf(item)}</Text>
+                      <Text numberOfLines={1} style={[styles.meta, { color: theme.textMuted }]}>
+                        {t('monthly_report.sets_count', { count: item.sets || 0, defaultValue: '{{count}} set' })}
+                        {hasVolume ? ` · ${t('stats.reps_count', { count: formatNumber(item.reps || 0, language), defaultValue: '{{count}} tekrar' })}` : ''}
+                      </Text>
+                    </View>
+                    <Text style={[styles.figure, { color: theme.text }]}>
+                      {hasVolume ? formatNumber(item.volume, language) : formatNumber(item.reps || 0, language)}
+                      <Text style={[styles.unit, { color: theme.textMuted }]}>
+                        {hasVolume ? ' kg' : ` ${t('stats.reps', 'Tekrar').toLocaleLowerCase(language)}`}
+                      </Text>
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  content: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingBottom: 40 },
+  lead: { fontSize: 14, lineHeight: 20, paddingHorizontal: 16, marginTop: 18 },
+  list: { marginTop: 14, borderTopWidth: StyleSheet.hairlineWidth },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 68,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  rank: { width: 16, fontSize: 14, fontWeight: '600', textAlign: 'center', fontVariant: ['tabular-nums'] },
+  artwork: {
+    ...exerciseThumbStyle(EXERCISE_THUMB.large),
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  name: { flex: 1, minWidth: 0 },
+  title: { fontSize: 15, fontWeight: '600' },
+  meta: { fontSize: 12.5, marginTop: 3 },
+  figure: { fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  unit: { fontSize: 12.5, fontWeight: '500' },
+  state: { height: 240, alignItems: 'center', justifyContent: 'center' },
+});
 
 export default MainExercisesScreen;

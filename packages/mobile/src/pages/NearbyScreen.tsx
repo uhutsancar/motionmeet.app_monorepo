@@ -209,14 +209,14 @@ const NearbyScreen = ({ navigation }: NavigationOnlyProps) => {
         {item.profile_picture ? (
           <Image source={{ uri: mediaVariantUrl(item.profile_picture, 'avatar') }} style={{ width: 46, height: 46, borderRadius: 23 }} contentFit="cover" cachePolicy="memory-disk" recyclingKey={item._id} />
         ) : (
-          <View style={{ width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.primarySoft }}>
-            <Text style={{ color: theme.primary, fontSize: 17, fontWeight: '800' }}>
+          <View style={{ width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceLight }}>
+            <Text style={{ color: theme.textSecondary, fontSize: 17, fontWeight: '500' }}>
               {item.full_name?.charAt(0)?.toUpperCase() || 'U'}
             </Text>
           </View>
         )}
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text numberOfLines={1} style={{ color: theme.text, fontSize: 14, fontWeight: '800' }}>{item.full_name}</Text>
+          <Text numberOfLines={1} style={{ color: theme.text, fontSize: 14, fontWeight: '600' }}>{item.full_name}</Text>
           <Text numberOfLines={1} style={{ color: theme.textMuted, fontSize: 11.5, marginTop: 1 }}>@{item.username}</Text>
           {item.approximateArea ? (
             <Text numberOfLines={1} style={{ color: theme.textMuted, fontSize: 11, marginTop: 3 }}>
@@ -225,7 +225,7 @@ const NearbyScreen = ({ navigation }: NavigationOnlyProps) => {
           ) : null}
         </View>
         <View style={{ paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8, backgroundColor: theme.surfaceLight }}>
-          <Text style={{ color: theme.textSecondary, fontSize: 10.5, fontWeight: '800' }}>
+          <Text style={{ color: theme.textSecondary, fontSize: 10.5, fontWeight: '700' }}>
             {t(BAND_LABELS[item.distanceBand].key, BAND_LABELS[item.distanceBand].fallback)}
           </Text>
         </View>
@@ -267,14 +267,14 @@ const NearbyScreen = ({ navigation }: NavigationOnlyProps) => {
 
     return (
       <Surface elevation={0} style={{ padding: 14, borderRadius: 12, gap: 8, borderWidth: StyleSheet.hairlineWidth, borderColor: `${theme.warning}55`, backgroundColor: `${theme.warning}14` }}>
-        <Text style={{ color: theme.text, fontSize: 13, fontWeight: '800' }}>{notice.title}</Text>
+        <Text style={{ color: theme.text, fontSize: 13, fontWeight: '700' }}>{notice.title}</Text>
         <Text style={{ color: theme.textSecondary, fontSize: 12, lineHeight: 17 }}>{notice.body}</Text>
         {notice.action ? (
           <TouchableRipple
             onPress={() => void (permission === 'blocked' || permission === 'services_off' ? openSettings() : load({ force: true }))}
             style={{ alignSelf: 'flex-start', paddingHorizontal: 14, height: 34, justifyContent: 'center', borderRadius: 9, backgroundColor: theme.primary }}
           >
-            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>{notice.action}</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>{notice.action}</Text>
           </TouchableRipple>
         ) : null}
       </Surface>
@@ -315,7 +315,7 @@ const NearbyScreen = ({ navigation }: NavigationOnlyProps) => {
     return (
       <View style={{ alignItems: 'center', paddingVertical: 40, paddingHorizontal: 26, gap: 7 }}>
         <Ionicons name="compass-outline" size={30} color={theme.textMuted} />
-        <Text style={{ color: theme.text, fontSize: 13.5, fontWeight: '800' }}>{copy.title}</Text>
+        <Text style={{ color: theme.text, fontSize: 13.5, fontWeight: '700' }}>{copy.title}</Text>
         <Text style={{ color: theme.textMuted, fontSize: 12, textAlign: 'center', lineHeight: 17 }}>{copy.body}</Text>
       </View>
     );
@@ -348,7 +348,7 @@ const NearbyScreen = ({ navigation }: NavigationOnlyProps) => {
             <Surface elevation={0} style={{ padding: 14, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border, backgroundColor: theme.surface, gap: 10 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ color: theme.text, fontSize: 14.5, fontWeight: '800' }}>
+                  <Text style={{ color: theme.text, fontSize: 14.5, fontWeight: '700' }}>
                     {t('nearby.feature_title', 'Show athletes near me')}
                   </Text>
                   <Text style={{ color: theme.textMuted, fontSize: 11.5, marginTop: 3, lineHeight: 16 }}>
@@ -373,7 +373,7 @@ const NearbyScreen = ({ navigation }: NavigationOnlyProps) => {
 
             {enabled ? (
               <View>
-                <Text style={{ color: theme.textMuted, fontSize: 10.5, fontWeight: '900', letterSpacing: 1.1, marginLeft: 4, marginBottom: 8 }}>
+                <Text style={{ color: theme.textMuted, fontSize: 10.5, fontWeight: '700', letterSpacing: 1.1, marginLeft: 4, marginBottom: 8 }}>
                   {t('nearby.radius', 'RADIUS')}
                 </Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
@@ -390,7 +390,7 @@ const NearbyScreen = ({ navigation }: NavigationOnlyProps) => {
                           backgroundColor: active ? theme.primarySoft : theme.surface,
                         }}
                       >
-                        <Text style={{ color: active ? theme.primary : theme.textSecondary, fontSize: 12, fontWeight: '800' }}>
+                        <Text style={{ color: active ? theme.primary : theme.textSecondary, fontSize: 12, fontWeight: '700' }}>
                           {t(SCOPE_LABELS[scope].key, SCOPE_LABELS[scope].fallback)}
                         </Text>
                       </TouchableRipple>

@@ -1,3 +1,4 @@
+import { USAGE_LIMITS, usageLimitFor } from "../configs/usageLimits.js";
 import imagekit from "../configs/imageKit.js";
 import type { RequestHandler } from "express";
 import { isOptionalString, isUuid } from "../utils/validation.js";
@@ -121,12 +122,7 @@ export const addPost: RequestHandler = async (req, res, next) => {
 
     let post;
     try {
-      const quotaLimit =
-        req.dbUser?.role === "superadmin"
-          ? -1
-          : req.dbUser?.plan && typeof req.dbUser.plan === "object"
-            ? req.dbUser.plan.features.max_posts_per_day
-            : -1;
+      const quotaLimit = usageLimitFor(req.dbUser, USAGE_LIMITS.postsPerDay);
       post = await postService.createPost(
         {
           user: userId,

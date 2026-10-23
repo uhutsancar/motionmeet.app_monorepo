@@ -4,10 +4,9 @@ import { Alert, FlatList, RefreshControl, ScrollView, StatusBar, StyleSheet, Vie
 // views and keeps a memory + disk cache where React Native's Image does not.
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActivityIndicator, Button, Chip, Divider, Surface, Text, TouchableRipple } from 'react-native-paper';
+import { ActivityIndicator, Divider, Surface, Text, TouchableRipple } from 'react-native-paper';
+import SoftButton from '../components/ui/SoftButton';
 import { useAuthContext } from "../context/AuthProvider";
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { MESSAGE_ICON } from '../config/icons';
 import { useTranslation } from 'react-i18next';
 import { fetchConnections } from '../features/connections/connectionsSlice';
 import {
@@ -211,7 +210,7 @@ const Connections = ({ navigation, route }: ConnectionsProps) => {
         {user.profile_picture ? (
           <Image
             source={{ uri: mediaVariantUrl(user.profile_picture, 'avatar') }}
-            style={{ width: AVATAR.medium, height: AVATAR.medium, borderRadius: AVATAR.medium / 2 }}
+            style={{ width: AVATAR.row, height: AVATAR.row, borderRadius: AVATAR.row / 2 }}
             contentFit="cover"
             cachePolicy="memory-disk"
             recyclingKey={user._id}
@@ -220,9 +219,9 @@ const Connections = ({ navigation, route }: ConnectionsProps) => {
         ) : (
           <Surface
             elevation={0}
-            style={{ width: AVATAR.medium, height: AVATAR.medium, borderRadius: AVATAR.medium / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.primarySoft }}
+            style={{ width: AVATAR.row, height: AVATAR.row, borderRadius: AVATAR.row / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceLight }}
           >
-            <Text style={{ color: theme.primary, fontWeight: '900' }}>
+            <Text style={{ color: theme.textSecondary, fontWeight: '500', fontSize: 17 }}>
               {(user.full_name || user.username || '?').charAt(0).toUpperCase()}
             </Text>
           </Surface>
@@ -231,7 +230,7 @@ const Connections = ({ navigation, route }: ConnectionsProps) => {
           <Text
             variant="titleSmall"
             numberOfLines={1}
-            style={{ color: theme.text, fontWeight: '700' }}
+            style={{ color: theme.text, fontWeight: '600' }}
           >
             {user.full_name}
           </Text>
@@ -239,76 +238,55 @@ const Connections = ({ navigation, route }: ConnectionsProps) => {
             @{user.username}
           </Text>
         </View>
-        {/* Actions live on the same row as the person: a single icon for
-            messaging keeps the row compact instead of a labelled button. */}
+        {/* Instagram's people list: short grey buttons on the row, one accent
+            button only where something is asked of the member. */}
         {(currentTab === 'Following' || currentTab === 'Connections') && (
-          <TouchableRipple
+          <SoftButton
+            fill={false}
+            label={t('messages.message', 'Mesaj')}
             onPress={() => navigation.navigate('ChatBox', { userId: user._id, user })}
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 17,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: theme.primarySoft,
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={`${t('common.message_action', 'Send message')}: ${user.username}`}
-            borderless
-          >
-            <Ionicons name={MESSAGE_ICON} size={16} color={theme.primary} />
-          </TouchableRipple>
+          />
+        )}
+        {currentTab === 'Following' && (
+          <SoftButton
+            fill={false}
+            label={t('profile.following_state', 'Takip ediliyor')}
+            dimmed={actionLoading}
+            onPress={() => Alert.alert(
+              user.full_name || user.username,
+              t('connections.unfollow_confirm', 'Takibi bırakmak istiyor musun?'),
+              [
+                { text: t('common.cancel', 'Vazgeç'), style: 'cancel' },
+                { text: t('connections.unfollow', 'Takibi bırak'), style: 'destructive', onPress: () => void handleUnfollow(user._id) },
+              ],
+            )}
+          />
         )}
         {currentTab === 'Requests' && (
           <View style={{ flexDirection: 'row', gap: 6 }}>
-            <Button
-              mode="contained"
-              compact
-              onPress={() => handleFollowRequest(user._id, true)}
-              disabled={actionLoading}
-              style={{ borderRadius: 16 }}
-              labelStyle={{ fontSize: 11, fontWeight: '700' }}
-            >
-              {t('activity.confirm', 'Onayla')}
-            </Button>
-            <Button
-              mode="outlined"
-              compact
-              onPress={() => handleFollowRequest(user._id, false)}
-              disabled={actionLoading}
-              textColor={theme.textMuted}
-              style={{ borderRadius: 16, borderColor: theme.border }}
-              labelStyle={{ fontSize: 11, fontWeight: '700' }}
-            >
-              {t('activity.decline', 'Sil')}
-            </Button>
+            <SoftButton
+              primary
+              fill={false}
+              dimmed={actionLoading}
+              label={t('activity.confirm', 'Onayla')}
+              onPress={() => void handleFollowRequest(user._id, true)}
+            />
+            <SoftButton
+              fill={false}
+              dimmed={actionLoading}
+              label={t('activity.decline', 'Sil')}
+              onPress={() => void handleFollowRequest(user._id, false)}
+            />
           </View>
         )}
         {currentTab === 'Pending' && (
-          <Button
-            mode="contained"
-            compact
-            onPress={() => handleAcceptConnection(user._id)}
-            disabled={actionLoading}
-            style={{ borderRadius: 16 }}
-            labelStyle={{ fontSize: 11, fontWeight: '700' }}
-          >
-            {t('connections.accept', 'Kabul et')}
-          </Button>
-        )}
-        {currentTab === 'Following' && (
-          <TouchableRipple
-            onPress={() => handleUnfollow(user._id)}
-            disabled={actionLoading}
-            style={{ paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8 }}
-            accessibilityRole="button"
-            accessibilityLabel={t('connections.unfollow', 'Takibi bırak')}
-            borderless
-          >
-            <Text style={{ color: theme.textMuted, fontSize: 11, fontWeight: '700' }}>
-              {t('connections.unfollow', 'Takibi bırak')}
-            </Text>
-          </TouchableRipple>
+          <SoftButton
+            primary
+            fill={false}
+            dimmed={actionLoading}
+            label={t('connections.accept', 'Kabul et')}
+            onPress={() => void handleAcceptConnection(user._id)}
+          />
         )}
       </View>
     </TouchableRipple>
@@ -365,15 +343,24 @@ const Connections = ({ navigation, route }: ConnectionsProps) => {
           }}
         >
           {TABS.map((tab) => (
-            <Chip
+            <TouchableRipple
               key={tab.key}
-              selected={currentTab === tab.key}
               onPress={() => setCurrentTab(tab.key)}
-              style={{ backgroundColor: currentTab === tab.key ? theme.primary : theme.surface }}
-              textStyle={{ color: currentTab === tab.key ? '#fff' : theme.text, fontWeight: '600' }}
+              borderless
+              accessibilityRole="tab"
+              accessibilityState={{ selected: currentTab === tab.key }}
+              style={{
+                height: 30,
+                paddingHorizontal: 12,
+                borderRadius: 15,
+                justifyContent: 'center',
+                backgroundColor: currentTab === tab.key ? theme.surfaceLight : 'transparent',
+              }}
             >
-              {t(tab.labelKey, tab.fallback)}
-            </Chip>
+              <Text style={{ color: currentTab === tab.key ? theme.text : theme.textMuted, fontSize: 13, fontWeight: '600' }}>
+                {t(tab.labelKey, tab.fallback)}
+              </Text>
+            </TouchableRipple>
           ))}
         </View>
       </ScrollView>

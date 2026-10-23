@@ -37,19 +37,33 @@ const PRODUCTION_AD_UNITS = {
 } as const;
 
 /**
- * How many real posts separate one ad row from the next in Home/Explore.
+ * How many real posts separate one ad row from the next in Home/Explore, and
+ * precede the first one.
  *
  * A fixed gap made every ad land in a fixed rhythm, which reads as denser
  * than it is once someone scrolls fast enough to see two in a row line up
- * the same way each session. Randomizing within the range breaks that
+ * the same way each session. Varying it within the range breaks that
  * pattern without changing the average frequency.
  */
 export const AD_FREQUENCY_POSTS_RANGE = { min: 10, max: 15 } as const;
 
-/** Picks one gap size for the current feed render. */
-export const nextAdFrequency = (): number => {
+/** A fresh seed for a new list generation: first load, a refresh, a new feed. */
+export const newAdSeed = (): number => Math.floor(Math.random() * 2 ** 31);
+
+/**
+ * Gap sizes for one list generation, drawn from a seeded generator.
+ *
+ * The same seed always yields the same sequence, so a list recomputed after a
+ * page is appended keeps every earlier ad exactly where it was and nothing
+ * the reader has scrolled past moves. Only a new seed reshuffles them.
+ */
+export const createAdGapSequence = (seed: number): (() => number) => {
+  let state = (seed >>> 0) || 1;
   const { min, max } = AD_FREQUENCY_POSTS_RANGE;
-  return min + Math.floor(Math.random() * (max - min + 1));
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return min + (state % (max - min + 1));
+  };
 };
 
 export type AdUnitKind = 'banner' | 'native';

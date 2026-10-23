@@ -146,7 +146,7 @@ const StoriesBar = () => {
             height: AVATAR_SIZE,
             border: 2.5,
             borderColor: "background.paper",
-            fontWeight: 800,
+            fontWeight: 700,
           }}
         >
           {fallback}

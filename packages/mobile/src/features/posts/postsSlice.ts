@@ -5,7 +5,16 @@ import type { Post } from '@motionmeet/shared';
 
 type FeedMode = 'discover' | 'following';
 type FetchPostsArgument = string | { token: string; cursor?: string | null; mode?: FeedMode };
-interface PostsState { posts: Post[]; nextCursor: string | null; loading: boolean; loadingMore: boolean; error: string | null; mode: FeedMode; activeRequestId: string | null }
+interface PostsState {
+  posts: Post[]; nextCursor: string | null; loading: boolean; loadingMore: boolean; error: string | null; mode: FeedMode; activeRequestId: string | null;
+  /**
+   * Bumped whenever a first page is requested. A next-page request remembers
+   * the generation it was made for, so a page that lands after a refresh has
+   * started is dropped instead of being appended to the new list.
+   */
+  generation: number;
+  appendRequest: { requestId: string; generation: number } | null;
+}
 interface CreatePostArgument { postData: FormData | (Record<string, unknown> & { operationId?: string }); token: string }
 interface LikePostArgument { postId: string; token: string; liked: boolean }
 interface DeletePostArgument { postId: string; token: string }
@@ -18,6 +27,8 @@ const initialState: PostsState = {
   error: null,
   mode: 'discover',
   activeRequestId: null,
+  generation: 0,
+  appendRequest: null,
 };
 
 export const fetchPosts = createAsyncThunk<{ posts: Post[]; nextCursor: string | null; append: boolean; mode: FeedMode }, FetchPostsArgument>(
@@ -82,6 +93,13 @@ const postsSlice = createSlice({
       state.posts = [];
       state.nextCursor = null;
     },
+    /** The server's answer to a like or unlike made from any card showing this post. */
+    postLikeSynced: (state, action: PayloadAction<{ postId: string; liked_by_me: boolean; like_count: number }>) => {
+      const post = state.posts.find((item) => item._id === action.payload.postId);
+      if (!post) return;
+      post.liked_by_me = action.payload.liked_by_me;
+      post.like_count = action.payload.like_count;
+    },
     setAuthorFollowState: (state, action: PayloadAction<{ authorId: string; isFollowing: boolean }>) => {
       const { authorId, isFollowing } = action.payload;
       state.posts.forEach((post) => {
@@ -98,8 +116,10 @@ const postsSlice = createSlice({
       .addCase(fetchPosts.pending, (state, action) => {
         const isNextPage =
           typeof action.meta.arg === 'object' && Boolean(action.meta.arg?.cursor);
-        if (isNextPage) state.loadingMore = true;
-        else {
+        if (isNextPage) {
+          state.loadingMore = true;
+          state.appendRequest = { requestId: action.meta.requestId, generation: state.generation };
+        } else {
           state.loading = true;
           state.loadingMore = false;
           state.mode =
@@ -107,6 +127,8 @@ const postsSlice = createSlice({
               ? action.meta.arg?.mode || 'discover'
               : 'discover';
           state.activeRequestId = action.meta.requestId;
+          state.generation += 1;
+          state.appendRequest = null;
         }
       })
       .addCase(fetchPosts.fulfilled, (state, action) => {
@@ -117,7 +139,15 @@ const postsSlice = createSlice({
         ) {
           return;
         }
+        if (
+          action.payload.append &&
+          (state.appendRequest?.requestId !== action.meta.requestId ||
+            state.appendRequest.generation !== state.generation)
+        ) {
+          return;
+        }
         if (action.payload.append) {
+          state.appendRequest = null;
           const knownIds = new Set(state.posts.map((post) => post._id));
           state.posts.push(
             ...action.payload.posts.filter((post) => !knownIds.has(post._id))
@@ -136,12 +166,17 @@ const postsSlice = createSlice({
             ? action.meta.arg?.mode || 'discover'
             : 'discover';
         if (mode !== state.mode) return;
-        if (
-          !(typeof action.meta.arg === 'object' && action.meta.arg?.cursor) &&
-          state.activeRequestId !== action.meta.requestId
-        ) {
+        const isNextPage = typeof action.meta.arg === 'object' && Boolean(action.meta.arg?.cursor);
+        if (isNextPage) {
+          // A failed next page only ends its own spinner; it must not touch a
+          // refresh that started after it.
+          if (state.appendRequest?.requestId !== action.meta.requestId) return;
+          state.appendRequest = null;
+          state.loadingMore = false;
+          state.error = action.error.message ?? null;
           return;
         }
+        if (state.activeRequestId !== action.meta.requestId) return;
         state.loading = false;
         state.loadingMore = false;
         state.activeRequestId = null;
@@ -174,5 +209,5 @@ const postsSlice = createSlice({
   },
 });
 
-export const { clearPosts, setAuthorFollowState } = postsSlice.actions;
+export const { clearPosts, postLikeSynced, setAuthorFollowState } = postsSlice.actions;
 export default postsSlice.reducer;

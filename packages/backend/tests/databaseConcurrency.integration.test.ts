@@ -16,8 +16,8 @@ test("PostgreSQL transactions remain idempotent under concurrent writes", { time
   const deletionKey = `posts/integration-${runId}.png`;
   const userIds: string[] = [];
   try {
-    const sender = await database.insertInto("users").values({ legacy_mongo_id: null, email: `sender-${runId}@example.test`, full_name: "Sender User", username: `sender_${runId}`, password_hash: "test-hash", plan_id: null, plan_start_date: null, plan_end_date: null, plan_cancelled_at: null }).returning("id").executeTakeFirstOrThrow();
-    const recipient = await database.insertInto("users").values({ legacy_mongo_id: null, email: `recipient-${runId}@example.test`, full_name: "Recipient User", username: `recipient_${runId}`, password_hash: "test-hash", plan_id: null, plan_start_date: null, plan_end_date: null, plan_cancelled_at: null }).returning("id").executeTakeFirstOrThrow();
+    const sender = await database.insertInto("users").values({ legacy_mongo_id: null, email: `sender-${runId}@example.test`, full_name: "Sender User", username: `sender_${runId}`, password_hash: "test-hash" }).returning("id").executeTakeFirstOrThrow();
+    const recipient = await database.insertInto("users").values({ legacy_mongo_id: null, email: `recipient-${runId}@example.test`, full_name: "Recipient User", username: `recipient_${runId}`, password_hash: "test-hash" }).returning("id").executeTakeFirstOrThrow();
     userIds.push(sender.id, recipient.id);
     const exercise = await database.insertInto("exercises").values({ legacy_mongo_id: null, external_id: `integration-${runId}`, name: "Integration Bench Press", name_normalized: `integration bench press ${runId}`, muscle_group: "chest", equipment: "barbell", created_by: sender.id }).returning("id").executeTakeFirstOrThrow();
     const post = await database.insertInto("posts").values({ legacy_mongo_id: null, user_id: sender.id, operation_id: `post-${runId}`, author_full_name: "Sender User", author_username: `sender_${runId}`, content: "test", workout_id: null }).returning("id").executeTakeFirstOrThrow();

@@ -7,11 +7,10 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from '../context/AuthProvider';
 import { getNearbySettings, getNearbyUsers } from '../api/endpoints';
 import { logHandledError } from '../utils/feedback';
-import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { FEED_GUTTER, feedCarouselCardWidth } from '../config/layout';
+import { FEED_GUTTER } from '../config/layout';
 import { BAND_LABELS } from '../config/nearbyLabels';
 import { useAppSelector } from '../store/hooks';
-import UserCard from './UserCard';
+import UserCard, { PEOPLE_CARD_WIDTH } from './UserCard';
 import type { NearbyUser } from '@motionmeet/shared';
 import type { NavigationOnlyProps } from '../navigation/types';
 
@@ -54,7 +53,6 @@ const cachedFor = (
 const NearbyAthletes = ({ navigation }: NavigationOnlyProps) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
-  const { usableWidth } = useResponsiveLayout();
   const { getToken } = useAuthContext();
   const currentUserId = useAppSelector((state) => state.user.value?._id);
   const initial = cachedFor(currentUserId);
@@ -99,8 +97,6 @@ const NearbyAthletes = ({ navigation }: NavigationOnlyProps) => {
   // With Nearby on and genuinely nobody around, there is nothing to say.
   if (state === 'ready' && users.length === 0) return null;
 
-  const cardWidth = feedCarouselCardWidth(usableWidth);
-
   return (
     <View style={[styles.section, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
       <View style={styles.header}>
@@ -113,10 +109,9 @@ const NearbyAthletes = ({ navigation }: NavigationOnlyProps) => {
           onPress={() => navigation.navigate('NearbyScreen')}
           style={styles.seeAll}
         >
-          <Text style={{ color: theme.primary, fontSize: 12.5, fontWeight: '800' }}>
+          <Text style={{ color: theme.primary, fontSize: 13, fontWeight: '600' }}>
             {t('nearby.see_all', 'See all')}
           </Text>
-          <Ionicons name="chevron-forward" size={14} color={theme.primary} />
         </TouchableOpacity>
       </View>
 
@@ -145,7 +140,7 @@ const NearbyAthletes = ({ navigation }: NavigationOnlyProps) => {
             <UserCard
               key={user._id}
               user={user}
-              width={cardWidth}
+              width={PEOPLE_CARD_WIDTH}
               badge={t(BAND_LABELS[user.distanceBand].key, BAND_LABELS[user.distanceBand].fallback)}
               caption={user.approximateArea || user.location || ''}
               onPress={() => navigation.navigate('Profile', { userId: user._id })}
@@ -160,9 +155,8 @@ const NearbyAthletes = ({ navigation }: NavigationOnlyProps) => {
 // Theme colours are applied inline above; these stay static.
 const styles = StyleSheet.create({
   section: {
-    paddingTop: 14,
-    paddingBottom: 14,
-    marginBottom: 8,
+    paddingTop: 12,
+    paddingBottom: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   header: {
@@ -175,9 +169,8 @@ const styles = StyleSheet.create({
   },
   title: {
     flexShrink: 1,
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: -0.2,
+    fontSize: 14,
+    fontWeight: '600',
   },
   seeAll: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: 2 },
   offRow: {
@@ -190,7 +183,7 @@ const styles = StyleSheet.create({
   // edge to edge while the first card lines up with the posts above it.
   scrollContent: {
     paddingHorizontal: FEED_GUTTER,
-    gap: 10,
+    gap: 8,
   },
 });
 

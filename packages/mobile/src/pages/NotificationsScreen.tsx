@@ -105,7 +105,7 @@ const NotificationsScreen = ({ navigation }: NavigationOnlyProps) => {
       >
         {sections.map((section) => (
           <Surface elevation={0} key={section.title} style={styles.section}>
-            <Text variant="labelMedium" style={styles.sectionLabel}>{section.title.toUpperCase()}</Text>
+            <Text variant="labelMedium" style={styles.sectionLabel}>{section.title}</Text>
             <Surface style={styles.card} elevation={0}>
               {section.items.map((item, i) => (
                 <SwitchRow
@@ -132,7 +132,7 @@ const getStyles = (theme: MotionTheme, _paperTheme: MD3Theme) => StyleSheet.crea
     borderBottomColor: theme.border,
     elevation: 0,
   },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: theme.text },
+  headerTitle: { fontSize: 16.5, fontWeight: '700', color: theme.text },
   scrollContent: {
     width: '100%',
     maxWidth: 720,
@@ -141,7 +141,7 @@ const getStyles = (theme: MotionTheme, _paperTheme: MD3Theme) => StyleSheet.crea
   },
   section: { marginTop: 24 },
   sectionLabel: {
-    fontWeight: '700', letterSpacing: 0.8, color: theme.textMuted,
+    fontSize: 13, fontWeight: '600', color: theme.textMuted,
     paddingHorizontal: 20, marginBottom: 8,
   },
   card: {

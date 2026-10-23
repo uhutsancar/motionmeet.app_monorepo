@@ -89,10 +89,10 @@ const MuscleLoadGrid = () => {
                 >
                   <Activity size={24} />
                 </Box>
-                <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
                   {t(`statistics.muscle_${item.name.toLowerCase()}`, item.name)}
                 </Typography>
-                <Typography variant="caption" sx={{ color, fontWeight: 900 }}>
+                <Typography variant="caption" sx={{ color, fontWeight: 700 }}>
                   {item.value}
                   {t("statistics.training_share_percent", "% share")}
                 </Typography>

@@ -178,10 +178,10 @@ const ActivityScreen = ({ navigation }: NavigationOnlyProps) => {
       >
         <View style={styles.rowInner}>
           {item.actor?.profile_picture ? (
-            <Avatar.Image size={AVATAR.medium} source={{ uri: item.actor.profile_picture }} />
+            <Avatar.Image size={AVATAR.row} source={{ uri: item.actor.profile_picture }} />
           ) : (
             <Avatar.Text
-              size={AVATAR.medium}
+              size={AVATAR.row}
               label={(item.actor?.full_name || '?').charAt(0).toUpperCase()}
               style={{ backgroundColor: theme.primarySoft }}
               labelStyle={{ color: theme.primary }}

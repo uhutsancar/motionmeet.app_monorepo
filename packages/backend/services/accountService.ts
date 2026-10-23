@@ -24,7 +24,7 @@ const streamRows = async (response: Response, rows: AsyncIterable<unknown>): Pro
 
 export const streamAccountData = async (userId: string, response: Response): Promise<boolean> => {
   const user = await database.selectFrom("users").select([
-    "id", "email", "full_name", "username", "bio", "profile_picture_url", "cover_photo_url", "location", "role", "plan_id", "plan_status",
+    "id", "email", "full_name", "username", "bio", "profile_picture_url", "cover_photo_url", "location", "role",
     "weight", "height", "followers_count", "following_count", "connections_count", "privacy_public_profile", "privacy_show_workouts_on_feed",
     "privacy_allow_followers", "privacy_show_in_search", "privacy_allow_messages", "total_workouts", "total_duration_minutes", "total_volume_kg", "created_at", "updated_at",
   ]).where("id", "=", userId).executeTakeFirst();

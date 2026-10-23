@@ -57,7 +57,7 @@ const errorMessage = (error: unknown, fallback: string): string => {
 
 const Section = ({ title, children }: { title: string; children: ReactNode }) => (
   <Stack spacing={1}>
-    <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900, letterSpacing: "0.1em" }}>
+    <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>
       {title}
     </Typography>
     <Paper variant="outlined" sx={{ overflow: "hidden" }}>{children}</Paper>
@@ -75,7 +75,7 @@ interface ChoiceRowProps<T extends string> {
 
 const ChoiceRow = <T extends string>({ disabled, label, description, options, value, onChange }: ChoiceRowProps<T>) => (
   <Box sx={{ px: 2, py: 1.75 }}>
-    <Typography variant="body2" sx={{ fontWeight: 800 }}>{label}</Typography>
+    <Typography variant="body2" sx={{ fontWeight: 700 }}>{label}</Typography>
     {description && (
       <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
         {description}
@@ -180,7 +180,7 @@ const LocationSettings = () => {
           <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
             {t("location.current_value", "Shown on your profile")}
           </Typography>
-          <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
             {profile?.displayName || t("location.not_set", "Not set")}
           </Typography>
         </Box>
@@ -189,7 +189,7 @@ const LocationSettings = () => {
           <ListItemText
             primary={profile?.displayName ? t("location.change", "Change location") : t("location.add", "Add location")}
             secondary={t("location.change_hint", "Pick from the world city list")}
-            slotProps={{ primary: { variant: "body2", sx: { fontWeight: 800 } }, secondary: { variant: "caption" } }}
+            slotProps={{ primary: { variant: "body2", sx: { fontWeight: 700 } }, secondary: { variant: "caption" } }}
           />
           <ChevronRightRounded fontSize="small" />
         </ListItemButton>
@@ -213,7 +213,7 @@ const LocationSettings = () => {
             <ListItemButton disabled={busy} onClick={() => setConfirm("profile")} sx={{ px: 2, py: 1.5, color: "error.main" }}>
               <ListItemText
                 primary={t("location.remove", "Remove profile location")}
-                slotProps={{ primary: { variant: "body2", sx: { fontWeight: 800 } } }}
+                slotProps={{ primary: { variant: "body2", sx: { fontWeight: 700 } } }}
               />
               <ChevronRightRounded fontSize="small" />
             </ListItemButton>
@@ -224,7 +224,7 @@ const LocationSettings = () => {
       <Section title={t("nearby.section", "Nearby")}>
         <Stack direction="row" spacing={2} sx={{ px: 2, py: 1.75, alignItems: "center" }}>
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="body2" sx={{ fontWeight: 800 }}>{t("nearby.visible", "Appear in nearby results")}</Typography>
+            <Typography variant="body2" sx={{ fontWeight: 700 }}>{t("nearby.visible", "Appear in nearby results")}</Typography>
             <Typography variant="caption" color="text.secondary">
               {t("nearby.visible_hint", "Turn this off to keep browsing without being listed by others.")}
             </Typography>
@@ -256,7 +256,7 @@ const LocationSettings = () => {
             secondary={nearby?.locationUpdatedAt
               ? t("nearby.delete_hint", "Erases the saved position and switches the feature off.")
               : t("nearby.delete_none", "Nothing is stored right now.")}
-            slotProps={{ primary: { variant: "body2", sx: { fontWeight: 800 } }, secondary: { variant: "caption" } }}
+            slotProps={{ primary: { variant: "body2", sx: { fontWeight: 700 } }, secondary: { variant: "caption" } }}
           />
           <ChevronRightRounded fontSize="small" />
         </ListItemButton>

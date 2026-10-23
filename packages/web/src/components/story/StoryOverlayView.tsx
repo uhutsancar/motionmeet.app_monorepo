@@ -31,7 +31,7 @@ const StoryOverlayView = ({ overlay, frameWidth }: StoryOverlayViewProps) => {
           bgcolor: "#FFFFFF",
           color: "#101014",
           fontSize,
-          fontWeight: 800,
+          fontWeight: 700,
           letterSpacing: "0.01em",
           textTransform: "uppercase",
           lineHeight: 1.1,

@@ -1,3 +1,4 @@
+import { USAGE_LIMITS, usageLimitFor } from "../configs/usageLimits.js";
 import { isExerciseList, isNonEmptyString, isOptionalString, isUuid } from "../utils/validation.js";
 import type { RequestHandler } from "express";
 import * as workoutService from "../services/workoutService.js";
@@ -69,12 +70,7 @@ export const logWorkout: RequestHandler = async (req, res, next) => {
       endTime: parsedEndTime,
       exercises: exercisesWithSnapshots,
     });
-    const quotaLimit =
-      req.dbUser?.role === "superadmin"
-        ? -1
-        : req.dbUser?.plan && typeof req.dbUser.plan === "object"
-          ? req.dbUser.plan.features.max_workouts_per_month
-          : -1;
+    const quotaLimit = usageLimitFor(req.dbUser, USAGE_LIMITS.workoutsPerMonth);
     const newWorkout = await workoutService.createWorkoutWithStatistics(
       canonicalWorkout,
       { quotaLimit }
@@ -108,7 +104,7 @@ export const getWorkoutStats: RequestHandler = async (req, res, next) => {
 
     if (
       !isOptionalString(period, 20) ||
-      !["week", "month", "calendar_month", "year"].includes(period)
+      !["week", "weeks", "month", "calendar_month", "year"].includes(period)
     ) {
       return res.status(400).json({ success: false, message: "Invalid statistics period" });
     }

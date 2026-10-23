@@ -43,8 +43,8 @@ import type { NavigationOnlyProps } from '../navigation/types';
 // its whole subtree instead of updating it.
 const Section = ({ theme, title, children }: React.PropsWithChildren<{ theme: MotionTheme; title: string }>) => (
   <View style={{ gap: 9 }}>
-    <Text style={{ color: theme.textMuted, fontSize: 10.5, fontWeight: '900', letterSpacing: 1.1, marginLeft: 4 }}>
-      {title.toUpperCase()}
+    <Text style={{ color: theme.textMuted, fontSize: 13, fontWeight: '600', marginLeft: 4 }}>
+      {title}
     </Text>
     <Surface elevation={0} style={{ overflow: 'hidden', borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border, backgroundColor: theme.surface }}>
       {children}
@@ -65,7 +65,7 @@ interface ChoiceRowProps<T extends string> {
 const ChoiceRow = <T extends string>({ theme, disabled, label, description, options, value, onChange }: ChoiceRowProps<T>) => (
   <View style={{ paddingHorizontal: 14, paddingVertical: 13, gap: 9 }}>
     <View>
-      <Text style={{ color: theme.text, fontSize: 13.5, fontWeight: '800' }}>{label}</Text>
+      <Text style={{ color: theme.text, fontSize: 13.5, fontWeight: '700' }}>{label}</Text>
       {description ? <Text style={{ color: theme.textMuted, fontSize: 11.5, marginTop: 2, lineHeight: 16 }}>{description}</Text> : null}
     </View>
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
@@ -82,7 +82,7 @@ const ChoiceRow = <T extends string>({ theme, disabled, label, description, opti
               backgroundColor: active ? theme.primarySoft : 'transparent',
             }}
           >
-            <Text style={{ color: active ? theme.primary : theme.textSecondary, fontSize: 11.5, fontWeight: '800' }}>{option.label}</Text>
+            <Text style={{ color: active ? theme.primary : theme.textSecondary, fontSize: 11.5, fontWeight: '700' }}>{option.label}</Text>
           </TouchableRipple>
         );
       })}
@@ -107,7 +107,7 @@ const ActionRow = ({ theme, disabled, icon, color, title, description, onPress }
         <Ionicons name={icon} size={17} color={color} />
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ color: theme.text, fontSize: 13.5, fontWeight: '800' }}>{title}</Text>
+        <Text style={{ color: theme.text, fontSize: 13.5, fontWeight: '700' }}>{title}</Text>
         {description ? <Text numberOfLines={2} style={{ color: theme.textMuted, fontSize: 11.5, marginTop: 2 }}>{description}</Text> : null}
       </View>
       <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
@@ -220,7 +220,7 @@ const LocationSettingsScreen = ({ navigation }: NavigationOnlyProps) => {
             <Text style={{ color: theme.textMuted, fontSize: 11, fontWeight: '700' }}>
               {t('location.current_value', 'Shown on your profile')}
             </Text>
-            <Text style={{ color: theme.text, fontSize: 15, fontWeight: '800', marginTop: 4 }}>
+            <Text style={{ color: theme.text, fontSize: 15, fontWeight: '700', marginTop: 4 }}>
               {profile?.displayName || t('location.not_set', 'Not set')}
             </Text>
           </View>
@@ -267,7 +267,7 @@ const LocationSettingsScreen = ({ navigation }: NavigationOnlyProps) => {
         <Section theme={theme} title={t('nearby.section', 'Nearby')}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13 }}>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ color: theme.text, fontSize: 13.5, fontWeight: '800' }}>{t('nearby.visible', 'Appear in nearby results')}</Text>
+              <Text style={{ color: theme.text, fontSize: 13.5, fontWeight: '700' }}>{t('nearby.visible', 'Appear in nearby results')}</Text>
               <Text style={{ color: theme.textMuted, fontSize: 11.5, marginTop: 2, lineHeight: 16 }}>
                 {t('nearby.visible_hint', 'Turn this off to keep browsing without being listed by others.')}
               </Text>

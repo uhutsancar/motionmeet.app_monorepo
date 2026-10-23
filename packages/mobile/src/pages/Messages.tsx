@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthContext } from "../context/AuthProvider";
 import { useTranslation } from 'react-i18next';
 import { useTheme, type MotionTheme } from '../context/ThemeContext';
+import { useKeyboardInset } from '../hooks/useKeyboardInset';
 import { useSocket } from '../hooks/useSocket';
 import { setConnections } from '../features/connections/connectionsSlice';
 import { getUserConnections, getUserConversations } from '../api/endpoints';
@@ -44,6 +45,8 @@ const Messages = ({ navigation }: NavigationOnlyProps) => {
   const dispatch = useAppDispatch();
   const { getToken } = useAuthContext();
   const { t, i18n } = useTranslation();
+  // The list under the search field keeps its last rows above the keyboard.
+  const keyboard = useKeyboardInset();
   const { theme, isDark } = useTheme();
   const s = React.useMemo(() => getStyles(theme), [theme]);
 
@@ -295,7 +298,7 @@ const Messages = ({ navigation }: NavigationOnlyProps) => {
   const renderConversation: ListRenderItem<ConversationItem> = ({ item: conv }) => {
     const hasUnread = (conv.unread || 0) > 0;
     const msgText = conv.lastMessage?.text
-      || (conv.lastMessage?.message_type === 'image' ? `📷 ${t('common.photo', 'Fotoğraf')}` : '');
+      || (conv.lastMessage?.message_type === 'image' ? t('messages.sent_photo', 'Fotoğraf gönderdi') : '');
     const timeLabel = conv.lastMessage?.createdAt ? dayjs(conv.lastMessage.createdAt).fromNow() : '';
     const preview = conv.isNew
       ? t('messages.start_new_chat', 'Start a new chat')
@@ -315,8 +318,9 @@ const Messages = ({ navigation }: NavigationOnlyProps) => {
               : <Avatar.Text
                   label={(conv.user?.full_name || conv.user?.username || '?').charAt(0).toUpperCase()}
                   size={AVATAR_SIZE}
-                  style={{ backgroundColor: theme.primarySoft }}
-                  labelStyle={{ color: theme.primary, fontWeight: '800' }}
+                  style={{ backgroundColor: theme.surfaceLight }}
+                  color={theme.textSecondary}
+                  labelStyle={{ fontWeight: '500' }}
                 />
             }
           </View>
@@ -330,10 +334,14 @@ const Messages = ({ navigation }: NavigationOnlyProps) => {
             </Text>
             {/* Message and age share one line: two lines of grey under every
                 name is what made the list feel twice as tall as it needed. */}
-            <Text numberOfLines={1} style={[s.convPreview, hasUnread && s.convPreviewUnread]}>
-              {preview}
-              {timeLabel ? <Text style={s.convTime}>{`  ·  ${timeLabel}`}</Text> : null}
-            </Text>
+            {/* The age keeps its place at the end of the line; inside the same
+                text it was the first thing an ellipsis cut off. */}
+            <View style={s.convLine}>
+              <Text numberOfLines={1} style={[s.convPreview, s.convPreviewText, hasUnread && s.convPreviewUnread]}>
+                {preview}
+              </Text>
+              {timeLabel ? <Text numberOfLines={1} style={[s.convPreview, s.convTime]}>{` · ${timeLabel}`}</Text> : null}
+            </View>
           </View>
 
           {hasUnread ? <View style={s.unreadDot} /> : null}
@@ -357,7 +365,7 @@ const Messages = ({ navigation }: NavigationOnlyProps) => {
           accessibilityRole="button"
           accessibilityLabel={t('common.back', 'Geri')}
         >
-          <Ionicons name="chevron-back" size={26} color={theme.text} />
+          <Ionicons name="chevron-back" size={25} color={theme.text} />
         </Pressable>
         <Text numberOfLines={1} style={s.headerTitle}>
           {t('messages.title', 'Messages')}
@@ -410,7 +418,7 @@ const Messages = ({ navigation }: NavigationOnlyProps) => {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         style={s.list}
-        contentContainerStyle={{ paddingTop: 2, paddingBottom: 24 }}
+        contentContainerStyle={{ paddingTop: 2, paddingBottom: 24 + keyboard.height }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
         onEndReached={searchQuery ? loadMoreConnections : loadMoreConversations}
         onEndReachedThreshold={0.35}
@@ -440,7 +448,7 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 48,
+    height: 44,
     paddingHorizontal: 6,
   },
   // Both sides reserve the same width, so the title is centred by geometry
@@ -451,20 +459,20 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
     minWidth: 0,
     textAlign: 'center',
     color: theme.text,
-    fontSize: 17,
-    fontWeight: '800',
+    fontSize: 16.5,
+    fontWeight: '700',
   },
   searchContainer: { paddingHorizontal: 14, paddingTop: 2, paddingBottom: 10 },
   searchField: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    height: 40,
-    paddingHorizontal: 13,
-    borderRadius: 12,
+    height: 36,
+    paddingHorizontal: 11,
+    borderRadius: 10,
     backgroundColor: theme.surfaceLight,
   },
-  searchInput: { flex: 1, minWidth: 0, color: theme.text, fontSize: 15, padding: 0 },
+  searchInput: { flex: 1, minWidth: 0, color: theme.text, fontSize: 14, padding: 0 },
   list: { flex: 1, width: '100%', maxWidth: 720, alignSelf: 'center' },
   // No card, no border, no side margin: the row is the full width of the list
   // and the only inset is the text gutter.
@@ -472,11 +480,13 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
   convRowInner: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatarContainer: { position: 'relative' },
   convContent: { flex: 1, minWidth: 0, gap: 3 },
-  convName: { color: theme.text, fontSize: 15, fontWeight: '600' },
-  convNameUnread: { fontWeight: '800' },
-  convPreview: { color: theme.textMuted, fontSize: 13.5 },
+  convName: { color: theme.text, fontSize: 14.5, fontWeight: '400' },
+  convNameUnread: { fontWeight: '600' },
+  convPreview: { color: theme.textMuted, fontSize: 13 },
+  convLine: { flexDirection: 'row', alignItems: 'center', marginTop: 1 },
+  convPreviewText: { flexShrink: 1 },
   convPreviewUnread: { color: theme.text, fontWeight: '600' },
-  convTime: { color: theme.textMuted, fontSize: 13.5, fontWeight: '400' },
+  convTime: { flexShrink: 0, fontWeight: '400' },
   unreadDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: theme.primary },
   emptyState: { alignItems: 'center', gap: 6, paddingTop: 70, paddingHorizontal: 40 },
   emptyTitle: { color: theme.text, fontSize: 15, fontWeight: '700', marginTop: 8 },
