@@ -41,11 +41,7 @@ export const removeStory = createAsyncThunk<string, DeleteStoryArgument>(
 const storiesSlice = createSlice({
   name: "stories",
   initialState,
-  reducers: {
-    clearStories: (state) => {
-      state.stories = [];
-    },
-  },
+  reducers: {},
   extraReducers: (builder) => {
     builder
       .addCase(fetchStories.pending, (state) => {
@@ -70,6 +66,4 @@ const storiesSlice = createSlice({
       });
   },
 });
-
-export const { clearStories } = storiesSlice.actions;
 export default storiesSlice.reducer;

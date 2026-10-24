@@ -29,11 +29,11 @@ Statü sözcükleri: **otomatik test geçti**, **API'de doğrulandı**, **native
 | backend `databaseConcurrency.integration.test.ts` | **1/1 geçti** |
 | shared testleri (yeni `parseDecimalInput`, `elapsedWorkoutSeconds` testleri dahil) | **13/13 geçti** |
 | Locale JSON'ları (web/mobil tr/en) | parse ediliyor |
-| `pnpm install --lockfile-only` | **bloklandı** (oturum izni) — lockfile hâlâ `@paddle/paddle-node-sdk` içeriyor |
+| `pnpm install --lockfile-only` | **bloklandı** (oturum izni) — lockfile hâlâ ödeme SDK'sını içeriyor |
 
 ## Migration 012 doğrulaması (test DB, tek seferlik betik)
 
-- 001→011 uygulandı, sonra ücretli plan + Paddle kimlikli kullanıcı, ücretsiz kullanıcı, webhook kaydı ve bir antrenman eklendi; ardından 012 uygulandı.
+- 001→011 uygulandı, sonra ücretli plan + ödeme sağlayıcısı kimlikli kullanıcı, ücretsiz kullanıcı, webhook kaydı ve bir antrenman eklendi; ardından 012 uygulandı.
 - Arşiv: `users: 1` (yalnız ücretli kullanıcı), `payment_webhook_events: 1`, `plans: 2` (billing cycle'larıyla).
 - Kalan ödeme nesnesi: **yok** (tablo, kolon, enum tipi).
 - Kullanıcılar (2) ve antrenman (1) korundu.
@@ -44,8 +44,8 @@ Statü sözcükleri: **otomatik test geçti**, **API'de doğrulandı**, **native
 
 | Senaryo | Sonuç |
 | --- | --- |
-| E25 `GET /api/plans`, `POST /api/plans/update`, `POST /api/payments/checkout-intent`, `GET /api/payments/subscription`, `POST /api/payments/portal-session`, `POST /api/payments/webhooks/paddle` | hepsi **410** "Plans and payments are no longer offered" |
-| Backend Paddle env'siz başlıyor | `/health/ready` → ready |
+| E25 `GET /api/plans`, `POST /api/plans/update`, `POST /api/payments/checkout-intent`, `GET /api/payments/subscription`, `POST /api/payments/portal-session`, `POST /api/payments/webhooks/*` | hepsi **410** "Plans and payments are no longer offered" |
+| Backend ödeme env'siz başlıyor | `/health/ready` → ready |
 | Auth yanıtı | `plan` alanı yok (`id,_id,email,username,full_name,profile_picture,bio,privacy`) |
 | E36 eski ücretsiz kota | Aynı ay 7 antrenman (eski sınır 5) ve 3 rutin (eski sınır 2) → hepsi başarılı |
 | DM izni plan olmadan | Takipçi olmayan → özel hesap: `needs_mutual_follow` ret; → açık hesap: gönderildi |
@@ -88,7 +88,7 @@ Ortam: kullanıcının onayıyla backend artık dev DB'de (`motionmeetdb`) çal�
 
 | ID | Senaryo | Sonuç |
 | --- | --- | --- |
-| CLEAN | `git rm` ile artık ödeme dosyaları, `pnpm install --lockfile-only` | yapıldı; lockfile'dan Paddle SDK ve `react-native-chart-kit` çıktı |
+| CLEAN | `git rm` ile artık ödeme dosyaları, `pnpm install --lockfile-only` | yapıldı; lockfile'dan ödeme SDK'sı ve `react-native-chart-kit` çıktı |
 | MM-02 | 012'nin dev DB'ye uygulanması | yedekten sonra uygulandı; backend açılışı temiz |
 | STATS-01 | `GET /api/workout/stats?period=weeks` | **API'de doğrulandı** — 12 Pazartesi anahtarı; kas payları göğüs .167, sırt .167, bacak .417, omuz .083, kol .167 (önce bacak/kol 0) |
 | STATS-01 | `GET /api/workout/stats` `muscleSets` | **API'de doğrulandı** — 7 gün: bacak 20, sırt 8, kol 4, diğerleri 0 (toplam set 32); 30 gün: bacak 80, göğüs/sırt/kol 32, omuz 16 (toplam set 192 — kas set toplamı toplam setle aynı) |

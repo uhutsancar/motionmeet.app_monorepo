@@ -89,15 +89,6 @@ export interface ProfileLocation {
   selectedAt: string | null;
 }
 
-/** Payload accepted when saving a profile location. Exactly one id is used. */
-export interface ProfileLocationInput {
-  cityId?: number | null;
-  stateId?: number | null;
-  countryId?: number | null;
-  source?: ProfileLocationSource;
-  visibility?: ProfileLocationVisibility;
-}
-
 /** The member's own nearby settings, returned by the settings endpoint. */
 export interface NearbySettings {
   enabled: boolean;
@@ -132,13 +123,6 @@ export interface NearbyUser {
   isFollowedBy?: boolean;
   requestSent?: boolean;
   requestReceived?: boolean;
-}
-
-/** Result of resolving a raw GPS fix to a dataset record. */
-export interface LocationSuggestionFromCoordinates {
-  suggestion: LocationSuggestion | null;
-  /** Coarse label to show while asking "set your profile location to this?". */
-  approximateArea: string | null;
 }
 
 /** Attribution that must stay visible in shipped builds; see docs/LICENSES.md. */

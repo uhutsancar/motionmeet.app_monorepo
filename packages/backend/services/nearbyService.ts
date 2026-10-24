@@ -34,12 +34,6 @@ import { distanceBandFor } from "../utils/distanceBands.js";
  * tomorrow and refresh it.
  */
 const FIX_VALIDITY_MS = 7 * 24 * 60 * 60 * 1000;
-/**
- * A fix newer than this is reused instead of asking the GPS again. Long enough
- * to survive tab switches and pull-to-refresh, short enough that walking a few
- * streets re-triggers a real reading.
- */
-export const FIX_REUSE_MS = 15 * 60 * 1000;
 const RESULTS_CACHE_SECONDS = 45;
 const MAX_RESULTS = 50;
 

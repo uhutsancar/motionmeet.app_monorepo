@@ -49,14 +49,3 @@ export interface Post extends Timestamped, IdempotentRequest {
   comments?: Comment[];
   comment_next_cursor?: string | null;
 }
-
-export type PostDetail = Post;
-
-export interface SavedItem {
-  userId: EntityId;
-  entityId: EntityId;
-  entityType: "post" | "exercise";
-  createdAt: string;
-}
-
-export type Favorite = SavedItem;

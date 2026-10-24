@@ -49,12 +49,6 @@ const messagesSlice = createSlice({
         return toId === action.payload ? { ...message, seen: true } : message;
       });
     },
-    resetMessages: (state) => {
-      state.messages = [];
-    },
-    setCurrentChat: (state, action: PayloadAction<PublicUser | null>) => {
-      state.currentChat = action.payload;
-    },
   },
   extraReducers: (builder) => {
     builder
@@ -78,7 +72,5 @@ export const {
   prependMessages,
   removeMessage,
   markMessagesSeenByUser,
-  resetMessages,
-  setCurrentChat,
 } = messagesSlice.actions;
 export default messagesSlice.reducer;

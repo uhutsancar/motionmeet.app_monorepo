@@ -87,7 +87,6 @@ const notificationsSlice = createSlice({
           : item,
       );
     },
-    clearNotifications: () => initialState,
   },
   extraReducers: (builder) => {
     builder
@@ -145,5 +144,5 @@ const notificationsSlice = createSlice({
   },
 });
 
-export const { notificationReceived, followRequestResolved, clearNotifications } = notificationsSlice.actions;
+export const { notificationReceived, followRequestResolved } = notificationsSlice.actions;
 export default notificationsSlice.reducer;

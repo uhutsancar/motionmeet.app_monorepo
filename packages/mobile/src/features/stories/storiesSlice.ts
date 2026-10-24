@@ -48,9 +48,6 @@ const storiesSlice = createSlice({
   name: 'stories',
   initialState,
   reducers: {
-    clearStories: (state) => {
-      state.stories = [];
-    },
   },
   extraReducers: (builder) => {
     builder
@@ -84,6 +81,4 @@ const storiesSlice = createSlice({
       });
   },
 });
-
-export const { clearStories } = storiesSlice.actions;
 export default storiesSlice.reducer;

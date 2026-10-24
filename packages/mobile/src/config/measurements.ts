@@ -41,9 +41,3 @@ export const dayKeyToDate = (dayKey: string): Date => {
   const [year, month, day] = dayKey.split('-').map(Number);
   return new Date(year, (month || 1) - 1, day || 1);
 };
-
-/** Trailing zeros only get in the way when the value is a whole number. */
-export const formatMetricValue = (value: number | null | undefined): string => {
-  if (value === null || value === undefined || !Number.isFinite(value)) return '-';
-  return Number.isInteger(value) ? `${value}` : value.toFixed(1);
-};

@@ -30,15 +30,6 @@ const connectionsSlice = createSlice({
     setConnections: (state, action: PayloadAction<PublicUser[]>) => {
       state.connections = action.payload;
     },
-    setPendingConnections: (state, action: PayloadAction<PublicUser[]>) => {
-      state.pendingConnections = action.payload;
-    },
-    setFollowers: (state, action: PayloadAction<PublicUser[]>) => {
-      state.followers = action.payload;
-    },
-    setFollowing: (state, action: PayloadAction<PublicUser[]>) => {
-      state.following = action.payload;
-    },
   },
   extraReducers: (builder) => {
     builder
@@ -61,5 +52,5 @@ const connectionsSlice = createSlice({
   },
 });
 
-export const { setConnections, setPendingConnections, setFollowers, setFollowing } = connectionsSlice.actions;
+export const { setConnections } = connectionsSlice.actions;
 export default connectionsSlice.reducer;

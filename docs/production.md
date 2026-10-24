@@ -2,7 +2,9 @@
 
 ## Required before first release
 
-- Use Node.js 22.22+ locally/CI; container images use Node 24.
+- Use Node.js 22.23.4+ or 24.22.1+ locally and in CI; container images use
+  `node:24.22.1-alpine` pinned by digest. `corepack pnpm security:node` and the
+  CI `docker-production` job verify the runtime actually in the image.
 - Copy `.env.production.example` to an untracked `.env.production`.
 - Generate a unique `JWT_SECRET` with at least 32 random bytes.
 - Set the exact public HTTPS origin in `FRONTEND_URL` and `CORS_ORIGINS`.

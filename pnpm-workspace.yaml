@@ -20,10 +20,45 @@ packages:
   - "tools/*"
 
 overrides:
-  "postcss@<8.5.12": "^8.5.12"
+  "postcss@<8.5.23": "^8.5.23"
   "uuid@<11.1.1": "^11.1.1"
-  "brace-expansion@<=5.0.7": "5.0.8"
+  "brace-expansion@<=5.0.11": "5.0.12"
   "tar@<=7.5.20": "7.5.21"
+
+  # Security fixes for transitive dependencies (`pnpm audit --prod`, October
+  # 2026). Each selector has a lower bound so only the vulnerable range of the
+  # major already in use is lifted; no package changes major here.
+  # express 5 / express-rate-limit / socket.io / imagekit (backend runtime)
+  "body-parser@>=2.0.0 <2.4.0": "^2.4.0"
+  "proxy-addr@>=1.1.0 <2.0.8": "^2.0.8"
+  "qs@>=6.0.0 <6.16.0": "^6.16.0"
+  "ip-address@>=10.0.0 <10.7.4": "^10.7.4"
+  "engine.io@>=6.0.0 <6.6.10": "~6.6.10"
+  "axios@>=1.0.0 <1.20.0": "^1.20.0"
+  "follow-redirects@>=1.0.0 <1.16.1": "^1.16.1"
+  # Expo CLI / Metro build toolchain (packages/mobile)
+  "undici@>=6.0.0 <6.29.1": "^6.29.1"
+  "shell-quote@>=1.8.0 <1.11.0": "^1.11.0"
+  "js-yaml@>=3.0.0 <3.15.2": "^3.15.2"
+  "js-yaml@>=4.0.0 <4.3.2": "^4.3.2"
+  "nanoid@>=3.0.0 <3.3.18": "^3.3.18"
+  "browserslist@>=4.0.0 <4.28.7": "^4.28.7"
+  "baseline-browser-mapping@>=2.0.0 <2.11.0": "^2.11.0"
+  "@xmldom/xmldom@>=0.8.0 <0.8.15": "^0.8.15"
+  "@xmldom/xmldom@>=0.9.0 <0.9.12": "^0.9.12"
+  "source-map-js@>=1.0.0 <1.2.2": "^1.2.2"
+  "compression@>=1.0.0 <1.8.2": "^1.8.2"
+
+  # One copy each in the mobile bundle. native-stack and material-top-tabs had
+  # resolved two patch releases of @react-navigation/elements, and Metro fell
+  # back to the backend's older `buffer` for modules that require it without
+  # declaring it - both were bundled twice.
+  "@react-navigation/elements@>=2.9.0 <2.9.36": "2.9.36"
+  "buffer@>=5.0.0 <5.7.1": "5.7.1"
+  # Paper asks for color 3 and react-navigation for color 4; every method
+  # Paper calls (alpha, darken, fade, isLight, lighten, rgb, string) exists
+  # unchanged in 4, so both share one copy.
+  "color@>=3.0.0 <4.0.0": "^4.2.3"
 
   # Keep the metro family on the single version Expo SDK 54 pins.
   "metro": "0.83.3"
@@ -40,6 +75,14 @@ overrides:
   "metro-symbolicate": "0.83.3"
   "metro-transform-plugins": "0.83.3"
   "metro-transform-worker": "0.83.3"
+
+# react-native-svg imports `buffer` without declaring it. Metro used to find
+# whichever copy pnpm happened to hoist; declaring it links one next to the
+# package, which the release bundle (built from the workspace root) can resolve.
+packageExtensions:
+  react-native-svg:
+    dependencies:
+      buffer: "5.7.1"
 
 allowBuilds:
   browser-tabs-lock: false

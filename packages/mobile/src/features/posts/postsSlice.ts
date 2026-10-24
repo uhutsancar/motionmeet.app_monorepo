@@ -89,10 +89,6 @@ const postsSlice = createSlice({
   name: 'posts',
   initialState,
   reducers: {
-    clearPosts: (state) => {
-      state.posts = [];
-      state.nextCursor = null;
-    },
     /** The server's answer to a like or unlike made from any card showing this post. */
     postLikeSynced: (state, action: PayloadAction<{ postId: string; liked_by_me: boolean; like_count: number }>) => {
       const post = state.posts.find((item) => item._id === action.payload.postId);
@@ -209,5 +205,5 @@ const postsSlice = createSlice({
   },
 });
 
-export const { clearPosts, postLikeSynced, setAuthorFollowState } = postsSlice.actions;
+export const { postLikeSynced, setAuthorFollowState } = postsSlice.actions;
 export default postsSlice.reducer;

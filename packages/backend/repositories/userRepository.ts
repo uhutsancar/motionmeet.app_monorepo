@@ -12,7 +12,3 @@ export const findUserById = async (
   if (!row) return null;
   return serializeUser(row, options.sensitive ?? false);
 };
-
-export const publicUserColumns = [
-  "id", "full_name", "username", "profile_picture_url",
-] as const;

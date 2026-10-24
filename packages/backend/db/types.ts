@@ -1,5 +1,5 @@
 import type { StoryOverlay } from "@motionmeet/shared";
-import type { ColumnType, Generated, Insertable, Selectable, Updateable } from "kysely";
+import type { ColumnType, Generated, Insertable, Selectable } from "kysely";
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 export type GeneratedTimestamp = ColumnType<Date, Date | string | undefined, Date | string>;
@@ -526,4 +526,3 @@ export interface Database {
 
 export type Row<TableName extends keyof Database> = Selectable<Database[TableName]>;
 export type NewRow<TableName extends keyof Database> = Insertable<Database[TableName]>;
-export type RowUpdate<TableName extends keyof Database> = Updateable<Database[TableName]>;

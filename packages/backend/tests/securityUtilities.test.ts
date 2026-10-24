@@ -1,6 +1,8 @@
 import "dotenv/config";
 import assert from "node:assert/strict";
 import test from "node:test";
+import jwt from "jsonwebtoken";
+import { loadEnvironment } from "../configs/environment.js";
 import { escapeHtml } from "../utils/html.js";
 import { hasValidMediaSignature } from "../utils/mediaValidation.js";
 import { extractS3Key } from "../utils/s3Utils.js";
@@ -72,6 +74,19 @@ test("access tokens enforce issuer and audience", () => {
     assert.equal(decoded.id, "user_123");
     assert.equal(decoded.sid, "session_123");
     assert.throws(() => verifyAccessToken(`${token}broken`));
+
+    const secret = loadEnvironment().jwtSecret;
+    const claims = { id: "user_123", sid: "session_123" };
+    const valid = { algorithm: "HS256", audience: "motionmeet-clients", issuer: "motionmeet-api", expiresIn: "15m" } as const;
+    assert.throws(() => verifyAccessToken(jwt.sign(claims, secret, { ...valid, issuer: "someone-else" })), /issuer/);
+    assert.throws(() => verifyAccessToken(jwt.sign(claims, secret, { ...valid, audience: "other-clients" })), /audience/);
+    assert.throws(() => verifyAccessToken(jwt.sign(claims, secret, { ...valid, algorithm: "HS512" })), /algorithm/);
+    assert.throws(() => verifyAccessToken(jwt.sign(claims, "a-different-secret-of-at-least-32-bytes", valid)), /signature/);
+    assert.throws(() => verifyAccessToken(jwt.sign({ ...claims, exp: Math.floor(Date.now() / 1000) - 60 }, secret, { algorithm: "HS256", audience: valid.audience, issuer: valid.issuer })), /expired/);
+    assert.throws(() => verifyAccessToken(jwt.sign({ id: "user_123" }, secret, valid)), /payload/);
+    const unsigned = [{ alg: "none", typ: "JWT" }, { ...claims, aud: valid.audience, iss: valid.issuer, exp: Math.floor(Date.now() / 1000) + 600 }]
+      .map((part) => Buffer.from(JSON.stringify(part)).toString("base64url")).join(".");
+    assert.throws(() => verifyAccessToken(`${unsigned}.`));
   } finally {
     if (previousSecret === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = previousSecret;

@@ -1,12 +1,16 @@
 import "dotenv/config";
 import assert from "node:assert/strict";
+import { once } from "node:events";
+import type { AddressInfo } from "node:net";
 import test from "node:test";
-import type { NextFunction, Request, Response } from "express";
+import { brotliCompressSync, deflateSync, gzipSync } from "node:zlib";
+import express, { type ErrorRequestHandler, type NextFunction, type Request, type Response } from "express";
 import type { Options as RateLimitOptions } from "express-rate-limit";
 import { createRateLimitStore } from "../configs/redis.js";
 import { loadEnvironment } from "../configs/environment.js";
-import { isAllowedBrowserOrigin, rejectUnsupportedApiContentType, verifyBrowserAuthRequest } from "../middlewares/browserSecurity.js";
+import { isAllowedBrowserOrigin, parseJsonBody, rejectUnsupportedApiContentType, verifyBrowserAuthRequest } from "../middlewares/browserSecurity.js";
 import { toPublicError } from "../middlewares/errorHandler.js";
+import { getRefreshTokenFromRequest } from "../utils/authTokens.js";
 import { safeErrorMetadata } from "../utils/logger.js";
 
 test("browser origin validation uses exact origins", () => {
@@ -41,6 +45,30 @@ test("browser cookie auth requires an allowed origin and CSRF header", () => {
   assert.deepEqual(runBrowserAuthCheck({ origin: `${allowedOrigin}.attacker.test`, "x-csrf-protection": "1" }), { status: 403, nextCalled: false });
   assert.deepEqual(runBrowserAuthCheck({ origin: allowedOrigin, "x-csrf-protection": "1" }), { status: 0, nextCalled: true });
   assert.deepEqual(runBrowserAuthCheck({ "x-client-platform": "mobile" }, { refreshToken: "native-body-token" }), { status: 0, nextCalled: true });
+});
+
+test("the referer stands in for a missing origin, but only an allowed one", () => {
+  const allowedOrigin = loadEnvironment().corsOrigins[0];
+  assert.deepEqual(runBrowserAuthCheck({ referer: `${allowedOrigin}/settings`, "x-csrf-protection": "1" }), { status: 0, nextCalled: true });
+  assert.deepEqual(runBrowserAuthCheck({ referer: "https://attacker.test/motionmeet", "x-csrf-protection": "1" }), { status: 403, nextCalled: false });
+  assert.deepEqual(runBrowserAuthCheck({ "x-csrf-protection": "1" }), { status: 403, nextCalled: false });
+});
+
+test("a forged mobile header alone does not skip the browser checks", () => {
+  // Without a body token the request can only be riding the refresh cookie.
+  assert.deepEqual(runBrowserAuthCheck({ "x-client-platform": "mobile" }), { status: 403, nextCalled: false });
+  assert.deepEqual(runBrowserAuthCheck({ "x-client-platform": "mobile", origin: "https://attacker.test" }, { refreshToken: 42 }), { status: 403, nextCalled: false });
+});
+
+test("a native body token is used instead of, never alongside, the refresh cookie", () => {
+  const request = {
+    body: { refreshToken: "attacker-supplied" },
+    headers: { cookie: "theme=dark; motionmeet_refresh=victim-session.secret" },
+    get: (name: string) => (name.toLowerCase() === "x-client-platform" ? "mobile" : undefined),
+  } as unknown as Request;
+  assert.equal(getRefreshTokenFromRequest(request), "attacker-supplied");
+  const cookieOnly = { body: {}, headers: { cookie: "motionmeet_refresh=victim-session.secret" }, get: () => undefined } as unknown as Request;
+  assert.equal(getRefreshTokenFromRequest(cookieOnly), "victim-session.secret");
 });
 
 const runContentTypeCheck = (method: string, contentType?: string) => {
@@ -101,4 +129,25 @@ test("rate limiting remains active before Redis initialization", async () => {
   await store.resetKey("client");
   assert.equal((await store.increment("client")).totalHits, 1);
   store.shutdown?.();
+});
+
+test("compressed JSON bodies are refused without being decoded", async () => {
+  const app = express();
+  app.post("/echo", parseJsonBody, (request, response) => { response.json(request.body); });
+  app.use(((error, _request, response, _next) => { response.status(toPublicError(error).status).end(); }) as ErrorRequestHandler);
+  const server = app.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  try {
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/echo`;
+    const body = JSON.stringify({ email: "member@example.test" });
+    const plain = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body });
+    assert.equal(plain.status, 200);
+    assert.deepEqual(await plain.json(), { email: "member@example.test" });
+    for (const [encoding, compressed] of [["br", brotliCompressSync(body)], ["gzip", gzipSync(body)], ["deflate", deflateSync(body)]] as const) {
+      const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json", "content-encoding": encoding }, body: compressed });
+      assert.equal(response.status, 415, `${encoding} body was accepted`);
+    }
+  } finally {
+    server.close();
+  }
 });

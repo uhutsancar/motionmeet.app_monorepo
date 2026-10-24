@@ -1,4 +1,4 @@
-import type { RequestHandler } from "express";
+import express, { type RequestHandler } from "express";
 import { isDevelopmentOrigin, loadEnvironment } from "../configs/environment.js";
 import { isMobileRefreshClient } from "../utils/authTokens.js";
 
@@ -50,6 +50,17 @@ export const verifyBrowserAuthRequest: RequestHandler = (request, response, next
   }
   next();
 };
+
+/**
+ * JSON request bodies, uncompressed only.
+ *
+ * body-parser inflates gzip, deflate and Brotli request bodies by default, and
+ * it runs before authentication and rate limiting, so any anonymous request
+ * could feed the runtime's decompressors directly (CVE-2026-111497 was a
+ * Brotli decoder out-of-bounds write). No MotionMeet client compresses what it
+ * sends, so a compressed body is answered 415 without being decoded.
+ */
+export const parseJsonBody = express.json({ limit: "500kb", strict: true, inflate: false });
 
 const BODY_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const ALLOWED_API_CONTENT_TYPES = new Set(["application/json", "multipart/form-data"]);

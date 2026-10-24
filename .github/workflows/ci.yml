@@ -8,10 +8,106 @@ on:
 permissions:
   contents: read
 
+# Each concern is its own job so one red gate no longer hides the rest: while
+# `pnpm audit` failed inside a single job, lint, typecheck, tests and builds
+# stopped running at all. `required-checks` at the bottom is the one status to
+# require in branch protection; it passes only when every job did.
+#
+# The Node.js versions below are exact patch releases. A bare "22" let the
+# runner's cache decide which 22.x ran. scripts/check-node-security.mjs fails
+# the build if any of them, or a Dockerfile stage, predates its minimums.
+
 jobs:
-  validate:
+  security-runtime:
+    name: Security · Node.js runtime (${{ matrix.node-version }})
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["22.23.4", "24.22.1"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node-version }}
+          package-manager-cache: false
+      - name: Report runtime
+        run: node -p "'node ' + process.versions.node + ', openssl ' + process.versions.openssl"
+      - name: Node.js security gate (binary, Dockerfiles, workflow, engines)
+        run: node scripts/check-node-security.mjs --scan
+      - name: Runtime behaviour and gate tests
+        run: node --test scripts/tests/*.test.mjs
+
+  security-dependencies:
+    name: Security · dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22.23.4"
+          package-manager-cache: false
+      - run: corepack enable
+      - run: corepack prepare pnpm@11.10.0 --activate
+      # Called with node rather than `pnpm run`: in a fresh checkout pnpm 11
+      # installs the whole workspace before running a script, and the audit
+      # only needs the lockfile.
+      - name: pnpm audit --prod (high/critical; reviewed, expiring exceptions only)
+        run: node scripts/check-dependency-audit.mjs
+
+  static-validation:
+    name: Lint and typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22.23.4"
+          package-manager-cache: false
+      - run: corepack enable
+      - run: corepack prepare pnpm@11.10.0 --activate
+      - run: pnpm config set store-dir ~/.pnpm-store
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+
+  unit-tests:
+    name: Unit tests · backend and shared (${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["22.23.4", "24.22.1"]
+    env:
+      NODE_ENV: test
+      # Parsed by configs/environment.ts at import time; unit tests never connect.
+      DATABASE_URL: postgresql://postgres:motionmeet-test@127.0.0.1:5433/motionmeet_test
+      JWT_SECRET: ci-test-secret-that-is-at-least-32-bytes
+      FRONTEND_URL: http://localhost:5173
+      CORS_ORIGINS: http://localhost:5173
+      MEDIA_UPLOADS_ENABLED: "false"
+      EMAIL_ENABLED: "false"
+      RUN_SCHEDULED_JOBS: "false"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node-version }}
+          package-manager-cache: false
+      - run: corepack enable
+      - run: corepack prepare pnpm@11.10.0 --activate
+      - run: pnpm config set store-dir ~/.pnpm-store
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec turbo run test --filter=@motionmeet/shared --filter=@motionmeet/backend
+
+  backend-postgres-integration:
+    name: Backend · PostgreSQL integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       NODE_ENV: test
       DATABASE_URL: postgresql://postgres:motionmeet-test@127.0.0.1:5433/motionmeet_test
@@ -25,28 +121,102 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: "22"
+          node-version: "22.23.4"
           package-manager-cache: false
       - run: corepack enable
       - run: corepack prepare pnpm@11.10.0 --activate
       - run: pnpm config set store-dir ~/.pnpm-store
       - run: pnpm install --frozen-lockfile
-      - run: pnpm audit --prod --audit-level=high
-      - run: pnpm lint
-      - run: pnpm typecheck
+      - run: pnpm --filter @motionmeet/shared build
       - name: Start PostgreSQL test service
         run: docker compose -f docker-compose.test.yml up -d --wait postgres-test
       - name: Migrate PostgreSQL test schema
         run: pnpm --filter @motionmeet/backend migrate:postgres
-      - run: pnpm test
+      - name: Re-run migrations (must be a no-op)
+        run: pnpm --filter @motionmeet/backend migrate:postgres
+      - name: Integration tests
+        run: pnpm --filter @motionmeet/backend test:integration
       - name: Stop PostgreSQL test service
         if: always()
         run: docker compose -f docker-compose.test.yml down --remove-orphans
-      - run: pnpm build
+
+  web-mobile-artifacts:
+    name: Web and mobile builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NODE_ENV: production
+      EXPO_PUBLIC_API_URL: https://api.example.invalid
+      EXPO_PUBLIC_WEB_URL: https://app.example.invalid
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22.23.4"
+          package-manager-cache: false
+      - run: corepack enable
+      - run: corepack prepare pnpm@11.10.0 --activate
+      - run: pnpm config set store-dir ~/.pnpm-store
+      - run: pnpm install --frozen-lockfile
+      - name: Build shared, backend, web and mobile (mobile export runs its artifact check)
+        run: pnpm build
+      - name: Web artifact check (no source maps or secrets)
+        run: pnpm --filter @motionmeet/web check:artifact
+      - name: Web performance budget
+        run: pnpm --filter @motionmeet/web check:performance
+      - name: Mobile config and permission check
+        run: pnpm --filter @motionmeet/mobile test
+
+  docker-production:
+    name: Docker · production images
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      MOTIONMEET_ENV_FILE: .env.production.example
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22.23.4"
+          package-manager-cache: false
+      - name: Validate production Compose file
+        run: docker compose -f docker-compose.prod.yml config --quiet
+      - name: Build production images from freshly pulled bases
+        run: docker compose -f docker-compose.prod.yml build --pull backend web
+      - name: Backend image runs a patched Node.js as a non-root user
+        run: |
+          version="$(docker run --rm --entrypoint node motionmeet_prod-backend --version)"
+          echo "backend image node ${version}"
+          node scripts/check-node-security.mjs --version="${version}"
+          user="$(docker image inspect --format '{{.Config.User}}' motionmeet_prod-backend)"
+          test "${user}" = "node" || { echo "backend image runs as '${user}', expected 'node'"; exit 1; }
+      - name: Web image ships nginx only, no Node.js runtime
+        run: |
+          if docker run --rm --entrypoint sh motionmeet_prod-web -c 'command -v node'; then
+            echo "web runtime image unexpectedly contains node"; exit 1
+          fi
+
+  required-checks:
+    name: Required checks
+    if: always()
+    needs:
+      - security-runtime
+      - security-dependencies
+      - static-validation
+      - unit-tests
+      - backend-postgres-integration
+      - web-mobile-artifacts
+      - docker-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every job succeeded
         env:
-          NODE_ENV: production
-          EXPO_PUBLIC_API_URL: https://api.example.invalid
-          EXPO_PUBLIC_WEB_URL: https://app.example.invalid
-      - run: docker compose -f docker-compose.prod.yml config
-        env:
-          MOTIONMEET_ENV_FILE: .env.production.example
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          node -e '
+            const needs = JSON.parse(process.env.NEEDS);
+            const failed = Object.entries(needs).filter(([, job]) => job.result !== "success");
+            for (const [name, job] of Object.entries(needs)) console.log(`${job.result === "success" ? "PASS" : "FAIL"} ${name}: ${job.result}`);
+            if (failed.length) process.exit(1);
+          '

@@ -28,4 +28,4 @@ corepack pnpm --filter @motionmeet/mobile typecheck
 corepack pnpm --filter @motionmeet/mobile build
 ```
 
-For a clean Metro restart, append `--clear` to the start command. Test OAuth on the target simulator/device and confirm that an authenticated API request and a Socket.IO reconnect both succeed.
+For a clean Metro restart, append `--clear` to the start command. Test sign-in on the target simulator/device and confirm that an authenticated API request and a Socket.IO reconnect both succeed.

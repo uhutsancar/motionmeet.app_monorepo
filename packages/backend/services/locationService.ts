@@ -490,7 +490,3 @@ export const listRecentSelections = async (userId: string, locale: Locale): Prom
   const resolved = await Promise.all(entries.map((entry) => findSuggestion(entry.kind, entry.id, locale)));
   return resolved.filter((suggestion): suggestion is LocationSuggestion => suggestion !== null);
 };
-
-export const clearRecentSelections = async (userId: string): Promise<void> => {
-  await setCachedJson(recentKey(userId), [], RECENT_CACHE_SECONDS);
-};

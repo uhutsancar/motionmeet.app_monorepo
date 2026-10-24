@@ -10,7 +10,9 @@ MotionMeet is a TypeScript social-fitness monorepo:
 
 ## Prerequisites
 
-- Node.js 22.22 or newer
+- Node.js 22.23.4+ on the 22 line or 24.22.1+ on the 24 line (the October 2026
+  security releases). CI runs 22.23.4 and 24.22.1; the Docker images run
+  24.22.1. `corepack pnpm security:node` checks the binary on your PATH.
 - Corepack and pnpm 11.10
 - PostgreSQL 18 and Redis, or Docker Desktop
 
@@ -27,6 +29,30 @@ corepack pnpm build
 
 Every application package is strict TypeScript. Backend and shared tests run
 through `tsx`; web uses a Vite production build; mobile uses Expo export.
+
+`corepack pnpm test` runs unit tests only. The backend's PostgreSQL integration
+tests write data, so they run separately and only against a database whose name
+ends in `_test`:
+
+```bash
+docker compose -f docker-compose.test.yml up -d --wait postgres-test
+DATABASE_URL=postgresql://postgres:motionmeet-test@127.0.0.1:5433/motionmeet_test \
+  corepack pnpm --filter @motionmeet/backend migrate:postgres
+DATABASE_URL=postgresql://postgres:motionmeet-test@127.0.0.1:5433/motionmeet_test \
+  corepack pnpm --filter @motionmeet/backend test:integration
+docker compose -f docker-compose.test.yml down --remove-orphans
+```
+
+Security gates, also run in CI:
+
+```bash
+corepack pnpm security:node    # patched Node.js binary, Dockerfiles, CI, engines
+corepack pnpm security:audit   # pnpm audit --prod; high/critical fail unless excepted
+corepack pnpm test:scripts     # tests for the gates and the Node.js runtime
+```
+
+Accepted advisories live in `scripts/audit-exceptions.json`, each with a reason
+and an expiry date after which CI fails again.
 
 ## Development without Docker
 

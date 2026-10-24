@@ -1,12 +1,13 @@
+import "./testDatabase.js";
 import "dotenv/config";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test, { after, before } from "node:test";
 import { sql } from "kysely";
-import { connectDatabase, database, disconnectDatabase } from "../configs/database.js";
-import { hydratePosts } from "../repositories/postRepository.js";
-import { createMessage } from "../services/messageService.js";
-import { createStory } from "../services/storyService.js";
+import { connectDatabase, database, disconnectDatabase } from "../../configs/database.js";
+import { hydratePosts } from "../../repositories/postRepository.js";
+import { createMessage } from "../../services/messageService.js";
+import { createStory } from "../../services/storyService.js";
 
 const runId = randomUUID().slice(0, 8);
 const userIds: string[] = [];

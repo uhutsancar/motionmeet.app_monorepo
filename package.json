@@ -16,6 +16,9 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "test:scripts": "node --test scripts/tests/*.test.mjs",
+    "security:node": "node scripts/check-node-security.mjs --scan",
+    "security:audit": "node scripts/check-dependency-audit.mjs",
     "docker:dev": "docker compose up --build",
     "docker:prod:config": "docker compose -f docker-compose.prod.yml config",
     "docker:prod": "docker compose -f docker-compose.prod.yml up -d --build",
@@ -27,11 +30,11 @@
   },
   "devDependencies": {
     "metro-runtime": "~0.83.3",
-    "sharp": "^0.35.3",
+    "sharp": "^0.35.5",
     "turbo": "^2.5.0",
     "typescript": "^5.8.0"
   },
   "engines": {
-    "node": ">=22.22.0"
+    "node": ">=22.23.4 <23 || >=24.22.1 <25"
   }
 }

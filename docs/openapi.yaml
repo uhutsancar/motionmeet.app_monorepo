@@ -31,8 +31,6 @@ tags:
     description: Public and authenticated reference catalogs.
   - name: Admin
     description: Superadmin-only account management.
-  - name: Payments
-    description: Paddle checkout, subscription state and webhook.
   - name: Health
     description: Container and dependency health probes.
 paths:
@@ -628,7 +626,7 @@ paths:
         "201":
           description: Logged workout
         "403":
-          description: Plan quota reached
+          description: Usage quota reached
   /api/workout/stats:
     get:
       tags: [Workouts]
@@ -851,75 +849,6 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/Success"
-  /api/plans:
-    get:
-      tags: [Reference]
-      summary: List available plans
-      operationId: getPlans
-      security: []
-      responses:
-        "200":
-          description: Available plans
-  /api/plans/update:
-    post:
-      tags: [User]
-      summary: Update the current plan
-      operationId: postPlansUpdate
-      description: Update the current user's plan only when server policy permits.
-      responses:
-        "200":
-          $ref: "#/components/responses/Success"
-  /api/payments/checkout-intent:
-    get:
-      tags: [Payments]
-      summary: Resolve a Paddle price id and custom data for checkout
-      operationId: getPaymentsCheckoutIntent
-      parameters:
-        - name: planId
-          in: query
-          required: true
-          schema: { type: string, format: uuid }
-        - name: interval
-          in: query
-          required: true
-          schema: { type: string, enum: [monthly, yearly] }
-      responses:
-        "200":
-          description: Price id and custom data for Paddle.js Checkout.open()
-        "404":
-          description: Plan is not available for checkout (inactive, or no Paddle price configured yet)
-  /api/payments/subscription:
-    get:
-      tags: [Payments]
-      summary: Current user's subscription summary
-      operationId: getPaymentsSubscription
-      responses:
-        "200":
-          description: Plan status, dates, and whether cancellation is scheduled for period end
-  /api/payments/portal-session:
-    post:
-      tags: [Payments]
-      summary: Create a link to Paddle's hosted billing portal
-      operationId: postPaymentsPortalSession
-      responses:
-        "200":
-          description: Portal URL
-        "404":
-          description: No Paddle customer on file yet
-  /api/payments/webhooks/paddle:
-    post:
-      tags: [Payments]
-      summary: Paddle notification webhook
-      operationId: postPaymentsWebhooksPaddle
-      description: Server-to-server only, authenticated by Paddle-Signature - not part of the normal Bearer-token API surface.
-      security: []
-      responses:
-        "200":
-          description: Accepted (includes already-processed duplicates)
-        "401":
-          description: Invalid or missing signature
-        "503":
-          description: Paddle is not configured
   /api/muscle-groups:
     get:
       tags: [Reference]
@@ -949,16 +878,6 @@ paths:
       tags: [Admin]
       summary: Update a user role
       operationId: putAdminUsersByUserIdRole
-      parameters:
-        - $ref: "#/components/parameters/UserId"
-      responses:
-        "200":
-          $ref: "#/components/responses/Success"
-  /api/admin/users/{userId}/plan:
-    put:
-      tags: [Admin]
-      summary: Update a user plan
-      operationId: putAdminUsersByUserIdPlan
       parameters:
         - $ref: "#/components/parameters/UserId"
       responses:

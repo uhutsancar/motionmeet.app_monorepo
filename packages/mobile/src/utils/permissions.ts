@@ -86,26 +86,3 @@ export const ensureMediaLibraryPermission = async (
 
   return result;
 };
-
-/** The same contract as the library permission, for the camera. */
-export const ensureCameraPermission = async (
-  options: { explain?: boolean } = {},
-): Promise<PermissionRequest> => {
-  const t = i18n.t.bind(i18n);
-  const current = await ImagePicker.getCameraPermissionsAsync();
-  if (current.granted) return { outcome: 'granted', granted: true };
-
-  const response = current.canAskAgain ? await ImagePicker.requestCameraPermissionsAsync() : current;
-  const result = toOutcome(response);
-
-  if (result.outcome === 'blocked' && options.explain !== false) {
-    promptForSettings(
-      t(
-        'permissions.camera_blocked',
-        'Kameraya erişim kapalı. Fotoğraf çekebilmek için ayarlardan kamera iznini açman gerekiyor.',
-      ),
-    );
-  }
-
-  return result;
-};

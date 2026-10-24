@@ -40,8 +40,8 @@ TypeScript bir uygulamadır. Kullanıcılar:
 - hesap oluşturabilir, giriş yapabilir, oturumlarını yenileyebilir ve parola
   sıfırlayabilir;
 - profil, kapak görseli, fiziksel bilgiler ve gizlilik tercihlerini yönetebilir;
-- egzersiz kataloğunu arayabilir, filtreleyebilir ve izin verilen planlarda kendi
-  egzersizlerini oluşturabilir;
+- egzersiz kataloğunu arayabilir, filtreleyebilir ve kendi egzersizlerini
+  oluşturabilir;
 - sıralı egzersiz ve setlerden rutin hazırlayabilir;
 - antrenman kaydedebilir; süre, hacim, tekrar, set, kas dağılımı, seri ve kişisel
   rekor istatistiklerini görebilir;
@@ -245,8 +245,7 @@ packages/backend/
    tabloda index oluşturmak istek trafiği için konmuş 15 saniyelik tavanın çok
    üstünde sürer ve yarıda kesilmesi yavaş bir boot'tan kötüdür.
 4. Beklenen tablo/migration contract'ı kontrol edilir.
-5. Free/Pro/Premium planları, kas grupları ve ekipman lookup kayıtları idempotent
-   biçimde bootstrap edilir.
+5. Kas grupları ve ekipman lookup kayıtları idempotent biçimde bootstrap edilir.
 6. Redis bağlantısı denenir. Redis yoksa süreç durmaz; PostgreSQL tabanlı ana
    işlevler devam eder.
 7. Express middleware zinciri ve REST route'ları bağlanır.
@@ -293,10 +292,9 @@ status'a çevrilir; PostgreSQL unique violation `409`, bilinmeyen server hatalar
 | Story | `POST /api/story/create`; `GET /api/story/get`; `DELETE /api/story/delete/:storyId`; `POST /api/story/:storyId/view`; `GET /api/story/:storyId/viewers` | 24 saatlik içerik, üstüne yerleştirilen metin/konum katmanları (`overlays`), görüntüleme makbuzu ve yalnız yazarına açık izleyici listesi. Ayrıntı: **14B**. |
 | Message | `POST /api/message/send`, `/get`, `/seen`; `GET /conversations`, `/recent`; `DELETE /delete/:messageId` | HTTP mesaj fallback'i, conversation, unread/seen ve silme. |
 | Workout | `GET/POST /api/workout`, `GET /api/workout/stats` | Antrenman yazma, geçmiş ve aggregate istatistikler. |
-| Routine | `GET/POST /api/routine`, `PUT/DELETE /api/routine/:id` | Kullanıcı rutinleri ve plan kotası. |
+| Routine | `GET/POST /api/routine`, `PUT/DELETE /api/routine/:id` | Kullanıcı rutinleri ve kullanım kotası. |
 | Exercise | `GET/POST /api/exercise`, `GET /records`, `GET /:id`, `GET /:id/stats` | Katalog, custom exercise ve analitik. |
-| Plan | `GET /api/plans`, `POST /api/plans/update` | Aktif planları okuma ve mevcut kullanıcı planını değiştirme (yalnızca ücretsiz plan - ücretli planlar için 409 guard). |
-| Payments | `GET /api/payments/checkout-intent`, `GET /api/payments/subscription`, `POST /api/payments/portal-session`, `POST /api/payments/webhooks/paddle` | Paddle checkout başlatma, abonelik özeti, fatura portalı ve webhook (ayrı raw-body middleware, `express.json()`'dan önce mount). |
+| Emekli | `/api/plans`, `/api/payments` (her metot ve alt yol) | Ücretli plan satışı kaldırıldı; gövde okunmadan `410 Gone` (`middlewares/retiredBilling.ts`). |
 | Lookup | `GET /api/muscle-groups`, `GET /api/equipment` | Aktif master data. |
 | Location | `GET /api/locations/search`, `/countries`, `/recent`, `/attribution`, `/:kind/:id`; `POST /api/locations/resolve` | Dünya ülke/bölge/şehir referans verisinde arama, tekil kayıt okuma, koordinattan öneri üretme ve ODbL attribution metni. |
 | Profil konumu | `GET/PUT/PATCH/DELETE /api/user/location` | Dataset kaydına referansla profil konumu okuma, kaydetme, görünürlük değiştirme ve kaldırma. |
@@ -342,12 +340,11 @@ register saatte 5, refresh 15 dakikada 60, password reset saatte 5. Global API
 limiti varsayılan 15 dakikada 1000 istektir ve environment ile 100–10000
 aralığında ayarlanır.
 
-### 6.6 Yetkilendirme, gizlilik ve plan kotaları
+### 6.6 Yetkilendirme, gizlilik ve kullanım kotaları
 
 `protect` geçerli Bearer token'ı doğrular. `attachDbUser` gerektiğinde kullanıcıyı
-planıyla yükler ve plansız eski kayıtları Free plana bağlar. RBAC rolleri `user`,
-`admin`, `superadmin` enum'udur; admin API şu an yalnız superadmin'e açıktır ve
-superadmin kendi rolünü düşüremez.
+veritabanından yükler. RBAC rolleri `user`, `admin`, `superadmin` enum'udur;
+admin API şu an yalnız superadmin'e açıktır ve superadmin kendi rolünü düşüremez.
 
 Gizlilik alanları:
 
@@ -360,26 +357,20 @@ Gizlilik alanları:
 Profil erişimi, takip, discovery ve mesaj izni service katmanında bu alanlara ve
 ilişki durumuna göre kontrol edilir.
 
-Bootstrap edilen planlar:
+MotionMeet her üyeye ücretsizdir; ürün katmanı yoktur. `configs/usageLimits.ts`
+yalnız kötüye kullanım tavanları tanımlar ve her üyeye aynıdır; superadmin
+muaftır (`-1` = sınırsız):
 
-| Plan | Durum | Antrenman/ay | Rutin | Upload | Öne çıkan yetenekler |
-| --- | --- | ---: | ---: | ---: | --- |
-| Free | aktif | 5 | 2 | 20 MB | Custom exercise açık; herkese mesaj/analytics kapalı. |
-| Pro | aktif | sınırsız | sınırsız | 50 MB | 7 gün trial, analytics, premium içerik, ad-free, herkese mesaj. |
-| Premium | başlangıçta pasif | sınırsız | sınırsız | 100 MB | 14 gün trial ve priority support dahil. |
+| Kaynak | Tavan | Bucket |
+| --- | ---: | --- |
+| Antrenman | 300 | aylık |
+| Rutin | 200 | toplam |
+| Gönderi | 100 | günlük |
+| Story | 100 | günlük |
 
-`-1` sınırsız kota anlamına gelir. Kota rezervasyonları `usage_counters`
-tablosunda transaction içinde atomik artırılır; aynı anda gelen istekler limiti
-aşamaz. Workout aylık, post/story günlük, rutin lifetime bucket kullanır.
-Repository'de kullanılmayan Stripe customer/subscription/price ID alanları hâlâ
-duruyor (dokunulmadı). Gerçek billing provider olarak **Paddle** entegre
-edildi (Sandbox): `plan_provider_prices` tablosu plan+aralık+ortam bazında
-Paddle price ID'lerine eşleniyor, `payment_webhook_events` webhook'ları
-idempotent işliyor, `users.paddle_customer_id`/`paddle_subscription_id`
-gerçek abonelik durumunu tutuyor. Detay ve kalan adımlar için
-`docs/paddle-integration-plan.md`. Self-servis ücretsiz plan değişimi hâlâ
-`POST /api/plans/update` üzerinden; ücretli planlar `POST
-/api/payments/checkout-intent` + Paddle Checkout ile.
+Kota rezervasyonları `usage_counters` tablosunda transaction içinde atomik
+artırılır; aynı anda gelen istekler limiti aşamaz. Kısa süreli patlamalar
+route bazlı rate limiter'ların işidir.
 
 ### 6.7 Domain service'leri ve önemli transaction sınırları
 
@@ -387,7 +378,7 @@ gerçek abonelik durumunu tutuyor. Detay ve kalan adımlar için
   yazılır; kota rezerve edilir, günlük analytics ve personal record güncellenir,
   kullanıcının toplam sayaçları artırılır.
 - **Routine:** rutin ve sıralı child satırları transaction'da yeniden oluşturulur;
-  ownership ve plan kotası kontrol edilir.
+  ownership ve kullanım kotası kontrol edilir.
 - **Post:** operation ID ile retry-safe oluşturma, görünürlük kontrolü, workout
   sahipliği, media reservation commit'i ve günlük kota aynı domain akışındadır.
 - **Like/comment:** composite key ile duplicate like engellenir; like/comment
@@ -525,24 +516,18 @@ asıl veri bütünlüğü PostgreSQL FK, unique, check, enum ve transaction'lar�
   `latitude`/`longitude` kolonları üzerinden bounding box + haversine yolu
   çalışır. Seçim boot'ta `detectGeometrySupport()` ile yapılır; şema iki durumda
   da aynıdır, sonradan PostGIS eklenebilir.
-- Enum'lar: `user_role`, `plan_status` (artık `past_due`/`paused` dahil, Paddle
-  için eklendi), `billing_interval`, `billing_provider`, `billing_environment`,
-  `set_type`, `post_type`, `post_visibility`, `media_type`, `story_media_type`,
+- Enum'lar: `user_role`, `set_type`, `post_type`, `post_visibility`, `media_type`, `story_media_type`,
   `connection_status`, `message_type`, `upload_purpose`, `outbox_status`,
   `outbox_type`. Konum tabloları enum yerine `CHECK` kısıtı kullanır: dataset
   yenilendiğinde yeni bir değer eklemek `ALTER TYPE` gerektirmesin diye.
 
 ### 7.3 41 uygulama tablosu
 
-#### Plan ve kullanıcı
+#### Kullanıcı
 
 | Tablo | Ana alanlar ve amaç |
 | --- | --- |
-| `plans` | Plan fiyatı, trial, aktiflik ve bütün ürün feature/kota değerleri. |
-| `plan_billing_cycles` | Plan başına monthly/yearly fiyat; `stripe_price_id` kullanılmıyor (legacy). Gerçek sağlayıcı eşlemesi `plan_provider_prices`'ta (Paddle, ortama göre ayrı). Composite PK `(plan_id, interval)`. |
-| `plan_provider_prices` | `(plan_id, interval, provider, environment)` → Paddle product/price ID eşlemesi. Ortam bazında ayrı (sandbox/live), sıfır satırla da güvenle boot alır. |
-| `payment_webhook_events` | Paddle webhook idempotency log'u. `event_id` PK - tekrar teslimat `ON CONFLICT DO NOTHING` ile no-op. |
-| `users` | Kimlik, password hash, profil/kapak key ve URL'leri, rol, plan, privacy, sosyal ve workout toplam sayaçları. Ayrıca profil konumu: `location` (backend'in ürettiği etiket), `location_country_id` / `location_state_id` / `location_city_id` (dataset referansları), `location_source`, `location_visibility`, `location_selected_at`. |
+| `users` | Kimlik, password hash, profil/kapak key ve URL'leri, rol, privacy, sosyal ve workout toplam sayaçları. Ayrıca profil konumu: `location` (backend'in ürettiği etiket), `location_country_id` / `location_state_id` / `location_city_id` (dataset referansları), `location_source`, `location_visibility`, `location_selected_at`. |
 
 #### Konum referans verisi ve yakınlık
 
@@ -610,7 +595,8 @@ kayıtlar silinmez, `is_active = false` yapılır.
 | `password_reset_tokens` | Hash'li, expiring ve consumed reset token. |
 | `upload_reservations` | Presigned upload'ın kullanıcı/purpose/MIME/limit/expiry kaydı. |
 | `media_deletion_jobs` | S3 object silme retry kuyruğu, attempt/backoff/claim lease. |
-| `usage_counters` | Plan kota bucket'ları ve expiry. |
+| `usage_counters` | Kullanım kotası bucket'ları ve expiry. |
+| `legacy_billing_archive` | Migration 012'nin kaldırdığı plan/ödeme verisinin JSON arşivi; uygulama okumaz. |
 | `outbox_events` | Profil snapshot yayılımı ve connection e-mail event'leri için durable outbox. |
 
 #### Analytics
@@ -1020,7 +1006,7 @@ render ediyordu.
 ### 11.2 Web route haritası
 
 - Public: `/`, `/login`, `/signup`, `/forgot-password`, `/reset-password`,
-  `/features`, `/pricing`, `/about`.
+  `/features`, `/about`. Eski `/pricing` bağlantısı `/`'e yönlenir.
 - Auth redirect alias'ları: `/sign-in`, `/sign-up`.
 - Authenticated layout: `/feed`, `/explore`, `/messages`, `/messages/:userId`,
   `/routines`, `/exercises`, `/profile`, `/profile/:profileId`, `/settings`.
@@ -1202,7 +1188,7 @@ yorum ile doğrudan mesaj farklı şeylerdir.
 Root stack; ChatBox, profile edit, settings, connections, exercise detail,
 active workout, workout detail/summary, statistics, advanced statistics, muscle
 distribution, monthly report detayları, notifications, privacy, support,
-pricing, main exercise, leaderboard, konum seçici, konum ayarları, yakındakiler
+main exercise, leaderboard, konum seçici, konum ayarları, yakındakiler
 ve lisans ekranlarını açar. `Messages` de bu stack'tedir ve kendi geri
 butonuyla açılır.
 
@@ -2369,30 +2355,13 @@ Bu bölüm mevcut kaynak durumunu dürüstçe kaydeder:
 1. `.github/workflows/ci.yml` PostgreSQL test servisi, migration ve test akışına
    güncellenmiştir; değişikliğin GitHub-hosted runner üzerindeki ilk gerçek koşusu
    bu yerel incelemenin kapsamı dışındadır.
-2. Kök `.env.development.example` içinde eski `MONGO_PORT` satırı vardır; güncel
-   development Compose bu değeri kullanmaz.
-3. `packages/backend/Dockerfile` düz dosyası `server.js` başlatmaya çalışır ve
-   strict TypeScript geçişi sonrası canonical değildir. Compose tarafından
-   kullanılan `Dockerfile.dev` ve `Dockerfile.prod` güncel yollardır.
-4. `packages/web/Dockerfile` düz varyantı shared build adımını açıkça çalıştırmaz;
-   production için canonical dosya `Dockerfile.prod`'dur.
-5. OpenAPI temel endpoint'leri kapsar; runtime'daki bazı legacy alias ve
+2. OpenAPI temel endpoint'leri kapsar; runtime'daki bazı legacy alias ve
    idempotent like route'larıyla düzenli olarak senkron kontrol edilmelidir.
-6. Kullanılmayan Stripe alanları schema/plan modelinde hâlâ duruyor (temizlenmedi,
-   sadece artık aktif kullanılmıyor). Gerçek billing provider **Paddle**
-   (Sandbox) olarak eklendi - bkz. §6.6 ve `docs/paddle-integration-plan.md`.
-   Gerçek webhook teslimatı yerel ortamda henüz test edilmedi (Paddle
-   localhost'a ulaşamıyor, public tünel gerekiyor); Sandbox katalog (ürün/fiyat)
-   gerçek Paddle API'sinde oluşturuldu ve doğrulandı.
-7. Notification tipi ve mobil Notifications ekranı vardır; ayrı kalıcı
-   `notifications` tablosu veya push notification provider'ı yoktur.
-8. Shared tiplerde `SavedItem/Favorite` sözleşmesi bulunur; backend'de saved-post
-   veya favorite tablosu/route'u yoktur.
-9. AWS kaynakları repository içinde IaC ile provision edilmez. Bucket/IAM/CORS/
+3. AWS kaynakları repository içinde IaC ile provision edilmez. Bucket/IAM/CORS/
    lifecycle/CDN ve secret manager ayarları dış deployment sorumluluğudur.
-10. Web/mobile için tam otomatik browser/device E2E framework'ü yoktur; mevcut
+4. Web/mobile için tam otomatik browser/device E2E framework'ü yoktur; mevcut
     güvence typecheck/build, backend integration ve manuel smoke test ağırlıklıdır.
-11. **Exercise medya lisansı production dağıtımı öncesi ayrıca çözülmelidir.**
+5. **Exercise medya lisansı production dağıtımı öncesi ayrıca çözülmelidir.**
     2026-08-07 itibarıyla 1.325 egzersizin 1.323'ü görselini ve GIF'ini
     MotionMeet'in kendi S3 bucket'ından servis ediyor. Bu medya Gym visual'a
     aittir; upstream repository'nin izni o repository'ye verilmiştir ve
@@ -2400,53 +2369,53 @@ Bu bölüm mevcut kaynak durumunu dürüstçe kaydeder:
     visual bildirimi gösterilmiyor: 2026-08-07'de eklendi, aynı gün ürün
     sahibinin talimatıyla kaldırıldı ve medya lisansı ayrı bir iş olarak ele
     alınacak. Ayrıntı: `docs/LICENSES.md` §2b.
-12. **Engelleme (block) özelliği yok.** Yakındakiler sorgusu `privacy_show_in_search`
+6. **Engelleme (block) özelliği yok.** Yakındakiler sorgusu `privacy_show_in_search`
     ile filtreler; ürün ileride kullanıcı engelleme eklerse aynı sorguya bir
     `NOT EXISTS (user_blocks ...)` koşulu eklenmelidir. Şu anda engellenecek bir
     ilişki bulunmadığı için filtre de yoktur.
-13. **Konum verisi yaşam döngüsü için zamanlanmış temizlik yok.** 7 günden eski
+7. **Konum verisi yaşam döngüsü için zamanlanmış temizlik yok.** 7 günden eski
     fix'ler sorgu sırasında elenir ama satır kalır. Gizlilik politikası bir
     saklama süresi taahhüt ederse `workers/cronJobs.ts` içine bir purge görevi
     eklenmelidir.
-14. **Profil konumu etiketi kaydedildiği dilde donar.** Etiket yazma anında
+8. **Profil konumu etiketi kaydedildiği dilde donar.** Etiket yazma anında
     üretilip `users.location` içinde saklandığı için, üye sonradan uygulama
     dilini değiştirirse ülke adı eski dilde kalır ("Nilüfer, Bursa, Turkey").
     Şehir ve bölge adları dataset'te zaten tek biçimde olduğu için yalnız ülke
     segmenti etkilenir. Okuma anında yeniden üretmek her profil, feed ve arama
     satırında üç tablolu bir join gerektirirdi; bu yüzden bilinçli olarak
     yapılmadı. Üye konumunu yeniden seçerse etiket güncel dilde yenilenir.
-15. **PostGIS bu geliştirme makinesinde kurulu değil.** Şema ve servis iki yolu
+9. **PostGIS bu geliştirme makinesinde kurulu değil.** Şema ve servis iki yolu
     da destekliyor ve yerelde bounding-box + haversine yolu çalışıyor; production
     PostgreSQL'inde PostGIS etkinleştirildiğinde migration generated `geography`
     kolonunu ve GiST indeksini kurar, servis boot'ta otomatik olarak `ST_DWithin`
     yoluna geçer. Yükseltme sonrası `location_geometry_mode` log satırı
     `postgis` göstermelidir.
 
-16. **"Keşfet" adı iki yerde geçiyor.** Feed başlığındaki açılır menüde bir feed
+10. **"Keşfet" adı iki yerde geçiyor.** Feed başlığındaki açılır menüde bir feed
     modu, alt navigasyonda ise ayrı bir sekme aynı adı taşır. İkisi de ürün
     sahibinin açık isteğiyle duruyor; menüdeki modun adı ileride ayrıştırılabilir
     (örn. "Herkes"). Ayrıntı: **14C.1**.
-17. **Hikâye katmanları görsele gömülmüyor.** Yayınlanan medya orijinal dosyadır;
+11. **Hikâye katmanları görsele gömülmüyor.** Yayınlanan medya orijinal dosyadır;
     metin her açılışta yeniden çizilir. "Hikâyeyi indir/dışa aktar" gibi bir
     özellik istenirse istemcide bir görüntü yakalama adımı gerekecek. Ayrıntı:
     **14B.7**.
-18. **Hikâye yanıtı normal bir DM olarak gidiyor.** Hangi hikâyeye yanıt olduğu
+12. **Hikâye yanıtı normal bir DM olarak gidiyor.** Hangi hikâyeye yanıt olduğu
     mesajda taşınmıyor; alıcı bağlamı göremiyor. Bunun için `messages` üzerinde
     bir `reply_to_story_id` alanı gerekir.
-19. **`react-native-pager-view` web'de çalışmıyor.** Kütüphane React Native'in
+13. **`react-native-pager-view` web'de çalışmıyor.** Kütüphane React Native'in
     codegen iç modüllerini import ediyor ve `react-native-web` bunu çözemiyor.
     Bu yüzden kütüphane tek bir dosyaya (`SwipeablePager.tsx`) hapsedildi ve
     tarayıcı için sayfalanmış yatay `ScrollView` kullanan `SwipeablePager.web.tsx`
     yazıldı. **Kütüphane başka hiçbir yerden doğrudan import edilmemelidir** —
     grafiğe tek bir import girmesi bütün web bundle'ını düşürür.
-20. **Sideload APK checked-in debug keystore ile imzalanıyor.** `android/app/
+14. **Sideload APK checked-in debug keystore ile imzalanıyor.** `android/app/
     build.gradle` içinde release buildType hâlâ `signingConfigs.debug`
     kullanıyor. Mağaza dağıtımı için ayrı bir release keystore ve secret
     yönetimi gerekir.
-21. **Runtime performans ölçümü yok.** p50/p95/p99 istek gecikmesi, cache
+15. **Runtime performans ölçümü yok.** p50/p95/p99 istek gecikmesi, cache
     hit/miss oranı, event loop lag, pool doluluğu ve slow query eşiği
     ölçülmüyor. Structured logging request süresini kaydediyor ama toplanmıyor.
-22. **Mobil `package.json` doğrudan import edilmeyen paketler taşıyor**
+16. **Mobil `package.json` doğrudan import edilmeyen paketler taşıyor**
     (`fbjs`, `styleq`, `invariant`, `merge-options`, `html-parse-stringify`,
     `use-latest-callback`, `use-sync-external-store`, `socket.io-parser`,
     `color`, `@callstack/react-theme-provider`). Büyük olasılıkla pnpm'in katı

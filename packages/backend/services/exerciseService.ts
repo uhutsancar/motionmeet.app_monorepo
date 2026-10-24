@@ -149,9 +149,6 @@ export const addExerciseSnapshots = async <T extends ExerciseReference>(exercise
     return { ...exercise, exerciseName: row.name, muscleGroup: row.muscle_group, equipment: row.equipment };
   });
 };
-
-export const getExerciseStatsLegacy = getComputedExerciseStats;
-export const getPersonalRecordsLegacy = getComputedPersonalRecords;
 export const getExerciseStats = getComputedExerciseStats;
 export const getPersonalRecords = getComputedPersonalRecords;
 export const getExerciseSessions = getComputedExerciseSessions;

@@ -11,10 +11,3 @@ type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
  * uses the pair below and nothing else.
  */
 export const MESSAGE_ICON: IoniconName = 'paper-plane-outline';
-export const MESSAGE_ICON_FILLED: IoniconName = 'paper-plane';
-
-/**
- * The same paper plane for react-native-paper components, which take Material
- * Community Icons names rather than Ionicons ones.
- */
-export const MESSAGE_ICON_PAPER = 'send-outline';

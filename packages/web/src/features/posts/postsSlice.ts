@@ -86,10 +86,6 @@ const postsSlice = createSlice({
   name: "posts",
   initialState,
   reducers: {
-    clearPosts: (state) => {
-      state.posts = [];
-      state.nextCursor = null;
-    },
     setAuthorFollowState: (state, action: PayloadAction<{ authorId: string; isFollowing: boolean }>) => {
       const { authorId, isFollowing } = action.payload;
       state.posts.forEach((post) => {
@@ -168,5 +164,5 @@ const postsSlice = createSlice({
   },
 });
 
-export const { clearPosts, setAuthorFollowState } = postsSlice.actions;
+export const { setAuthorFollowState } = postsSlice.actions;
 export default postsSlice.reducer;

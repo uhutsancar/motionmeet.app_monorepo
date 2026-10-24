@@ -56,7 +56,6 @@ export const API_ROUTES = Object.freeze({
 
 export const PRIVACY_DEFAULTS = Object.freeze({ publicProfile: true, showWorkoutsOnFeed: true, allowFollowers: true, showInSearch: true, allowMessages: true });
 export const PRIVACY_KEYS = Object.freeze(Object.keys(PRIVACY_DEFAULTS) as Array<keyof typeof PRIVACY_DEFAULTS>);
-export const PAGINATION_DEFAULTS = Object.freeze({ comments: 30, conversations: 50, exercises: 50, feed: 30, messages: 50, routines: 50, stories: 50, workouts: 30 });
 export const CONTENT_LIMITS = Object.freeze({ comment: 1000, exerciseName: 80, message: 2000, post: 5000, postMediaItems: 4, routineName: 120, story: 2000 });
 export const AUTH_LIMITS = Object.freeze({ email: 254, fullNameMin: 2, fullNameMax: 100, passwordMinBytes: 10, passwordMaxBytes: 72, usernameMin: 3, usernameMax: 30 });
 

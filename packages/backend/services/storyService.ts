@@ -192,18 +192,6 @@ export const setStoryLike = async (
   return { liked: false, changed: Boolean(removed) };
 };
 
-/** How many people reacted to a story. Callers must verify the requester owns it. */
-export const countStoryLikes = async (storyId: string): Promise<number> =>
-  Number(
-    (
-      await database
-        .selectFrom("story_likes")
-        .select((expression) => expression.fn.countAll<number>().as("total"))
-        .where("story_id", "=", storyId)
-        .executeTakeFirst()
-    )?.total ?? 0,
-  );
-
 export const getStoryById = async (storyId: string): Promise<StoryAccess | null> => {
   const row = await database.selectFrom("stories").select(["id", "user_id", "media_url", "media_key"]).where("id", "=", storyId).executeTakeFirst();
   return row ? { id: row.id, _id: row.id, user: row.user_id, media_url: row.media_url, media_key: row.media_key } : null;

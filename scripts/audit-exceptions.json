@@ -1,0 +1,32 @@
+{
+  "$comment": "High/critical advisories accepted by scripts/check-dependency-audit.mjs. Each entry needs a reason and an expiry; an expired entry fails CI until it is re-reviewed. Remove an entry as soon as a fixed version can be installed.",
+  "exceptions": [
+    {
+      "ghsa": "GHSA-86w9-cpqp-85rv",
+      "package": "node-forge",
+      "severity": "high",
+      "paths": "packages/mobile > expo > @expo/cli > node-forge, @expo/cli > @expo/code-signing-certificates > node-forge",
+      "reason": "No fixed release exists (advisory covers <=1.4.0, the latest published version). Only the Expo CLI uses it, for expo-updates code-signing certificates; MotionMeet configures no update code signing, and node-forge is not part of the Hermes bundle shipped to devices.",
+      "reviewed": "2026-10-24",
+      "expires": "2026-12-31"
+    },
+    {
+      "ghsa": "GHSA-5p2g-fcmc-qvqq",
+      "package": "image-size",
+      "severity": "high",
+      "paths": "packages/mobile > expo > @expo/cli > @expo/metro > metro > image-size",
+      "reason": "Fixed only in image-size 2.0.3, whose API Metro 0.83.3 (pinned by Expo SDK 54) does not use. Metro runs it at bundle time on image assets committed to this repository, so the input is not attacker-supplied; it never runs in the API or on devices.",
+      "reviewed": "2026-10-24",
+      "expires": "2026-12-31"
+    },
+    {
+      "ghsa": "GHSA-w3rx-r6r6-pgpr",
+      "package": "image-size",
+      "severity": "high",
+      "paths": "packages/mobile > expo > @expo/cli > @expo/metro > metro > image-size",
+      "reason": "Same dependency and reasoning as GHSA-5p2g-fcmc-qvqq: build-time only, repository-controlled input, fix only in the incompatible 2.x line.",
+      "reviewed": "2026-10-24",
+      "expires": "2026-12-31"
+    }
+  ]
+}

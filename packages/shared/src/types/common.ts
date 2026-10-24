@@ -5,12 +5,6 @@ export interface Timestamped {
   updatedAt: string;
 }
 
-export interface ApiSuccess<T> {
-  success: true;
-  data?: T;
-  message?: string;
-}
-
 export interface ApiErrorDetail {
   code: string;
   message: string;
@@ -22,20 +16,6 @@ export interface ApiFailure {
   message: string;
   error?: ApiErrorDetail;
   requestId?: string;
-}
-
-export type ApiResponse<T> = ApiSuccess<T> | ApiFailure;
-
-export interface CursorPage<T> {
-  items: T[];
-  nextCursor: string | null;
-}
-
-export interface OffsetPage<T> {
-  items: T[];
-  total: number | null;
-  limit: number;
-  skip: number;
 }
 
 export interface IdempotentRequest {

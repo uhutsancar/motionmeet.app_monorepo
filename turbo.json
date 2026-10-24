@@ -22,12 +22,25 @@
       "outputs": []
     },
     "typecheck": {
-      "dependsOn": ["^typecheck"],
+      "dependsOn": ["^typecheck", "^build"],
+      "outputs": []
+    },
+    "@motionmeet/database-migration#typecheck": {
+      "dependsOn": ["@motionmeet/shared#build"],
+      "outputs": []
+    },
+    "@motionmeet/shared#test": {
+      "dependsOn": ["build"],
       "outputs": []
     },
     "test": {
       "dependsOn": ["^build"],
       "outputs": []
+    },
+    "@motionmeet/backend#test": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "passThroughEnv": ["NODE_ENV", "DATABASE_URL", "JWT_SECRET", "FRONTEND_URL", "CORS_ORIGINS", "REDIS_URL", "MEDIA_UPLOADS_ENABLED", "EMAIL_ENABLED", "RUN_SCHEDULED_JOBS"]
     }
   }
 }

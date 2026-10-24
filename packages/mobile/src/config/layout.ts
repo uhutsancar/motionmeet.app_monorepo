@@ -94,28 +94,8 @@ export const CARD = Object.freeze({
  */
 export const FEED_GUTTER = 16;
 
-/**
- * Width of one card in a full-bleed horizontal feed carousel.
- *
- * Just under two thirds of the screen, so the next card always peeks in and the
- * row reads as scrollable, while the clamps keep it usable from a 320pt phone
- * up to a tablet.
- */
-export const feedCarouselCardWidth = (usableWidth: number): number =>
-  Math.round(Math.min(268, Math.max(198, usableWidth * 0.62)));
-
 export const exerciseThumbStyle = (size: number) => ({
   width: size,
   height: size,
   borderRadius: size / 2,
 });
-
-/**
- * Width of one tile in an evenly spaced grid.
- *
- * Compact stat tiles read better two per row even on narrow phones - the
- * generic column count is meant for wide content, and using it here made every
- * tile span the full screen.
- */
-export const gridItemWidth = (contentWidth: number, gap: number, perRow = 2): number =>
-  Math.max(120, (contentWidth - gap * (perRow - 1)) / perRow);

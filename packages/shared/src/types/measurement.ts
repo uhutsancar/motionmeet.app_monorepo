@@ -25,18 +25,3 @@ export interface BodyMeasurement extends BodyMeasurementValues {
 }
 
 export type BodyMeasurementMetric = keyof BodyMeasurementValues;
-
-/** Metric order used by the measurement screens. */
-export const BODY_MEASUREMENT_METRICS: readonly BodyMeasurementMetric[] = Object.freeze([
-  "weightKg",
-  "bodyFatPercentage",
-  "waistCm",
-  "chestCm",
-  "hipsCm",
-  "neckCm",
-  "shouldersCm",
-  "leftArmCm",
-  "rightArmCm",
-  "leftThighCm",
-  "rightThighCm",
-]);

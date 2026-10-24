@@ -26,20 +26,14 @@ const relationshipsSlice = createSlice({
       const { userId, relationship } = action.payload;
       state.byUserId[userId] = { ...EMPTY_RELATIONSHIP, ...state.byUserId[userId], ...relationship };
     },
-    setRelationships: (state, action: PayloadAction<Array<{ userId: string; relationship: Partial<RelationshipState> }>>) => {
-      for (const entry of action.payload) {
-        state.byUserId[entry.userId] = { ...EMPTY_RELATIONSHIP, ...state.byUserId[entry.userId], ...entry.relationship };
-      }
-    },
     setRelationshipPending: (state, action: PayloadAction<{ userId: string; pending: boolean }>) => {
       const { userId, pending } = action.payload;
       state.pending = pending
         ? [...new Set([...state.pending, userId])]
         : state.pending.filter((id) => id !== userId);
     },
-    clearRelationships: () => initialState,
   },
 });
 
-export const { setRelationship, setRelationships, setRelationshipPending, clearRelationships } = relationshipsSlice.actions;
+export const { setRelationship, setRelationshipPending } = relationshipsSlice.actions;
 export default relationshipsSlice.reducer;

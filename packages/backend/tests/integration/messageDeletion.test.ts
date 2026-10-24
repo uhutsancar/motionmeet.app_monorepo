@@ -1,9 +1,10 @@
+import "./testDatabase.js";
 import "dotenv/config";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
-import { connectDatabase, database, disconnectDatabase } from "../configs/database.js";
-import { createMessage, deleteMessageById, getMessageById, getUserConversationsList } from "../services/messageService.js";
+import { connectDatabase, database, disconnectDatabase } from "../../configs/database.js";
+import { createMessage, deleteMessageById, getMessageById, getUserConversationsList } from "../../services/messageService.js";
 
 /*
  * Deleting the newest message of a thread must hand the inbox the message

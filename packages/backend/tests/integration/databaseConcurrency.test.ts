@@ -1,14 +1,15 @@
+import "./testDatabase.js";
 import "dotenv/config";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
-import { connectDatabase, database, disconnectDatabase } from "../configs/database.js";
-import { canSendToUser, createMessage } from "../services/messageService.js";
-import { likePost } from "../services/postInteractionService.js";
-import { deletePostById, getPostById } from "../services/postService.js";
-import { acceptConnection, createConnection, getUserById } from "../services/userService.js";
-import { acceptFollowRequest, requestFollow } from "../services/relationshipService.js";
-import { createWorkoutWithStatistics } from "../services/workoutService.js";
+import { connectDatabase, database, disconnectDatabase } from "../../configs/database.js";
+import { canSendToUser, createMessage } from "../../services/messageService.js";
+import { likePost } from "../../services/postInteractionService.js";
+import { deletePostById, getPostById } from "../../services/postService.js";
+import { acceptConnection, createConnection, getUserById } from "../../services/userService.js";
+import { acceptFollowRequest, requestFollow } from "../../services/relationshipService.js";
+import { createWorkoutWithStatistics } from "../../services/workoutService.js";
 
 test("PostgreSQL transactions remain idempotent under concurrent writes", { timeout: 120_000 }, async () => {
   await connectDatabase();

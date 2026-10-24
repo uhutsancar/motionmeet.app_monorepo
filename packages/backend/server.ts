@@ -30,9 +30,10 @@ import { createRateLimitStore, disconnectRedis, getRedisStatus, initializeRedis,
 import { migrateToLatest } from "./db/migrator.js";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler.js";
 import { requestContext } from "./middlewares/requestContext.js";
-import { rejectUnsupportedApiContentType } from "./middlewares/browserSecurity.js";
+import { parseJsonBody, rejectUnsupportedApiContentType } from "./middlewares/browserSecurity.js";
+import { answerRetiredBilling, RETIRED_BILLING_PATHS } from "./middlewares/retiredBilling.js";
 import { handleSocketConnection } from "./realtime/socketHandlers.js";
-import { setSocketServer, userSockets, type SocketData } from "./realtime/socketRegistry.js";
+import { setSocketServer, type SocketData } from "./realtime/socketRegistry.js";
 import { ensureApplicationData } from "./services/bootstrapService.js";
 import { assertDatabaseContract } from "./services/databaseMigrationService.js";
 import { detectGeometrySupport } from "./services/locationGeometry.js";
@@ -97,14 +98,10 @@ app.set("trust proxy", 1);
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(requestContext);
 app.use(cors(corsOptions));
-// MotionMeet no longer sells plans. Old clients and the provider's webhook
-// retries get an explicit 410 instead of a generic 404, ahead of body parsing
-// so nothing they send is read.
-app.use(["/api/plans", "/api/payments"], (_request, response) => {
-  response.status(410).json({ success: false, message: "Plans and payments are no longer offered" });
-});
+// Ahead of body parsing so nothing an old client or a webhook retry sends is read.
+app.use(RETIRED_BILLING_PATHS, answerRetiredBilling);
 app.use("/api", rejectUnsupportedApiContentType);
-app.use(express.json({ limit: "500kb", strict: true }));
+app.use(parseJsonBody);
 const configuredGlobalLimit = Number.parseInt(process.env.GLOBAL_RATE_LIMIT_PER_15_MIN ?? "", 10);
 app.use("/api", rateLimit({ windowMs: 900_000, limit: Number.isFinite(configuredGlobalLimit) ? Math.min(Math.max(configuredGlobalLimit, 100), 10_000) : 1_000, standardHeaders: true, legacyHeaders: false, store: createRateLimitStore("global"), message: { success: false, message: "Too many requests; please try again later" } }));
 
@@ -136,8 +133,6 @@ io.use(async (socket, next) => {
   } catch (error: unknown) { logger.warn("socket_authentication_failed", safeErrorMetadata(error)); next(new Error("Authentication failed")); }
 });
 io.on("connection", (socket) => { void handleSocketConnection(socket).catch((error: unknown) => { logger.error("socket_initialization_failed", safeErrorMetadata(error)); socket.disconnect(true); }); });
-
-export { app, io, userSockets };
 const cronTasks = initCronJobs();
 let shuttingDown = false;
 const shutdown = async (signal: string, exitCode = 0): Promise<void> => {

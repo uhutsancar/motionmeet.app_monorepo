@@ -7,7 +7,6 @@ const managedKeys = [
   "MEDIA_UPLOADS_ENABLED", "EMAIL_ENABLED", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
   "AWS_BUCKET_NAME", "IMAGEKIT_PUBLIC_KEY", "IMAGEKIT_PRIVATE_KEY", "IMAGEKIT_URL_ENDPOINT",
   "SMTP_USER", "SMTP_PASS", "SENDER_EMAIL", "ALLOW_INSECURE_REDIS_TLS",
-  "PADDLE_ENABLED", "PADDLE_ENVIRONMENT",
 ] as const;
 const original = new Map(managedKeys.map((key) => [key, process.env[key]]));
 
@@ -70,16 +69,5 @@ test("production Redis requires authentication and TLS", () => {
     assert.throws(() => loadEnvironment(), /password/);
     productionBase(); process.env.REDIS_URL = "redis://default:secret@redis:6379"; resetEnvironmentForTests();
     assert.throws(() => loadEnvironment(), /rediss/);
-  } finally { restore(); }
-});
-
-test("leftover payment variables from an old deployment are ignored", () => {
-  try {
-    productionBase();
-    process.env.PADDLE_ENABLED = "true";
-    process.env.PADDLE_ENVIRONMENT = "sandbox";
-    resetEnvironmentForTests();
-    const environment = loadEnvironment();
-    assert.equal("paddleEnabled" in environment, false);
   } finally { restore(); }
 });

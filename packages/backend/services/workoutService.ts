@@ -92,6 +92,4 @@ export const getUserWorkoutsList = async (userId: string, pagination: Pagination
   const nextCursor = hasMore && last ? Buffer.from(JSON.stringify({ date: new Date(last.start_time).toISOString(), id: last.id })).toString("base64url") : null;
   return { items, nextCursor };
 };
-
-export const getWorkoutStatsDataLegacy = getComputedWorkoutStats;
 export const getWorkoutStatsData = getComputedWorkoutStats;

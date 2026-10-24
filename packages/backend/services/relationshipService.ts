@@ -383,14 +383,3 @@ export const getIncomingRequests = (userId: string, limit: number, cursor: { dat
   listRequests(userId, "incoming", limit, cursor);
 export const getOutgoingRequests = (userId: string, limit: number, cursor: { date: Date; id: string } | null): Promise<RequestPage> =>
   listRequests(userId, "outgoing", limit, cursor);
-
-export const countIncomingRequests = async (userId: string): Promise<number> =>
-  Number(
-    (
-      await database
-        .selectFrom("follow_requests")
-        .select((expression) => expression.fn.countAll<number>().as("count"))
-        .where("target_id", "=", userId)
-        .executeTakeFirst()
-    )?.count ?? 0,
-  );

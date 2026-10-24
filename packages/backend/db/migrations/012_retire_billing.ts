@@ -5,16 +5,16 @@ import type { Database } from "../types.js";
  * Retires plans and payments.
  *
  * MotionMeet is free for every member now; ads are the only revenue. The plan
- * tables, the per-user plan/provider columns and the Paddle webhook log have no
- * reader left in the application, so they go - but not blind.
+ * tables and the per-user plan columns have no reader left in the
+ * application, so they go - but not blind.
  *
  * Anything that could be a record of a real purchase is copied into
  * `legacy_billing_archive` first, as plain JSON: every member who was on a
- * paid plan or carries a provider customer/subscription id, every webhook
- * event, and the plan catalogue itself. Nothing in the app reads that table;
- * it exists so an operator can still answer a billing question after this
- * migration has run. Members' content, follows, workouts and statistics are
- * untouched - only billing columns are dropped.
+ * paid plan or carries a customer/subscription id, and the plan catalogue
+ * itself. Nothing in the app reads that table; it exists so an operator can
+ * still answer a billing question after this migration has run. Members'
+ * content, follows, workouts and statistics are untouched - only billing
+ * columns are dropped.
  *
  * The drops deliberately avoid CASCADE: if some object nobody knew about
  * still depends on these tables or types, the migration fails and rolls back
@@ -40,27 +40,14 @@ export const up = async (db: Kysely<Database>): Promise<void> => {
       'plan_start_date', u.plan_start_date,
       'plan_end_date', u.plan_end_date,
       'plan_cancelled_at', u.plan_cancelled_at,
-      'plan_cancel_at_period_end', u.plan_cancel_at_period_end,
       'stripe_customer_id', u.stripe_customer_id,
-      'stripe_subscription_id', u.stripe_subscription_id,
-      'paddle_customer_id', u.paddle_customer_id,
-      'paddle_subscription_id', u.paddle_subscription_id,
-      'billing_provider', u.billing_provider,
-      'paddle_environment', u.paddle_environment,
-      'last_paddle_event_occurred_at', u.last_paddle_event_occurred_at
+      'stripe_subscription_id', u.stripe_subscription_id
     )
     FROM users u
     LEFT JOIN plans p ON p.id = u.plan_id
     WHERE u.plan_status <> 'free'
        OR coalesce(p.slug, 'free') <> 'free'
-       OR u.stripe_customer_id <> '' OR u.stripe_subscription_id <> ''
-       OR u.paddle_customer_id <> '' OR u.paddle_subscription_id <> '';
-
-    INSERT INTO legacy_billing_archive (source, payload)
-    SELECT 'payment_webhook_events', to_jsonb(e) FROM payment_webhook_events e;
-
-    INSERT INTO legacy_billing_archive (source, payload)
-    SELECT 'plan_provider_prices', to_jsonb(pp) FROM plan_provider_prices pp;
+       OR u.stripe_customer_id <> '' OR u.stripe_subscription_id <> '';
 
     INSERT INTO legacy_billing_archive (source, payload)
     SELECT 'plans', to_jsonb(p) || jsonb_build_object(
@@ -69,8 +56,6 @@ export const up = async (db: Kysely<Database>): Promise<void> => {
     )
     FROM plans p;
 
-    DROP INDEX IF EXISTS users_paddle_subscription_idx;
-    DROP INDEX IF EXISTS users_paddle_customer_idx;
     DROP INDEX IF EXISTS users_plan_status_idx;
     ALTER TABLE users
       DROP COLUMN IF EXISTS plan_id,
@@ -78,22 +63,12 @@ export const up = async (db: Kysely<Database>): Promise<void> => {
       DROP COLUMN IF EXISTS plan_start_date,
       DROP COLUMN IF EXISTS plan_end_date,
       DROP COLUMN IF EXISTS plan_cancelled_at,
-      DROP COLUMN IF EXISTS plan_cancel_at_period_end,
       DROP COLUMN IF EXISTS stripe_customer_id,
-      DROP COLUMN IF EXISTS stripe_subscription_id,
-      DROP COLUMN IF EXISTS paddle_customer_id,
-      DROP COLUMN IF EXISTS paddle_subscription_id,
-      DROP COLUMN IF EXISTS billing_provider,
-      DROP COLUMN IF EXISTS paddle_environment,
-      DROP COLUMN IF EXISTS last_paddle_event_occurred_at;
+      DROP COLUMN IF EXISTS stripe_subscription_id;
 
-    DROP TABLE IF EXISTS payment_webhook_events;
-    DROP TABLE IF EXISTS plan_provider_prices;
     DROP TABLE IF EXISTS plan_billing_cycles;
     DROP TABLE IF EXISTS plans;
 
-    DROP TYPE IF EXISTS billing_environment;
-    DROP TYPE IF EXISTS billing_provider;
     DROP TYPE IF EXISTS billing_interval;
     DROP TYPE IF EXISTS plan_status;
   `).execute(db);

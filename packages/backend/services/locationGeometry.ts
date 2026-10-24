@@ -47,8 +47,6 @@ export const detectGeometrySupport = async (): Promise<boolean> => {
   return postgisEnabled;
 };
 
-export const isPostgisEnabled = (): boolean => postgisEnabled;
-
 /**
  * Longitude degrees covering `meters` at the given latitude. Meridians converge
  * towards the poles, so the span widens; above ~89° it is clamped to a full

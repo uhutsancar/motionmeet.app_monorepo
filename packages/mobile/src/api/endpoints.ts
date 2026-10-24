@@ -124,9 +124,6 @@ export const requestFollow = async (userId: string, token: Token): Promise<Relat
   return data;
 };
 
-/** Kept as an alias so older call sites keep compiling; it sends a request too. */
-export const followUser = requestFollow;
-
 export const unfollowUser = async (userId: string, token: Token): Promise<RelationshipResponse> => {
   const { data } = await api.post(API_ROUTES.user_extras.unfollow, { id: userId }, {
     headers: { Authorization: `Bearer ${token}` },
@@ -163,21 +160,6 @@ export const getIncomingFollowRequests = async (token: Token, cursor?: Cursor): 
   return data;
 };
 
-export const getOutgoingFollowRequests = async (token: Token, cursor?: Cursor): Promise<FollowRequestsResponse> => {
-  const { data } = await api.get(API_ROUTES.followRequest.outgoing, {
-    headers: { Authorization: `Bearer ${token}` },
-    params: cursor ? { cursor } : undefined,
-  });
-  return data;
-};
-
-export const getRelationship = async (userId: string, token: Token): Promise<RelationshipResponse> => {
-  const { data } = await api.get(API_ROUTES.user_extras.relationship(userId), {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return data;
-};
-
 // ============= NOTIFICATION APIs =============
 export const getNotifications = async (token: Token, cursor?: Cursor): Promise<NotificationsResponse> => {
   const { data } = await api.get(API_ROUTES.notification.list, {
@@ -201,13 +183,6 @@ export const markNotificationsRead = async (token: Token): Promise<UnreadCountRe
   return data;
 };
 
-export const sendConnectionRequest = async (userId: string, token: Token): Promise<BasicResponse> => {
-  const { data } = await api.post(API_ROUTES.user_extras.connect, { id: userId }, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return data;
-};
-
 export const acceptConnectionRequest = async (userId: string, token: Token): Promise<BasicResponse> => {
   const { data } = await api.post(API_ROUTES.user_extras.accept, { id: userId }, {
     headers: { Authorization: `Bearer ${token}` },
@@ -221,13 +196,6 @@ export const getUserConnections = async (token: Token, section?: string | null, 
     params: section
       ? { section, ...(cursor ? { cursor } : {}) }
       : undefined,
-  });
-  return data;
-};
-
-export const getUserRecentMessages = async (token: Token): Promise<MessagesResponse> => {
-  const { data } = await api.get(API_ROUTES.user_extras.recent_messages, {
-    headers: { Authorization: `Bearer ${token}` },
   });
   return data;
 };
@@ -271,14 +239,6 @@ export const createPost = async (postData: OperationPayload, token: Token): Prom
       Authorization: `Bearer ${token}`,
       'Idempotency-Key': request.operationId,
     },
-  });
-  return data;
-};
-
-/** @deprecated Use likePostIdempotent / unlikePostIdempotent instead */
-export const likePost = async (postId: string, token: Token): Promise<LikeResponse> => {
-  const { data } = await api.post(API_ROUTES.post.like, { postId }, {
-    headers: { Authorization: `Bearer ${token}` },
   });
   return data;
 };
@@ -672,98 +632,4 @@ export const getNearbyUsers = async (token: Token, limit?: number): Promise<Near
     params: limit ? { limit } : undefined,
   });
   return data;
-};
-
-export default {
-  // User
-  getUserData,
-  updateUserProfile,
-  getUserProfile,
-  discoverUsers,
-  followUser,
-  requestFollow,
-  unfollowUser,
-  cancelFollowRequest,
-  acceptFollowRequest,
-  declineFollowRequest,
-  getIncomingFollowRequests,
-  getOutgoingFollowRequests,
-  getRelationship,
-  sendConnectionRequest,
-  acceptConnectionRequest,
-  getUserConnections,
-
-  // Notifications
-  getNotifications,
-  getUnreadNotificationCount,
-  markNotificationsRead,
-  getUserRecentMessages,
-  getUserConversations,
-  
-  // Post
-  getPost,
-  getPosts,
-  createPost,
-  likePost,
-  likePostIdempotent,
-  unlikePostIdempotent,
-  deletePost,
-  
-  // Message
-  getMessages,
-  sendMessage,
-  deleteMessage,
-  markMessageSeen,
-  
-  // Story
-  getStories,
-  createStory,
-  deleteStory,
-  markStoryViewed,
-  getStoryViewers,
-  setStoryLike,
-
-  // Measurement
-  getMeasurements,
-  saveMeasurement,
-  deleteMeasurement,
-
-  // Workout
-  getWorkoutStats,
-  getWorkouts,
-  createWorkout,
-
-  // Routine
-  getRoutines,
-  createRoutine,
-
-  // Exercise
-  getExercises,
-  createExercise,
-  getExerciseStats,
-  getExerciseHistory,
-  getPersonalRecords,
-
-  // Post Extras
-  addComment,
-  getPostComments,
-
-  // User Extras
-  getSuggestedUsers,
-
-  // Location
-  searchLocations,
-  getRecentLocations,
-  resolveCoordinates,
-  getProfileLocation,
-  saveProfileLocation,
-  setProfileLocationVisibility,
-  clearProfileLocation,
-
-  // Nearby
-  getNearbySettings,
-  updateNearbySettings,
-  updateNearbyPosition,
-  deleteNearbyPosition,
-  getNearbyUsers,
 };

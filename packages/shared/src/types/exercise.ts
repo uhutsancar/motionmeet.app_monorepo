@@ -23,11 +23,6 @@ export interface Exercise extends Timestamped, ExerciseMedia {
 
 export type ExerciseDetail = Exercise;
 
-export interface ExerciseCategory {
-  code: string;
-  name: string;
-}
-
 export interface ExerciseSet {
   id?: EntityId;
   setType: "normal" | "warmup" | "drop" | "failure";

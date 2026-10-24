@@ -8,7 +8,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuthContext } from '../context/AuthProvider';
-import endpoints from '../api/endpoints';
+import { getWorkoutStats } from '../api/endpoints';
 import { EXERCISE_THUMB, exerciseThumbStyle } from '../config/layout';
 import { API_URL } from '../config/environment';
 import { mediaVariantUrl, resolvePublicMediaUrl, type WorkoutStats } from '@motionmeet/shared';
@@ -47,7 +47,7 @@ const MainExercisesScreen = ({ navigation }: NavigationOnlyProps) => {
       try {
         const token = await getToken();
         if (!token) throw new Error('Authentication required');
-        const data = await endpoints.getWorkoutStats(period, token);
+        const data = await getWorkoutStats(period, token);
         if (active) setExercises(data.success ? data.exerciseBreakdown ?? [] : []);
       } catch (error) {
         logHandledError('main-exercises-stats', error);

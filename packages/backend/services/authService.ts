@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import { database, withTransaction } from "../configs/database.js";
-import { findUserById } from "../repositories/userRepository.js";
 import { serializeUser, type InternalUser } from "../repositories/entities.js";
 
 export const getUserByEmailOrUsername = async (email: string, username: string): Promise<InternalUser | null> => {
@@ -57,5 +56,3 @@ export const resetPasswordWithToken = async (rawToken: unknown, hashedPassword: 
     return true;
   });
 };
-
-export const getUserAfterAuthentication = (userId: string): Promise<InternalUser | null> => findUserById(userId);
