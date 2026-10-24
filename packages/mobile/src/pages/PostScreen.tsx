@@ -155,7 +155,7 @@ const PostScreen = ({ navigation, route }: PostScreenProps) => {
           style={styles.list}
           contentContainerStyle={[styles.content, keyboardPadding > 0 && { paddingBottom: 32 + keyboardPadding }]}
           ListFooterComponent={
-            loadingMore ? <RNActivityIndicator color={theme.primary} style={styles.footer} /> : null
+            loadingMore ? <RNActivityIndicator color={theme.primary} style={styles.footer} /> : undefined
           }
         />
       ) : missing ? (

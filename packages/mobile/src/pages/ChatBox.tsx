@@ -666,9 +666,9 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
                     : <Text style={{ color: theme.primary, fontSize: 13, fontWeight: '600' }}>{t('messages.load_older', 'Önceki mesajlar')}</Text>
                   }
                 </Pressable>
-              ) : null
+              ) : undefined
             }
-            ListFooterComponent={partnerTyping ? renderTyping : null}
+            ListFooterComponent={partnerTyping ? renderTyping : undefined}
           />
         )}
 

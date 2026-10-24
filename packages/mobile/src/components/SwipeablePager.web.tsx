@@ -1,5 +1,5 @@
 import React, { Children, useEffect, useRef, useState } from 'react';
-import { ScrollView, View, type LayoutChangeEvent } from 'react-native';
+import { ScrollView, View, type LayoutChangeEvent, type ScrollViewInstance } from 'react-native';
 import type { SwipeablePagerProps } from './SwipeablePager.types';
 
 /**
@@ -11,7 +11,7 @@ import type { SwipeablePagerProps } from './SwipeablePager.types';
  * panes can be dragged through, and the active index stays controlled.
  */
 const SwipeablePager = ({ page, onPageChange, style, children }: SwipeablePagerProps) => {
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const [width, setWidth] = useState(0);
   // Mirrors the native pager: a change that came from a drag is not echoed back
   // as a programmatic scroll.

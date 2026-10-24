@@ -389,7 +389,7 @@ const Connections = ({ navigation, route }: ConnectionsProps) => {
           ListFooterComponent={
             currentPage.loading && currentData.length > 0
               ? <ActivityIndicator style={{ paddingVertical: 18 }} color={theme.primary} />
-              : null
+              : undefined
           }
           ListEmptyComponent={
             <Text style={{ textAlign: 'center', marginTop: 48, color: theme.textMuted }}>

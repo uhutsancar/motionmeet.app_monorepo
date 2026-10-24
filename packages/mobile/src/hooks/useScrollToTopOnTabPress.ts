@@ -1,11 +1,11 @@
 import { useEffect, type RefObject } from 'react';
 import { useNavigation } from '@react-navigation/native';
-import type { FlatList, ScrollView } from 'react-native';
+import type { FlatList, ScrollViewInstance } from 'react-native';
 
 /** Anything with a scroll offset this hook knows how to reset. */
 type Scrollable =
   | Pick<FlatList<unknown>, 'scrollToOffset'>
-  | Pick<ScrollView, 'scrollTo'>;
+  | Pick<ScrollViewInstance, 'scrollTo'>;
 
 interface TabNavigationLike {
   getParent: () => TabNavigationLike | undefined;

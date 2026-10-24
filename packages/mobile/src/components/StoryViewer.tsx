@@ -974,7 +974,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
   },
   storyContent: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     overflow: 'hidden',
   },
   mediaLoading: { position: 'absolute', alignSelf: 'center', top: '48%' },
@@ -1017,12 +1017,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.35)',
   },
   progressFilled: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderRadius: 2,
     backgroundColor: '#FFFFFF',
   },
   tapAreas: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     flexDirection: 'row',
     zIndex: 20,
   },
@@ -1102,7 +1102,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   composerScrim: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.55)',
     // Above the story, below everything that can be tapped.
     zIndex: 15,
@@ -1155,7 +1155,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   viewersSheet: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(0,0,0,0.55)',
     zIndex: 50,

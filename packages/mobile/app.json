@@ -38,6 +38,10 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "expo-asset",
+      "expo-font",
+      "expo-secure-store",
+      "expo-video",
       "expo-localization",
       [
         "expo-image-picker",

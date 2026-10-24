@@ -19,10 +19,7 @@ const AppContent = () => {
   return (
     <PaperProvider theme={theme}>
       <AuthNavigator />
-      <StatusBar
-        style={isDark ? 'light' : 'dark'}
-        backgroundColor={theme.background}
-      />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <AppToast />
     </PaperProvider>
   );

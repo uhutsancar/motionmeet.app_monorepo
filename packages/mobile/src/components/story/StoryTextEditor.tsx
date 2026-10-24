@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   TextInput,
+  type TextInputInstance,
   View,
   useWindowDimensions,
 } from 'react-native';
@@ -74,7 +75,7 @@ const StoryTextEditor = ({ overlay, onCancel, onDone }: StoryTextEditorProps) =>
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const keyboard = useKeyboardInset();
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
 
   const [draft, setDraft] = useState(overlay);
   const [tray, setTray] = useState<OpenTray>('none');
@@ -291,7 +292,7 @@ const StoryTextEditor = ({ overlay, onCancel, onDone }: StoryTextEditorProps) =>
 
 const styles = StyleSheet.create({
   root: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.62)',
     zIndex: 60,
   },

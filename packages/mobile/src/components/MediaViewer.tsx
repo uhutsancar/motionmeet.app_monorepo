@@ -46,7 +46,7 @@ const MediaViewer = ({ uri, onClose, accessibilityLabel }: MediaViewerProps) => 
       navigationBarTranslucent
       onRequestClose={onClose}
     >
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
+      <StatusBar barStyle="light-content" />
       <View style={styles.root}>
         <Pressable
           style={styles.backdrop}
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   spinner: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },

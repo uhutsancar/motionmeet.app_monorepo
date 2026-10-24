@@ -251,9 +251,9 @@ const ActivityScreen = ({ navigation }: NavigationOnlyProps) => {
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => { void load(); }} tintColor={theme.primary} />}
         onEndReachedThreshold={0.4}
         onEndReached={() => { if (nextCursor && !loadingMore && !loading) void load(nextCursor); }}
-        ListFooterComponent={loadingMore ? <ActivityIndicator style={styles.footer} color={theme.primary} /> : null}
+        ListFooterComponent={loadingMore ? <ActivityIndicator style={styles.footer} color={theme.primary} /> : undefined}
         ListEmptyComponent={
-          loading ? null : (
+          loading ? undefined : (
             <Surface elevation={0} style={styles.empty}>
               <Ionicons name="notifications-outline" size={30} color={theme.textMuted} />
               <Text style={styles.emptyTitle}>{t('activity.empty_title', 'Henüz bildirim yok')}</Text>

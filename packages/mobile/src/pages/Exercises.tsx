@@ -397,7 +397,7 @@ const Exercises = ({ navigation }: NavigationOnlyProps) => {
                   ? t('exercises.results', 'Sonuçlar')
                   : t('exercises.all_exercises', 'All exercises')}
               </Text>
-            ) : null
+            ) : undefined
           }
           ListFooterComponent={
             loadingMore ? (
@@ -406,7 +406,7 @@ const Exercises = ({ navigation }: NavigationOnlyProps) => {
                 color={theme.textMuted}
                 style={{ paddingVertical: 18 }}
               />
-            ) : null
+            ) : undefined
           }
           ListEmptyComponent={
             failed ? (

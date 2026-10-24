@@ -425,7 +425,7 @@ const Messages = ({ navigation }: NavigationOnlyProps) => {
         ListFooterComponent={
           (searchQuery ? loadingMoreConnections : loadingMore) ? (
             <ActivityIndicator color={theme.primary} style={{ marginVertical: 18 }} />
-          ) : null
+          ) : undefined
         }
         ListEmptyComponent={
           loading ? (

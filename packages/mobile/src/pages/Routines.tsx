@@ -1,5 +1,5 @@
 import React, { useCallback, useState, useRef } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, type ScrollViewInstance } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useScrollToTopOnTabPress } from '../hooks/useScrollToTopOnTabPress';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -76,7 +76,7 @@ const Routines = ({ navigation }: NavigationOnlyProps) => {
   const [failed, setFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const headerEdge = useScrollEdge();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   useScrollToTopOnTabPress(scrollRef);
   const activeWorkout = useActiveWorkoutDraft();
 

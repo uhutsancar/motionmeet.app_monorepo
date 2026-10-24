@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   type NativeSyntheticEvent,
+  type ScrollViewInstance,
   type ScrollViewProps,
   type StyleProp,
   type TargetedEvent,
@@ -69,7 +70,7 @@ const isIOS = Platform.OS === 'ios';
  * sign-in form moved 10px and the focused password field stayed under the
  * keyboard until the content was padded and scrolled by hand.
  */
-const KeyboardAwareScrollView = React.forwardRef<ScrollView, KeyboardAwareScrollViewProps>(({
+const KeyboardAwareScrollView = React.forwardRef<ScrollViewInstance, KeyboardAwareScrollViewProps>(({
   avoidKeyboard = true,
   contentContainerStyle,
   extraScrollHeight = 20,
@@ -77,7 +78,7 @@ const KeyboardAwareScrollView = React.forwardRef<ScrollView, KeyboardAwareScroll
   onFocus,
   ...props
 }, forwardedRef) => {
-  const localRef = useRef<ScrollView | null>(null);
+  const localRef = useRef<ScrollViewInstance | null>(null);
   const { keyboardHeight, keyboardPadding, scheduleFocusedInputScroll } = useKeyboardAwareScroll(localRef, {
     extraScrollHeight,
   });
@@ -87,7 +88,7 @@ const KeyboardAwareScrollView = React.forwardRef<ScrollView, KeyboardAwareScroll
       ? flattenedContentStyle.paddingBottom
       : 0;
 
-  const setRefs = useCallback((node: ScrollView | null) => {
+  const setRefs = useCallback((node: ScrollViewInstance | null) => {
     localRef.current = node;
     if (typeof forwardedRef === 'function') forwardedRef(node);
     else if (forwardedRef) forwardedRef.current = node;

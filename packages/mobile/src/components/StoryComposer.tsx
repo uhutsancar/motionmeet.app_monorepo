@@ -444,12 +444,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
   },
   frame: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: '#000000',
     overflow: 'hidden',
   },
   pending: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },

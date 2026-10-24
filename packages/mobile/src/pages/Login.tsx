@@ -3,7 +3,7 @@ import {
   Linking,
   StyleSheet,
   View,
-  type TextInput as NativeTextInput,
+  type TextInputInstance as NativeTextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Surface, Text, TextInput, TouchableRipple } from 'react-native-paper';

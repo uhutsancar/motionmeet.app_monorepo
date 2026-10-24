@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { FlatList, Keyboard, Pressable, StyleSheet, TextInput, View, type TextInputInstance } from 'react-native';
 import { ActivityIndicator, Text } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Location from 'expo-location';
@@ -40,7 +40,7 @@ const StoryLocationSheet = ({ onCancel, onPick }: StoryLocationSheetProps) => {
   const insets = useSafeAreaInsets();
   const { requestFix, busy, openSettings } = useDeviceLocation();
   const keyboard = useKeyboardInset();
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [query, setQuery] = useState('');
   const [resolved, setResolved] = useState(false);
@@ -195,7 +195,7 @@ const StoryLocationSheet = ({ onCancel, onPick }: StoryLocationSheetProps) => {
 
 const styles = StyleSheet.create({
   root: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: '#000000',
     zIndex: 70,
   },

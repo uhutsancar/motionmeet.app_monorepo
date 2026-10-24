@@ -102,7 +102,7 @@ const PostViewerModal = ({ posts, navigation, onClose, onEndReached, loadingMore
           contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
           style={styles.list}
           ListFooterComponent={
-            loadingMore ? <ActivityIndicator color={theme.primary} style={styles.footer} /> : null
+            loadingMore ? <ActivityIndicator color={theme.primary} style={styles.footer} /> : undefined
           }
         />
       </View>

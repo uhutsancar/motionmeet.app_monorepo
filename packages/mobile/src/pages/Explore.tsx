@@ -327,7 +327,7 @@ const Explore = ({ navigation }: NavigationOnlyProps) => {
         ListFooterComponent={
           loadingMore ? (
             <ActivityIndicator color={theme.primary} style={{ marginVertical: 18 }} />
-          ) : null
+          ) : undefined
         }
       />
 

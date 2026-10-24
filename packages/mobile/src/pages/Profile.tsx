@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, Share, StyleSheet, View, type ScrollViewInstance } from 'react-native';
 // expo-image: these rows scroll past many remote avatars, and it recycles
 // views and keeps a memory + disk cache where React Native's Image does not.
 import { Image } from 'expo-image';
@@ -89,7 +89,7 @@ const Profile = ({ route, navigation }: ProfileProps) => {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [publicProfile, setPublicProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(!isOwnProfile);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   useScrollToTopOnTabPress(scrollRef);
   const headerEdge = useScrollEdge();
   const user = isOwnProfile ? currentUser : publicProfile;

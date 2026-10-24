@@ -13,7 +13,7 @@ import {
   type ListRenderItem,
   type StyleProp,
   type ViewStyle,
-  type ViewToken,
+  type ListViewToken,
 } from 'react-native';
 // expo-image, not React Native's Image: the feed is the one screen where a
 // member scrolls past dozens of remote photographs, and this one recycles
@@ -191,7 +191,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
     ]).start();
   }, [burst]);
 
-  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken<CarouselItem>[] }) => {
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ListViewToken[] }) => {
     if (viewableItems.length > 0) {
       setActiveSlide(viewableItems[0]?.index ?? 0);
     }
@@ -354,7 +354,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
       justifyContent: 'center',
     },
     playOverlay: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet.absoluteFill,
       justifyContent: 'center',
       alignItems: 'center',
       backgroundColor: 'transparent'
@@ -413,7 +413,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
       marginLeft: EXERCISE_THUMB.medium + 12,
     },
     burst: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet.absoluteFill,
       alignItems: 'center',
       justifyContent: 'center',
       // A white heart is invisible over a bright photo without something under

@@ -5,6 +5,7 @@ import {
   Pressable,
   StyleSheet,
   TextInput,
+  type TextInputInstance,
   View,
   type ListRenderItem,
 } from 'react-native';
@@ -68,7 +69,7 @@ const SearchScreen = ({ navigation }: NavigationOnlyProps) => {
   const [searching, setSearching] = useState(false);
   const [recents, setRecents] = useState<RecentEntry[]>([]);
 
-  const inputRef = useRef<TextInput | null>(null);
+  const inputRef = useRef<TextInputInstance | null>(null);
   // Only the newest search may write to the list: a slow request for "uh" must
   // not land on top of the results for "uhut".
   const searchSequence = useRef(0);
@@ -269,7 +270,7 @@ const SearchScreen = ({ navigation }: NavigationOnlyProps) => {
                   <Text style={styles.sectionAction}>{t('search.clear_all', 'Tümünü temizle')}</Text>
                 </Pressable>
               </View>
-            ) : null
+            ) : undefined
           }
           ListEmptyComponent={
             <View style={styles.empty}>

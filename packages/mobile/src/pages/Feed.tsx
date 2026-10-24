@@ -462,7 +462,7 @@ const Feed = ({ navigation }: NavigationOnlyProps) => {
             <View style={{ padding: 18, alignItems: 'center' }}>
               <ActivityIndicator color={theme.primary} />
             </View>
-          ) : null
+          ) : undefined
         }
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.4}

@@ -7,6 +7,7 @@ import {
   TextInput,
   View,
   type KeyboardTypeOptions,
+  type TextInputInstance,
   type TextInputProps,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -56,7 +57,7 @@ const validateAsset = (asset: ImagePickerAsset): void => {
 
 interface FieldRowProps extends TextInputProps {
   label: string;
-  inputRef?: React.Ref<TextInput>;
+  inputRef?: React.Ref<TextInputInstance>;
   keyboardType?: KeyboardTypeOptions;
 }
 
@@ -101,10 +102,10 @@ const ProfileEditScreen = ({ navigation }: NavigationOnlyProps) => {
     weight: String(user?.weight || ''),
     height: String(user?.height || ''),
   });
-  const usernameRef = useRef<TextInput>(null);
-  const bioRef = useRef<TextInput>(null);
-  const weightRef = useRef<TextInput>(null);
-  const heightRef = useRef<TextInput>(null);
+  const usernameRef = useRef<TextInputInstance>(null);
+  const bioRef = useRef<TextInputInstance>(null);
+  const weightRef = useRef<TextInputInstance>(null);
+  const heightRef = useRef<TextInputInstance>(null);
   // Location is not part of this form. It is chosen from the dataset on its own
   // screen and written by the backend, so it is only shown here as a link.
   const locationLabel = user?.location || '';

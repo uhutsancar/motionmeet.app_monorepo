@@ -105,40 +105,31 @@ config.resolver.unstable_enablePackageExports = true;
  * Set METRO_WATCH_NODE_MODULES=1 to opt back in when editing a dependency in
  * place, e.g. while debugging a patch-package change.
  *
- * `roots` is swapped only for the duration of the watch() call because crawl()
- * has already run by then and reads the same array.
+ * Expo CLI replaces Metro's file map with its fork, @expo/metro-file-map, which
+ * keeps the watcher options in a private field, so the roots can no longer be
+ * filtered from outside. The fork starts one backend per root instead -
+ * FallbackWatcher on Windows, as NativeWatcher is macOS-only - and the one for
+ * a node_modules root is simply never started. crawl() has already run by then
+ * and is unaffected.
  */
 if (process.env.METRO_WATCH_NODE_MODULES !== '1') {
   try {
-    // pnpm keeps metro-file-map out of this package's node_modules, so follow
-    // the same dependency chain Metro itself resolves through.
+    // pnpm keeps the file map out of this package's node_modules, so follow
+    // the same dependency chain Expo CLI itself resolves through.
     let req = require;
-    for (const pkg of ['expo', '@expo/metro-config', 'metro']) {
+    for (const pkg of ['expo', '@expo/cli', '@expo/metro-file-map']) {
       req = require('node:module').createRequire(req.resolve(`${pkg}/package.json`));
     }
-    const { Watcher } = req('metro-file-map/private/Watcher');
-    const originalWatch = Watcher.prototype.watch;
-    if (typeof originalWatch !== 'function') {
-      throw new Error('Watcher.prototype.watch is missing');
+    const { default: FallbackWatcher } = req('./build/watchers/FallbackWatcher');
+    const originalStartWatching = FallbackWatcher?.prototype?.startWatching;
+    if (typeof originalStartWatching !== 'function') {
+      throw new Error('FallbackWatcher.prototype.startWatching is missing');
     }
     const isNodeModulesRoot = (root) => /[\\/]node_modules$/.test(root);
 
-    Watcher.prototype.watch = function watch(onChange) {
-      const allRoots = this._options.roots;
-      const restore = () => {
-        this._options.roots = allRoots;
-      };
-      this._options.roots = allRoots.filter((root) => !isNodeModulesRoot(root));
-      return originalWatch.call(this, onChange).then(
-        (result) => {
-          restore();
-          return result;
-        },
-        (error) => {
-          restore();
-          throw error;
-        },
-      );
+    FallbackWatcher.prototype.startWatching = function startWatching() {
+      if (isNodeModulesRoot(this.root)) return Promise.resolve();
+      return originalStartWatching.call(this);
     };
   } catch (error) {
     // A Metro upgrade can move this internal. Losing the optimisation is a slow
