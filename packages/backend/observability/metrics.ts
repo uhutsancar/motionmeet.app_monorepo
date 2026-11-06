@@ -68,5 +68,16 @@ export const scheduledTaskDuration = new client.Histogram({
   registers: [registry],
 });
 
+/**
+ * Owner-cache invalidations that still failed after their retries. Each one
+ * means some cached page may stay stale until its own TTL (feed 30 s, nearby
+ * 45 s, profile 60 s); see D-10 in the 2026-11 audit.
+ */
+export const cacheInvalidationFailures = new client.Counter({
+  name: "motionmeet_cache_invalidation_failures_total",
+  help: "Cache invalidations that failed after every retry.",
+  registers: [registry],
+});
+
 /** `2xx`-style class, so the status label has five values instead of sixty. */
 export const statusClass = (status: number): string => `${Math.floor(status / 100)}xx`;

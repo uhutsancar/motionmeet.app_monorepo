@@ -9,7 +9,7 @@ Status values: `NOT_STARTED`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-ENV`
 | ID | Durum | Commit(ler) | Test(ler) | Kalan sınırlama |
 | --- | --- | --- | --- | --- |
 | WP-00 | DONE | see `git log --grep WP-00` | `tests/integration/auditRegressions.test.ts` (R1–R7 as `todo`) | Baseline: lint 4/4, typecheck 6/6, unit 89/89, integration 21/21 |
-| WP-01 | NOT_STARTED | | | |
+| WP-01 | DONE | see `git log --grep WP-01` | `integration/cacheCore.test.ts` (8), `cacheCoreWithoutRedis.test.ts` (3), R4 in `auditRegressions`, `environment.test.ts` | Mixed-version window during the deploy that switches to `v2`: ≤ TTL staleness unless `CACHE_READS_ENABLED=false` is used (DEPLOYMENT.md). Invalidation is skipped in processes that never connect to Redis (worker/scheduler) — today all cache-relevant writes are in the API |
 | WP-02 | NOT_STARTED | | | |
 | WP-03 | NOT_STARTED | | | |
 | WP-04 | NOT_STARTED | | | |
@@ -47,6 +47,13 @@ Status values: `NOT_STARTED`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-ENV`
 
 - **WP-07 — D-04 varsayılanı uygulandı:** `canViewContent=false` iken `weight`, `height`, `statistics` → `null`.
   `User` (the owner's own record) keeps them non-nullable in the shared types.
+- **WP-01 — D-10 varsayılanı uygulandı:** invalidation = first attempt + 3 retries (50/150/400 ms), then
+  `cache_invalidation_failed` log + `motionmeet_cache_invalidation_failures_total`; the mutation stays successful.
+- **WP-01 — plan dışı karar:** the custom-exercise flag moved from one global hash (`maxFields` 10 000) to one
+  owner per member (`exercises:custom-owner:<id>`), so `createExercise` can retire it race-safely instead of writing
+  `true` over a possibly racing `false`. More restrictive/safer than the plan's "may stay global".
+- **WP-01 — plan dışı karar:** `OwnerRead.generation` is `number | null` (null = no usable cache, nothing is
+  written) and `OwnerRead` carries `hit`, so a cached `false`/`null` value is distinguishable from a miss.
 
 ## Environment-only work (Ek B)
 

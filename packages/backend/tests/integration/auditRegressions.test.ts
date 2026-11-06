@@ -6,7 +6,7 @@ import { Writable } from "node:stream";
 import { setTimeout as sleep } from "node:timers/promises";
 import test from "node:test";
 import { connectDatabase, database, disconnectDatabase } from "../../configs/database.js";
-import { disconnectRedis, getCachedField, initializeRedis, setCachedField } from "../../configs/redis.js";
+import { disconnectRedis, initializeRedis, readOwnerField, writeOwnerField } from "../../configs/redis.js";
 import { createPost, deletePostById, getPostById } from "../../services/postService.js";
 import { getUserProfileAndPosts, updateUser } from "../../services/userService.js";
 import { deletePosition, listNearbyUsers, savePosition, updateNearbySettings } from "../../services/nearbyService.js";
@@ -90,14 +90,15 @@ test("R7 / WP-03: a deleted account leaves other members' nearby results", { tod
   assert.ok(!(await nearbyIds(a)).includes(b));
 });
 
-test("R4 / WP-01: a cached field expires on its own TTL, not the hash's", { todo: "WP-01" }, async () => {
+test("R4 / WP-01: a cached field expires on its own TTL, not the hash's", async () => {
   const owner = `audit-r4:${runId}`;
-  await setCachedField(owner, "page1", { page: 1 }, 2);
+  const { generation } = await readOwnerField(owner, "page1");
+  await writeOwnerField(owner, "page1", { page: 1 }, 2, generation);
   await sleep(1_000);
-  await setCachedField(owner, "page2", { page: 2 }, 2);
+  await writeOwnerField(owner, "page2", { page: 2 }, 2, generation);
   await sleep(1_300);
-  assert.equal(await getCachedField(owner, "page1"), null, "page1 outlived its own TTL");
-  assert.deepEqual(await getCachedField(owner, "page2"), { page: 2 });
+  assert.equal((await readOwnerField(owner, "page1")).hit, false, "page1 outlived its own TTL");
+  assert.deepEqual((await readOwnerField(owner, "page2")).value, { page: 2 });
 });
 
 test("R5 / WP-04: an account export completes as valid JSON", { todo: "WP-04" }, async () => {

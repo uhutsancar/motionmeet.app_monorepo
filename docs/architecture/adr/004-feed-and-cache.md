@@ -37,6 +37,42 @@ Cost scales with the audience, not the table. A viewer following thousands
 of accounts makes thousands of short index walks — fine at today's follow
 cap, and the point to revisit before raising it.
 
+## Cache entries: envelope and owner generation (2026-11 audit, WP-01)
+
+Two defects of the plain per-owner hash were reproduced against real Redis:
+a hash has a single TTL, so refreshing it on every write kept old fields alive
+past their own TTL; and `DEL` loses a race — a request that read PostgreSQL
+before a write committed could store its result after that write's `DEL`, and
+the stale page (possibly one the viewer may no longer see) was served until
+the TTL.
+
+- Every field is stored as an envelope `{ v, g, x, d }`: format version, the
+  owner's generation when the source data was read, absolute expiry, data.
+  A read is a hit only when all three match (`v` current, `x` in the future,
+  `g` equal to the owner's current generation).
+- Invalidation is `MULTI INCR gen:<owner>; EXPIRE gen:<owner> 86400; DEL <owner>`.
+  The generation bump is what makes it race-safe; `DEL` only frees memory.
+- `cachedOwnerField` is the only read-through path. Its single-flight key
+  carries the generation, so a request that starts after an invalidation never
+  joins a computation that began before it.
+- The key prefix moved from `motionmeet:v1:` to `motionmeet:v2:`; old entries
+  are never read.
+
+**Guarantee (D-10).** When Redis is reachable and the invalidation succeeds, a
+read that starts after the mutation's successful response does not see the old
+data. The invalidation is retried synchronously (first attempt + 3 retries at
+50/150/400 ms); if it still fails, the mutation stays successful (it is
+committed), `motionmeet_cache_invalidation_failures_total` is incremented and
+`cache_invalidation_failed` is logged, and staleness is bounded by the entry's
+TTL: feed 30 s, nearby 45 s, profile 60 s. This includes writes that narrow
+privacy (unfollow, removed connection, account going private); the TTL is the
+accepted upper bound for that failure case. A Redis read error is always a
+miss, never a "last known" value. A stronger guarantee would need a database
+check on every read, which is what the cache exists to avoid.
+
+Processes that never connect to Redis (worker, scheduler) have no cache and
+skip invalidation; all cache-relevant writes happen in the API process.
+
 ## Consequences
 
 An epoch bump turns the next request of every active member into a cache miss.

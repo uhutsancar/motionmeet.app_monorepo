@@ -3,6 +3,8 @@ import { RedisStore } from "rate-limit-redis";
 import { MemoryStore, type Options as RateLimitOptions, type Store } from "express-rate-limit";
 import { loadEnvironment } from "./environment.js";
 import { logger, safeErrorMetadata } from "../utils/logger.js";
+import { cacheInvalidationFailures } from "../observability/metrics.js";
+import { singleFlight } from "../utils/singleFlight.js";
 
 type Client = RedisClientType;
 interface Clients { client: Client; publisher: Client; subscriber: Client }
@@ -27,6 +29,13 @@ let redisPublisher: Client | null = null;
 let redisSubscriber: Client | null = null;
 let redisInitialization: Promise<{ client: Client; publisher: Client; subscriber: Client } | null> | null = null;
 let redisReachedReady = false;
+/**
+ * Only the API process connects to Redis (server.ts). Worker, scheduler and
+ * tests that never ask for it have no cache of their own to serve, so an
+ * invalidation there is skipped rather than retried against a client that will
+ * never exist.
+ */
+let redisRequested = false;
 const localLimits = new Map<string, LocalLimit>();
 const LOCAL_LIMIT_SWEEP_SIZE = 1_000;
 
@@ -71,6 +80,7 @@ const baseClient = async (): Promise<Client | null> => {
 };
 
 export const initializeRedis = async (): Promise<Clients | null> => {
+  redisRequested = true;
   const client = await baseClient();
   if (!client) return null;
   if (redisPublisher?.isReady && redisSubscriber?.isReady && client.isReady) return { client, publisher: redisPublisher, subscriber: redisSubscriber };
@@ -222,7 +232,13 @@ class AdaptiveRateLimitStore implements Store {
 
 export const createRateLimitStore = (prefix: string): Store => new AdaptiveRateLimitStore(prefix);
 
-const CACHE_PREFIX = "motionmeet:v1:";
+/**
+ * `v2` since the 2026-11 audit: owner-addressed entries are stored in a
+ * versioned envelope (below), so anything written in the old shape must never
+ * be read back. Changing the prefix retires every old key at once without a
+ * migration; the cost is one cold cache on the deploy that changes it.
+ */
+const CACHE_PREFIX = "motionmeet:v2:";
 
 export const getCachedJson = async <T>(key: string): Promise<T | null> => {
   const client = getRedisClient();
@@ -242,7 +258,7 @@ export const setCachedJson = async (key: string, value: unknown, ttlSeconds: num
  *
  * Everything that used to be invalidated by prefix now lives as a field inside
  * one hash per owner - one member's feed, one profile, one member's exercise
- * list. Dropping it is a single `DEL`, which is what makes a write cheap.
+ * list. Dropping it is O(1), which is what makes a write cheap.
  *
  * The prefix scan this replaced was neither: Redis applies `MATCH` *after*
  * walking a key, so every `SCAN ... MATCH feed:*` toured the entire keyspace,
@@ -250,27 +266,131 @@ export const setCachedJson = async (key: string, value: unknown, ttlSeconds: num
  * profile update in the system. A like storm on one post therefore swept every
  * member's cached feed and sent all of them back to PostgreSQL at once.
  *
+ * ## Why every field carries an envelope
+ *
+ * Two defects of the plain hash were reproduced in the 2026-11 audit:
+ *
+ * - A hash has one TTL. Refreshing it on every write kept a field written
+ *   minutes ago alive for as long as its siblings kept being written, so a
+ *   page outlived its own TTL (R4), and the global custom-exercise flag hash
+ *   never expired at all on a busy system.
+ * - `DEL` alone loses a race. A request that missed the cache and read
+ *   PostgreSQL *before* a write committed could store its result *after* that
+ *   write's invalidation; the stale page was then served until the next
+ *   invalidation or the TTL - including after an unfollow or a removed
+ *   connection, where the stale page is a privacy leak.
+ *
+ * So each field is stored as `{ v, g, x, d }`: a format version, the owner's
+ * generation at the time the source data was read, an absolute expiry, and the
+ * data. A read is a hit only if the version matches, the expiry is in the
+ * future, and the generation equals the owner's current one. Invalidation
+ * increments the generation (and drops the hash to free memory), so a write
+ * that raced it lands under an old generation and is never served.
+ *
+ * `x` is computed from the writing replica's clock; small skew between
+ * replicas shifts an entry's life by that much and is accepted.
+ *
+ * Every TTL used with these helpers must stay below `GENERATION_TTL_SECONDS`:
+ * a generation key that expires reads as 0 again, which is only safe because
+ * every entry written under an earlier 0 has long expired by its own `x`.
+ *
  * `maxFields` keeps one owner from accumulating a cursor's worth of fields
  * faster than the TTL clears them; past the cap the hash is rebuilt rather than
  * grown.
  */
+const ENVELOPE_VERSION = 2;
+const GENERATION_TTL_SECONDS = 86_400;
 const ownerKey = (owner: string): string => `${CACHE_PREFIX}${owner}`;
+const generationKey = (owner: string): string => `${CACHE_PREFIX}gen:${owner}`;
 
-export const getCachedField = async <T>(owner: string, field: string): Promise<T | null> => {
+interface CacheEnvelope<T> { v: number; g: number; x: number; d: T }
+
+/**
+ * `CACHE_READS_ENABLED=false` turns the owner cache off on this replica - no
+ * reads and no fills - while invalidations keep running. It exists for the
+ * mixed-version window of a rolling deploy that changes the cache format: old
+ * replicas only invalidate their own keys, so new replicas should not serve
+ * entries that an old replica's privacy change cannot retire. See
+ * docs/operations/DEPLOYMENT.md.
+ */
+const cacheServingEnabled = (): boolean => loadEnvironment().cacheReadsEnabled;
+
+export interface OwnerRead<T> {
+  hit: boolean;
+  value: T | null;
+  /**
+   * The owner's generation when the field was read; data read *after* this
+   * call is written back with it (`writeOwnerField`). Null when there is no
+   * usable cache - no Redis, a Redis error, serving disabled - and then
+   * nothing is written.
+   */
+  generation: number | null;
+}
+
+const MISS_WITHOUT_CACHE: OwnerRead<never> = Object.freeze({ hit: false, value: null, generation: null });
+
+/** One round trip: `MULTI GET gen:<owner>; HGET <owner> <field>; EXEC`. */
+export const readOwnerField = async <T>(owner: string, field: string): Promise<OwnerRead<T>> => {
   const client = getRedisClient();
-  if (!client) return null;
-  try { const raw = await client.hGet(ownerKey(owner), field); return raw ? JSON.parse(raw) as T : null; }
-  catch { return null; }
+  if (!client || !cacheServingEnabled()) return MISS_WITHOUT_CACHE;
+  try {
+    const [rawGeneration, raw] = await client.multi().get(generationKey(owner)).hGet(ownerKey(owner), field).exec() as unknown as [string | null, string | null];
+    const generation = Number(rawGeneration) || 0;
+    if (!raw) return { hit: false, value: null, generation };
+    const envelope = JSON.parse(raw) as Partial<CacheEnvelope<T>>;
+    const valid = envelope.v === ENVELOPE_VERSION && envelope.g === generation && typeof envelope.x === "number" && envelope.x > Date.now();
+    return valid ? { hit: true, value: envelope.d as T, generation } : { hit: false, value: null, generation };
+  } catch {
+    // A Redis error is always a miss, never "the last value we knew".
+    return MISS_WITHOUT_CACHE;
+  }
 };
 
-export const setCachedField = async (owner: string, field: string, value: unknown, ttlSeconds: number, maxFields = 64): Promise<void> => {
+/**
+ * Stores `value` under the generation observed *before* the data was read, so
+ * a write that raced an invalidation is stored but never served.
+ */
+export const writeOwnerField = async (owner: string, field: string, value: unknown, ttlSeconds: number, generation: number | null, maxFields = 64): Promise<void> => {
   const client = getRedisClient();
-  if (!client) return;
+  if (!client || generation === null || !cacheServingEnabled()) return;
   const key = ownerKey(owner);
+  const envelope: CacheEnvelope<unknown> = { v: ENVELOPE_VERSION, g: generation, x: Date.now() + ttlSeconds * 1000, d: value };
   try {
+    // Eviction only: dropping the hash frees memory but must not bump the
+    // generation, or a full hash would retire entries nobody changed.
     if (await client.hLen(key) >= maxFields) await client.del(key);
-    await client.multi().hSet(key, field, JSON.stringify(value)).expire(key, ttlSeconds).exec();
+    // The hash TTL is only a memory bound now; each field's own `x` decides
+    // whether it is served, so refreshing it here no longer extends anything.
+    await client.multi().hSet(key, field, JSON.stringify(envelope)).expire(key, ttlSeconds).exec();
   } catch { /* cache is optional */ }
+};
+
+/**
+ * Read-through for every owner-addressed cache: a hit is returned as is; a
+ * miss is computed once per process (single-flight) and stored under the
+ * generation read before the computation started.
+ *
+ * The single-flight key includes that generation. Without it, a request that
+ * arrives after an invalidation could join a computation that began before it
+ * and be handed the pre-invalidation result.
+ */
+export const cachedOwnerField = async <T>(
+  owner: string, field: string, ttlSeconds: number, compute: () => Promise<T>,
+  options: { maxFields?: number; cacheIf?: (value: T) => boolean } = {},
+): Promise<T> => {
+  const first = await readOwnerField<T>(owner, field);
+  if (first.hit) return first.value as T;
+  if (first.generation === null) return compute();
+  return singleFlight(`${owner}:${first.generation}:${field}`, async () => {
+    // Somebody else may have filled the entry while this caller waited.
+    const again = await readOwnerField<T>(owner, field);
+    if (again.hit) return again.value as T;
+    const value = await compute();
+    if (!options.cacheIf || options.cacheIf(value)) {
+      await writeOwnerField(owner, field, value, ttlSeconds, again.generation, options.maxFields);
+    }
+    return value;
+  });
 };
 
 /**
@@ -295,11 +415,44 @@ export const bumpCacheEpoch = async (name: string): Promise<void> => {
   catch (error: unknown) { logger.warn("cache_epoch_bump_failed", { epoch: name, ...safeErrorMetadata(error) }); }
 };
 
-/** O(1) invalidation: one `DEL` per owner, no keyspace walk. */
+/**
+ * Invalidation retries synchronously, before the mutation answers (D-10 in the
+ * 2026-11 audit): a first attempt and three retries 50, 150 and 400 ms apart,
+ * about 0.6 s at worst. The mutation itself stays successful - it is committed
+ * - so a final failure is logged and counted, and the entry then lives at most
+ * its own TTL (feed 30 s, nearby 45 s, profile 60 s).
+ */
+const INVALIDATION_RETRY_DELAYS_MS = [50, 150, 400] as const;
+const wait = (ms: number): Promise<void> => new Promise((resolve) => { setTimeout(resolve, ms); });
+
+/**
+ * O(1) per owner, one `MULTI`: `INCR gen`, `EXPIRE gen`, `DEL hash`. The
+ * generation bump is what makes the invalidation race-safe (see the envelope
+ * notes above); the `DEL` only frees memory.
+ *
+ * Guarantee: when Redis is reachable and this resolves without logging
+ * `cache_invalidation_failed`, every read that *starts* after it resolves sees
+ * fresh data for these owners. Without a configured Redis, or in a process that
+ * never connected to it, there is no cache here and nothing to do.
+ */
 export const invalidateCacheOwners = async (...owners: string[]): Promise<void> => {
-  const client = getRedisClient();
-  if (!client || !owners.length) return;
-  try { await client.del(owners.map(ownerKey)); } catch { /* cache is optional */ }
+  if (!owners.length || !loadEnvironment().redisUrl || !redisRequested) return;
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt <= INVALIDATION_RETRY_DELAYS_MS.length; attempt += 1) {
+    if (attempt > 0) await wait(INVALIDATION_RETRY_DELAYS_MS[attempt - 1]!);
+    const client = getRedisClient();
+    if (!client) { lastError = new Error("Redis client is not ready"); continue; }
+    try {
+      const transaction = client.multi();
+      for (const owner of owners) transaction.incr(generationKey(owner)).expire(generationKey(owner), GENERATION_TTL_SECONDS).del(ownerKey(owner));
+      await transaction.exec();
+      return;
+    } catch (error: unknown) {
+      lastError = error;
+    }
+  }
+  cacheInvalidationFailures.inc();
+  logger.warn("cache_invalidation_failed", { owners: owners.length, ...safeErrorMetadata(lastError) });
 };
 
 /**

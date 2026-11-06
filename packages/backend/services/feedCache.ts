@@ -34,6 +34,16 @@ import { bumpCacheEpoch, getCacheEpoch, invalidateCacheOwners } from "../configs
  *   those bump the audience epoch instead. The epoch is part of every feed
  *   field name, so one `INCR` retires every cached page at once. These writes
  *   are rare next to reads, which is what makes a global miss acceptable.
+ *
+ * ## What "dropped" means
+ *
+ * Dropping an owner bumps its generation in Redis (configs/redis.ts). A page
+ * that a concurrent request read from PostgreSQL before the write committed,
+ * and stores only after this invalidation, lands under the old generation and
+ * is never served - so the drop holds even against that race, which a plain
+ * `DEL` did not. When Redis is reachable and the invalidation succeeds, a read
+ * that starts after the write has answered sees fresh data; if it fails after
+ * its retries, the entry lives at most its TTL (D-10 in the 2026-11 audit).
  */
 export const FEED_CACHE_TTL_SECONDS = 30;
 export const PROFILE_CACHE_TTL_SECONDS = 60;

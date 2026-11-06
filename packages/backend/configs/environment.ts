@@ -32,6 +32,12 @@ export interface Environment {
    * shared rate limits; there the instance is not ready without it.
    */
   readinessRequiresRedis: boolean;
+  /**
+   * Serve and fill the owner-addressed Redis cache. Invalidations run either
+   * way; `false` is for the mixed-version window of a rolling deploy that
+   * changes the cache format (docs/operations/DEPLOYMENT.md).
+   */
+  cacheReadsEnabled: boolean;
 }
 
 export type ProcessRole = "api" | "worker" | "scheduler";
@@ -170,6 +176,7 @@ export const loadEnvironment = (): Environment => {
     rabbitmqUrl: rabbitmqUrlValue,
     metricsPort: metricsPortValue ? integerValue("METRICS_PORT", 9464, 1, 65_535) : null,
     readinessRequiresRedis: booleanValue("READINESS_REQUIRE_REDIS", false),
+    cacheReadsEnabled: booleanValue("CACHE_READS_ENABLED", true),
   };
   return cachedEnvironment;
 };

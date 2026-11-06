@@ -1,5 +1,5 @@
 import { database, withTransaction } from "../configs/database.js";
-import { getCachedField, invalidateCacheOwners, setCachedField } from "../configs/redis.js";
+import { cachedOwnerField, invalidateCacheOwners } from "../configs/redis.js";
 import type { Row } from "../db/types.js";
 import { serializeExercise, type InternalExercise } from "../repositories/entities.js";
 import { getComputedExerciseSessions, getComputedExerciseStats, getComputedPersonalRecords } from "./workoutAnalyticsService.js";
@@ -20,24 +20,24 @@ export interface ExerciseListOptions {
  *
  * Members with custom exercises still get their own owner key, so nobody sees
  * somebody else's custom entry. Which of the two applies is a cached boolean,
- * refreshed only when that member writes a custom exercise.
+ * retired only when that member writes a custom exercise.
+ *
+ * The boolean used to be one field in a single global hash shared by every
+ * member. Each write refreshed that hash's TTL, so on a busy system no flag
+ * ever expired (NEW-04 in the 2026-11 audit), and it could only be dropped for
+ * everyone at once. It now has an owner per member, retired like any other.
  */
 const SHARED_EXERCISE_OWNER = "exercises:list:shared";
-const CUSTOM_OWNER_FLAG = "exercises:custom-owner";
+const customOwnerFlag = (userId: string): string => `exercises:custom-owner:${userId}`;
 const CATALOGUE_TTL_SECONDS = 300;
 const DETAIL_TTL_SECONDS = 900;
 const CUSTOM_OWNER_TTL_SECONDS = 3_600;
 
 export const exerciseListOwner = (userId: string): string => `exercises:list:${userId}`;
 
-const ownsCustomExercises = async (userId: string): Promise<boolean> => {
-  const cached = await getCachedField<boolean>(CUSTOM_OWNER_FLAG, userId);
-  if (cached !== null) return cached;
-  const row = await database.selectFrom("exercises").select("id").where("is_custom", "=", true).where("created_by", "=", userId).executeTakeFirst();
-  const owns = Boolean(row);
-  await setCachedField(CUSTOM_OWNER_FLAG, userId, owns, CUSTOM_OWNER_TTL_SECONDS, 10_000);
-  return owns;
-};
+const ownsCustomExercises = (userId: string): Promise<boolean> =>
+  cachedOwnerField(customOwnerFlag(userId), "owns", CUSTOM_OWNER_TTL_SECONDS, async () =>
+    Boolean(await database.selectFrom("exercises").select("id").where("is_custom", "=", true).where("created_by", "=", userId).executeTakeFirst()));
 
 const catalogueOwner = async (userId: string): Promise<string> =>
   await ownsCustomExercises(userId) ? exerciseListOwner(userId) : SHARED_EXERCISE_OWNER;
@@ -58,8 +58,12 @@ export const getExercisesList = async (options: ExerciseListOptions): Promise<{ 
   const equipment = typeof options.equipment === "string" ? options.equipment : "";
   const owner = await catalogueOwner(options.userId);
   const field = `${search}:${muscleGroup}:${equipment}:${options.limitNum}:${options.skipNum}:${options.cursor?.name ?? ""}:${options.cursor?.id ?? ""}:${Boolean(options.includeTotal)}`;
-  const cached = await getCachedField<{ exercises: InternalExercise[]; total: number | null; nextCursor: string | null }>(owner, field);
-  if (cached) return cached;
+  // The shared catalogue is browsed with many filter combinations, so it gets a
+  // wider field cap than a single member's feed would need.
+  return cachedOwnerField(owner, field, CATALOGUE_TTL_SECONDS, () => queryExercisesList(options, search, muscleGroup, equipment), { maxFields: 512 });
+};
+
+const queryExercisesList = async (options: ExerciseListOptions, search: string, muscleGroup: string, equipment: string): Promise<{ exercises: InternalExercise[]; total: number | null; nextCursor: string | null }> => {
   let query = database.selectFrom("exercises").selectAll().where((expression) => expression.or([
     expression("is_custom", "=", false), expression.and([expression("is_custom", "=", true), expression("created_by", "=", options.userId)]),
   ]));
@@ -86,25 +90,20 @@ export const getExercisesList = async (options: ExerciseListOptions): Promise<{ 
     if (equipment && equipment !== "All Equipment") countQuery = countQuery.where("equipment", "=", equipment);
     total = Number((await countQuery.executeTakeFirst())?.count ?? 0);
   }
-  const result = { exercises, total, nextCursor };
-  // The shared catalogue is browsed with many filter combinations, so it gets a
-  // wider field cap than a single member's feed would need.
-  await setCachedField(owner, field, result, CATALOGUE_TTL_SECONDS, 512);
-  return result;
+  return { exercises, total, nextCursor };
 };
 
 export const getExerciseById = async (id: string, userId: string): Promise<InternalExercise | null> => {
   const shared = (await catalogueOwner(userId)) === SHARED_EXERCISE_OWNER;
   const detailOwner = shared ? "exercises:detail:shared" : `exercises:detail:${userId}`;
-  const cached = await getCachedField<InternalExercise>(detailOwner, id);
-  if (cached) return cached;
-  const row = await database.selectFrom("exercises").selectAll().where("id", "=", id).where((expression) => expression.or([
-    expression("is_custom", "=", false), expression("created_by", "=", userId),
-  ])).executeTakeFirst();
-  if (!row) return null;
-  const [exercise] = await hydrateExercises([row]);
-  if (exercise) await setCachedField(detailOwner, id, exercise, DETAIL_TTL_SECONDS, 2_048);
-  return exercise ?? null;
+  return cachedOwnerField(detailOwner, id, DETAIL_TTL_SECONDS, async () => {
+    const row = await database.selectFrom("exercises").selectAll().where("id", "=", id).where((expression) => expression.or([
+      expression("is_custom", "=", false), expression("created_by", "=", userId),
+    ])).executeTakeFirst();
+    if (!row) return null;
+    const [exercise] = await hydrateExercises([row]);
+    return exercise ?? null;
+  }, { maxFields: 2_048, cacheIf: (exercise) => exercise !== null });
 };
 
 interface NewExerciseInput { name: string; muscleGroup?: unknown; equipment?: unknown; target?: unknown; category?: unknown; secondary_muscles?: unknown; imageUrl?: unknown; gifUrl?: unknown; userId: string }
@@ -122,10 +121,10 @@ export const createExercise = async (input: NewExerciseInput): Promise<InternalE
     for (const [position, muscle] of secondary.entries()) await transaction.insertInto("exercise_secondary_muscles").values({ exercise_id: created.id, muscle, position }).execute();
     return created;
   });
-  // Only this member's view of the catalogue changed. Dropping the cached
-  // "owns custom exercises" flag moves them off the shared entry onto their own.
-  await invalidateCacheOwners(exerciseListOwner(input.userId), `exercises:detail:${input.userId}`);
-  await setCachedField(CUSTOM_OWNER_FLAG, input.userId, true, CUSTOM_OWNER_TTL_SECONDS, 10_000);
+  // Only this member's view of the catalogue changed. Retiring the cached
+  // "owns custom exercises" flag moves them off the shared entry onto their own
+  // at the next read, which finds the committed row.
+  await invalidateCacheOwners(exerciseListOwner(input.userId), `exercises:detail:${input.userId}`, customOwnerFlag(input.userId));
   return serializeExercise(row, secondary);
 };
 

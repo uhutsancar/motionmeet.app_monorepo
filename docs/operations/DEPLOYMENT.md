@@ -28,6 +28,7 @@ capabilities dropped, `no-new-privileges`, non-root user, `tini` as PID 1.
 | `METRICS_PORT` | unset | private ops listener; keep it off the proxy |
 | `READINESS_REQUIRE_REDIS` | `false` | set `true` with more than one API replica |
 | `MOTIONMEET_PROCESS_ROLE` | `api` | set by the entry points; names DB connections and metrics |
+| `CACHE_READS_ENABLED` | `true` | `false` stops this replica serving and filling the owner cache (invalidations still run); see "Cache format changes" below |
 
 ## Connection budget
 
@@ -46,6 +47,24 @@ scaling any of them.
    5xx ratio, `motionmeet_events_consumed_total{outcome="dead"}`.
 4. Roll back by redeploying the previous tag. The schema stays (expand-only);
    see RUNBOOKS.md for migration `014`'s down path if it is ever needed.
+
+## Cache format changes
+
+The release that introduced the cache envelope (2026-11 audit, WP-01) moved
+the Redis key prefix from `motionmeet:v1:` to `motionmeet:v2:`:
+
+- **Cold cache once.** No `v1` entry is read again, so right after the deploy
+  every feed, profile, nearby and exercise read is a miss. Single-flight keeps
+  that to one query per page per replica, but deploy it outside peak hours.
+  `v1` keys expire on their own TTLs; nothing needs deleting.
+- **Mixed-version window.** During a rolling deploy, old replicas invalidate
+  only `v1` keys and new replicas only `v2` keys. A privacy-narrowing write
+  (unfollow, account going private, post deleted) handled by an old replica
+  therefore does not retire what a new replica has cached: that entry can stay
+  stale for at most its TTL (≤ 60 s). That is the accepted bound. To remove it,
+  start the new replicas with `CACHE_READS_ENABLED=false` and set it back to
+  `true` (rolling restart) once no old replica is left; with serving off a
+  replica reads every request from PostgreSQL.
 
 ## Switching the outbox to RabbitMQ
 

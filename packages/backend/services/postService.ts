@@ -1,8 +1,7 @@
 import type { Post, PostType, PostVisibility } from "@motionmeet/shared";
 import { sql } from "kysely";
 import { database, withTransaction } from "../configs/database.js";
-import { getCachedField, setCachedField } from "../configs/redis.js";
-import { singleFlight } from "../utils/singleFlight.js";
+import { cachedOwnerField } from "../configs/redis.js";
 import { FEED_CACHE_TTL_SECONDS, feedAudienceEpoch, feedCacheOwner, invalidateOwnFeed, revokeFeedAudience } from "./feedCache.js";
 import { findHydratedPost, findPostAccessRecord, hydratePosts, type PostAccessRecord } from "../repositories/postRepository.js";
 import { canAccessPost as evaluatePostAccess } from "./accessControlService.js";
@@ -102,16 +101,14 @@ export const getFeedPostsForUser = async (userId: string, pagination: Pagination
   // The audience epoch leads the field so an access-narrowing write elsewhere
   // (an account going private, a deleted post) retires this page too.
   const field = `${await feedAudienceEpoch()}:${feedMode}:${pagination.rawCursor ?? "first"}:${pagination.limit}`;
-  const cached = await getCachedField<{ items: Post[]; nextCursor: string | null }>(owner, field);
-  if (cached) return cached;
 
   // A miss under load must cost one query, not one per waiting request: the
   // entry expiring while a thousand members are scrolling would otherwise send
-  // a thousand identical feed queries at PostgreSQL together.
-  return singleFlight(`${owner}:${field}`, async () => {
-    const fresh = await getCachedField<{ items: Post[]; nextCursor: string | null }>(owner, field);
-    if (fresh) return fresh;
-
+  // a thousand identical feed queries at PostgreSQL together. The read-through
+  // helper single-flights the miss and stores the page under the owner
+  // generation read before the query, so a page computed across an
+  // invalidation is never served.
+  return cachedOwnerField(owner, field, FEED_CACHE_TTL_SECONDS, async () => {
     const rows = feedMode === "following"
       ? await queryFollowingFeed(userId, pagination)
       : await queryDiscoverFeed(userId, pagination);
@@ -125,9 +122,7 @@ export const getFeedPostsForUser = async (userId: string, pagination: Pagination
         ? encodeCursor({ date: new Date(last.created_at).toISOString(), id: last.id })
         : encodeCursor({ rank: Number(last.discover_rank), id: last.id })
       : null;
-    const result = { items: hydrated, nextCursor };
-    await setCachedField(owner, field, result, FEED_CACHE_TTL_SECONDS);
-    return result;
+    return { items: hydrated, nextCursor };
   });
 };
 

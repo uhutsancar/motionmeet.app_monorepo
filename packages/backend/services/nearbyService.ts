@@ -7,7 +7,7 @@ import type {
 } from "@motionmeet/shared";
 import { DISTANCE_VISIBILITIES, NEARBY_SCOPES, NEARBY_SCOPE_METERS } from "@motionmeet/shared";
 import { database } from "../configs/database.js";
-import { getCachedField, invalidateCacheOwners, setCachedField } from "../configs/redis.js";
+import { cachedOwnerField, invalidateCacheOwners } from "../configs/redis.js";
 import { distanceMeters, withinRadius } from "./locationGeometry.js";
 import { describeCity, findNearestCity } from "./locationService.js";
 import { getRelationshipMap } from "./relationshipService.js";
@@ -203,9 +203,15 @@ export const listNearbyUsers = async (userId: string, requestedLimit = 20): Prom
   const limit = Math.min(Math.max(requestedLimit, 1), MAX_RESULTS);
   const owner = nearbyOwner(userId);
   const field = `${own.scope}:${limit}:${new Date(own.location_updated_at).getTime()}`;
-  const cached = await getCachedField<NearbyUser[]>(owner, field);
-  if (cached) return { users: cached, settings, reason: cached.length ? null : "no_results" };
+  const users = await cachedOwnerField(owner, field, RESULTS_CACHE_SECONDS, () => queryNearbyUsers(userId, own, limit));
+  return { users, settings, reason: users.length ? null : "no_results" };
+};
 
+const queryNearbyUsers = async (
+  userId: string,
+  own: { latitude: number; longitude: number; city_id: number | null; scope: NearbyScope },
+  limit: number,
+): Promise<NearbyUser[]> => {
   const freshAfter = new Date(Date.now() - FIX_VALIDITY_MS);
   const distance = distanceMeters("ul", own.latitude, own.longitude);
 
@@ -245,7 +251,7 @@ export const listNearbyUsers = async (userId: string, requestedLimit = 20): Prom
   // follow state instead of offering "Takip et" for someone already followed.
   const relationships = await getRelationshipMap(userId, rows.map((row) => row.id));
 
-  const users: NearbyUser[] = rows.map((row) => ({
+  return rows.map((row) => ({
     id: row.id,
     _id: row.id,
     full_name: row.full_name,
@@ -261,7 +267,4 @@ export const listNearbyUsers = async (userId: string, requestedLimit = 20): Prom
     lastActiveAt: new Date(row.location_updated_at).toISOString(),
     ...(relationships.get(row.id) ?? { isFollowing: false, isFollowedBy: false, requestSent: false, requestReceived: false }),
   }));
-
-  await setCachedField(owner, field, users, RESULTS_CACHE_SECONDS);
-  return { users, settings, reason: users.length ? null : "no_results" };
 };

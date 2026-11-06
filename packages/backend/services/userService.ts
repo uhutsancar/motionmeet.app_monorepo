@@ -1,7 +1,7 @@
 import { sql } from "kysely";
 import type { PublicUser, UserProfile } from "@motionmeet/shared";
 import { database, withTransaction } from "../configs/database.js";
-import { getCachedField, setCachedField } from "../configs/redis.js";
+import { cachedOwnerField } from "../configs/redis.js";
 import { PROFILE_CACHE_TTL_SECONDS, invalidateMember, profileCacheOwner, revokeFeedAudience } from "./feedCache.js";
 import type { Row } from "../db/types.js";
 import { serializeUser, toIsoString, type InternalUser } from "../repositories/entities.js";
@@ -221,15 +221,16 @@ export const removeConnection = async (userId: string, targetId: string): Promis
  * so the viewer is part of the field rather than dropped for a better hit rate.
  *
  * All of a profile's entries live under one owner key, so an edit or a follow
- * drops them for every viewer at once with a single `DEL`.
+ * retires them for every viewer at once with one generation bump.
  */
 export const getUserProfileAndPosts = async (profileId: string, requesterId: string, pagination: Pagination) => {
   const owner = profileCacheOwner(profileId);
   const field = `${requesterId}:${pagination.cursor?.date.toISOString() ?? "first"}:${pagination.cursor?.id ?? ""}:${pagination.limit}`;
-  const cached = await getCachedField<Awaited<ReturnType<typeof buildProfileAndPosts>>>(owner, field); if (cached) return cached;
-  const result = await buildProfileAndPosts(profileId, requesterId, pagination);
-  if (result) await setCachedField(owner, field, result, PROFILE_CACHE_TTL_SECONDS);
-  return result;
+  return cachedOwnerField(owner, field, PROFILE_CACHE_TTL_SECONDS, () => buildProfileAndPosts(profileId, requesterId, pagination), {
+    // A missing profile is not cached: an account created a moment later must
+    // not stay "not found" for a minute.
+    cacheIf: (result) => result !== null,
+  });
 };
 
 /**

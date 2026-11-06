@@ -8,6 +8,7 @@ const managedKeys = [
   "AWS_BUCKET_NAME", "IMAGEKIT_PUBLIC_KEY", "IMAGEKIT_PRIVATE_KEY", "IMAGEKIT_URL_ENDPOINT",
   "SMTP_USER", "SMTP_PASS", "SENDER_EMAIL", "ALLOW_INSECURE_REDIS_TLS",
   "OUTBOX_TRANSPORT", "RABBITMQ_URL", "ALLOW_INSECURE_RABBITMQ_TLS", "MOTIONMEET_PROCESS_ROLE", "METRICS_PORT",
+  "CACHE_READS_ENABLED",
 ] as const;
 const original = new Map(managedKeys.map((key) => [key, process.env[key]]));
 
@@ -29,7 +30,7 @@ const productionBase = (): void => {
   process.env.MEDIA_UPLOADS_ENABLED = "false";
   process.env.EMAIL_ENABLED = "false";
   // Whatever the developer's shell exports must not leak into these cases.
-  for (const key of ["OUTBOX_TRANSPORT", "RABBITMQ_URL", "ALLOW_INSECURE_RABBITMQ_TLS", "MOTIONMEET_PROCESS_ROLE", "METRICS_PORT"] as const) delete process.env[key];
+  for (const key of ["OUTBOX_TRANSPORT", "RABBITMQ_URL", "ALLOW_INSECURE_RABBITMQ_TLS", "MOTIONMEET_PROCESS_ROLE", "METRICS_PORT", "CACHE_READS_ENABLED"] as const) delete process.env[key];
   resetEnvironmentForTests();
 };
 
@@ -101,5 +102,16 @@ test("production Redis requires authentication and TLS", () => {
     assert.throws(() => loadEnvironment(), /password/);
     productionBase(); process.env.REDIS_URL = "redis://default:secret@redis:6379"; resetEnvironmentForTests();
     assert.throws(() => loadEnvironment(), /rediss/);
+  } finally { restore(); }
+});
+
+test("the owner cache serves by default and can be switched off for a deploy window", () => {
+  try {
+    productionBase();
+    assert.equal(loadEnvironment().cacheReadsEnabled, true);
+    process.env.CACHE_READS_ENABLED = "false"; resetEnvironmentForTests();
+    assert.equal(loadEnvironment().cacheReadsEnabled, false);
+    process.env.CACHE_READS_ENABLED = "sometimes"; resetEnvironmentForTests();
+    assert.throws(() => loadEnvironment(), /CACHE_READS_ENABLED/);
   } finally { restore(); }
 });
