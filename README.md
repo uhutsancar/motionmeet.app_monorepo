@@ -1,62 +1,142 @@
 # MotionMeet
 
-MotionMeet is a TypeScript social-fitness monorepo:
+**A social network for people who train.** Log workouts, build routines, track
+progress — and share it with the people you train with: posts, stories,
+direct messages and nearby athletes.
 
-- `packages/backend`: Express 5, PostgreSQL/Kysely, Redis, S3 and Socket.IO
-- `packages/web`: React 19, Vite and MUI
-- `packages/mobile`: React Native and Expo
-- `packages/shared`: shared API contracts, domain types and utilities
-- `tools/database-migration`: isolated, offline legacy-data import and verification utility
+[![CI](https://github.com/uhutsancar/motionmeet.app_monorepo/actions/workflows/ci.yml/badge.svg)](https://github.com/uhutsancar/motionmeet.app_monorepo/actions/workflows/ci.yml)
 
-## Prerequisites
+MotionMeet is a TypeScript monorepo with an Express/PostgreSQL backend, a React
+web app and a React Native (Expo) mobile app that share one contract package.
 
-- Node.js 22.23.4+ on the 22 line or 24.22.1+ on the 24 line (the October 2026
-  security releases). CI runs 22.23.4 and 24.22.1; the Docker images run
-  24.22.1. `corepack pnpm security:node` checks the binary on your PATH.
-- Corepack and pnpm 11.10
-- PostgreSQL 18 and Redis, or Docker Desktop
+---
 
-## Install and validate
+## Contents
+
+- [Features](#features)
+- [Architecture](#architecture)
+- [Tech stack](#tech-stack)
+- [Repository layout](#repository-layout)
+- [Getting started](#getting-started)
+- [Testing and quality gates](#testing-and-quality-gates)
+- [Deployment](#deployment)
+- [Documentation](#documentation)
+- [Security](#security)
+- [Licensing and data attribution](#licensing-and-data-attribution)
+
+## Features
+
+**Training**
+- Workout logging with sets, reps and weight; routines and folders
+- Exercise library with muscle groups, equipment and instructions; custom exercises
+- Statistics, personal records and per-exercise history
+- Body measurements
+- Shareable workout cards (rendered on the server as PNG)
+
+**Social**
+- Posts with text, photos, video or an attached workout; likes and comments
+- Stories with movable text overlays, viewers and reactions (24-hour lifetime)
+- Following with follow requests and private accounts; mutual connections
+- Real-time direct messages with typing indicators, read receipts and catch-up
+  after reconnecting
+- Activity notifications
+- Explore grid and people search
+- Nearby athletes by distance band — exact coordinates are never returned
+
+**Account and privacy**
+- Per-post visibility (public, followers, private) and profile privacy settings
+- Data export and permanent account deletion
+- Turkish and English, light and dark themes
+
+There are no paid tiers or in-app purchases. The mobile app has ad placements
+wired to Google's test ad units only.
+
+## Architecture
+
+One backend codebase, built into one image and run as separate processes:
+
+```
+   Web (React, static)            Mobile (Expo / React Native)
+            │   HTTPS / WSS               │
+            └───────────────┬─────────────┘
+                     Nginx (web container)
+                            │
+              ┌─────────────┴──────────────┐
+              │  api      Express + Socket.IO │──── Redis (cache, rate limits,
+              └─────────────┬──────────────┘          Socket.IO adapter)
+                            │
+                   PostgreSQL 18 (source of truth)
+                   domain rows + transactional outbox
+                            │
+          ┌─────────────────┴──────────────────┐
+          │ worker     outbox relay, consumers  │──── RabbitMQ (optional transport)
+          │ scheduler  housekeeping             │
+          └────────────────────────────────────┘
+          S3 (media originals) · ImageKit (transformed delivery)
+```
+
+- **PostgreSQL is the source of truth.** A change and the event announcing it
+  are written in one transaction (transactional outbox); events are delivered
+  afterwards, in-process or through RabbitMQ with publisher confirms, and every
+  consumer is idempotent.
+- **Uploads go straight to object storage.** Clients upload with presigned URLs;
+  the API verifies owner, size, stored type and the file's own signature before
+  attaching it; a media worker adds image and video metadata later.
+- **Privacy is enforced on every read.** Caches are invalidated when access
+  narrows, sockets are bound to their login session, and an automated
+  authorization sweep checks every resource type.
+- **Background work runs outside the API.** The scheduler holds a PostgreSQL
+  advisory lock per task; the worker drains the outbox continuously.
+
+The full picture, with the reasoning behind each choice, is in
+[docs/architecture](docs/architecture/TARGET_ARCHITECTURE.md) and its
+[ADRs](docs/architecture/adr).
+
+## Tech stack
+
+| Area | Technology |
+|---|---|
+| Backend | Node.js 22/24, Express 5, Socket.IO 4, Kysely, PostgreSQL 18, Redis, RabbitMQ (`amqplib`), `sharp`, FFmpeg (worker only), `prom-client` |
+| Web | React 19, Vite 7, React Router, MUI 7, Redux Toolkit, i18next |
+| Mobile | Expo SDK 58, React Native 0.88, React Navigation 7, React Native Paper, `expo-image`, `expo-video` |
+| Shared | TypeScript contracts, route constants, share-card rendering |
+| Tooling | pnpm workspaces, Turborepo, strict TypeScript, ESLint 9, Node test runner, Docker Compose, GitHub Actions, k6 |
+
+## Repository layout
+
+```
+packages/
+  backend/    API, worker and scheduler (entrypoints/), outbox and broker
+              (messaging/), migrations (db/), observability, tests
+  web/        React web app and its Nginx configuration
+  mobile/     Expo app
+  shared/     Contracts and utilities used by all three
+tools/
+  database-migration/   offline legacy-data import (never shipped with the API)
+infra/grafana/          importable Grafana dashboard
+scripts/                security gates, brand assets, load-test tooling
+docs/                   architecture, operations, quality, API contract
+```
+
+## Getting started
+
+### Prerequisites
+
+- Node.js **22.23.4+** (22 line) or **24.22.1+** (24 line) — `corepack pnpm
+  security:node` checks the binary on your PATH
+- Corepack with pnpm 11.10
+- Docker Desktop, or local PostgreSQL 18 and Redis
+
+### Install
 
 ```bash
 corepack enable
 corepack pnpm install --frozen-lockfile
-corepack pnpm lint
-corepack pnpm typecheck
-corepack pnpm test
-corepack pnpm build
 ```
 
-Every application package is strict TypeScript. Backend and shared tests run
-through `tsx`; web uses a Vite production build; mobile uses Expo export.
+### Configure
 
-`corepack pnpm test` runs unit tests only. The backend's PostgreSQL integration
-tests write data, so they run separately and only against a database whose name
-ends in `_test`:
-
-```bash
-docker compose -f docker-compose.test.yml up -d --wait postgres-test
-DATABASE_URL=postgresql://postgres:motionmeet-test@127.0.0.1:5433/motionmeet_test \
-  corepack pnpm --filter @motionmeet/backend migrate:postgres
-DATABASE_URL=postgresql://postgres:motionmeet-test@127.0.0.1:5433/motionmeet_test \
-  corepack pnpm --filter @motionmeet/backend test:integration
-docker compose -f docker-compose.test.yml down --remove-orphans
-```
-
-Security gates, also run in CI:
-
-```bash
-corepack pnpm security:node    # patched Node.js binary, Dockerfiles, CI, engines
-corepack pnpm security:audit   # pnpm audit --prod; high/critical fail unless excepted
-corepack pnpm test:scripts     # tests for the gates and the Node.js runtime
-```
-
-Accepted advisories live in `scripts/audit-exceptions.json`, each with a reason
-and an expiry date after which CI fails again.
-
-## Development without Docker
-
-Copy the package examples to untracked local environment files:
+Copy the examples to untracked files and fill them in:
 
 ```text
 packages/backend/.env.example -> packages/backend/.env
@@ -64,121 +144,149 @@ packages/web/.env.example     -> packages/web/.env
 packages/mobile/.env.example  -> packages/mobile/.env
 ```
 
-The backend requires `DATABASE_URL`, `REDIS_URL` and `JWT_SECRET`. Media and
-email capabilities remain disabled unless their explicit enable flags and
-credentials are supplied.
+The backend needs `DATABASE_URL`, `REDIS_URL` and `JWT_SECRET`. Media uploads
+and email stay off until their flags and credentials are set. Every variable is
+described in [`packages/backend/.env.example`](packages/backend/.env.example).
+
+### Run locally
 
 ```bash
-corepack pnpm dev
-corepack pnpm dev:backend
-corepack pnpm dev:web
-corepack pnpm dev:mobile
+corepack pnpm dev            # backend, web and mobile together
+corepack pnpm dev:backend    # API on :4000 (runs migrations on start)
+corepack pnpm dev:web        # Vite on :5173
+corepack pnpm dev:mobile     # Expo / Metro on :8081
 ```
 
-Defaults are API `4000`, web `5173`, PostgreSQL `5432`, Redis `6379`, and
-Expo/Metro `8081`.
+In local development the API also runs the housekeeping tasks and delivers
+outbox events itself, so nothing else is needed. To run the worker and
+scheduler as separate processes: `pnpm --filter @motionmeet/backend worker`
+and `... scheduler`.
 
-For LAN development with Expo Go on a physical device, use the local-network
-commands. They detect the active physical IPv4 adapter at startup, ignore common
-WSL/Hyper-V/VirtualBox/VPN adapters, and inject matching API, web, Metro and CORS
-origins without hard-coding the current Wi-Fi address:
+**Physical device on the same network:** `corepack pnpm dev:local` detects the
+active network adapter and wires API, web, Metro and CORS origins to it
+(`corepack pnpm local:ip` shows the address; `MOTIONMEET_LAN_IP` overrides it).
+
+### Run with Docker
 
 ```bash
-corepack pnpm local:ip
-corepack pnpm dev:local
-
-# Or run each service in a separate terminal:
-corepack pnpm dev:local:backend
-corepack pnpm dev:local:web
-corepack pnpm dev:local:mobile
+docker compose up --build --wait                                   # PostgreSQL, Redis, API, web
+docker compose --profile queue --profile workers up --build        # + RabbitMQ, worker, scheduler
+docker compose --profile mobile up --build                         # + Expo
 ```
 
-The defaults remain API `4000`, web `5173` and Expo `8081`. Set
-`MOTIONMEET_LAN_IP` only when automatic adapter selection needs an explicit
-override.
+### Reference data
 
-## Docker development
-
-The development stack starts PostgreSQL 18, Redis, the API and Vite. Database
-and cache health checks gate backend startup; the API applies idempotent Kysely
-migrations before accepting traffic.
-
-```bash
-docker compose up --build --wait
-```
-
-Expo is optional in Compose:
-
-```bash
-docker compose --profile mobile up --build
-```
-
-A physical device needs LAN-accessible `EXPO_PUBLIC_API_URL` and
-`EXPO_PUBLIC_WEB_URL` values.
-
-## Database migrations
-
-Apply the PostgreSQL schema directly with:
-
-```bash
-corepack pnpm --filter @motionmeet/backend migrate:postgres
-```
-
-Application startup also runs the same idempotent migration set unless
-`RUN_MIGRATIONS=false`. Existing installations use the isolated migration tool
-under `tools/database-migration`; it is not imported by or shipped with the
-production API. See [database operations](docs/database.md).
-
-## Location reference data
-
-The profile-location picker searches country, region and city records held in
-PostgreSQL. Import them once after migrating:
+Profile locations search a countries/regions/cities dataset kept in PostgreSQL.
+Import it once after migrating:
 
 ```bash
 corepack pnpm --filter @motionmeet/backend run import:locations
 ```
 
-The script downloads a pinned release of the Countries States Cities Database,
-keeps only the columns the app reads, and can be re-run to pick up a newer
-dataset — records that disappear upstream are deactivated rather than deleted so
-saved profile locations survive. Until it runs, location search simply returns
-no results.
+Proximity search uses PostGIS when available and an indexed bounding box
+otherwise; the schema is the same either way.
 
-Proximity search uses PostGIS where the extension is available and falls back to
-an indexed bounding box plus haversine where it is not; the schema is identical
-either way. The mode is logged at boot as `location_geometry_mode`.
-
-Both bundled datasets carry attribution obligations — see
-[LICENSES.md](docs/LICENSES.md) before shipping.
-
-## Docker production
-
-1. Copy `.env.production.example` to `.env.production`.
-2. Set managed `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `FRONTEND_URL` and
-   `CORS_ORIGINS`.
-3. Enable media/email only after their credentials are supplied.
-4. Validate, build and start:
+## Testing and quality gates
 
 ```bash
-docker compose -f docker-compose.prod.yml config
-docker compose -f docker-compose.prod.yml build
-docker compose -f docker-compose.prod.yml up -d
-docker compose -f docker-compose.prod.yml ps
+corepack pnpm lint
+corepack pnpm typecheck
+corepack pnpm test           # unit tests in every package
+corepack pnpm build
 ```
 
-Production intentionally uses external, authenticated, TLS-enabled PostgreSQL
-and Redis services. The backend image runs compiled JavaScript only; the web
-image serves static Vite output through unprivileged Nginx. Both containers are
-read-only and drop Linux capabilities.
+Backend integration tests run against disposable containers (the test database
+name must end in `_test`):
 
-Native iOS/Android binaries are built separately with the Expo/EAS workflow.
-See [production.md](docs/production.md) and [the API contract](docs/openapi.yaml).
+```bash
+docker compose -f docker-compose.test.yml up -d --wait postgres-test rabbitmq-test redis-test
+export DATABASE_URL=postgresql://postgres:motionmeet-test@127.0.0.1:5433/motionmeet_test \
+  RABBITMQ_URL=amqp://motionmeet:motionmeet-test@127.0.0.1:5673 \
+  REDIS_URL=redis://127.0.0.1:6381
+corepack pnpm --filter @motionmeet/backend migrate:postgres
+corepack pnpm --filter @motionmeet/backend test:integration
+docker compose -f docker-compose.test.yml down --remove-orphans
+```
 
-## Exercise media
+An end-to-end authorization sweep checks that one member can never read, change
+or delete another member's resources. Run it against a disposable stack only:
 
-Large media remains in S3/CDN storage. PostgreSQL stores only object keys,
-public URLs and metadata. See [exercises-dataset.md](docs/exercises-dataset.md).
+```bash
+E2E_BASE_URL=http://localhost:8088 corepack pnpm --filter @motionmeet/backend test:e2e
+```
 
-The exercise animations are Gym visual's property and their redistribution
-licence is still open, and is being handled as separate work — read
-[LICENSES.md §2b](docs/LICENSES.md) before a public release.
+Security gates, also enforced in CI:
+
+```bash
+corepack pnpm security:node    # patched Node.js in the toolchain, Dockerfiles and CI
+corepack pnpm security:audit   # dependency advisories (high/critical fail the build)
+corepack pnpm test:scripts     # tests for the gates themselves
+```
+
+Load-test tooling (synthetic data, query plans, k6) is in
+[`scripts/load`](scripts/load); results are recorded in
+[PERFORMANCE_BASELINE.md](docs/quality/PERFORMANCE_BASELINE.md).
+
+CI ([`ci.yml`](.github/workflows/ci.yml)) runs on every push to `main` and every
+pull request: security gates, lint and typecheck, unit tests on Node 22 and 24,
+integration tests against PostgreSQL, RabbitMQ and Redis, web and mobile
+builds with their size budgets, and production image builds. The authorization
+sweep and load tests need a running stack and are run by hand.
+
+## Deployment
+
+`docker-compose.prod.yml` runs the production topology from one backend image:
+a one-shot `migrate` job, the `backend` API, the `worker`, the `scheduler` and
+the `web` Nginx container — read-only filesystems, non-root users, all Linux
+capabilities dropped. PostgreSQL, Redis and RabbitMQ are expected as managed,
+authenticated, TLS-enabled services.
+
+```bash
+cp .env.production.example .env.production   # then fill it in
+docker compose -f docker-compose.prod.yml config
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+To rehearse the full topology on one machine with bundled data services:
+
+```bash
+MOTIONMEET_ENV_FILE=.env.production.example \
+  docker compose -f docker-compose.prod.yml -f docker-compose.local.yml up -d --build
+# http://localhost:8088
+```
+
+Mobile binaries are built and signed separately (Expo / EAS). Release
+checklists, environment variables and runbooks:
+[DEPLOYMENT.md](docs/operations/DEPLOYMENT.md),
+[production.md](docs/production.md),
+[RUNBOOKS.md](docs/operations/RUNBOOKS.md).
+
+## Documentation
+
+| Topic | Where |
+|---|---|
+| Architecture and decisions | [TARGET_ARCHITECTURE.md](docs/architecture/TARGET_ARCHITECTURE.md), [ADRs](docs/architecture/adr), [EVENT_CATALOG.md](docs/architecture/EVENT_CATALOG.md) |
+| Current state of the architecture work | [IMPLEMENTATION_STATUS.md](docs/architecture/IMPLEMENTATION_STATUS.md) |
+| Detailed system map (Turkish) | [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) |
+| HTTP API contract | [openapi.yaml](docs/openapi.yaml) |
+| Database rules and migrations | [database.md](docs/database.md) |
+| Operations | [DEPLOYMENT.md](docs/operations/DEPLOYMENT.md), [RUNBOOKS.md](docs/operations/RUNBOOKS.md), [observability.md](docs/architecture/observability.md) |
+| Quality | [TEST_MATRIX.md](docs/quality/TEST_MATRIX.md), [PERFORMANCE_BASELINE.md](docs/quality/PERFORMANCE_BASELINE.md) |
+| Security | [SECURITY_THREAT_MODEL.md](docs/architecture/SECURITY_THREAT_MODEL.md) |
+| Mobile release on a device | [mobile-qa-apk.md](docs/mobile-qa-apk.md) |
+| Monitoring dashboard | [infra/grafana](infra/grafana/README.md) |
+
+## Security
+
+- Secrets never belong in this repository: every `.env*` file except the
+  `*.example` templates is ignored, and examples contain placeholders only.
+- Please report suspected vulnerabilities privately to the maintainer instead of
+  opening a public issue.
+
+## Licensing and data attribution
+
+This repository does not include an open-source license; unless one is added,
+all rights are reserved by the author.
+
+Bundled reference datasets (exercises, locations) carry their own terms and
+attribution requirements — see [LICENSES.md](docs/LICENSES.md).
