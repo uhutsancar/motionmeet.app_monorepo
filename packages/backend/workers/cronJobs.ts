@@ -10,6 +10,38 @@ import { childContext, runWithContext } from "../observability/context.js";
 import { logger, safeErrorMetadata } from "../utils/logger.js";
 
 /**
+ * Retention periods (WP-13 of the 2026-11 audit; docs/database.md has the
+ * full table). Nothing below kept data for a reason once these have passed:
+ * an expired or revoked session cannot be refreshed, a used or expired reset
+ * token cannot be redeemed, a read notification was seen, and a fix that has
+ * not been refreshed for a month says nothing about where the member is.
+ */
+const SESSION_RETENTION_DAYS = 7;
+const USED_RESET_TOKEN_RETENTION_DAYS = 1;
+const READ_NOTIFICATION_RETENTION_DAYS = 180;
+/** D-07: coordinates not refreshed for this long are wiped; the settings stay. */
+const STALE_LOCATION_DAYS = 30;
+const RETENTION_BATCH = 1_000;
+const daysAgo = (days: number): Date => new Date(Date.now() - days * 86_400_000);
+
+/**
+ * Deletes in claimed batches (SKIP LOCKED), so a large backlog never holds a
+ * long transaction or blocks the rows other work is touching.
+ */
+const deleteInBatches = async (claim: (transaction: Parameters<Parameters<typeof withTransaction>[0]>[0]) => Promise<string[]>, remove: (transaction: Parameters<Parameters<typeof withTransaction>[0]>[0], ids: string[]) => Promise<unknown>): Promise<number> => {
+  let total = 0;
+  for (;;) {
+    const removed = await withTransaction(async (transaction) => {
+      const ids = await claim(transaction);
+      if (ids.length) await remove(transaction, ids);
+      return ids.length;
+    });
+    total += removed;
+    if (removed < RETENTION_BATCH) return total;
+  }
+};
+
+/**
  * Story expiry here is housekeeping only. Every read path already filters on
  * `expires_at > now()`, so a story is gone for viewers at the 24-hour mark
  * even when this sweep runs minutes late; the sweep reclaims rows and media.
@@ -54,6 +86,62 @@ const purgeTombstones = async (): Promise<void> => {
   if (purged) logger.info("message_tombstones_purged", { purged });
 };
 
+export const deleteExpiredSessions = async (): Promise<void> => {
+  const cutoff = daysAgo(SESSION_RETENTION_DAYS);
+  const deleted = await deleteInBatches(
+    async (transaction) => (await transaction.selectFrom("sessions").select("id")
+      .where((expression) => expression.or([expression("expires_at", "<", cutoff), expression("revoked_at", "<", cutoff)]))
+      .orderBy("id").forUpdate().skipLocked().limit(RETENTION_BATCH).execute()).map((row) => row.id),
+    (transaction, ids) => transaction.deleteFrom("sessions").where("id", "in", ids).execute(),
+  );
+  if (deleted) logger.info("expired_sessions_deleted", { deleted });
+};
+
+export const deleteSpentResetTokens = async (): Promise<void> => {
+  const usedBefore = daysAgo(USED_RESET_TOKEN_RETENTION_DAYS);
+  const deleted = await deleteInBatches(
+    async (transaction) => (await transaction.selectFrom("password_reset_tokens").select("id")
+      .where((expression) => expression.or([expression("expires_at", "<", new Date()), expression("consumed_at", "<", usedBefore)]))
+      .orderBy("id").forUpdate().skipLocked().limit(RETENTION_BATCH).execute()).map((row) => row.id),
+    (transaction, ids) => transaction.deleteFrom("password_reset_tokens").where("id", "in", ids).execute(),
+  );
+  if (deleted) logger.info("password_reset_tokens_deleted", { deleted });
+};
+
+/** Unread activity is kept however old: the member has not seen it yet. */
+export const purgeReadNotifications = async (): Promise<void> => {
+  const cutoff = daysAgo(READ_NOTIFICATION_RETENTION_DAYS);
+  const deleted = await deleteInBatches(
+    async (transaction) => (await transaction.selectFrom("notifications").select("id")
+      .where("read_at", "is not", null).where("created_at", "<", cutoff)
+      .orderBy("id").forUpdate().skipLocked().limit(RETENTION_BATCH).execute()).map((row) => row.id),
+    (transaction, ids) => transaction.deleteFrom("notifications").where("id", "in", ids).execute(),
+  );
+  if (deleted) logger.info("read_notifications_deleted", { deleted });
+};
+
+/**
+ * D-07: a position not refreshed for 30 days is reduced to the placeholder a
+ * member has before their first fix - coordinates 0/0, no accuracy, no city,
+ * timestamp at the epoch - so it is unusable for search, while the member's
+ * Nearby settings stay as they chose them. Nearby already ignores fixes older
+ * than 7 days; this removes the coordinates themselves. Counts only, never
+ * coordinates, go to the log.
+ */
+export const wipeStaleLocations = async (): Promise<void> => {
+  const cutoff = daysAgo(STALE_LOCATION_DAYS);
+  const wiped = await deleteInBatches(
+    async (transaction) => (await transaction.selectFrom("user_locations").select("user_id")
+      .where("location_updated_at", "<", cutoff)
+      .where((expression) => expression.or([expression("latitude", "<>", 0), expression("longitude", "<>", 0), expression("location_updated_at", ">", new Date(0))]))
+      .orderBy("user_id").forUpdate().skipLocked().limit(RETENTION_BATCH).execute()).map((row) => row.user_id),
+    (transaction, ids) => transaction.updateTable("user_locations")
+      .set({ latitude: 0, longitude: 0, accuracy_meters: null, city_id: null, location_updated_at: new Date(0) })
+      .where("user_id", "in", ids).execute(),
+  );
+  if (wiped) logger.info("stale_locations_wiped", { wiped });
+};
+
 interface TaskDefinition { name: string; schedule: string; run: () => Promise<void> }
 
 /**
@@ -70,6 +158,10 @@ export const SCHEDULED_TASKS: readonly TaskDefinition[] = [
   { name: "media-deletions", schedule: "*/10 * * * *", run: deleteQueuedMedia },
   { name: "event-history-retention", schedule: "41 3 * * *", run: purgeEventHistory },
   { name: "message-tombstone-retention", schedule: "23 4 * * *", run: purgeTombstones },
+  { name: "expired-sessions", schedule: "7 * * * *", run: deleteExpiredSessions },
+  { name: "password-reset-tokens", schedule: "37 * * * *", run: deleteSpentResetTokens },
+  { name: "notifications-retention", schedule: "53 4 * * *", run: purgeReadNotifications },
+  { name: "stale-location-wipe", schedule: "13 5 * * *", run: wipeStaleLocations },
 ];
 
 /**

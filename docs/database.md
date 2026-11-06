@@ -135,3 +135,24 @@ See docs/architecture/adr/005-message-sync.md.
 unique index `post_comments_user_operation_idx (user_id, operation_id) WHERE
 operation_id IS NOT NULL`: a retried comment with the same id is the same
 comment. Comments from clients that send no id are unaffected.
+
+## Retention
+
+Scheduled tasks (`packages/backend/workers/cronJobs.ts`, each under an
+advisory lock, in SKIP LOCKED batches). Periods are constants at the top of
+that file.
+
+| Data | Kept | Task (schedule) |
+| --- | --- | --- |
+| `sessions` expired or revoked | 7 days after expiry / revocation | `expired-sessions` (hourly, :07) |
+| `password_reset_tokens` | until expiry; used tokens 1 day after use | `password-reset-tokens` (hourly, :37) |
+| `notifications` that were read | 180 days after creation (unread ones are kept) | `notifications-retention` (daily 04:53) |
+| `user_locations` coordinates | 30 days without a refresh, then reset to the pre-fix placeholder (0/0, no accuracy, no city, epoch); settings stay (D-07) | `stale-location-wipe` (daily 05:13) |
+| `message_deletions` tombstones | 30 days (D-06); orphans removed; floor recorded | `message-tombstone-retention` (daily 04:23) |
+| expired `stories` | until expiry (+ up to 5 min) | `expired-stories` (every 5 min) |
+| abandoned `upload_reservations` | until expiry | `abandoned-uploads` (every 15 min) |
+| `usage_counters` | until expiry | `expired-usage` (hourly, :17) |
+| delivered outbox / processed events | 7 days | `event-history-retention` (daily 03:41) |
+
+Nearby also stops listing a fix after 7 days without a refresh and shows
+other members' `lastActiveAt` only to the hour.
