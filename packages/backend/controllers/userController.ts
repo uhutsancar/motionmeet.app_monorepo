@@ -17,6 +17,7 @@ import {
 import { PRIVACY_KEYS } from "@motionmeet/shared";
 import { deleteMediaOrQueue } from "../services/mediaDeletionService.js";
 import { runWithRedisLock } from "../configs/redis.js";
+import { logger, safeErrorMetadata } from "../utils/logger.js";
 
 export const getUserData: RequestHandler = async (req, res, next) => {
   try {
@@ -96,6 +97,14 @@ export const exportAccount: RequestHandler = async (req, res, next) => {
     }
     return undefined;
   } catch (error) {
+    // Once the first byte is out the status is 200 and cannot change. Breaking
+    // the connection makes the client report a failed download; ending it
+    // would leave a short file that looks like a finished one.
+    if (res.headersSent) {
+      logger.error("account_export_failed", { requestId: req.requestId, ...safeErrorMetadata(error) });
+      res.destroy();
+      return undefined;
+    }
     return next(error);
   }
 };

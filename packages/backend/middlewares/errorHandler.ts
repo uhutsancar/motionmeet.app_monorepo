@@ -31,5 +31,10 @@ export const notFoundHandler: RequestHandler = (request, response) => { response
 export const errorHandler: ErrorRequestHandler = (value, request, response, _next) => {
   const mapped = toPublicError(value); const { error, status } = mapped;
   logger.error("request_failed", { requestId: request.requestId, method: request.method, path: request.path, status, code: error.code, ...(process.env.NODE_ENV !== "production" ? { message: error.message, stack: error.stack } : {}) });
+  // A streamed response that fails part-way has already sent its status and
+  // part of its body. Writing an error object now would throw, and ending the
+  // stream normally would leave the client a truncated body that looks
+  // complete; breaking the connection is the only honest signal left.
+  if (response.headersSent) { response.destroy(); return; }
   response.status(status).json({ success: false, message: mapped.message, requestId: request.requestId, ...(mapped.fields ? { fields: mapped.fields } : {}) });
 };

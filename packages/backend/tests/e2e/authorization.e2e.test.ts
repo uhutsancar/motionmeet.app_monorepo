@@ -180,6 +180,19 @@ test("profile: a private account reveals no posts and no location to a stranger"
   const text = JSON.stringify(profile.body);
   for (const key of ["publicPost", "followersPost", "privatePost"]) assert.ok(!text.includes(ids[key]), `${key} not in the profile`);
   assert.ok(!/"latitude"|"longitude"|"lat"|"lng"/.test(text), "no coordinates in the profile");
+  const header = profile.body.profile as { weight?: unknown; height?: unknown; statistics?: unknown } | undefined;
+  assert.equal(header?.weight, null, "weight is withheld from a stranger (D-04)");
+  assert.equal(header?.height, null, "height is withheld from a stranger (D-04)");
+  assert.equal(header?.statistics, null, "training totals are withheld from a stranger (D-04)");
+});
+
+test("export: whatever id is sent, a member exports only their own account", async () => {
+  const reply = await call("GET", `/api/user/export?userId=${owner.id}&id=${owner.id}`, { token: stranger.token });
+  assertOk(reply, "a member exports their own data");
+  assert.equal((reply.body.user as { id?: string }).id, stranger.id);
+  assert.equal(reply.body.complete, true, "the file ends with its completeness marker");
+  const text = JSON.stringify(reply.body);
+  for (const key of ["publicPost", "followersPost", "privatePost"]) assert.ok(!text.includes(ids[key]), `${key} not in the stranger's export`);
 });
 
 test("mass assignment: server-owned fields cannot be set by the client", async () => {

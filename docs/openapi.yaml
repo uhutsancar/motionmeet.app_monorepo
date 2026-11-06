@@ -212,6 +212,12 @@ paths:
     get:
       tags: [User]
       summary: Export account data
+      description: |
+        Streams the caller's own account as one JSON document (format 4,
+        docs/ACCOUNT_EXPORT_FORMAT.md). Takes no parameters: it is always the
+        authenticated member's data. The last property is `complete: true`;
+        a failure after the first byte breaks the connection rather than
+        ending a short file, so a document without the marker is incomplete.
       operationId: getUserExport
       responses:
         "200":
@@ -221,7 +227,19 @@ paths:
               schema: { type: string }
           content:
             application/json:
-              schema: { type: object, additionalProperties: true }
+              schema:
+                type: object
+                required: [exportedAt, formatVersion, user, complete]
+                properties:
+                  exportedAt: { type: string, format: date-time }
+                  formatVersion: { type: integer, const: 4 }
+                  user: { type: object, additionalProperties: true }
+                  complete: { type: boolean, const: true }
+                additionalProperties:
+                  type: array
+                  items: { type: object, additionalProperties: true }
+        "409":
+          description: An export for this account is already running
   /api/user/account:
     delete:
       tags: [User]

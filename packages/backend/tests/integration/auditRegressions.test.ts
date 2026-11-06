@@ -184,7 +184,7 @@ test("R4 / WP-01: a cached field expires on its own TTL, not the hash's", async 
   assert.deepEqual((await readOwnerField(owner, "page2")).value, { page: 2 });
 });
 
-test("R5 / WP-04: an account export completes as valid JSON", { todo: "WP-04" }, async () => {
+test("R5 / WP-04: an account export completes as valid JSON", async () => {
   const user = await newUser("export");
   let body = "";
   const sink = new Writable({ write(chunk, _encoding, callback) { body += chunk.toString(); callback(); } });

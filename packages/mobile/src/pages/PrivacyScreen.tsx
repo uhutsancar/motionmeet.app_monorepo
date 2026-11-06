@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Linking, ScrollView, Share, StatusBar, StyleSheet, Switch, TouchableOpacity } from 'react-native';
+import { Linking, ScrollView, StatusBar, StyleSheet, Switch, TouchableOpacity } from 'react-native';
 import { Button, Dialog, Portal, Surface, Text, TextInput } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -7,7 +7,10 @@ import { useTranslation } from 'react-i18next';
 import { useTheme, type MotionTheme } from '../context/ThemeContext';
 import { useAuthContext } from '../context/AuthProvider';
 import { API_ROUTES } from '@motionmeet/shared';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import api from '../api/client';
+import { API_URL } from '../config/environment';
 import { KeyboardResponsiveView } from '../components/KeyboardAwareScrollView';
 import { getUserFacingError, logHandledError, showError } from '../utils/feedback';
 import ScreenHeader from '../components/ScreenHeader';
@@ -38,7 +41,7 @@ const DEFAULT_PREFS = {
 const PrivacyScreen = ({ navigation }: NavigationOnlyProps) => {
   const { t } = useTranslation();
   const { theme, isDark } = useTheme();
-  const { signOut } = useAuthContext();
+  const { signOut, getToken } = useAuthContext();
   const styles = getStyles(theme);
   const [prefs, setPrefs] = useState(DEFAULT_PREFS);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -106,13 +109,29 @@ const PrivacyScreen = ({ navigation }: NavigationOnlyProps) => {
     }
   };
 
+  /*
+   * The export is written straight to a file and shared as a file. It used to
+   * be read into memory as one string and handed to the share sheet as a text
+   * message: an account with a few thousand messages is megabytes of JSON,
+   * which neither belongs in JS memory nor survives being pasted into a chat.
+   * A download the server breaks off part-way rejects here, so a short file
+   * is never offered for sharing.
+   */
   const exportData = async () => {
     try {
       setRequestPending(true);
-      const { data } = await api.get(API_ROUTES.user.export);
-      await Share.share({
-        title: `MotionMeet ${t('privacy.export_data', 'Veri Dışa Aktarımı')}`,
-        message: typeof data === 'string' ? data : JSON.stringify(data, null, 2),
+      const token = await getToken();
+      if (!token) throw new Error('Not signed in');
+      const target = `${FileSystem.cacheDirectory}motionmeet-export-${new Date().toISOString().slice(0, 10)}.json`;
+      const result = await FileSystem.downloadAsync(`${API_URL}${API_ROUTES.user.export}`, target, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (result.status !== 200) throw new Error(`Account export failed with ${result.status}`);
+      if (!(await Sharing.isAvailableAsync())) throw new Error('Sharing is not available on this device');
+      await Sharing.shareAsync(result.uri, {
+        mimeType: 'application/json',
+        UTI: 'public.json',
+        dialogTitle: `MotionMeet ${t('privacy.export_data', 'Veri Dışa Aktarımı')}`,
       });
     } catch (error) {
       logHandledError('export-account', error);
