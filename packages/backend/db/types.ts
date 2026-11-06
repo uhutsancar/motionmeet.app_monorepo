@@ -427,16 +427,30 @@ export interface UsageCounterTable extends BaseTable {
 
 export type OutboxPayload = Record<string, string | number | boolean | null>;
 
+/** Types the code may write; the column itself is text checked for shape (migration 014). */
+export type OutboxEventType = "user.profile.updated" | "connection.requested";
+export type OutboxStatus = "pending" | "processing" | "published" | "dead";
+
 export interface OutboxEventTable extends BaseTable {
-  type: "user.profile.updated" | "connection.requested";
+  type: OutboxEventType;
   aggregate_id: string;
   payload: OutboxPayload;
-  status: Generated<"pending" | "processing">;
+  status: Generated<OutboxStatus>;
   attempts: Generated<number>;
   next_attempt_at: GeneratedTimestamp;
   claim_token: string | null;
   claim_until: NullableTimestamp;
   last_error: Generated<string>;
+  event_id: Generated<string>;
+  schema_version: Generated<number>;
+  correlation_id: string | null;
+  published_at: NullableTimestamp;
+}
+
+export interface ProcessedEventTable {
+  consumer: string;
+  event_id: string;
+  processed_at: GeneratedTimestamp;
 }
 
 export interface PersonalRecordTable extends BaseTable {
@@ -518,6 +532,7 @@ export interface Database {
   media_deletion_jobs: MediaDeletionJobTable;
   usage_counters: UsageCounterTable;
   outbox_events: OutboxEventTable;
+  processed_events: ProcessedEventTable;
   personal_records: PersonalRecordTable;
   user_daily_workout_stats: UserDailyWorkoutStatTable;
   user_daily_muscle_stats: UserDailyMuscleStatTable;

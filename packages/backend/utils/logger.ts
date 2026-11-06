@@ -1,3 +1,5 @@
+import { currentContext } from "../observability/context.js";
+
 type Metadata = Record<string, unknown>;
 export const safeErrorMetadata = (error: unknown): Metadata => {
   if (!error || typeof error !== "object") return {};
@@ -8,7 +10,12 @@ export const safeErrorMetadata = (error: unknown): Metadata => {
   };
 };
 const write = (level: "info" | "warn" | "error", message: string, metadata: Metadata = {}): void => {
-  const output = JSON.stringify({ timestamp: new Date().toISOString(), level, message, ...metadata });
+  // Every line written while serving a request or an event carries its ids, so
+  // one search by trace id finds the API line, the outbox publish and the
+  // worker line that one tap produced.
+  const context = currentContext();
+  const correlation = context ? { requestId: context.requestId, traceId: context.traceId } : {};
+  const output = JSON.stringify({ timestamp: new Date().toISOString(), level, message, ...correlation, ...metadata });
   if (level === "error") console.error(output); else if (level === "warn") console.warn(output); else console.log(output);
 };
 export const logger = { info: (message: string, metadata?: Metadata): void => write("info", message, metadata), warn: (message: string, metadata?: Metadata): void => write("warn", message, metadata), error: (message: string, metadata?: Metadata): void => write("error", message, metadata) };

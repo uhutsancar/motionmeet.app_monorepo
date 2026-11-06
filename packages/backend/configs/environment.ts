@@ -16,7 +16,26 @@ export interface Environment {
   mediaUploadsEnabled: boolean;
   emailEnabled: boolean;
   scheduledJobsEnabled: boolean;
+  /** Which process this is; names its database connections and metrics. */
+  processRole: ProcessRole;
+  /**
+   * How committed outbox events leave PostgreSQL. `direct` handles them in
+   * the process that claims them (the original behaviour, no broker needed);
+   * `rabbitmq` publishes them with confirms and lets the worker consume them.
+   */
+  outboxTransport: "direct" | "rabbitmq";
+  rabbitmqUrl: string | null;
+  /** Port of the private ops listener (/metrics, health); null disables it. */
+  metricsPort: number | null;
+  /**
+   * Multi-instance deployments rely on Redis for the Socket.IO adapter and the
+   * shared rate limits; there the instance is not ready without it.
+   */
+  readinessRequiresRedis: boolean;
 }
+
+export type ProcessRole = "api" | "worker" | "scheduler";
+const PROCESS_ROLES: readonly ProcessRole[] = ["api", "worker", "scheduler"];
 
 const integerValue = (name: string, fallback: number, minimum: number, maximum: number): number => {
   const parsed = Number.parseInt(process.env[name] ?? "", 10);
@@ -102,6 +121,15 @@ export const loadEnvironment = (): Environment => {
   if (mediaUploadsEnabled) requireCapabilityVariables("media", ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_BUCKET_NAME", "IMAGEKIT_PUBLIC_KEY", "IMAGEKIT_PRIVATE_KEY", "IMAGEKIT_URL_ENDPOINT"]);
   if (emailEnabled) requireCapabilityVariables("email", ["SMTP_USER", "SMTP_PASS", "SENDER_EMAIL"]);
 
+  const processRoleValue = process.env.MOTIONMEET_PROCESS_ROLE?.trim() || "api";
+  if (!PROCESS_ROLES.includes(processRoleValue as ProcessRole)) throw new Error(`MOTIONMEET_PROCESS_ROLE must be one of ${PROCESS_ROLES.join(", ")}`);
+  const outboxTransportValue = process.env.OUTBOX_TRANSPORT?.trim() || "direct";
+  if (outboxTransportValue !== "direct" && outboxTransportValue !== "rabbitmq") throw new Error("OUTBOX_TRANSPORT must be direct or rabbitmq");
+  const rabbitmqUrlValue = process.env.RABBITMQ_URL?.trim() || null;
+  const rabbitmq = rabbitmqUrlValue ? parseUrl("RABBITMQ_URL", rabbitmqUrlValue, ["amqp:", "amqps:"]) : null;
+  if (outboxTransportValue === "rabbitmq" && !rabbitmq) throw new Error("RABBITMQ_URL is required when OUTBOX_TRANSPORT=rabbitmq");
+  const metricsPortValue = process.env.METRICS_PORT?.trim();
+
   if (nodeEnv === "production") {
     if (Buffer.byteLength(jwtSecret, "utf8") < MIN_PRODUCTION_SECRET_LENGTH) {
       throw new Error(`JWT_SECRET must be at least ${MIN_PRODUCTION_SECRET_LENGTH} bytes in production`);
@@ -111,6 +139,12 @@ export const loadEnvironment = (): Environment => {
     if (!redis.password) throw new Error("REDIS_URL must include a password in production");
     if (redis.protocol !== "rediss:" && process.env.ALLOW_INSECURE_REDIS_TLS !== "true") {
       throw new Error("REDIS_URL must use rediss:// in production");
+    }
+    if (rabbitmq) {
+      if (!rabbitmq.username || !rabbitmq.password) throw new Error("RABBITMQ_URL must include credentials in production");
+      if (rabbitmq.protocol !== "amqps:" && process.env.ALLOW_INSECURE_RABBITMQ_TLS !== "true") {
+        throw new Error("RABBITMQ_URL must use amqps:// in production");
+      }
     }
   }
   cachedEnvironment = {
@@ -131,6 +165,11 @@ export const loadEnvironment = (): Environment => {
     mediaUploadsEnabled,
     emailEnabled,
     scheduledJobsEnabled: booleanValue("RUN_SCHEDULED_JOBS", true),
+    processRole: processRoleValue as ProcessRole,
+    outboxTransport: outboxTransportValue,
+    rabbitmqUrl: rabbitmqUrlValue,
+    metricsPort: metricsPortValue ? integerValue("METRICS_PORT", 9464, 1, 65_535) : null,
+    readinessRequiresRedis: booleanValue("READINESS_REQUIRE_REDIS", false),
   };
   return cachedEnvironment;
 };

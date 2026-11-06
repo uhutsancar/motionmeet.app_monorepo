@@ -1,19 +1,61 @@
 name: motionmeet_prod
 
-# Production intentionally does not bundle PostgreSQL or Redis.
+# Production intentionally does not bundle PostgreSQL, Redis or RabbitMQ.
 # .env.production must point at authenticated, backed-up, highly available
-# managed services.
+# managed services (RabbitMQ only when OUTBOX_TRANSPORT=rabbitmq).
+#
+# One backend image runs as four processes (docs/operations/DEPLOYMENT.md):
+#   migrate    one-shot schema migration, before anything else starts
+#   backend    HTTP API + Socket.IO; no background work
+#   worker     outbox relay and event consumers
+#   scheduler  recurring housekeeping (advisory-locked, safe to overlap)
+x-backend-image: &backend-image
+  build:
+    context: .
+    dockerfile: packages/backend/Dockerfile.prod
+  image: motionmeet-backend:${MOTIONMEET_IMAGE_TAG:-local}
+  env_file:
+    - path: ${MOTIONMEET_ENV_FILE:-.env.production}
+      required: true
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  networks:
+    - edge
+
+x-ops-healthcheck: &ops-healthcheck
+  test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9464/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+  interval: 20s
+  timeout: 5s
+  retries: 6
+  start_period: 30s
+
 services:
+  migrate:
+    <<: *backend-image
+    command: ["node", "dist/scripts/migrate.js"]
+    environment:
+      NODE_ENV: production
+    restart: "no"
+
   backend:
-    build:
-      context: .
-      dockerfile: packages/backend/Dockerfile.prod
-    env_file:
-      - path: ${MOTIONMEET_ENV_FILE:-.env.production}
-        required: true
+    <<: *backend-image
     environment:
       NODE_ENV: production
       PORT: 4000
+      MOTIONMEET_PROCESS_ROLE: api
+      # Schema changes and background work run in their own processes.
+      RUN_MIGRATIONS: "false"
+      RUN_SCHEDULED_JOBS: "false"
+      METRICS_PORT: 9464
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     expose:
       - "4000"
     healthcheck:
@@ -23,16 +65,47 @@ services:
       retries: 6
       start_period: 30s
     restart: unless-stopped
-    init: true
-    read_only: true
-    tmpfs:
-      - /tmp
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    networks:
-      - edge
+
+  worker:
+    <<: *backend-image
+    command: ["node", "dist/entrypoints/worker.js"]
+    environment:
+      NODE_ENV: production
+      MOTIONMEET_PROCESS_ROLE: worker
+      METRICS_PORT: 9464
+      DATABASE_POOL_MAX: 10
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck: *ops-healthcheck
+    # Long enough for in-flight events to finish and acknowledge (runtime/lifecycle.ts).
+    stop_grace_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  scheduler:
+    <<: *backend-image
+    command: ["node", "dist/entrypoints/scheduler.js"]
+    environment:
+      NODE_ENV: production
+      MOTIONMEET_PROCESS_ROLE: scheduler
+      METRICS_PORT: 9464
+      DATABASE_POOL_MAX: 5
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck: *ops-healthcheck
+    stop_grace_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   web:
     build:

@@ -42,6 +42,8 @@ import { verifyAccessToken } from "./utils/authTokens.js";
 import { logger, safeErrorMetadata } from "./utils/logger.js";
 import { isUserId } from "./utils/validation.js";
 import { initCronJobs } from "./workers/cronJobs.js";
+import { startDirectOutboxRelay } from "./messaging/outboxRelay.js";
+import { startOpsServer } from "./observability/opsServer.js";
 
 const environment = loadEnvironment();
 const configuredOrigins = environment.corsOrigins;
@@ -107,9 +109,21 @@ app.use("/api", rateLimit({ windowMs: 900_000, limit: Number.isFinite(configured
 
 app.get("/", (_request, response) => { response.send("Server is running"); });
 app.get("/health/live", (_request, response) => { response.json({ status: "ok", uptimeSeconds: Math.floor(process.uptime()) }); });
+/**
+ * Ready when PostgreSQL answers. Redis is a degradation, not an outage, for a
+ * single instance - the cache and rate limits fall back to local - but with
+ * several replicas behind a load balancer the Socket.IO adapter and the shared
+ * rate limits need it, so READINESS_REQUIRE_REDIS=true takes such an instance
+ * out of rotation until Redis is back.
+ */
+const readiness = async () => {
+  const databaseReady = await checkDatabaseHealth(); const redisStatus = getRedisStatus();
+  const ready = databaseReady && (!environment.readinessRequiresRedis || redisStatus === "ready");
+  return { ready, database: databaseReady ? "ready" : "not-ready", redis: redisStatus, degraded: redisStatus === "not-ready", capabilities: { mediaUploads: environment.mediaUploadsEnabled ? "configured" : "disabled", email: environment.emailEnabled ? "configured" : "disabled", backgroundJobs: environment.scheduledJobsEnabled ? "enabled" : "disabled", outboxTransport: environment.outboxTransport } };
+};
 app.get("/health/ready", async (_request, response) => {
-  const databaseReady = await checkDatabaseHealth(); const redisStatus = getRedisStatus(); const ready = databaseReady;
-  response.status(ready ? 200 : 503).json({ status: ready ? "ready" : "not-ready", database: databaseReady ? "ready" : "not-ready", redis: redisStatus, degraded: redisStatus === "not-ready", capabilities: { mediaUploads: environment.mediaUploadsEnabled ? "configured" : "disabled", email: environment.emailEnabled ? "configured" : "disabled", backgroundJobs: environment.scheduledJobsEnabled ? "enabled" : "disabled" } });
+  const { ready, ...report } = await readiness();
+  response.status(ready ? 200 : 503).json({ status: ready ? "ready" : "not-ready", ...report });
 });
 
 app.use("/api/auth", authRoutes); app.use("/api/user", userRouter); app.use("/api/post", postRouter); app.use("/api/story", storyRouter);
@@ -133,14 +147,22 @@ io.use(async (socket, next) => {
   } catch (error: unknown) { logger.warn("socket_authentication_failed", safeErrorMetadata(error)); next(new Error("Authentication failed")); }
 });
 io.on("connection", (socket) => { void handleSocketConnection(socket).catch((error: unknown) => { logger.error("socket_initialization_failed", safeErrorMetadata(error)); socket.disconnect(true); }); });
-const cronTasks = initCronJobs();
+// Single-process mode (RUN_SCHEDULED_JOBS unset, the default for local
+// development) keeps the housekeeping and the outbox in this process. A
+// production deployment sets RUN_SCHEDULED_JOBS=false here and runs the
+// scheduler and worker entry points instead (docs/operations/DEPLOYMENT.md).
+const cron = initCronJobs();
+const outboxRelay = environment.scheduledJobsEnabled && environment.outboxTransport === "direct" ? startDirectOutboxRelay() : null;
+const opsServer = environment.metricsPort ? startOpsServer(environment.metricsPort, readiness) : null;
 let shuttingDown = false;
 const shutdown = async (signal: string, exitCode = 0): Promise<void> => {
-  if (shuttingDown) return; shuttingDown = true; console.log(`${signal} received; shutting down`);
+  if (shuttingDown) return; shuttingDown = true; logger.info("shutdown_started", { signal });
   const forceExitTimer = setTimeout(() => process.exit(1), 10_000); forceExitTimer.unref();
-  cronTasks.forEach((task) => task.stop());
+  // Stop taking work first, then let the work already taken finish.
   await new Promise<void>((resolve) => io.close(() => resolve()));
   if (httpServer.listening) await new Promise<void>((resolve) => httpServer.close(() => resolve()));
+  await Promise.allSettled([cron.stop(), outboxRelay?.stop()]);
+  opsServer?.close();
   await Promise.allSettled([disconnectDatabase(), disconnectRedis()]);
   clearTimeout(forceExitTimer); process.exit(exitCode);
 };

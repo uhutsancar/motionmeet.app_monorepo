@@ -34,6 +34,79 @@ services:
     networks:
       - data
 
+  # Optional broker (`--profile queue`). The management UI is bound to the
+  # loopback interface only; never publish 15672 beyond this machine.
+  rabbitmq:
+    profiles: ["queue"]
+    image: rabbitmq:4.2-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-motionmeet}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-motionmeet-development}
+    ports:
+      - "127.0.0.1:${RABBITMQ_PORT:-5672}:5672"
+      - "127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+    volumes:
+      - rabbitmq_dev_data:/var/lib/rabbitmq
+    networks:
+      - data
+
+  # Background processes (`--profile workers`). Without them the backend
+  # below does no scheduled work and leaves outbox events in PostgreSQL.
+  worker:
+    profiles: ["workers"]
+    build:
+      context: .
+      dockerfile: packages/backend/Dockerfile.dev
+    command: ["pnpm", "exec", "tsx", "watch", "entrypoints/worker.ts"]
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-motionmeet-development}@postgres:5432/${POSTGRES_DB:-motionmeetdb}
+      DATABASE_POOL_MAX: 5
+      JWT_SECRET: development-only-change-before-deployment
+      MEDIA_UPLOADS_ENABLED: "false"
+      EMAIL_ENABLED: "false"
+      OUTBOX_TRANSPORT: ${OUTBOX_TRANSPORT:-direct}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-motionmeet}:${RABBITMQ_PASSWORD:-motionmeet-development}@rabbitmq:5672
+      METRICS_PORT: 9464
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./packages/backend:/app/packages/backend
+      - ./packages/shared:/app/packages/shared
+      - backend_ts_node_modules:/app/packages/backend/node_modules
+    networks:
+      - data
+
+  scheduler:
+    profiles: ["workers"]
+    build:
+      context: .
+      dockerfile: packages/backend/Dockerfile.dev
+    command: ["pnpm", "exec", "tsx", "watch", "entrypoints/scheduler.ts"]
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-motionmeet-development}@postgres:5432/${POSTGRES_DB:-motionmeetdb}
+      DATABASE_POOL_MAX: 3
+      JWT_SECRET: development-only-change-before-deployment
+      MEDIA_UPLOADS_ENABLED: "false"
+      EMAIL_ENABLED: "false"
+      METRICS_PORT: 9464
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./packages/backend:/app/packages/backend
+      - ./packages/shared:/app/packages/shared
+      - backend_ts_node_modules:/app/packages/backend/node_modules
+    networks:
+      - data
+
   backend:
     build:
       context: .
@@ -123,6 +196,7 @@ networks:
 volumes:
   postgres_dev_data:
   redis_dev_data:
+  rabbitmq_dev_data:
   backend_ts_node_modules:
   web_ts_node_modules:
   mobile_ts_node_modules:

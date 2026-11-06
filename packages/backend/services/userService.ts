@@ -2,7 +2,7 @@ import { sql } from "kysely";
 import type { PublicUser, UserProfile } from "@motionmeet/shared";
 import { database, withTransaction } from "../configs/database.js";
 import { getCachedField, setCachedField } from "../configs/redis.js";
-import { PROFILE_CACHE_TTL_SECONDS, invalidateMember, profileCacheOwner } from "./feedCache.js";
+import { PROFILE_CACHE_TTL_SECONDS, invalidateMember, profileCacheOwner, revokeFeedAudience } from "./feedCache.js";
 import type { Row } from "../db/types.js";
 import { serializeUser, toIsoString, type InternalUser } from "../repositories/entities.js";
 import { evaluateMessagePermission } from "./accessControlService.js";
@@ -13,6 +13,7 @@ import { hydratePostInteractions } from "./postInteractionService.js";
 import { commitReservedUploads } from "./mediaUploadService.js";
 import { invalidateMessagePermissions } from "../realtime/socketRegistry.js";
 import { queueMediaDeletions } from "./mediaDeletionService.js";
+import { enqueueOutboxEvent } from "./outboxService.js";
 import { extractS3Key } from "../utils/s3Utils.js";
 import { escapeLikePattern, isUserId } from "../utils/validation.js";
 import type { Pagination } from "../utils/pagination.js";
@@ -81,10 +82,13 @@ export const updateUser = async (userId: string, input: UserUpdate, { reservatio
       if (typeof input.full_name === "string") payload.full_name = input.full_name;
       if (typeof input.username === "string") payload.username = input.username;
       if (typeof input.profile_picture === "string") payload.profile_picture = input.profile_picture;
-      await transaction.insertInto("outbox_events").values({ legacy_mongo_id: null, type: "user.profile.updated", aggregate_id: userId, payload, status: "pending", attempts: 0, next_attempt_at: new Date(), claim_token: null, claim_until: null, last_error: "" }).execute();
+      await enqueueOutboxEvent(transaction, { type: "user.profile.updated", aggregateId: userId, payload });
     }
   });
   await invalidateMember(userId);
+  // Hiding the account or its workouts narrows an audience that other members'
+  // cached Keşfet pages already hold, and those viewers cannot be listed.
+  if (input["privacy.publicProfile"] === false || input["privacy.showWorkoutsOnFeed"] === false) await revokeFeedAudience();
   // Who may message this member can have just changed; sockets that cached
   // the old answer must not keep acting on it.
   if (["privacy.allowMessages", "privacy.publicProfile", "privacy.allowFollowers"].some((key) => typeof input[key as keyof UserUpdate] === "boolean")) {
@@ -147,7 +151,7 @@ export const createConnection = async (userId: string, targetId: string) => with
   const quota = await transaction.updateTable("usage_counters").set((expression) => ({ count: expression("count", "+", 1) })).where("user_id", "=", userId).where("bucket", "=", bucket).where("count", "<", 20).executeTakeFirst();
   if (Number(quota.numUpdatedRows) !== 1) throw Object.assign(new Error("Daily connection request limit reached"), { status: 429 });
   const row = await transaction.insertInto("connections").values({ legacy_mongo_id: null, from_user_id: userId, to_user_id: targetId, pair_key: [userId, targetId].sort().join(":"), status: "pending" }).returningAll().executeTakeFirstOrThrow();
-  await transaction.insertInto("outbox_events").values({ legacy_mongo_id: null, type: "connection.requested", aggregate_id: row.id, payload: { senderId: userId, recipientId: targetId }, status: "pending", attempts: 0, next_attempt_at: now, claim_token: null, claim_until: null, last_error: "" }).execute();
+  await enqueueOutboxEvent(transaction, { type: "connection.requested", aggregateId: row.id, payload: { senderId: userId, recipientId: targetId } });
   return { id: row.id, _id: row.id, from_user_id: row.from_user_id, to_user_id: row.to_user_id, status: row.status };
 });
 
@@ -197,12 +201,18 @@ export const acceptConnection = async (userId: string, senderId: string) => with
   return transaction.updateTable("connections").set({ status: "accepted" }).where("id", "=", row.id).returningAll().executeTakeFirst();
 });
 
-export const removeConnection = async (userId: string, targetId: string): Promise<boolean> => withTransaction(async (transaction) => {
-  const deleted = await transaction.deleteFrom("connections").where("pair_key", "=", [userId, targetId].sort().join(":")).where("status", "=", "accepted").returning("id").executeTakeFirst();
-  if (!deleted) return false;
-  for (const id of [userId, targetId]) await transaction.updateTable("users").set((expression) => ({ connections_count: expression.fn<number>("greatest", [expression("connections_count", "-", 1), expression.val(0)]) })).where("id", "=", id).execute();
-  return true;
-});
+export const removeConnection = async (userId: string, targetId: string): Promise<boolean> => {
+  const removed = await withTransaction(async (transaction) => {
+    const deleted = await transaction.deleteFrom("connections").where("pair_key", "=", [userId, targetId].sort().join(":")).where("status", "=", "accepted").returning("id").executeTakeFirst();
+    if (!deleted) return false;
+    for (const id of [userId, targetId]) await transaction.updateTable("users").set((expression) => ({ connections_count: expression.fn<number>("greatest", [expression("connections_count", "-", 1), expression.val(0)]) })).where("id", "=", id).execute();
+    return true;
+  });
+  // A connection grants each side the other's followers-only posts and
+  // stories, so neither cached feed nor profile may keep serving them.
+  if (removed) await invalidateMember(userId, targetId);
+  return removed;
+};
 
 /**
  * Cached per viewer, because what a profile shows depends on who is looking:

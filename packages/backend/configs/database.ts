@@ -12,7 +12,9 @@ const pool = new Pool({
   connectionTimeoutMillis: environment.databaseConnectionTimeoutMs,
   idleTimeoutMillis: environment.databaseIdleTimeoutMs,
   allowExitOnIdle: environment.nodeEnv !== "production",
-  application_name: "motionmeet-api",
+  // Per role, so pg_stat_activity tells the API's connections from the
+  // worker's and the scheduler's when the pool budget is being audited.
+  application_name: `motionmeet-${environment.processRole}`,
   // A query with no ceiling holds its pool slot for as long as it runs, so a
   // single pathological plan can starve every other request on the instance.
   // `statement_timeout` is the server-side cap and `query_timeout` the

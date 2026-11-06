@@ -16,3 +16,19 @@ services:
       retries: 30
     tmpfs:
       - /var/lib/postgresql
+
+  # Disposable broker for tests/integration/rabbitmq.test.ts; nothing is kept.
+  rabbitmq-test:
+    image: rabbitmq:4.2-alpine
+    ports:
+      - "${RABBITMQ_TEST_PORT:-5673}:5672"
+    environment:
+      RABBITMQ_DEFAULT_USER: motionmeet
+      RABBITMQ_DEFAULT_PASS: motionmeet-test
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 3s
+      timeout: 10s
+      retries: 40
+    tmpfs:
+      - /var/lib/rabbitmq

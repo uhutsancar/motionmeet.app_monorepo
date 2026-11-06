@@ -85,6 +85,9 @@ importers:
       '@socket.io/redis-adapter':
         specifier: ^8.3.0
         version: 8.3.0(socket.io-adapter@2.5.8(bufferutil@4.1.0)(utf-8-validate@6.0.6))
+      amqplib:
+        specifier: ^2.2.1
+        version: 2.2.1
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
@@ -124,12 +127,15 @@ importers:
       pg:
         specifier: ^8.22.0
         version: 8.22.0
+      prom-client:
+        specifier: ^15.1.3
+        version: 15.1.3
       rate-limit-redis:
         specifier: ^6.0.0
         version: 6.0.0(express-rate-limit@8.6.0(express@5.2.1))
       redis:
         specifier: ^6.1.0
-        version: 6.1.0
+        version: 6.1.0(@opentelemetry/api@1.10.0)
       sharp:
         specifier: ^0.35.5
         version: 0.35.5(@types/node@24.13.3)
@@ -1820,6 +1826,10 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@opentelemetry/api@1.10.0':
+    resolution: {integrity: sha512-lMkyes8iHrG+mk6WH7X70MdCLI2RS0FwNBY1PyQ8UemaijE2m5mv5A0Niy3HtbYTFrgkUEQjFMXmSAk2hQDuPQ==}
+    engines: {node: '>=8.0.0'}
+
   '@oxc-project/types@0.154.0':
     resolution: {integrity: sha512-KYOUGQFlLWR+s4QMV2Q9ko38TZm7EdO87Qm7rvZLqk/webse/cDjtyxKhg/47l0byCbs/k46LT8qc4PKjAikzA==}
 
@@ -2547,6 +2557,10 @@ packages:
   ajv@6.15.0:
     resolution: {integrity: sha512-fgFx7Hfoq60ytK2c7DhnF8jIvzYgOMxfugjLOSMHjLIPgenqa7S7oaagATUq99mV6IYvN2tRmC0wnTYX6iPbMw==}
 
+  amqplib@2.2.1:
+    resolution: {integrity: sha512-J3JjAydC2vJ/AgkgVAE0kVH5M4RNfm51zUaspHpwSai3W35lD3hKryvYY/xqMnYcNfR66NYL06Eik+Adn293dQ==}
+    engines: {node: '>=18'}
+
   anser@1.4.10:
     resolution: {integrity: sha512-hCv9AqTQ8ycjpSd3upOJd7vFwW1JaoYQ7tpham03GJ1ca8/65rqn0RpaWpItOAd6ylW9wAw6luXYPJIyPFVOww==}
 
@@ -2697,6 +2711,9 @@ packages:
   big-integer@1.6.52:
     resolution: {integrity: sha512-QxD8cf2eVqJOOz63z6JIN9BzvVs/dlySa5HGSBH5xtR8dPteIRQnBxxKqkNTiT6jbDTF6jAfrd4oMcND9RGbQg==}
     engines: {node: '>=0.6'}
+
+  bintrees@1.0.2:
+    resolution: {integrity: sha512-VOMgTMwjAaUG580SXn3LacVgjurrbMme7ZZNYGSSV7mmtY6QQRh0Eg3pwIcntQ77DErK1L0NxkbetjcoXzVwKw==}
 
   body-parser@2.4.0:
     resolution: {integrity: sha512-Ifk1KcLrxaGt1occQagQNFNNOqRt1LFuehEnHHzB8Z6cRgIxRU1TBaiIsUiCdA+gy5PL7Y1IX31DNKkRmxtXjQ==}
@@ -4650,6 +4667,11 @@ packages:
     resolution: {integrity: sha512-7PiHtLll5LdnKIMw100I+8xJXR5gW2QwWYkT6iJva0bXitZKa/XMrSbdmg3r2Xnaidz9Qumd0VPaMrZlF9V9sA==}
     engines: {node: '>=0.4.0'}
 
+  prom-client@15.1.3:
+    resolution: {integrity: sha512-6ZiOBfCywsD4k1BN9IX0uZhF+tJkV8q8llP64G5Hajs4JOeVLPCwpPVcpXy3BwYiUGgyJzsJJQeOIv7+hDSq8g==}
+    engines: {node: ^16 || ^18 || >=20}
+    deprecated: prom-client has been replaced by @prometheus-io/client
+
   promise@7.3.1:
     resolution: {integrity: sha512-nolQXZ/4L+bP/UGlkfaIujX9BKxGwmQ9OT4mOt5yvy8iK1h3wqTEJCijzGANTCCl9nWjY41juyAn2K3Q1hLLTg==}
 
@@ -5261,6 +5283,9 @@ packages:
   tapable@2.3.3:
     resolution: {integrity: sha512-uxc/zpqFg6x7C8vOE7lh6Lbda8eEL9zmVm/PLeTPBRhh1xCgdWaQ+J1CUieGpIfm2HdtsUpRv+HshiasBMcc6A==}
     engines: {node: '>=6'}
+
+  tdigest@0.1.3:
+    resolution: {integrity: sha512-zbRt+lT+/H4fRItHshczHErVCQnitJk8MfMT24MqFJf3YL7SJJPqGIGeuOdvxXxM/AHFzKBl7WoyaYwqO9s3Kw==}
 
   terminal-link@2.1.1:
     resolution: {integrity: sha512-un0FmiRUQNr5PJqy9kP7c40F5BOfpGlYTrxonDChEZB7pzZxRNp/bt+ymiy9/npwXya9KH99nJ/GXFIiUkYGFQ==}
@@ -7192,6 +7217,8 @@ snapshots:
   '@noxcturnal/noxcturnal-win32-x64-msvc@0.1.9':
     optional: true
 
+  '@opentelemetry/api@1.10.0': {}
+
   '@oxc-project/types@0.154.0': {}
 
   '@popperjs/core@2.11.8': {}
@@ -7343,25 +7370,27 @@ snapshots:
     dependencies:
       nanoid: 3.3.20
 
-  '@redis/bloom@6.1.0(@redis/client@6.1.0)':
+  '@redis/bloom@6.1.0(@redis/client@6.1.0(@opentelemetry/api@1.10.0))':
     dependencies:
-      '@redis/client': 6.1.0
+      '@redis/client': 6.1.0(@opentelemetry/api@1.10.0)
 
-  '@redis/client@6.1.0':
+  '@redis/client@6.1.0(@opentelemetry/api@1.10.0)':
     dependencies:
       cluster-key-slot: 1.1.2
+    optionalDependencies:
+      '@opentelemetry/api': 1.10.0
 
-  '@redis/json@6.1.0(@redis/client@6.1.0)':
+  '@redis/json@6.1.0(@redis/client@6.1.0(@opentelemetry/api@1.10.0))':
     dependencies:
-      '@redis/client': 6.1.0
+      '@redis/client': 6.1.0(@opentelemetry/api@1.10.0)
 
-  '@redis/search@6.1.0(@redis/client@6.1.0)':
+  '@redis/search@6.1.0(@redis/client@6.1.0(@opentelemetry/api@1.10.0))':
     dependencies:
-      '@redis/client': 6.1.0
+      '@redis/client': 6.1.0(@opentelemetry/api@1.10.0)
 
-  '@redis/time-series@6.1.0(@redis/client@6.1.0)':
+  '@redis/time-series@6.1.0(@redis/client@6.1.0(@opentelemetry/api@1.10.0))':
     dependencies:
-      '@redis/client': 6.1.0
+      '@redis/client': 6.1.0(@opentelemetry/api@1.10.0)
 
   '@reduxjs/toolkit@2.12.0(react-redux@9.3.0(@types/react@19.2.17)(react@19.2.8)(redux@5.0.1))(react@19.2.8)':
     dependencies:
@@ -7909,6 +7938,8 @@ snapshots:
       json-schema-traverse: 0.4.1
       uri-js: 4.4.1
 
+  amqplib@2.2.1: {}
+
   anser@1.4.10: {}
 
   ansi-escapes@4.3.2:
@@ -8173,6 +8204,8 @@ snapshots:
   bcryptjs@3.0.3: {}
 
   big-integer@1.6.52: {}
+
+  bintrees@1.0.2: {}
 
   body-parser@2.4.0:
     dependencies:
@@ -10328,6 +10361,11 @@ snapshots:
 
   progress@2.0.3: {}
 
+  prom-client@15.1.3:
+    dependencies:
+      '@opentelemetry/api': 1.10.0
+      tdigest: 0.1.3
+
   promise@7.3.1:
     dependencies:
       asap: 2.0.6
@@ -10628,13 +10666,13 @@ snapshots:
       - '@types/react'
       - redux
 
-  redis@6.1.0:
+  redis@6.1.0(@opentelemetry/api@1.10.0):
     dependencies:
-      '@redis/bloom': 6.1.0(@redis/client@6.1.0)
-      '@redis/client': 6.1.0
-      '@redis/json': 6.1.0(@redis/client@6.1.0)
-      '@redis/search': 6.1.0(@redis/client@6.1.0)
-      '@redis/time-series': 6.1.0(@redis/client@6.1.0)
+      '@redis/bloom': 6.1.0(@redis/client@6.1.0(@opentelemetry/api@1.10.0))
+      '@redis/client': 6.1.0(@opentelemetry/api@1.10.0)
+      '@redis/json': 6.1.0(@redis/client@6.1.0(@opentelemetry/api@1.10.0))
+      '@redis/search': 6.1.0(@redis/client@6.1.0(@opentelemetry/api@1.10.0))
+      '@redis/time-series': 6.1.0(@redis/client@6.1.0(@opentelemetry/api@1.10.0))
     transitivePeerDependencies:
       - '@node-rs/xxhash'
       - '@opentelemetry/api'
@@ -11149,6 +11187,10 @@ snapshots:
   tailwindcss@4.3.3: {}
 
   tapable@2.3.3: {}
+
+  tdigest@0.1.3:
+    dependencies:
+      bintrees: 1.0.2
 
   terminal-link@2.1.1:
     dependencies:

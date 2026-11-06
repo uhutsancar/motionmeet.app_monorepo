@@ -8,6 +8,8 @@ declare global {
       sessionId?: string;
       dbUser?: InternalUser;
       requestId?: string;
+      /** W3C trace id, continued from the caller's `traceparent` when valid. */
+      traceId?: string;
     }
   }
 }
