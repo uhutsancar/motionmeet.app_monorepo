@@ -15,6 +15,7 @@ import * as repairConversationLastMessage from "./migrations/013_repair_conversa
 import * as outboxReliability from "./migrations/014_outbox_reliability.js";
 import * as postsAuthorTimelineIndex from "./migrations/015_posts_author_timeline_index.js";
 import * as messageSync from "./migrations/016_message_sync.js";
+import * as commentOperationId from "./migrations/017_comment_operation_id.js";
 
 const migrationProvider: MigrationProvider = {
   async getMigrations() {
@@ -34,6 +35,7 @@ const migrationProvider: MigrationProvider = {
       "014_outbox_reliability": outboxReliability,
       "015_posts_author_timeline_index": postsAuthorTimelineIndex,
       "016_message_sync": messageSync,
+      "017_comment_operation_id": commentOperationId,
     };
   },
 };

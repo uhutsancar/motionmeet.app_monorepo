@@ -35,6 +35,7 @@ import {
   type Comment,
   type Post,
   type Workout,
+  createOperationId,
 } from "@motionmeet/shared";
 
 interface PostCardProps {
@@ -92,6 +93,7 @@ const PostCard = ({ post }: PostCardProps) => {
   const [olderCommentsLoading, setOlderCommentsLoading] = useState(false);
   const [isLiking, setIsLiking] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const pendingCommentRef = useRef<{ content: string; operationId: string } | null>(null);
 
   useEffect(() => {
     setDayjsLocale(i18n.language);
@@ -153,17 +155,24 @@ const PostCard = ({ post }: PostCardProps) => {
     const content = commentText.trim();
     if (!content) return;
 
+    // A retry of a comment that failed (or whose answer was lost) sends the same
+    // operation id, so the server returns the comment it already made instead
+    // of posting it twice.
+    const pending = pendingCommentRef.current;
+    const operationId = pending && pending.content === content ? pending.operationId : createOperationId("comment");
+    pendingCommentRef.current = { content, operationId };
     setCommentLoading(true);
     try {
       const token = await getToken();
       if (!token) throw new Error("Your session has expired");
       const { data } = await api.post<AddCommentResponse>(
         API_ROUTES.post.comment,
-        { postId: post._id, content },
+        { postId: post._id, content, operationId },
         { headers: { Authorization: `Bearer ${token}` } },
       );
       if (data.success) {
-        setComments((currentComments) => [...currentComments, data.comment]);
+        pendingCommentRef.current = null;
+        setComments((currentComments) => currentComments.some((comment) => comment._id === data.comment._id) ? currentComments : [...currentComments, data.comment]);
         setCommentCount(data.comment_count);
         setCommentText("");
         toast.success(t("feed.comment_posted", "Comment posted!"));

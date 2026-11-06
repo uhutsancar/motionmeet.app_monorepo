@@ -534,6 +534,10 @@ paths:
     post:
       tags: [Social]
       summary: Add a post comment
+      description: |
+        With an `operationId` (body) or `Idempotency-Key` header the call is
+        idempotent per author: a retry returns the comment the first call made.
+        The author's activity row is written in the same transaction.
       operationId: postPostCommentAdd
       requestBody:
         required: true
@@ -545,9 +549,10 @@ paths:
               properties:
                 postId: { type: string }
                 content: { type: string, minLength: 1, maxLength: 1000 }
+                operationId: { type: string, minLength: 8, maxLength: 128 }
       responses:
         "200":
-          description: Created comment and aggregate count
+          description: Created (or, for a repeated operationId, the existing) comment and aggregate count
   /api/post/{postId}/comments:
     get:
       tags: [Social]

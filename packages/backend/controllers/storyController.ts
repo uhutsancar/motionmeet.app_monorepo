@@ -246,18 +246,11 @@ export const setStoryLike: RequestHandler = async (req, res, next) => {
     }
 
     const liked = req.method !== "DELETE";
-    const result = await storyService.setStoryLike(storyId, req.userId, liked);
+    const result = await storyService.setStoryLike(storyId, req.userId, liked, story.user);
 
-    if (result.changed && liked) {
-      // Best-effort, and outside the write: the like is already durable, and a
-      // delivery hiccup must not undo it.
-      void notificationService.recordAndPublish({
-        userId: story.user,
-        actorId: req.userId,
-        type: "story_like",
-        storyId,
-      });
-    }
+    // The activity row was written with the like; delivering it is best
+    // effort, after the commit, and never fails the request.
+    void notificationService.publishNotification(result.notification);
 
     return res.json({ success: true, liked: result.liked });
   } catch (error) {

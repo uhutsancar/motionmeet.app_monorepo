@@ -131,6 +131,7 @@ const invalidateFor = (leftId: string, rightId: string): Promise<void> => invali
  * privacy setting - never from anything the caller sends.
  */
 export const requestFollow = async (requesterId: string, targetId: string): Promise<FollowAction> => {
+  let notification: Awaited<ReturnType<typeof notificationService.recordNotification>> = null;
   const action = await withTransaction<FollowAction>(async (transaction) => {
     const target = await transaction
       .selectFrom("users")
@@ -180,12 +181,15 @@ export const requestFollow = async (requesterId: string, targetId: string): Prom
       throw Object.assign(new Error("Daily follow request limit reached"), { status: 429 });
     }
 
+    // The activity row is part of the change (WP-08): if it cannot be
+    // written, neither the request nor the follow is kept.
     if (!targetIsOpen) {
       await transaction
         .insertInto("follow_requests")
         .values({ requester_id: requesterId, target_id: targetId })
         .onConflict((conflict) => conflict.columns(["requester_id", "target_id"]).doNothing())
         .execute();
+      notification = await notificationService.recordNotification({ userId: targetId, actorId: requesterId, type: "follow_request" }, { transaction });
       return "requested";
     }
 
@@ -193,22 +197,19 @@ export const requestFollow = async (requesterId: string, targetId: string): Prom
       await transaction.deleteFrom("follow_requests").where("id", "=", existingRequest.id).execute();
     }
     await writeFollowEdge(transaction, requesterId, targetId);
+    // The stale request row may have carried a notification with Confirm/Delete
+    // on it; the follow already happened, so it must not still be offered.
+    await notificationService.clearFollowRequestNotification(targetId, requesterId, { transaction });
+    notification = await notificationService.recordNotification({ userId: targetId, actorId: requesterId, type: "follow" }, { transaction });
     return "followed";
   });
 
   if (action === "requested") {
-    await notificationService.publishNotification(
-      await notificationService.recordNotification({ userId: targetId, actorId: requesterId, type: "follow_request" }),
-    );
+    void notificationService.publishNotification(notification);
     await notifyRelationshipChange(requesterId, targetId);
   }
   if (action === "followed") {
-    // The stale request row may have carried a notification with Confirm/Delete
-    // on it; the follow already happened, so it must not still be offered.
-    await notificationService.clearFollowRequestNotification(targetId, requesterId);
-    await notificationService.publishNotification(
-      await notificationService.recordNotification({ userId: targetId, actorId: requesterId, type: "follow" }),
-    );
+    void notificationService.publishNotification(notification);
     await invalidateFor(requesterId, targetId);
     await notifyRelationshipChange(requesterId, targetId);
   }
@@ -274,17 +275,16 @@ export const acceptFollowRequest = async (userId: string, requesterId: string): 
       .where("target_id", "=", userId)
       .forUpdate()
       .executeTakeFirst();
-    if (!request) return false;
+    if (!request) return null;
     await transaction.deleteFrom("follow_requests").where("id", "=", request.id).execute();
     await writeFollowEdge(transaction, requesterId, userId);
-    return true;
+    // The approval and its activity rows commit together (WP-08).
+    await notificationService.clearFollowRequestNotification(userId, requesterId, { transaction });
+    return { notification: await notificationService.recordNotification({ userId: requesterId, actorId: userId, type: "follow_request_accepted" }, { transaction }) };
   });
   if (!accepted) return false;
 
-  await notificationService.clearFollowRequestNotification(userId, requesterId);
-  await notificationService.publishNotification(
-    await notificationService.recordNotification({ userId: requesterId, actorId: userId, type: "follow_request_accepted" }),
-  );
+  void notificationService.publishNotification(accepted.notification);
   await invalidateFor(userId, requesterId);
   await notifyRelationshipChange(userId, requesterId);
   return true;

@@ -128,3 +128,10 @@ conversation uniqueness, analytics and durable media-deletion jobs.
 | `message_deletions` | One tombstone per deleted message (`change_seq` from the same counter), written by trigger `messages_record_deletion`; kept 30 days; no foreign key |
 
 See docs/architecture/adr/005-message-sync.md.
+
+## Comment idempotency (migration 017)
+
+`post_comments.operation_id` (nullable, client-generated) with the partial
+unique index `post_comments_user_operation_idx (user_id, operation_id) WHERE
+operation_id IS NOT NULL`: a retried comment with the same id is the same
+comment. Comments from clients that send no id are unaffected.

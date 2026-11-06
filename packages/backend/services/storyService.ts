@@ -8,6 +8,8 @@ import type { Pagination } from "../utils/pagination.js";
 import { extractS3Key } from "../utils/s3Utils.js";
 import { queueMediaDeletions } from "./mediaDeletionService.js";
 import { deliverMedia } from "./mediaDelivery.js";
+import { recordNotification } from "./notificationService.js";
+import type { Row } from "../db/types.js";
 import { commitReservedUploads } from "./mediaUploadService.js";
 import * as quotaService from "./quotaService.js";
 
@@ -189,15 +191,23 @@ export const setStoryLike = async (
   storyId: string,
   userId: string,
   liked: boolean,
-): Promise<{ liked: boolean; changed: boolean }> => {
+  ownerId?: string,
+): Promise<{ liked: boolean; changed: boolean; notification: Row<"notifications"> | null }> => {
   if (liked) {
-    const inserted = await database
-      .insertInto("story_likes")
-      .values({ story_id: storyId, user_id: userId })
-      .onConflict((conflict) => conflict.columns(["story_id", "user_id"]).doNothing())
-      .returning("story_id")
-      .executeTakeFirst();
-    return { liked: true, changed: Boolean(inserted) };
+    // A new like and the owner's activity row commit together (WP-08); the
+    // caller delivers the row after the commit.
+    return withTransaction(async (transaction) => {
+      const inserted = await transaction
+        .insertInto("story_likes")
+        .values({ story_id: storyId, user_id: userId })
+        .onConflict((conflict) => conflict.columns(["story_id", "user_id"]).doNothing())
+        .returning("story_id")
+        .executeTakeFirst();
+      const notification = inserted && ownerId
+        ? await recordNotification({ userId: ownerId, actorId: userId, type: "story_like", storyId }, { transaction })
+        : null;
+      return { liked: true, changed: Boolean(inserted), notification };
+    });
   }
   const removed = await database
     .deleteFrom("story_likes")
@@ -205,7 +215,7 @@ export const setStoryLike = async (
     .where("user_id", "=", userId)
     .returning("story_id")
     .executeTakeFirst();
-  return { liked: false, changed: Boolean(removed) };
+  return { liked: false, changed: Boolean(removed), notification: null };
 };
 
 export const getStoryById = async (storyId: string): Promise<StoryAccess | null> => {

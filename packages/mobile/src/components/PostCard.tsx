@@ -45,6 +45,7 @@ import {
   type Exercise,
   type Post,
   type Workout,
+  createOperationId,
 } from '@motionmeet/shared';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { postLikeSynced } from '../features/posts/postsSlice';
@@ -156,6 +157,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
   // Separate flags: sending a comment must not freeze the heart, and the
   // other way round.
   const likeInFlightRef = useRef(false);
+  const pendingCommentRef = useRef<{ content: string; operationId: string } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   /*
    * The card keeps its own copy so a tap answers instantly, but the post it
@@ -634,13 +636,20 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
   const handleAddComment = async () => {
     const content = commentText.trim();
     if (!content || isProcessing) return;
+    // A retry of a comment that failed (or whose answer was lost) sends the same
+    // operation id, so the server returns the comment it already made instead
+    // of posting it twice.
+    const pending = pendingCommentRef.current;
+    const operationId = pending && pending.content === content ? pending.operationId : createOperationId('comment');
+    pendingCommentRef.current = { content, operationId };
     try {
       setIsProcessing(true);
       const token = await getToken();
       if (!token) throw new Error('Authentication required');
-      const data = await addComment(post._id, content, token);
+      const data = await addComment(post._id, content, token, operationId);
       if (data.success) {
-        setComments((currentComments) => [...currentComments, data.comment]);
+        pendingCommentRef.current = null;
+        setComments((currentComments) => currentComments.some((comment) => comment._id === data.comment._id) ? currentComments : [...currentComments, data.comment]);
         setCommentCount(data.comment_count);
         setCommentText("");
       } else {

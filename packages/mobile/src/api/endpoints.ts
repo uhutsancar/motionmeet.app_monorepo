@@ -497,8 +497,9 @@ export const getPersonalRecords = async (token: Token): Promise<RecordsResponse>
 };
 
 // ============= ADDITIONAL APIs =============
-export const addComment = async (postId: string, content: string, token: Token): Promise<CommentResponse> => {
-  const { data } = await api.post(API_ROUTES.post.comment, { postId, content }, {
+/** `operationId` makes a retry return the comment the first attempt made. */
+export const addComment = async (postId: string, content: string, token: Token, operationId?: string): Promise<CommentResponse> => {
+  const { data } = await api.post(API_ROUTES.post.comment, { postId, content, ...(operationId ? { operationId } : {}) }, {
     headers: { Authorization: `Bearer ${token}` },
   });
   return data;

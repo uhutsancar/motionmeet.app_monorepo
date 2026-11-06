@@ -261,6 +261,8 @@ export interface PostCommentTable extends BaseTable {
   post_id: string;
   user_id: string;
   content: string;
+  /** Client-generated id that makes a retried comment the same comment (migration 017). */
+  operation_id: ColumnType<string | null, string | null | undefined, string | null>;
 }
 
 export interface StoryTable extends BaseTable {

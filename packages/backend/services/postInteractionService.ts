@@ -75,15 +75,18 @@ const applyLikeCount = async (postId: string, delta: 1 | -1, transaction: Databa
 };
 
 /**
- * The row is already durable when this runs, and the recipient may not even be
- * connected. Awaiting the fan-out would put `hydrate` plus an unread `COUNT` -
- * three queries - in front of the HTTP response for every like in the system,
- * so the write is awaited and the delivery is not.
+ * Activity rows are written inside the action's own transaction (WP-08 of the
+ * 2026-11 audit). Written after the commit, a failure left a like with no
+ * activity row - and a comment, because the client then retried, twice. Now
+ * either both exist or neither does, and the client's retry is safe.
+ *
+ * Delivery to the socket happens after the commit and is not awaited: the
+ * recipient may not be connected, and `hydrate` plus an unread `COUNT` must
+ * not sit in front of the response for every like in the system.
+ * `publishNotification` swallows its own failures.
  */
-const notifyPostLike = async (authorId: string, actorId: string, postId: string): Promise<void> => {
-  const row = await notificationService.recordNotification({ userId: authorId, actorId, type: "post_like", postId });
-  void notificationService.publishNotification(row);
-};
+const recordPostLike = (authorId: string, actorId: string, postId: string, transaction: DatabaseTransaction) =>
+  notificationService.recordNotification({ userId: authorId, actorId, type: "post_like", postId }, { transaction });
 
 export const togglePostLike = async (postId: string, userId: string): Promise<{ liked: boolean; likeCount: number }> => {
   const result = await withTransaction(async (transaction) => {
@@ -94,13 +97,13 @@ export const togglePostLike = async (postId: string, userId: string): Promise<{ 
     const post = await transaction.selectFrom("posts").select(["id", "user_id"]).where("id", "=", postId).executeTakeFirst();
     if (!post) throw Object.assign(new Error("Post not found"), { status: 404 });
     const removed = await transaction.deleteFrom("post_likes").where("post_id", "=", postId).where("user_id", "=", userId).returning("post_id").executeTakeFirst();
-    if (removed) return { liked: false, likeCount: await applyLikeCount(postId, -1, transaction), authorId: post.user_id };
+    if (removed) return { liked: false, likeCount: await applyLikeCount(postId, -1, transaction), notification: null };
     const inserted = await transaction.insertInto("post_likes").values({ post_id: postId, user_id: userId }).onConflict((conflict) => conflict.columns(["post_id", "user_id"]).doNothing()).returning("post_id").executeTakeFirst();
     const likeCount = inserted ? await applyLikeCount(postId, 1, transaction) : await postCount(postId, transaction);
-    return { liked: true, likeCount, authorId: post.user_id };
+    return { liked: true, likeCount, notification: await recordPostLike(post.user_id, userId, postId, transaction) };
   });
   await invalidateOwnFeed(userId);
-  if (result.liked) await notifyPostLike(result.authorId, userId, postId);
+  void notificationService.publishNotification(result.notification);
   return { liked: result.liked, likeCount: result.likeCount };
 };
 
@@ -110,12 +113,12 @@ export const likePost = async (postId: string, userId: string): Promise<{ liked:
     if (!post) throw Object.assign(new Error("Post not found"), { status: 404 });
     const inserted = await transaction.insertInto("post_likes").values({ post_id: postId, user_id: userId }).onConflict((conflict) => conflict.columns(["post_id", "user_id"]).doNothing()).returning("post_id").executeTakeFirst();
     const likeCount = inserted ? await applyLikeCount(postId, 1, transaction) : await postCount(postId, transaction);
-    return { likeCount, authorId: post.user_id, isNew: Boolean(inserted) };
+    return { likeCount, notification: inserted ? await recordPostLike(post.user_id, userId, postId, transaction) : null };
   });
   await invalidateOwnFeed(userId);
-  // Outside the transaction: the like is already durable, and a delivery hiccup
-  // must not undo it.
-  if (result.isNew) await notifyPostLike(result.authorId, userId, postId);
+  // After the commit and not awaited: a delivery hiccup must not undo the like
+  // or delay the response.
+  void notificationService.publishNotification(result.notification);
   return { liked: true, likeCount: result.likeCount };
 };
 
@@ -127,26 +130,55 @@ export const unlikePost = async (postId: string, userId: string): Promise<{ like
   await invalidateOwnFeed(userId); return { liked: false, likeCount };
 };
 
-export const createPostComment = async (postId: string, userId: string, content: string): Promise<{ comment: Comment; commentCount: number }> => {
-  let authorId = "";
-  const result = await withTransaction(async (transaction) => {
-    // Read without a row lock: the insert stands on its own and the counter is
-    // an atomic delta, so holding the post row only queued concurrent comments
-    // on a busy post behind each other.
-    const post = await transaction.selectFrom("posts").select(["id", "user_id"]).where("id", "=", postId).executeTakeFirst();
-    if (!post) throw Object.assign(new Error("Post not found"), { status: 404 });
-    authorId = post.user_id;
-    const row = await transaction.insertInto("post_comments").values({ legacy_mongo_id: null, post_id: postId, user_id: userId, content: content.trim() }).returningAll().executeTakeFirstOrThrow();
-    const countRow = await transaction.updateTable("posts").set((expression) => ({ comment_count: expression("comment_count", "+", 1) })).where("id", "=", postId).returning("comment_count").executeTakeFirstOrThrow();
-    const user = await transaction.selectFrom("users").select(["id", "full_name", "username", "profile_picture_url"]).where("id", "=", userId).executeTakeFirst();
-    return { comment: { id: row.id, _id: row.id, postId, content: row.content, user: user ? publicUser(user.id, user.full_name, user.username, user.profile_picture_url) : null, createdAt: toIsoString(row.created_at) ?? new Date(0).toISOString(), updatedAt: toIsoString(row.updated_at) ?? new Date(0).toISOString() }, commentCount: countRow.comment_count };
-  });
-  await invalidateOwnFeed(userId);
-  // Durable first, delivered after the response - same reasoning as a like.
-  void notificationService.publishNotification(
-    await notificationService.recordNotification({ userId: authorId, actorId: userId, type: "post_comment", postId }),
-  );
-  return result;
+const isUniqueViolation = (error: unknown): boolean => Boolean(error && typeof error === "object" && "code" in error && error.code === "23505");
+
+const commentView = async (row: { id: string; content: string; created_at: Date; updated_at: Date }, postId: string, userId: string, executor: DatabaseTransaction | typeof database): Promise<Comment> => {
+  const user = await executor.selectFrom("users").select(["id", "full_name", "username", "profile_picture_url"]).where("id", "=", userId).executeTakeFirst();
+  return { id: row.id, _id: row.id, postId, content: row.content, user: user ? publicUser(user.id, user.full_name, user.username, user.profile_picture_url) : null, createdAt: toIsoString(row.created_at) ?? new Date(0).toISOString(), updatedAt: toIsoString(row.updated_at) ?? new Date(0).toISOString() };
+};
+
+/** A retry with an operation id the author already used: the comment it made, and the current count. */
+const existingComment = async (postId: string, userId: string, operationId: string, executor: DatabaseTransaction | typeof database): Promise<{ comment: Comment; commentCount: number } | null> => {
+  const row = await executor.selectFrom("post_comments").select(["id", "content", "created_at", "updated_at"]).where("user_id", "=", userId).where("operation_id", "=", operationId).where("post_id", "=", postId).executeTakeFirst();
+  if (!row) return null;
+  const count = await executor.selectFrom("posts").select("comment_count").where("id", "=", postId).executeTakeFirst();
+  return { comment: await commentView(row, postId, userId, executor), commentCount: count?.comment_count ?? 0 };
+};
+
+/**
+ * `operationId` (optional, from the client) makes the call idempotent: a retry
+ * with the same id returns the comment the first call made instead of adding
+ * another (NEW-09). The activity row for the post's author is written in the
+ * same transaction (see `recordPostLike`).
+ */
+export const createPostComment = async (postId: string, userId: string, content: string, { operationId }: { operationId?: string } = {}): Promise<{ comment: Comment; commentCount: number }> => {
+  try {
+    const result = await withTransaction(async (transaction) => {
+      if (operationId) {
+        const repeat = await existingComment(postId, userId, operationId, transaction);
+        if (repeat) return { ...repeat, notification: null };
+      }
+      // Read without a row lock: the insert stands on its own and the counter is
+      // an atomic delta, so holding the post row only queued concurrent comments
+      // on a busy post behind each other.
+      const post = await transaction.selectFrom("posts").select(["id", "user_id"]).where("id", "=", postId).executeTakeFirst();
+      if (!post) throw Object.assign(new Error("Post not found"), { status: 404 });
+      const row = await transaction.insertInto("post_comments").values({ legacy_mongo_id: null, post_id: postId, user_id: userId, content: content.trim(), operation_id: operationId ?? null }).returningAll().executeTakeFirstOrThrow();
+      const countRow = await transaction.updateTable("posts").set((expression) => ({ comment_count: expression("comment_count", "+", 1) })).where("id", "=", postId).returning("comment_count").executeTakeFirstOrThrow();
+      const notification = await notificationService.recordNotification({ userId: post.user_id, actorId: userId, type: "post_comment", postId }, { transaction });
+      return { comment: await commentView(row, postId, userId, transaction), commentCount: countRow.comment_count, notification };
+    });
+    await invalidateOwnFeed(userId);
+    // Durable first, delivered after the response - same reasoning as a like.
+    void notificationService.publishNotification(result.notification);
+    return { comment: result.comment, commentCount: result.commentCount };
+  } catch (error: unknown) {
+    // Two requests with the same id raced; the loser returns the winner's comment.
+    if (!operationId || !isUniqueViolation(error)) throw error;
+    const repeat = await existingComment(postId, userId, operationId, database);
+    if (!repeat) throw error;
+    return repeat;
+  }
 };
 
 export const getPostComments = async (postId: string, pagination: Pagination): Promise<{ items: Comment[]; nextCursor: string | null }> => {

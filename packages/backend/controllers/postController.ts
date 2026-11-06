@@ -347,7 +347,12 @@ export const addComment: RequestHandler = async (req, res, next) => {
       return res.status(403).json({ success: false, message: "Post is not accessible" });
     }
 
-    const result = await postService.addCommentToPost(postId, req.userId, content);
+    // Optional: a client that sends one gets the same comment back on a retry.
+    const operationId = req.get("Idempotency-Key") || req.body?.operationId;
+    if (operationId !== undefined && (typeof operationId !== "string" || operationId.length < 8 || operationId.length > 128)) {
+      return res.status(400).json({ success: false, message: "operationId must be 8-128 characters" });
+    }
+    const result = await postService.addCommentToPost(postId, req.userId, content, { operationId });
     return res.json({
       success: true,
       comment: result.comment,
