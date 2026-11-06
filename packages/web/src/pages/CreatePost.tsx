@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
-import { uploadMedia } from "~/api/mediaUpload";
+import { uploadMedia, UploadCancelledError } from "~/api/mediaUpload";
 import { createPost } from "~/api/endpoints";
 import {
   CONTENT_LIMITS,
@@ -74,6 +74,9 @@ const CreatePost = ({ onSuccess }: CreatePostProps) => {
   const [content, setContent] = useState("");
   const [images, setImages] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
+  // Percent of all selected files sent while the uploads run; null otherwise.
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
   const user = useAppSelector((state) => state.user.value);
   const { getToken } = useAuthContext();
   const operationIdRef = useRef<string | null>(null);
@@ -83,6 +86,10 @@ const CreatePost = ({ onSuccess }: CreatePostProps) => {
     operationIdRef.current = null;
     uploadCacheRef.current = null;
   };
+
+  // Leaving the page mid-upload stops the transfers instead of letting them
+  // run on behind a screen that will never attach them.
+  useEffect(() => () => uploadAbortRef.current?.abort(), []);
 
   const replaceImages = (updater: ImageUpdater) => {
     setImages((current) => {
@@ -115,9 +122,29 @@ const CreatePost = ({ onSuccess }: CreatePostProps) => {
         ? uploadCacheRef.current.keys
         : null;
       if (!uploadedKeys) {
-        uploadedKeys = await Promise.all(
-          images.map((image) => uploadMedia(image, "posts", token))
-        );
+        const controller = new AbortController();
+        uploadAbortRef.current = controller;
+        const sent = images.map(() => 0);
+        const total = images.reduce((sum, image) => sum + image.size, 0);
+        setUploadPercent(0);
+        try {
+          uploadedKeys = await Promise.all(
+            images.map((image, index) => uploadMedia(image, "posts", token, {
+              signal: controller.signal,
+              onProgress: ({ sentBytes }) => {
+                sent[index] = sentBytes;
+                if (total > 0) setUploadPercent(Math.min(100, Math.round((sent.reduce((sum, value) => sum + value, 0) / total) * 100)));
+              },
+            }))
+          );
+        } catch (error) {
+          // One file failing fails the post; the others stop sending.
+          controller.abort();
+          throw error;
+        } finally {
+          uploadAbortRef.current = null;
+          setUploadPercent(null);
+        }
         uploadCacheRef.current = { signature: mediaSignature, keys: uploadedKeys };
       }
       operationIdRef.current ||= createOperationId("post");
@@ -137,6 +164,8 @@ const CreatePost = ({ onSuccess }: CreatePostProps) => {
       if (onSuccess) onSuccess();
       else navigate("/");
     } catch (error: unknown) {
+      // Cancelled on purpose: not an error to report.
+      if (error instanceof UploadCancelledError) return;
       toast.error(error instanceof Error ? error.message : "Post could not be published");
     } finally {
       setLoading(false);
@@ -250,14 +279,23 @@ const CreatePost = ({ onSuccess }: CreatePostProps) => {
                 sx={{ display: "none" }}
               />
             </Button>
-            <Button
-              variant="contained"
-              startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <Send size={16} />}
-              onClick={handleSubmit}
-              disabled={loading || (!content.trim() && !images.length)}
-            >
-              {t("feed.post")}
-            </Button>
+            <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+              {uploadPercent !== null && (
+                <Button color="inherit" onClick={() => uploadAbortRef.current?.abort()}>
+                  {t("common.cancel")}
+                </Button>
+              )}
+              <Button
+                variant="contained"
+                startIcon={uploadPercent !== null
+                  ? <CircularProgress size={16} color="inherit" variant={uploadPercent > 0 ? "determinate" : "indeterminate"} value={uploadPercent} />
+                  : loading ? <CircularProgress size={16} color="inherit" /> : <Send size={16} />}
+                onClick={handleSubmit}
+                disabled={loading || (!content.trim() && !images.length)}
+              >
+                {uploadPercent !== null && uploadPercent > 0 ? `${uploadPercent}%` : t("feed.post")}
+              </Button>
+            </Stack>
           </Stack>
         </Stack>
       </Paper>

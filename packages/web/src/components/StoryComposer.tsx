@@ -22,7 +22,7 @@ import type { ChangeEvent, PointerEvent as ReactPointerEvent } from "react";
 import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import api from "~/api/axios";
-import { uploadMedia } from "~/api/mediaUpload";
+import { uploadMedia, UploadCancelledError } from "~/api/mediaUpload";
 import { useAuthContext } from "~/context/AuthProvider";
 import {
   API_ROUTES,
@@ -111,6 +111,10 @@ const StoryComposer = ({ open, onClose, onCreated }: StoryComposerProps) => {
   const [dragging, setDragging] = useState(false);
   const [overTrash, setOverTrash] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  // Percent of the file sent while the upload runs; null otherwise.
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null);
+  // Set only while bytes move: closing then cancels the transfer.
+  const uploadAbortRef = useRef<AbortController | null>(null);
   const [frameWidth, setFrameWidth] = useState(360);
 
   const editing = useMemo(
@@ -151,7 +155,10 @@ const StoryComposer = ({ open, onClose, onCreated }: StoryComposerProps) => {
   }, []);
 
   const close = useCallback(() => {
-    if (publishing) return;
+    // Mid-upload, closing means stop; once the story is being created the
+    // short, idempotent request is allowed to finish.
+    if (publishing && !uploadAbortRef.current) return;
+    uploadAbortRef.current?.abort();
     reset();
     onClose();
   }, [onClose, publishing, reset]);
@@ -276,7 +283,20 @@ const StoryComposer = ({ open, onClose, onCreated }: StoryComposerProps) => {
       const signature = `${media.name}:${media.size}:${media.lastModified}`;
       let uploadedKey = uploadedRef.current?.signature === signature ? uploadedRef.current.key : undefined;
       if (!uploadedKey) {
-        uploadedKey = await uploadMedia(media, "stories", token);
+        const controller = new AbortController();
+        uploadAbortRef.current = controller;
+        setUploadPercent(0);
+        try {
+          uploadedKey = await uploadMedia(media, "stories", token, {
+            signal: controller.signal,
+            onProgress: ({ sentBytes, totalBytes }) => {
+              if (totalBytes > 0) setUploadPercent(Math.min(100, Math.round((sentBytes / totalBytes) * 100)));
+            },
+          });
+        } finally {
+          uploadAbortRef.current = null;
+          setUploadPercent(null);
+        }
         uploadedRef.current = { signature, key: uploadedKey };
       }
 
@@ -304,6 +324,8 @@ const StoryComposer = ({ open, onClose, onCreated }: StoryComposerProps) => {
       await onCreated();
       onClose();
     } catch (error: unknown) {
+      // Closed mid-upload: nothing to report.
+      if (error instanceof UploadCancelledError) return;
       const failure = axios.isAxiosError<ApiFailure>(error) ? error.response?.data : undefined;
       toast.error(
         failure?.message ||
@@ -479,7 +501,15 @@ const StoryComposer = ({ open, onClose, onCreated }: StoryComposerProps) => {
                   aria-label={t("feed.share_story", "Share story")}
                   sx={{ width: 50, height: 50, color: "common.white", bgcolor: "#7A4DF5", "&:hover": { bgcolor: "#6A3DE5" } }}
                 >
-                  {publishing ? <CircularProgress size={20} color="inherit" /> : <ArrowForwardRounded />}
+                  {publishing ? (
+                    <CircularProgress
+                      size={20}
+                      color="inherit"
+                      variant={uploadPercent ? "determinate" : "indeterminate"}
+                      value={uploadPercent ?? undefined}
+                      aria-label={uploadPercent ? `${uploadPercent}%` : undefined}
+                    />
+                  ) : <ArrowForwardRounded />}
                 </IconButton>
               </Stack>
             )}
