@@ -2127,6 +2127,7 @@
       "id": 37,
       "type": "table",
       "title": "En büyük tablolar",
+      "description": "Satır sayısı istatistik sayacından, sayaç sıfırlanmışsa (sunucu temiz kapanmadığında olur) planlayıcının tahmininden gelir; ikisi de yoksa ANALYZE çalıştırın. Ölü satır oranı yüksek ve boyut satıra göre büyükse tablo şişmiştir (VACUUM).",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "${DS_MOTIONMEET}"
@@ -2147,7 +2148,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "select relname as \"Tablo\", pg_total_relation_size(relid) as \"Boyut\", n_live_tup as \"Satır\",\n       n_dead_tup as \"Ölü satır\", last_autovacuum as \"Son autovacuum\"\nfrom pg_stat_user_tables\norder by pg_total_relation_size(relid) desc\nlimit 10"
+          "rawSql": "select s.relname as \"Tablo\", pg_total_relation_size(s.relid) as \"Boyut\",\n       greatest(s.n_live_tup, c.reltuples::bigint, 0) as \"Satır (yaklaşık)\",\n       s.n_dead_tup as \"Ölü satır\", greatest(s.last_autovacuum, s.last_vacuum) as \"Son vacuum\",\n       greatest(s.last_autoanalyze, s.last_analyze) as \"Son analyze\"\nfrom pg_stat_user_tables s\njoin pg_class c on c.oid = s.relid\norder by pg_total_relation_size(s.relid) desc\nlimit 10"
         }
       ],
       "fieldConfig": {
@@ -2204,6 +2205,6 @@
   "timezone": "browser",
   "title": "MotionMeet Genel Bakış",
   "uid": "motionmeet-overview",
-  "version": 1,
+  "version": 2,
   "weekStart": "monday"
 }

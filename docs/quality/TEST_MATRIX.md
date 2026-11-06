@@ -53,3 +53,16 @@ pnpm --filter @motionmeet/backend test
 pnpm --filter @motionmeet/backend test:integration
 docker compose -f docker-compose.test.yml down
 ```
+
+## Authorization sweep (black-box)
+
+`packages/backend/tests/e2e/authorization.e2e.test.ts`, run with
+`E2E_BASE_URL=http://localhost:8088 pnpm --filter @motionmeet/backend test:e2e`
+against the local production rehearsal stack — **10/10 PASS** (2026-11-06).
+A private-account owner, an approved follower and a stranger; for every
+resource with an id (posts at each visibility, story, workout share card,
+routine, measurement, custom exercise, message) the stranger's read, act and
+delete attempts are refused while the follower's and owner's allowed reads
+succeed. Also covered: share link without login, profile of a private
+account, mass assignment of role/counters/author, admin routes, requests
+without a token.

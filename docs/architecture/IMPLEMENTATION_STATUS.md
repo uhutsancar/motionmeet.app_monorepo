@@ -34,10 +34,10 @@ scenario results: [../quality/TEST_MATRIX.md](../quality/TEST_MATRIX.md).
 | MM-P0-02 | Post creation bugs | DONE | Presigned-only posts, duplicate keys, post type from files, retry keeps keys |
 | MM-P0-03 | Real media metadata | PARTIAL | Per-file MIME + size (DONE); image width/height by worker (DONE); video duration and backfill of old rows: NOT_STARTED |
 | MM-P0-04 | Mobile upload memory/cancel/timeout | DONE in code | 32-byte sniff, native progress, real cancel, stall + size-scaled deadline. Device measurement NOT_RUN; multipart/resumable not needed without data |
-| MM-P0-05 | Privacy regression | PARTIAL | Two cache leaks fixed and covered by Redis-backed tests (FEED-01/02), story expiry enforced at read, workout masquerade closed. Full authorisation matrix (BOLA sweep): NOT_STARTED |
+| MM-P0-05 | Privacy regression | DONE | Two cache leaks fixed and covered by Redis-backed tests (FEED-01/02), story expiry enforced at read, workout masquerade closed, authorisation sweep passes (see MM-P1-21) |
 | MM-P1-01/02/03 | Outbox, RabbitMQ, idempotent consumers | DONE | Migration 014, confirms + mandatory, retry tiers, `.dead`, `processed_events`, redrive script |
 | MM-P1-04 | Scheduler separation | DONE | Advisory-locked tasks, graceful stop; SIGTERM drain verified in the production image |
-| MM-P1-05 | Queue observability | PARTIAL | Metrics, alert suggestions, runbooks. Dashboards/alert rules as code: NOT_STARTED |
+| MM-P1-05 | Queue observability | PARTIAL | Metrics, alert suggestions, runbooks; Grafana dashboard as code (`infra/grafana/motionmeet-overview.json`, PostgreSQL datasource) imported into the existing Grafana. Prometheus scraping of the process metrics: not set up |
 | MM-P1-06 | `media_assets` / variants | NOT_STARTED (by decision) | ADR 003: verify synchronously, enrich asynchronously until video volume justifies the asset model |
 | MM-P1-07 | Upload/finalize/publish contract | PARTIAL | Contract unchanged and backward compatible; `media.uploaded` event added |
 | MM-P1-08 | Image processing | PARTIAL | Dimensions + EXIF orientation. Variants: ImageKit already serves them |
@@ -53,7 +53,7 @@ scenario results: [../quality/TEST_MATRIX.md](../quality/TEST_MATRIX.md).
 | MM-P1-18 | Query planning | NOT_STARTED | Needs `pg_stat_statements` and representative data |
 | MM-P1-19 | Migration discipline | DONE for 014 | Expand-only, documented down path, idempotent re-run |
 | MM-P2-20 | Replicas/sharding | Not needed | Single PostgreSQL kept |
-| MM-P1-21 | Auth/session/API security | PARTIAL | Socket session binding. BOLA/IDOR sweep: NOT_STARTED |
+| MM-P1-21 | Auth/session/API security | DONE for this scope | Socket session binding; black-box BOLA/IDOR sweep `tests/e2e/authorization.e2e.test.ts` (10 scenarios, every resource type with an id, positive controls, mass assignment, admin, unauthenticated) passes against the production images. Finding: the server-rendered share page with post-specific Open Graph tags is not reachable behind the web nginx (`/post/:id` serves the SPA shell, which reads `/api/post/:id/public`); private data does not leak, but link previews stay generic — routing `/post/` to the backend is a product decision |
 | MM-P1-22 | Object storage security | PARTIAL | Size floor, duplicate refusal. Private CDN for private media: NOT_STARTED |
 | MM-P1-23/24 | Privacy lifecycle, moderation | NOT_STARTED | Account deletion now also disconnects sockets and retires feed caches |
 | MM-P2-25/26 | Web/mobile performance | NOT_STARTED | Device and browser profiling needed |
