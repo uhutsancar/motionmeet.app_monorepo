@@ -2,6 +2,7 @@ import { database, withTransaction, type DatabaseTransaction } from "../configs/
 import type { OutboxEventType } from "../db/types.js";
 import sendEmail from "../configs/nodeMailer.js";
 import { escapeHtml } from "../utils/html.js";
+import { probeStoredImage } from "../services/mediaProbeService.js";
 import type { DomainEvent } from "./events.js";
 
 /**
@@ -79,7 +80,34 @@ const connectionRequestEmail: EventConsumer = {
   },
 };
 
-export const EVENT_CONSUMERS: readonly EventConsumer[] = [profileProjection, connectionRequestEmail];
+/**
+ * Measures a new post's images and stores their pixel size on `post_media`.
+ *
+ * The post went live when its upload was verified; this only adds metadata,
+ * so a slow or failed probe never holds anything up. The update writes only
+ * rows still missing a width, which makes a repeated delivery a no-op, and a
+ * post deleted in the meantime simply has no rows left to update.
+ */
+const mediaMetadata: EventConsumer = {
+  name: "media-metadata",
+  eventTypes: ["media.uploaded"],
+  kind: "external",
+  perform: async (event) => {
+    const postId = payloadString(event, "postId");
+    if (!postId) throw new PermanentEventError("media.uploaded is missing its post id");
+    // Without object storage there is nothing to read.
+    if (!process.env.AWS_BUCKET_NAME) return;
+    const rows = await database.selectFrom("post_media").select(["id", "object_key"])
+      .where("post_id", "=", postId).where("media_type", "=", "image").where("width", "is", null).where("object_key", "!=", "").execute();
+    for (const row of rows) {
+      const dimensions = await probeStoredImage(row.object_key);
+      if (!dimensions) continue;
+      await database.updateTable("post_media").set(dimensions).where("id", "=", row.id).where("width", "is", null).execute();
+    }
+  },
+};
+
+export const EVENT_CONSUMERS: readonly EventConsumer[] = [profileProjection, connectionRequestEmail, mediaMetadata];
 
 export const consumersFor = (eventType: OutboxEventType): EventConsumer[] =>
   EVENT_CONSUMERS.filter((consumer) => consumer.eventTypes.includes(eventType));

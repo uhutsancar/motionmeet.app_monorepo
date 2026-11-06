@@ -10,6 +10,13 @@ export interface PostMedia {
   url: string;
   mediaType: "image" | "video";
   position: number;
+  /**
+   * Display size in pixels, measured by the media worker shortly after the
+   * post is created; null (or absent, from older servers) until then and for
+   * videos. Lets a client reserve the right aspect ratio before the image loads.
+   */
+  width?: number | null;
+  height?: number | null;
 }
 
 export interface Comment extends Timestamped {

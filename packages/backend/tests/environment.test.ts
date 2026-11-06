@@ -7,6 +7,7 @@ const managedKeys = [
   "MEDIA_UPLOADS_ENABLED", "EMAIL_ENABLED", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
   "AWS_BUCKET_NAME", "IMAGEKIT_PUBLIC_KEY", "IMAGEKIT_PRIVATE_KEY", "IMAGEKIT_URL_ENDPOINT",
   "SMTP_USER", "SMTP_PASS", "SENDER_EMAIL", "ALLOW_INSECURE_REDIS_TLS",
+  "OUTBOX_TRANSPORT", "RABBITMQ_URL", "ALLOW_INSECURE_RABBITMQ_TLS", "MOTIONMEET_PROCESS_ROLE", "METRICS_PORT",
 ] as const;
 const original = new Map(managedKeys.map((key) => [key, process.env[key]]));
 
@@ -27,8 +28,39 @@ const productionBase = (): void => {
   process.env.JWT_SECRET = "0123456789abcdef0123456789abcdef";
   process.env.MEDIA_UPLOADS_ENABLED = "false";
   process.env.EMAIL_ENABLED = "false";
+  // Whatever the developer's shell exports must not leak into these cases.
+  for (const key of ["OUTBOX_TRANSPORT", "RABBITMQ_URL", "ALLOW_INSECURE_RABBITMQ_TLS", "MOTIONMEET_PROCESS_ROLE", "METRICS_PORT"] as const) delete process.env[key];
   resetEnvironmentForTests();
 };
+
+test("the broker transport needs a broker URL, and production needs it authenticated over TLS", () => {
+  try {
+    productionBase(); process.env.OUTBOX_TRANSPORT = "rabbitmq"; resetEnvironmentForTests();
+    assert.throws(() => loadEnvironment(), /RABBITMQ_URL is required/);
+    process.env.RABBITMQ_URL = "amqp://app:secret@rabbitmq:5672"; resetEnvironmentForTests();
+    assert.throws(() => loadEnvironment(), /amqps/);
+    process.env.RABBITMQ_URL = "amqps://rabbitmq:5671"; resetEnvironmentForTests();
+    assert.throws(() => loadEnvironment(), /credentials/);
+    process.env.RABBITMQ_URL = "amqps://app:secret@rabbitmq:5671/motionmeet"; resetEnvironmentForTests();
+    assert.equal(loadEnvironment().outboxTransport, "rabbitmq");
+    process.env.RABBITMQ_URL = "amqp://app:secret@rabbitmq:5672"; process.env.ALLOW_INSECURE_RABBITMQ_TLS = "true"; resetEnvironmentForTests();
+    assert.doesNotThrow(() => loadEnvironment());
+  } finally { restore(); }
+});
+
+test("unknown transports and process roles are refused rather than defaulted", () => {
+  try {
+    productionBase(); process.env.OUTBOX_TRANSPORT = "kafka"; resetEnvironmentForTests();
+    assert.throws(() => loadEnvironment(), /OUTBOX_TRANSPORT/);
+    productionBase(); process.env.MOTIONMEET_PROCESS_ROLE = "cron"; resetEnvironmentForTests();
+    assert.throws(() => loadEnvironment(), /MOTIONMEET_PROCESS_ROLE/);
+    productionBase(); resetEnvironmentForTests();
+    const defaults = loadEnvironment();
+    assert.equal(defaults.outboxTransport, "direct");
+    assert.equal(defaults.processRole, "api");
+    assert.equal(defaults.metricsPort, null);
+  } finally { restore(); }
+});
 
 test("production accepts explicitly disabled optional capabilities", () => {
   try { productionBase(); assert.doesNotThrow(() => loadEnvironment()); } finally { restore(); }

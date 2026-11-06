@@ -428,7 +428,7 @@ export interface UsageCounterTable extends BaseTable {
 export type OutboxPayload = Record<string, string | number | boolean | null>;
 
 /** Types the code may write; the column itself is text checked for shape (migration 014). */
-export type OutboxEventType = "user.profile.updated" | "connection.requested";
+export type OutboxEventType = "user.profile.updated" | "connection.requested" | "media.uploaded";
 export type OutboxStatus = "pending" | "processing" | "published" | "dead";
 
 export interface OutboxEventTable extends BaseTable {

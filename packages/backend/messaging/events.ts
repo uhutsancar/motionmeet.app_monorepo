@@ -31,6 +31,7 @@ export const EVENTS_EXCHANGE = "motionmeet.events";
 export const EVENT_CATALOG: Readonly<Record<OutboxEventType, { versions: readonly number[] }>> = {
   "user.profile.updated": { versions: [1] },
   "connection.requested": { versions: [1] },
+  "media.uploaded": { versions: [1] },
 };
 
 export const isKnownEventType = (value: unknown): value is OutboxEventType =>
