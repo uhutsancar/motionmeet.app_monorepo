@@ -35,7 +35,7 @@ overrides:
   "ip-address@>=10.0.0 <10.7.4": "^10.7.4"
   "engine.io@>=6.0.0 <6.6.10": "~6.6.10"
   "axios@>=1.0.0 <1.20.0": "^1.20.0"
-  "follow-redirects@>=1.0.0 <1.16.1": "^1.16.1"
+  "follow-redirects@>=1.0.0 <1.16.2": "^1.16.2"
   # Expo CLI / Metro build toolchain (packages/mobile)
   "undici@>=6.0.0 <6.29.1": "^6.29.1"
   "shell-quote@>=1.8.0 <1.11.0": "^1.11.0"
@@ -48,12 +48,16 @@ overrides:
   "@xmldom/xmldom@>=0.9.0 <0.9.12": "^0.9.12"
   "source-map-js@>=1.0.0 <1.2.2": "^1.2.2"
   "compression@>=1.0.0 <1.8.2": "^1.8.2"
+  # November 2026 (`pnpm audit --prod`): node-forge <1.4.1 has five high
+  # advisories and is only used by the Expo CLI for local dev certificates;
+  # 1.4.x is a patch line, so the CLI's ^1.4.0 range is unchanged.
+  "node-forge@>=1.0.0 <1.4.3": "^1.4.3"
 
   # One copy each in the mobile bundle. native-stack and material-top-tabs had
   # resolved two patch releases of @react-navigation/elements, and Metro fell
   # back to the backend's older `buffer` for modules that require it without
   # declaring it - both were bundled twice.
-  "@react-navigation/elements@>=2.9.0 <2.9.36": "2.9.36"
+  "@react-navigation/elements@>=2.9.0 <2.9.45": "2.9.45"
   "buffer@>=5.0.0 <5.7.1": "5.7.1"
   # Paper asks for color 3 and react-navigation for color 4; every method
   # Paper calls (alpha, darken, fade, isLight, lighten, rgb, string) exists
