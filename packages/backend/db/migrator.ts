@@ -13,6 +13,7 @@ import * as storyLikes from "./migrations/010_story_likes.js";
 import * as retireBilling from "./migrations/012_retire_billing.js";
 import * as repairConversationLastMessage from "./migrations/013_repair_conversation_last_message.js";
 import * as outboxReliability from "./migrations/014_outbox_reliability.js";
+import * as postsAuthorTimelineIndex from "./migrations/015_posts_author_timeline_index.js";
 
 const migrationProvider: MigrationProvider = {
   async getMigrations() {
@@ -30,6 +31,7 @@ const migrationProvider: MigrationProvider = {
       "012_retire_billing": retireBilling,
       "013_repair_conversation_last_message": repairConversationLastMessage,
       "014_outbox_reliability": outboxReliability,
+      "015_posts_author_timeline_index": postsAuthorTimelineIndex,
     };
   },
 };

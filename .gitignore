@@ -73,3 +73,4 @@ generate_inventory.js
 
 # Design QA screenshots and direction sheets (local only)
 .taste-skill/
+scripts/load/.tokens.local.json

@@ -6,6 +6,7 @@ import { singleFlight } from "../utils/singleFlight.js";
 import { FEED_CACHE_TTL_SECONDS, feedAudienceEpoch, feedCacheOwner, invalidateOwnFeed, revokeFeedAudience } from "./feedCache.js";
 import { findHydratedPost, findPostAccessRecord, hydratePosts, type PostAccessRecord } from "../repositories/postRepository.js";
 import { canAccessPost as evaluatePostAccess } from "./accessControlService.js";
+import type { Row } from "../db/types.js";
 import type { Pagination } from "../utils/pagination.js";
 import { UUID_PATTERN } from "../utils/validation.js";
 import { mediaKindOf, type PostMediaInput } from "../utils/postMedia.js";
@@ -133,26 +134,69 @@ export const getFeedPostsForUser = async (userId: string, pagination: Pagination
 const encodeCursor = (value: Record<string, unknown>): string =>
   Buffer.from(JSON.stringify(value)).toString("base64url");
 
-const queryFollowingFeed = async (userId: string, pagination: Pagination) => {
-  let query = database.selectFrom("posts").innerJoin("users as author", "author.id", "posts.user_id").selectAll("posts")
-    .where((expression) => expression.or([
-      expression("posts.user_id", "=", userId),
-      expression.and([
-        expression("posts.visibility", "in", ["public", "followers"]),
-        expression.or([
-          sql<boolean>`exists (select 1 from user_follows uf where uf.follower_id = ${userId} and uf.followee_id = posts.user_id)`,
-          sql<boolean>`exists (select 1 from connections c where c.status = 'accepted' and ((c.from_user_id = ${userId} and c.to_user_id = posts.user_id) or (c.to_user_id = ${userId} and c.from_user_id = posts.user_id)))`,
-        ]),
-        expression.or([expression("posts.post_type", "!=", "workout"), expression("author.privacy_show_workouts_on_feed", "=", true)]),
-      ]),
-    ]));
-  if (pagination.cursor) {
-    query = query.where((expression) => expression.or([
-      expression("posts.created_at", "<", pagination.cursor!.date),
-      expression.and([expression("posts.created_at", "=", pagination.cursor!.date), expression("posts.id", "<", pagination.cursor!.id)]),
-    ]));
-  }
-  return query.orderBy("posts.created_at", "desc").orderBy("posts.id", "desc").limit(pagination.limit + 1).execute();
+/**
+ * The home feed, read audience-first.
+ *
+ * It used to scan every public and followers-only post in the table, newest
+ * first, testing each against the follow and connection graph. Fine with a
+ * few thousand posts; 3.7-4.4 s for a first page at 300 000 posts
+ * (scripts/load/explain-feeds.sql on the synthetic data set). Now the
+ * viewer's audience is listed first - themselves, the accounts they follow,
+ * their accepted connections: dozens of rows - and only each member's newest
+ * page is read, straight off `posts_author_timeline_idx`. The cost follows
+ * the size of the audience, not of the table.
+ *
+ * It reads in two steps. The per-author walk returns only ids and times from
+ * the covering index - index-only, stopping at the page size - and only the
+ * one page that survives the merge is fetched from the table. Selecting whole
+ * rows per author made PostgreSQL read every post of a popular author from
+ * the heap first; with many members missing the cache at once, all following
+ * the same big accounts, that queued requests for seconds on cold reads
+ * (20 VUs over 300 members: p95 3.6 s with timeouts).
+ *
+ * The rules are unchanged: all of the viewer's own posts; other members'
+ * `public` and `followers` posts; other members' workouts only where the
+ * author shows workouts on the feed. The workout rule sits inside each
+ * author's page, before its LIMIT, so a run of hidden workouts can never
+ * crowd out posts that should appear.
+ */
+const queryFollowingFeed = async (userId: string, pagination: Pagination): Promise<Row<"posts">[]> => {
+  const pageSize = pagination.limit + 1;
+  const after = pagination.cursor
+    ? sql`and (p.created_at, p.id) < (${pagination.cursor.date}::timestamptz, ${pagination.cursor.id}::uuid)`
+    : sql``;
+  const { rows } = await sql<Row<"posts">>`
+    with audience as (
+      select ${userId}::uuid as user_id, true as is_self, true as shows_workouts
+      union all
+      select u.id, false, u.privacy_show_workouts_on_feed
+      from users u
+      where u.id <> ${userId}::uuid and u.id in (
+        select uf.followee_id from user_follows uf where uf.follower_id = ${userId}::uuid
+        union
+        select case when c.from_user_id = ${userId}::uuid then c.to_user_id else c.from_user_id end
+        from connections c
+        where c.status = 'accepted' and (c.from_user_id = ${userId}::uuid or c.to_user_id = ${userId}::uuid)
+      )
+    ),
+    picked as (
+      select page.id, page.created_at from audience a
+      cross join lateral (
+        select p.id, p.created_at from posts p
+        where p.user_id = a.user_id
+          and (a.is_self or p.visibility in ('public', 'followers'))
+          and (a.is_self or p.post_type <> 'workout' or a.shows_workouts)
+          ${after}
+        order by p.created_at desc, p.id desc
+        limit ${pageSize}
+      ) page
+      order by page.created_at desc, page.id desc
+      limit ${pageSize}
+    )
+    select posts.* from picked
+    join posts on posts.id = picked.id
+    order by picked.created_at desc, picked.id desc`.execute(database);
+  return rows;
 };
 
 /**
