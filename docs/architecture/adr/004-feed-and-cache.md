@@ -73,6 +73,21 @@ check on every read, which is what the cache exists to avoid.
 Processes that never connect to Redis (worker, scheduler) have no cache and
 skip invalidation; all cache-relevant writes happen in the API process.
 
+## Profile cache (2026-11 audit, WP-02)
+
+A profile is cached per viewer under one owner (`profile:<authorId>`), so one
+invalidation reaches every viewer. Creating a post, deleting a post and
+logging a workout now invalidate the author's profile as well as their feed
+(previously a new post stayed missing and a deleted one stayed visible on the
+profile for up to 60 s, R1/R2). Like and comment counts are left to the TTL,
+as on the feed.
+
+**Deleted content.** When Redis is reachable and the invalidation succeeds,
+reads that start after a delete request has answered successfully do not see
+the deleted post on the profile, the feeds or the single-post view (the last
+never uses the cache). Otherwise the post can stay on a cached profile for at
+most the profile TTL (60 s) and on a cached feed page for at most 30 s.
+
 ## Consequences
 
 An epoch bump turns the next request of every active member into a cache miss.

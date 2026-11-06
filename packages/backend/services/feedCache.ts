@@ -21,6 +21,15 @@ import { bumpCacheEpoch, getCacheEpoch, invalidateCacheOwners } from "../configs
  * The author snapshot embedded in other members' cached feeds is refreshed by
  * the `user.profile.updated` outbox event on top of that TTL.
  *
+ * ## Profiles
+ *
+ * A profile's cache owner is the profile, and every viewer's entry lives under
+ * it, so one invalidation reaches all viewers. Creating or deleting a post and
+ * logging a workout drop the author's profile along with their feed: the post
+ * list and the training totals are what the author checks right after. Like
+ * and comment counts on profile posts are *not* invalidated, exactly as on the
+ * feed - they move by one and the 60-second TTL carries them.
+ *
  * ## Writes that take access away
  *
  * The narrowing above is only safe for writes that *add* or *count* things.

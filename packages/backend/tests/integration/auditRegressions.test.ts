@@ -7,7 +7,8 @@ import { setTimeout as sleep } from "node:timers/promises";
 import test from "node:test";
 import { connectDatabase, database, disconnectDatabase } from "../../configs/database.js";
 import { disconnectRedis, initializeRedis, readOwnerField, writeOwnerField } from "../../configs/redis.js";
-import { createPost, deletePostById, getPostById } from "../../services/postService.js";
+import { createPost, deletePostById, getFeedPostsForUser, getPostById, getVisiblePostForViewer } from "../../services/postService.js";
+import { createWorkoutWithStatistics } from "../../services/workoutService.js";
 import { getUserProfileAndPosts, updateUser } from "../../services/userService.js";
 import { deletePosition, listNearbyUsers, savePosition, updateNearbySettings } from "../../services/nearbyService.js";
 import { deleteAccountData, streamAccountData } from "../../services/accountService.js";
@@ -37,6 +38,8 @@ const newUser = async (name: string): Promise<string> => {
 const publish = (userId: string) => createPost({ user: userId, operationId: randomUUID(), content: "post", media: [], post_type: "text", visibility: "public" });
 const profilePostIds = async (profileId: string, viewerId: string): Promise<string[]> =>
   ((await getUserProfileAndPosts(profileId, viewerId, FIRST as never))?.posts ?? []).map((post: { id: string }) => post.id);
+const feedPostIds = async (viewerId: string, mode: "discover" | "following"): Promise<string[]> =>
+  (await getFeedPostsForUser(viewerId, FIRST, mode)).items.map((post) => post.id);
 const nearbyIds = async (userId: string): Promise<string[]> => (await listNearbyUsers(userId)).users.map((user) => user.id);
 
 test.before(async () => { await connectDatabase(); assert.ok(await initializeRedis(), "Redis must be reachable"); });
@@ -45,7 +48,7 @@ test.after(async () => {
   await disconnectRedis(); await disconnectDatabase();
 });
 
-test("R1 / WP-02: a deleted post leaves every cached profile view", { todo: "WP-02" }, async () => {
+test("R1 / WP-02: a deleted post leaves every cached profile view", async () => {
   const author = await newUser("rauthor"); const stranger = await newUser("rstranger");
   const post = await publish(author);
   assert.ok((await profilePostIds(author, stranger)).includes(post.id));
@@ -55,11 +58,42 @@ test("R1 / WP-02: a deleted post leaves every cached profile view", { todo: "WP-
   assert.ok(!(await profilePostIds(author, author)).includes(post.id));
 });
 
-test("R2 / WP-02: a new post appears in the author's cached profile at once", { todo: "WP-02" }, async () => {
+test("R2 / WP-02: a new post appears in the author's cached profile at once", async () => {
   const author = await newUser("rnew");
   await profilePostIds(author, author); // warm the cache
   const post = await publish(author);
   assert.ok((await profilePostIds(author, author)).includes(post.id));
+});
+
+test("WP-02: a deleted post leaves a stranger's and a follower's cached profile, the feed and the single-post view", async () => {
+  const author = await newUser("delauthor"); const stranger = await newUser("delstranger"); const follower = await newUser("delfollower");
+  await requestFollow(follower, author); // a public account is followed at once
+  const post = await publish(author);
+  for (const viewer of [stranger, follower]) {
+    assert.ok((await profilePostIds(author, viewer)).includes(post.id), "visible and now cached");
+    assert.ok((await feedPostIds(viewer, "discover")).includes(post.id));
+  }
+  assert.ok((await feedPostIds(follower, "following")).includes(post.id));
+  await deletePostById((await getPostById(post.id))!);
+  for (const viewer of [stranger, follower]) {
+    assert.ok(!(await profilePostIds(author, viewer)).includes(post.id), "profile");
+    assert.ok(!(await feedPostIds(viewer, "discover")).includes(post.id), "Keşfet");
+    assert.equal(await getVisiblePostForViewer(post.id, viewer), null, "single post");
+  }
+  assert.ok(!(await feedPostIds(follower, "following")).includes(post.id), "home feed");
+});
+
+test("WP-02: a logged workout shows in the cached profile statistics at once", async () => {
+  const athlete = await newUser("athlete"); const viewer = await newUser("watcher");
+  const before = await getUserProfileAndPosts(athlete, viewer, FIRST as never);
+  assert.equal(before?.profile.statistics?.totalWorkouts, 0);
+  const now = Date.now();
+  await createWorkoutWithStatistics({
+    userId: athlete, operationId: randomUUID(), name: "Push", startTime: new Date(now - 3_600_000), endTime: new Date(now),
+    durationMinutes: 60, volumeKg: 0, totalSets: 0, totalReps: 0, metricsVersion: 1, exercises: [],
+  });
+  const after = await getUserProfileAndPosts(athlete, viewer, FIRST as never);
+  assert.equal(after?.profile.statistics?.totalWorkouts, 1);
 });
 
 test("R3 / WP-03: nearby opt-outs apply to other members' cached results", { todo: "WP-03" }, async () => {

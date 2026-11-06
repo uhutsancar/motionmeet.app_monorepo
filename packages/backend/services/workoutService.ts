@@ -1,5 +1,6 @@
 import type { Workout } from "@motionmeet/shared";
 import { database, withTransaction, type DatabaseTransaction } from "../configs/database.js";
+import { invalidateProfile } from "./feedCache.js";
 import { findWorkoutById, hydrateWorkouts } from "../repositories/workoutRepository.js";
 import type { Pagination } from "../utils/pagination.js";
 import * as quotaService from "./quotaService.js";
@@ -37,7 +38,15 @@ const insertWorkoutExercises = async (workoutId: string, exercises: WorkoutExerc
 
 const uniqueViolation = (error: unknown): boolean => Boolean(error && typeof error === "object" && "code" in error && error.code === "23505");
 
-export const createWorkoutWithStatistics = async (input: WorkoutInput, { quotaLimit = -1 }: { quotaLimit?: number } = {}): Promise<Workout> => {
+export const createWorkoutWithStatistics = async (input: WorkoutInput, options: { quotaLimit?: number } = {}): Promise<Workout> => {
+  const workout = await insertWorkoutWithStatistics(input, options);
+  // The profile's training totals are cached for every viewer; the member who
+  // just logged a session expects the new count on their profile at once.
+  await invalidateProfile(input.userId);
+  return workout;
+};
+
+const insertWorkoutWithStatistics = async (input: WorkoutInput, { quotaLimit = -1 }: { quotaLimit?: number }): Promise<Workout> => {
   try {
     return await withTransaction(async (transaction) => {
       const existing = await transaction.selectFrom("workouts").select("id").where("user_id", "=", input.userId).where("operation_id", "=", input.operationId).executeTakeFirst();

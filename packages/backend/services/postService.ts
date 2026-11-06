@@ -2,7 +2,7 @@ import type { Post, PostType, PostVisibility } from "@motionmeet/shared";
 import { sql } from "kysely";
 import { database, withTransaction } from "../configs/database.js";
 import { cachedOwnerField } from "../configs/redis.js";
-import { FEED_CACHE_TTL_SECONDS, feedAudienceEpoch, feedCacheOwner, invalidateOwnFeed, revokeFeedAudience } from "./feedCache.js";
+import { FEED_CACHE_TTL_SECONDS, feedAudienceEpoch, feedCacheOwner, invalidateMember, revokeFeedAudience } from "./feedCache.js";
 import { findHydratedPost, findPostAccessRecord, hydratePosts, type PostAccessRecord } from "../repositories/postRepository.js";
 import { canAccessPost as evaluatePostAccess } from "./accessControlService.js";
 import type { Row } from "../db/types.js";
@@ -71,7 +71,9 @@ export const createPost = async (input: NewPostInput, { quotaLimit = -1, reserva
       if (!hydrated) throw new Error("Created post could not be loaded");
       return hydrated;
     });
-    await invalidateOwnFeed(input.user);
+    // The author's own feed and their profile (first page and post count are
+    // cached for every viewer) both have to show the new post at once.
+    await invalidateMember(input.user);
     return post;
   } catch (error: unknown) {
     if (!isUniqueViolation(error)) throw error;
@@ -276,6 +278,8 @@ export const deletePostById = async (post: PostAccessRecord): Promise<void> => {
     await transaction.deleteFrom("posts").where("id", "=", post.id).where("user_id", "=", post.user).execute();
   });
   // Any member's cached page may hold the deleted post; the author expects it
-  // gone from all of them, not after the TTL.
-  await Promise.all([invalidateOwnFeed(post.user), revokeFeedAudience()]);
+  // gone from all of them, not after the TTL. Feed pages are retired through
+  // the audience epoch, every viewer's cached view of the author's profile
+  // through the profile owner.
+  await Promise.all([invalidateMember(post.user), revokeFeedAudience()]);
 };
