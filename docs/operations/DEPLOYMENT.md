@@ -63,6 +63,23 @@ scaling any of them.
    the queues first (stop the publisher, let consumers empty them) if the
    switch is meant to be permanent.
 
+## Local production rehearsal
+
+`docker-compose.local.yml` runs the same images and process split on one
+machine, with PostgreSQL 18, Redis 8 and RabbitMQ 4.2 bundled:
+
+```sh
+MOTIONMEET_ENV_FILE=.env.production.example \
+  docker compose -f docker-compose.prod.yml -f docker-compose.local.yml up -d --build
+# http://localhost:8088  ·  RabbitMQ UI: http://127.0.0.1:15673 (motionmeet / motionmeet-local)
+```
+
+Media keys come from `packages/backend/.env` if present (real bucket); every
+data-service setting is overridden, so it never touches a natively running
+development database. Only port 8088 and the loopback-bound broker UI are
+published. Load rehearsal: `scripts/load/feed-read.k6.js` (header of the file
+has the command).
+
 ## Database settings this code assumes
 
 - `pg_stat_statements` enabled, for slow-query work.

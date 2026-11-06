@@ -17,8 +17,14 @@ scenario results: [../quality/TEST_MATRIX.md](../quality/TEST_MATRIX.md).
   integration tests (PostgreSQL 18 + RabbitMQ 4.2), migration run twice
   (second a no-op); mobile and web typecheck + lint; worker/scheduler process
   smoke test; prod/dev compose `config` validation.
-- Not verified: Android/iOS device runs, release APK build, production image
-  build, web production build, load tests.
+- Second pass (same day): dependency security upgrade, production images built
+  and run as a full local stack (`docker-compose.local.yml`) with an
+  end-to-end check through nginx (real S3 upload, worker, RabbitMQ), worker
+  outage and SIGTERM drain, k6 feed load rehearsal, mobile export for
+  Android/iOS/web, web production build with its artifact and performance
+  checks.
+- Not verified: Android/iOS device runs and a release APK build (native
+  modules changed with RN 0.88.1 — a new APK is required).
 
 ## Work packages
 
@@ -28,15 +34,15 @@ scenario results: [../quality/TEST_MATRIX.md](../quality/TEST_MATRIX.md).
 | MM-P0-02 | Post creation bugs | DONE | Presigned-only posts, duplicate keys, post type from files, retry keeps keys |
 | MM-P0-03 | Real media metadata | PARTIAL | Per-file MIME + size (DONE); image width/height by worker (DONE); video duration and backfill of old rows: NOT_STARTED |
 | MM-P0-04 | Mobile upload memory/cancel/timeout | DONE in code | 32-byte sniff, native progress, real cancel, stall + size-scaled deadline. Device measurement NOT_RUN; multipart/resumable not needed without data |
-| MM-P0-05 | Privacy regression | PARTIAL | Two cache leaks fixed, story expiry enforced at read, workout masquerade closed. Redis-backed cache tests NOT_RUN |
+| MM-P0-05 | Privacy regression | PARTIAL | Two cache leaks fixed and covered by Redis-backed tests (FEED-01/02), story expiry enforced at read, workout masquerade closed. Full authorisation matrix (BOLA sweep): NOT_STARTED |
 | MM-P1-01/02/03 | Outbox, RabbitMQ, idempotent consumers | DONE | Migration 014, confirms + mandatory, retry tiers, `.dead`, `processed_events`, redrive script |
-| MM-P1-04 | Scheduler separation | DONE | Advisory-locked tasks, graceful stop; SIGTERM drain BLOCKED for testing on Windows |
+| MM-P1-04 | Scheduler separation | DONE | Advisory-locked tasks, graceful stop; SIGTERM drain verified in the production image |
 | MM-P1-05 | Queue observability | PARTIAL | Metrics, alert suggestions, runbooks. Dashboards/alert rules as code: NOT_STARTED |
 | MM-P1-06 | `media_assets` / variants | NOT_STARTED (by decision) | ADR 003: verify synchronously, enrich asynchronously until video volume justifies the asset model |
 | MM-P1-07 | Upload/finalize/publish contract | PARTIAL | Contract unchanged and backward compatible; `media.uploaded` event added |
 | MM-P1-08 | Image processing | PARTIAL | Dimensions + EXIF orientation. Variants: ImageKit already serves them |
 | MM-P1-09 | Video pipeline | NOT_STARTED | Needs ffprobe/FFmpeg image and usage data |
-| MM-P1-10 | Publish UX | PARTIAL | Mobile story/post: percent + cancel on close. Web API supports progress/abort; web composers not wired |
+| MM-P1-10 | Publish UX | PARTIAL | Mobile and web story/post composers: percent, cancel on close/unmount, cancelled uploads not reported as errors. A server-side `processing` state is not part of this design (ADR 003) |
 | MM-P1-11 | Share card | PARTIAL | SSRF bounding was already in place; render cost NOT_MEASURED |
 | MM-P1-12 | Feed | PARTIAL | Privacy invalidation (ADR 004). Benchmarks/EXPLAIN on synthetic data: NOT_STARTED |
 | MM-P1-13 | Likes/comments | No change needed | `UPDATE … RETURNING` counters kept; existing concurrency test passes |
@@ -53,10 +59,10 @@ scenario results: [../quality/TEST_MATRIX.md](../quality/TEST_MATRIX.md).
 | MM-P2-25/26 | Web/mobile performance | NOT_STARTED | Device and browser profiling needed |
 | MM-P2-27 | Ads, no payments | Unchanged | No payment, subscription or paywall code added; retired billing endpoints untouched |
 | MM-P1-28 | Local topology | DONE | `--profile queue` (RabbitMQ, UI on loopback), `--profile workers` |
-| MM-P1-29 | Production compose | DONE (config validated) | migrate → backend + worker + scheduler; image build NOT_RUN |
+| MM-P1-29 | Production compose | DONE | migrate → backend + worker + scheduler; images built and run healthy locally; RabbitMQ health check no longer races the Erlang cookie |
 | MM-P2-30 | AWS alternative | NOT_STARTED (by design) | Nothing provisioned |
 | MM-P1-31 | CI | PARTIAL | Integration job runs RabbitMQ. Contract/architecture-boundary checks: NOT_STARTED |
-| MM-P1-34 | Load/soak tests | NOT_STARTED | |
+| MM-P1-34 | Load/soak tests | PARTIAL | `scripts/load/feed-read.k6.js` run against the rehearsal stack (PERFORMANCE_BASELINE.md); soak and production-sized data: NOT_STARTED |
 | MM-P1-37 | Chaos | PARTIAL | Broker unavailable at publish time (EVT-01), poison message, transient failure covered |
 | MM-P1-38 | RabbitMQ cutover | Documented | DEPLOYMENT.md; default stays `direct` |
 | MM-P1-40 | Disaster recovery | NOT_STARTED | Restore drill outline in RUNBOOKS.md |
@@ -80,14 +86,49 @@ scenario results: [../quality/TEST_MATRIX.md](../quality/TEST_MATRIX.md).
   `RUN_SCHEDULED_JOBS=false`.
 - **Dependencies:** `amqplib` 2.2.1 (no dependencies), `prom-client` 15.1.3.
 
+## Dependency security pass (2026-11-06)
+
+The dependency gate failed on four high advisories, all transitive. Each was
+removed at its source rather than forced with a major-version override:
+
+| Advisory | Was | Fix applied | Why this way |
+|---|---|---|---|
+| `zod` GHSA-mrhx-c7xc-m3w5 | 3.25.76 via `@expo/cli` 58.1.15 | Expo SDK 58 patch 58.0.19 → **58.0.23** (`@expo/cli` 58.1.19 no longer depends on zod) | zod has no fixed 3.x; forcing 4.x under a CLI written for 3.x would break it |
+| `decode-uri-component` GHSA-qr28-fpjm-wq7f | 0.2.2 via `query-string` 7 via `@react-navigation/core` 7.21 | react-navigation **core 7.24 / native 7.5.1 / native-stack 7.21 / material-top-tabs 7.8.1 / elements 2.9.45** (no `query-string` at all) | the only fixed release is ESM-only and breaks `query-string` 7 (CommonJS) |
+| `node-forge` (5 advisories) | 1.4.0 | override to **1.4.3** | patch line, `@expo/cli` asks for ^1.4.0 |
+| `follow-redirects` GHSA-mrwp-f3q8-3g9p | 1.16.1 via axios | override to **1.16.2** | patch line, axios asks for ^1.16.0 |
+
+The Expo upgrade aligns every native module with SDK 58.0.23's own
+`bundledNativeModules.json`: React Native **0.88.1**, safe-area-context
+**5.11.1**, screens **4.30.1**, and the matching `expo-*` patches. Metro stays
+on the single pinned 0.87.1 that Expo 58 uses. `expo install --check` (with
+dependency validation forced on): "Dependencies are up to date". The audit gate
+passes with **zero** accepted exceptions (the `image-size` and `node-forge`
+entries were removed as no longer needed). Two moderate advisories below the
+gate remain (`glob` 13, `minimatch` 10 — build tooling, fixes are majors).
+
+Bundle effect, measured from the export's source map: Android 4.74 MB and iOS
+4.74 MB stay under their 5 MB budgets; the mobile *web* bundle grew to
+2.66 MB, mostly `@react-navigation/core` 7.24 (94 KB, now carrying its own URL
+parser). Its budget was raised from 2.6 MB to 2.7 MB rather than giving up the
+security fix. The largest avoidable item is `@expo/vector-icons` (225 KB of
+glyph maps) — the place to start if the budget should go back down.
+
+Native code changed (RN patch, screens, safe-area): a **new APK build** is
+needed for the QA device; Expo Go on SDK 58 is the matching runtime for the
+JavaScript side.
+
+Base images checked the same day: `node:24.22.1-alpine` digest unchanged
+(already current), PostgreSQL 18.6, Redis 8.10.3, RabbitMQ 4.2.9. Node.js has
+announced a HIGH security release for 22/24/26 on or after 11 November 2026 —
+not yet published; raise the pins when it ships.
+
 ## Open risks
 
-- **Dependency audit fails, independent of this work.** New advisories in the
-  Expo toolchain's transitive dependencies: `node-forge` 1.4.0 (fix 1.4.1),
-  `follow-redirects` 1.16.1 (fix 1.16.2), `decode-uri-component` 0.2.2 (fix
-  0.5.1), `zod` 3.25.76 (fix 4.6.6). The two patch-level ones are low-risk
-  overrides; the other two cross a major line and need an Expo compatibility
-  check. Not changed here. Stale `image-size` exceptions were removed.
+- Node.js security release pending (see above).
+- `.env.production.example` carried a password-like value in its example
+  `DATABASE_URL` from commit `13cd273` (public history). Replaced with a
+  placeholder; rotate it if it was ever a real credential.
 - Graceful SIGTERM drain is implemented but not exercised (Windows host).
 - Mobile upload and chat catch-up changes are not yet verified on a device.
 - Feed audience epoch makes privacy-narrowing writes cost a global cache miss;

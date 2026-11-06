@@ -12,6 +12,14 @@ conditions or NOT_MEASURED. Targets are the plan's starting SLOs, not claims.
 | Outbox commit → consumer effect, before | up to 60 s | Once-a-minute cron (by construction) |
 | Retry round trip through tier 0 | ≈10.1 s | Integration test; tier TTL 10 s |
 | Integration suite | 21–25 s | 16 tests, serial, same machine |
+| Feed first page, Keşfet (`/api/post/feed?mode=discover`) | p50 4.2 ms · p95 25.5 ms · max 89 ms | k6 (`scripts/load/feed-read.k6.js`), 10 VUs, 30 s, 1156 requests, 0 % errors; local production rehearsal stack through nginx, near-empty database, warm Redis cache |
+| Feed first page, following | p50 4.0 ms · p95 21.8 ms · max 39 ms | same run |
+| Commit → projection through RabbitMQ, production images | 0.98 s (rename), 1.0 s (image measured from real S3) | `docker-compose.local.yml`, worker in its own container |
+| Worker graceful stop (SIGTERM) | 16 ms drain, exit 0 | `docker compose stop worker`, Linux container |
+
+The feed numbers describe the code path and the cache, not capacity: the
+database held a handful of rows. Repeat with production-sized synthetic data
+before treating them as a baseline.
 
 ## Expected effects, not yet measured
 

@@ -27,5 +27,7 @@ are unchanged and covered by `docs/security-verification/`.
   job does).
 - RabbitMQ: a dedicated vhost and user with configure/write/read limited to
   `motionmeet.*` — documented in DEPLOYMENT.md, applied on the broker, not here.
-- Pre-existing dependency advisories in the Expo toolchain (see
-  IMPLEMENTATION_STATUS.md).
+- Node.js announced a HIGH-severity security release for 22.x/24.x/26.x on
+  or after 11 November 2026; the pinned 22.23.4 / 24.22.1 must be raised
+  (engines, Dockerfile digests, `scripts/check-node-security.mjs`, CI matrix)
+  when it ships.
