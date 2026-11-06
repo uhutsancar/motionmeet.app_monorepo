@@ -34,6 +34,7 @@ import {
   setMessages,
   addMessage,
   markMessagesSeenByUser,
+  mergeLatestMessages,
   prependMessages,
   removeMessage,
 } from '../features/messages/messagesSlice';
@@ -271,6 +272,21 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
       socket.off('messages_seen', onMessagesSeen);
     };
   }, [dispatch, getToken, socket, t, userId]);
+
+  // Every message is persisted before it is emitted, so whatever arrived while
+  // this socket was down (the app backgrounded disconnects it) is on the
+  // server: on each reconnect the newest page is fetched and merged.
+  useEffect(() => {
+    if (!socket || !userId) return undefined;
+    const onReconnect = () => {
+      getToken()
+        .then((token) => (token ? getMessages(userId, token) : null))
+        .then((data) => { if (data?.success) dispatch(mergeLatestMessages(data.messages)); })
+        .catch(() => undefined);
+    };
+    socket.on('connect', onReconnect);
+    return () => { socket.off('connect', onReconnect); };
+  }, [dispatch, getToken, socket, userId]);
 
   useEffect(() => () => {
     clearTimeout(typingRef.current);

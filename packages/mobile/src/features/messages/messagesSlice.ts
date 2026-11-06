@@ -40,6 +40,19 @@ const messagesSlice = createSlice({
         ...state.messages,
       ];
     },
+    /**
+     * Folds the newest page back in after the socket was down - the app in the
+     * background, a network change - so messages sent meanwhile appear without
+     * reopening the chat. Known messages are refreshed in place (their seen
+     * flag may have changed), new ones are added, and the list stays in
+     * send order.
+     */
+    mergeLatestMessages: (state, action: PayloadAction<Message[]>) => {
+      const byId = new Map(state.messages.map((message) => [message._id, message]));
+      for (const message of action.payload) byId.set(message._id, message);
+      state.messages = [...byId.values()].sort((left, right) =>
+        Date.parse(left.createdAt) - Date.parse(right.createdAt) || String(left._id).localeCompare(String(right._id)));
+    },
     removeMessage: (state, action: PayloadAction<string>) => {
       state.messages = state.messages.filter(msg => msg._id !== action.payload);
     },
@@ -70,6 +83,7 @@ export const {
   setMessages,
   addMessage,
   prependMessages,
+  mergeLatestMessages,
   removeMessage,
   markMessagesSeenByUser,
 } = messagesSlice.actions;

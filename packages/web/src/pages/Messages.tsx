@@ -356,7 +356,27 @@ const WebMessages = () => {
       setMessages(prev => prev.filter(m => m._id !== messageId));
     };
     socket.on('message_deleted', onDeleted);
+    // Messages are persisted before they are emitted, so anything sent while
+    // this socket was down is on the server: after a reconnect the open
+    // conversation's newest page is fetched again and merged in send order.
+    const onReconnect = () => {
+      const partnerId = activeConvRef.current?.partner?._id;
+      if (!partnerId) return;
+      getToken()
+        .then((token) => (token ? getMessages(token, partnerId) : null))
+        .then((data) => {
+          if (!data?.success || activeConvRef.current?.partner?._id !== partnerId) return;
+          setMessages((current) => {
+            const byId = new Map(current.map((message) => [message._id, message]));
+            for (const message of data.messages || []) byId.set(message._id, message);
+            return [...byId.values()].sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt) || String(left._id).localeCompare(String(right._id)));
+          });
+        })
+        .catch(() => undefined);
+    };
+    socket.on('connect', onReconnect);
     return () => {
+      socket.off('connect', onReconnect);
       socket.off('message_received', onMsg);
       socket.off('message_sent', onSent);
       socket.off('typing_start', onTypStart);
