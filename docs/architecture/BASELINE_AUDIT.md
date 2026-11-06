@@ -31,6 +31,9 @@ backend lint about 90 seconds. Timings in this document are from that machine.
 
 ## Documents that no longer match the code
 
+(Snapshot of the starting point. All three items were brought up to date in
+the documentation pass of 2026-11-06.)
+
 - `PROJECT_STRUCTURE.md` describes Expo SDK 54 / React Native 0.81.5. The
   mobile `package.json` has Expo `^58.0.19`, React Native `0.88.0`.
 - The plan's file references use `packages/backend/src/...` and

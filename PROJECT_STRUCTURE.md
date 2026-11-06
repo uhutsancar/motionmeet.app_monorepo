@@ -156,7 +156,7 @@ motionmeet.app_monorepo/
 
 | Dosya/dizin | Sorumluluk |
 | --- | --- |
-| `package.json` | Kök `dev`, `build`, `lint`, `typecheck`, `test`, Docker ve LAN komutları. Node `>=22.22.0`, pnpm `11.10.0`. |
+| `package.json` | Kök `dev`, `build`, `lint`, `typecheck`, `test`, Docker ve LAN komutları. Node `>=22.23.4 <23 || >=24.22.1 <25`, pnpm `11.10.0`. |
 | `pnpm-workspace.yaml` | `packages/*` ve `tools/*` workspace kapsamı; güvenlik override'ları; `minimatch@3.1.5` uyumluluk yaması. |
 | `turbo.json` | Paketler arası görev sırası. `build` üst bağımlılıkları önce derler; `dev` persistent ve cache dışıdır. |
 | `tsconfig.json` | `strict: true`, `allowJs: false`, ES2022 ve bundler çözümleme temeli. Backend kendi config'inde NodeNext emit yapar. |
@@ -167,6 +167,12 @@ motionmeet.app_monorepo/
 | `patches/minimatch@3.1.5.patch` | `brace-expansion` CommonJS/export biçimiyle uyumluluk sağlar. |
 | `brand/` | Marka işaretinin tek kaynağı. Uygulamaların gönderdiği her ikon buradan türetilir; elle düzenlenmiş bir PNG repository'de bulunmaz. Ayrıntı: **13A**. |
 | `scripts/generate-brand-assets.mjs` | `pnpm brand`. İki SVG'den Android launcher/adaptive/splash ikonlarını, web favicon setini, apple-touch ikonunu ve web logosunu üretir. |
+| `docs/architecture/` | Mimari durum ve kararlar: `IMPLEMENTATION_STATUS.md` (iş paketlerinin güncel durumu), `TARGET_ARCHITECTURE.md`, `EVENT_CATALOG.md`, `observability.md`, `SECURITY_THREAT_MODEL.md`, `BASELINE_AUDIT.md`, `adr/001-004`. |
+| `docs/operations/` | `DEPLOYMENT.md` (süreç rolleri, ortam, sürüm prosedürü, yerel üretim provası) ve `RUNBOOKS.md` (outbox gecikmesi, RabbitMQ kesintisi, dead olaylar, redrive, kilitler, Redis kesintisi). |
+| `docs/quality/` | `TEST_MATRIX.md` (senaryo bazında PASS/NOT_RUN) ve `PERFORMANCE_BASELINE.md` (ölçülen sayılar ve koşulları). |
+| `docker-compose.local.yml` | `docker-compose.prod.yml` üzerine eklenen yerel üretim provası: PostgreSQL 18, Redis 8, RabbitMQ 4.2 ile tüm süreç rolleri; yalnız web portu (8088) ve loopback broker UI yayınlanır. |
+| `infra/grafana/` | Mevcut bir Grafana'ya import edilecek pano (PostgreSQL datasource) ve kurulum notu. |
+| `scripts/load/` | Sentetik veri tohumlama/temizleme (açık onay olmadan çalışmaz), feed sorgu planları ve k6 yük senaryosu. |
 | `docs/mobile-qa-apk.md` | Fiziksel cihazda yerel backend'e bakan release APK üretme tarifi; `EXPO_PUBLIC_*` değerlerinin neden `.env.local`'a yazılması gerektiğini de açıklar. |
 
 ## 4. Teknoloji matrisi
@@ -178,11 +184,13 @@ motionmeet.app_monorepo/
 | Backend | Express 5.1, Kysely 0.29, `pg` 8.22, Socket.IO 4.8, JWT, bcryptjs, Helmet, CORS, Multer |
 | Kalıcı veri | PostgreSQL 18, `pgcrypto`, `citext`, `pg_trgm`, opsiyonel `postgis`, UUID, enum, FK, check, trigger ve composite/partial/GIN/GiST index'ler |
 | Konum verisi | Countries States Cities Database `v3.2-export.7` (ODbL v1.0), PostgreSQL'e sınırlı alan seti olarak import edilir |
-| Geçici altyapı | Redis 7.4, Redis rate-limit store, Socket.IO Redis adapter |
+| Geçici altyapı | Redis 7.4/8, Redis rate-limit store, Socket.IO Redis adapter |
+| Arka plan / kuyruk | Transactional outbox (PostgreSQL) + `OUTBOX_TRANSPORT=direct` (süreç içi) veya `rabbitmq` (RabbitMQ 4.2, `amqplib` 2, publisher confirm, retry/dead kuyrukları); ayrı `worker` ve `scheduler` süreçleri |
+| Gözlemlenebilirlik | W3C `traceparent` + request id (AsyncLocalStorage), `prom-client` metrikleri özel ops portunda, Grafana panosu (`infra/grafana`) |
 | Medya | AWS SDK v3 S3, multipart upload, presigned PUT, ImageKit URL dönüşümü |
 | E-posta | Nodemailer 9, Brevo SMTP relay (`smtp-relay.brevo.com:587`) |
 | Web | React 19.2, React Router 8, Vite 7, MUI 7, Emotion, Redux Toolkit 2, Axios, Recharts, dayjs, i18next, Socket.IO client (dinamik import) |
-| Mobile | Expo SDK 54, React Native 0.81.5, React 19.1, React Navigation 7, React Native Paper 5, SecureStore, AsyncStorage, Expo Image/Video/ImagePicker/Location/Localization |
+| Mobile | Expo SDK 58 (58.0.23), React Native 0.88.1, React 19.3, React Navigation 7 (core 7.24), React Native Paper 5, SecureStore, AsyncStorage, Expo Image/Video/ImagePicker/Location/Localization |
 | Production web | Multi-stage Vite build + unprivileged Nginx Alpine |
 | Marka varlıkları | Kaynak SVG + `sharp` 0.35 (yalnız kök devDependency; build-time raster üretimi, runtime'da kullanılmaz) |
 | Test/kalite | ESLint 9, strict TypeScript, Node test runner üzerinden `tsx --test`, Docker PostgreSQL integration testi, pnpm audit |
@@ -217,7 +225,7 @@ packages/backend/
 ├─ db/
 │  ├─ migrations/ # PostgreSQL schema sürümleri
 │  ├─ migrator.ts # Kysely migration registry/runner
-│  └─ types.ts    # 41 uygulama tablosunun tipli DB sözleşmesi
+│  └─ types.ts    # 42 uygulama tablosunun tipli DB sözleşmesi
 ├─ middlewares/   # JWT auth, DB user bağlama, RBAC, request ID, error handling
 ├─ realtime/      # Socket.IO auth sonrası mesaj/presence/typing işleyicileri
 ├─ repositories/  # SQL okuma/hydration ve DB entity -> API entity dönüşümü
@@ -229,8 +237,12 @@ packages/backend/
 ├─ types/         # Express request genişletmeleri
 ├─ utils/         # Token, doğrulama, pagination, medya, plan ve metrik yardımcıları
 │                 #   singleFlight.ts = cache miss'i tek sorguya indirger (8.3)
-├─ workers/       # Cron tabanlı bakım ve durable job tüketicileri
-└─ server.ts      # Composition root ve process yaşam döngüsü
+├─ workers/       # Zamanlanmış bakım görevleri (PostgreSQL advisory lock ile)
+├─ messaging/     # Olay kataloğu, tüketiciler, outbox relay, RabbitMQ publisher/consumer
+├─ observability/ # Trace/request bağlamı, Prometheus metrikleri, ops HTTP sunucusu
+├─ runtime/       # worker ve scheduler süreçlerinin yaşam döngüsü (SIGTERM drenajı)
+├─ entrypoints/   # worker.ts, scheduler.ts giriş noktaları
+└─ server.ts      # API composition root ve process yaşam döngüsü
 ```
 
 ### 6.2 Başlangıç sırası
@@ -244,18 +256,24 @@ packages/backend/
    ayrı, tek bağlantılı ve `statement_timeout`'suz bir havuzu kullanır: büyük bir
    tabloda index oluşturmak istek trafiği için konmuş 15 saniyelik tavanın çok
    üstünde sürer ve yarıda kesilmesi yavaş bir boot'tan kötüdür.
-4. Beklenen tablo/migration contract'ı kontrol edilir.
+4. Beklenen tablo/migration contract'ı kontrol edilir: tabloların varlığı ve
+   self-relation'ları engelleyen doğrulanmış CHECK kısıtları katalogdan okunur
+   (satır saymaz; büyük veride de açılış süresini etkilemez).
 5. Kas grupları ve ekipman lookup kayıtları idempotent biçimde bootstrap edilir.
 6. Redis bağlantısı denenir. Redis yoksa süreç durmaz; PostgreSQL tabanlı ana
    işlevler devam eder.
 7. Express middleware zinciri ve REST route'ları bağlanır.
 8. Socket.IO kurulur; Redis hazırsa pub/sub adapter eklenir.
-9. Background cron görevleri ayara göre başlatılır.
+9. `RUN_SCHEDULED_JOBS=false` değilse (yerel tek süreç modu) zamanlanmış
+   görevler ve doğrudan outbox relay'i bu süreçte başlar. Production'da API
+   bunları çalıştırmaz; `scheduler` ve `worker` süreçleri çalıştırır (6.10).
 10. HTTP + Socket.IO aynı Node HTTP server üzerinde `0.0.0.0:PORT` dinler.
 
 PostgreSQL bağlantısı veya schema contract'ı başarısızsa API başlamaz. Redis
-başarısızlığı ise readiness yanıtını `degraded: true` yapar fakat HTTP readiness
-PostgreSQL hazır olduğu sürece 200 dönebilir.
+başarısızlığı readiness yanıtını `degraded: true` yapar; tek instance'ta HTTP
+readiness PostgreSQL hazır olduğu sürece 200 döner. Birden fazla API replikası
+varsa `READINESS_REQUIRE_REDIS=true` ile Redis'siz instance not-ready olur ve
+load balancer'dan çıkar (Socket.IO adapter'ı ve ortak rate limit Redis ister).
 
 ### 6.3 HTTP request hattı
 
@@ -431,8 +449,14 @@ kayıtlar birbirleriyle çakışmaz.
 
 ### 6.9 Socket.IO gerçek zamanlı katmanı
 
-Socket handshake `auth.token` alanında access JWT ister. Token doğrulandıktan ve
-kullanıcı PostgreSQL'den bulunduğunda socket `user:<uuid>` odasına katılır.
+Socket handshake `auth.token` alanında access JWT ister. Token doğrulandıktan,
+kullanıcı PostgreSQL'den bulunduğunda ve token'daki `sid` oturumu hâlâ geçerli
+(revoke edilmemiş, süresi dolmamış, kullanıcıya ait) olduğunda socket
+`user:<uuid>` ve `session:<sid>` odalarına katılır. Logout o oturumun,
+parola sıfırlama ve hesap silme kullanıcının tüm soketlerini adapter üzerinden
+her instance'ta kapatır; açık soketler oturumlarını ~10 dakikada bir yeniden
+doğrular. İstemciler yeniden bağlandığında açık sohbetin en yeni sayfasını
+çekip birleştirir (soket kapalıyken gelen mesajlar kaybolmaz).
 
 Client -> server olayları:
 
@@ -464,33 +488,51 @@ kaydı PostgreSQL sayesinde korunur.
 
 ### 6.10 Background job ve durable queue modeli
 
-`RUN_SCHEDULED_JOBS=false` değilse:
+Arka plan işi üç ayrı süreç rolünde çalışır (aynı imaj, farklı giriş noktası;
+ayrıntı: `docs/architecture/TARGET_ARCHITECTURE.md`):
+
+- `api` (`server.ts`): production'da arka plan işi yapmaz
+  (`RUN_SCHEDULED_JOBS=false`). Yerel tek süreç modunda (değişken boşsa)
+  zamanlanmış görevleri ve doğrudan outbox relay'ini de çalıştırır.
+- `scheduler` (`entrypoints/scheduler.ts`): aşağıdaki görevler. Her görev bir
+  PostgreSQL advisory lock alır; kaç scheduler/API çalışırsa çalışsın bir görevi
+  aynı anda yalnız biri yürütür, kilit sahibi ölürse bağlantısıyla bırakılır.
+- `worker` (`entrypoints/worker.ts`): outbox relay ve olay tüketicileri.
 
 | Sıklık | Görev |
 | --- | --- |
-| Her dakika | `outbox_events` işler. |
-| Her 5 dakika | Süresi dolan story'leri siler, medyayı kuyruğa alır. |
+| Her 5 dakika | Süresi dolan story'leri siler, medyayı kuyruğa alır (okuma yolları zaten `expires_at`'e göre filtreler). |
 | Her 10 dakika | `media_deletion_jobs` üzerinden S3 silmelerini işler. |
 | Her 15 dakika | Tamamlanmamış/süresi geçen upload reservation'larını temizler. |
 | Her saatin 17. dakikası | Süresi dolan usage counter'ları siler. |
+| Her gün 03:41 | Yayınlanmış outbox satırlarını (7 gün) ve `processed_events` kayıtlarını (14 gün) temizler. |
 
-Expired story/upload/usage scan'leri Redis lease kullanır. Redis yoksa görev
-çalışmaya devam eder; birden fazla instance aynı scheduler'ı çalıştırıyorsa DB
-`FOR UPDATE SKIP LOCKED`/claim kuralları dayanıklılığı sağlar fakat gereksiz
-tarama oluşabilir.
+**Outbox.** Domain değişikliği ve olayı aynı transaction'da yazılır. Relay
+olayları dakikada bir değil, sürekli (varsayılan 1 saniyelik bekleme) çeker:
+`OUTBOX_TRANSPORT=direct` olayları aynı süreçte tüketicilere uygular,
+`rabbitmq` olayları publisher confirm ile `motionmeet.events` exchange'ine
+yayınlar. Satırlar `FOR UPDATE SKIP LOCKED` ile toplu, veritabanı saatine göre
+kiralanır; hata ±%20 jitter'lı exponential backoff ile tekrar denenir (en fazla
+1 saat), 10 denemeden sonra `dead` olur ve `outbox:redrive` ile yeniden
+kuyruğa alınır. Tüketiciler (`messaging/consumers.ts`: profil projeksiyonu,
+bağlantı e-postası, medya ölçümü) `processed_events` ile idempotenttir. Olay
+kataloğu: `docs/architecture/EVENT_CATALOG.md`.
 
-Outbox ve media deletion işleri PostgreSQL'de kalıcıdır. Worker satırı atomik
-claim token ve `claim_until` ile alır. Hata olursa exponential backoff uygulanır;
-bekleme en fazla 24 saattir. Process job ortasında ölürse lease süresi sonunda
-başka worker işi yeniden alabilir.
+Media deletion işleri PostgreSQL'de kalıcıdır; satır atomik claim token ve
+`claim_until` ile alınır, hata exponential backoff ile en fazla 24 saat sonra
+tekrar denenir.
 
 ### 6.11 Health ve kontrollü kapanış
 
 - `/health/live`: Node process çalışıyor mu?
 - `/health/ready`: PostgreSQL sorgulanabiliyor mu, Redis durumu ne, media/e-mail/
-  scheduled job capability'leri açık mı?
-- SIGTERM/SIGINT: cron durur, Socket.IO kapanır, HTTP yeni bağlantı almayı bırakır,
-  PostgreSQL ve Redis bağlantıları kapatılır.
+  scheduled job capability'leri ve outbox transport'u ne?
+- `METRICS_PORT` ayarlıysa her süreç özel bir ops portunda `/metrics`,
+  `/health/live` ve `/health/ready` sunar (worker ve scheduler'ın sağlık
+  kontrolü budur); bu port reverse proxy'den yayınlanmaz.
+- SIGTERM/SIGINT (API): Socket.IO ve HTTP yeni iş almayı bırakır, devam eden
+  zamanlanmış görevler ve relay biter, PostgreSQL ve Redis kapatılır. Worker yeni
+  claim ve teslim almayı durdurur, işlenen olayları bitirip ack'ler.
 - Kapanış 10 saniyede bitmezse force-exit koruması devreye girer.
 
 ## 7. PostgreSQL veri mimarisi
@@ -517,11 +559,12 @@ asıl veri bütünlüğü PostgreSQL FK, unique, check, enum ve transaction'lar�
   çalışır. Seçim boot'ta `detectGeometrySupport()` ile yapılır; şema iki durumda
   da aynıdır, sonradan PostGIS eklenebilir.
 - Enum'lar: `user_role`, `set_type`, `post_type`, `post_visibility`, `media_type`, `story_media_type`,
-  `connection_status`, `message_type`, `upload_purpose`, `outbox_status`,
-  `outbox_type`. Konum tabloları enum yerine `CHECK` kısıtı kullanır: dataset
-  yenilendiğinde yeni bir değer eklemek `ALTER TYPE` gerektirmesin diye.
+  `connection_status`, `message_type`, `upload_purpose`. Konum tabloları ve
+  014'ten beri `outbox_events.type`/`status` enum yerine `CHECK` kısıtı
+  kullanır: yeni bir değer eklemek `ALTER TYPE` (ve yeni değerin aynı
+  transaction'da kullanılamaması) gerektirmesin diye.
 
-### 7.3 41 uygulama tablosu
+### 7.3 42 uygulama tablosu
 
 #### Kullanıcı
 
@@ -597,7 +640,8 @@ kayıtlar silinmez, `is_active = false` yapılır.
 | `media_deletion_jobs` | S3 object silme retry kuyruğu, attempt/backoff/claim lease. |
 | `usage_counters` | Kullanım kotası bucket'ları ve expiry. |
 | `legacy_billing_archive` | Migration 012'nin kaldırdığı plan/ödeme verisinin JSON arşivi; uygulama okumaz. |
-| `outbox_events` | Profil snapshot yayılımı ve connection e-mail event'leri için durable outbox. |
+| `outbox_events` | Domain olayları için durable outbox (profil yayılımı, bağlantı e-postası, medya ölçümü): değişmez `event_id`, `schema_version`, `correlation_id`, durum `pending`/`processing`/`published`/`dead`, deneme ve kira alanları. |
+| `processed_events` | Tüketici başına uygulanmış olaylar (`consumer`, `event_id`); tekrar teslimi etkisiz kılar, 14 gün saklanır. |
 
 #### Analytics
 
@@ -608,7 +652,7 @@ kayıtlar silinmez, `is_active = false` yapılır.
 | `user_daily_muscle_stats` | Günlük aggregate'e bağlı kas başına set sayısı. |
 | `user_exercise_daily_stats` | Kullanıcı-gün-egzersiz başına volume, rep, set, session ve max weight. |
 
-Kysely'nin kendi migration metadata tabloları bu 41 uygulama tablosuna dahil
+Kysely'nin kendi migration metadata tabloları bu 42 uygulama tablosuna dahil
 değildir.
 
 ### 7.4 Normalizasyon ve bilinçli denormalizasyon
@@ -723,6 +767,20 @@ Bazı alanlar performans için bilinçli denormalized tutulur:
    privacy_show_in_search` ile partial'dır, çünkü sorgu bu koşulu her zaman
    taşır. 200.000 satırda ölçüm: substring araması 128 ms → 5,2 ms, prefix
    araması 169 ms → 0,05 ms.
+10. `010_story_likes`: hikâye beğenileri (`story_likes`, hikâye başına üye başına
+    tek satır).
+11. `012_retire_billing`: ücretli plan/ödeme tablolarını kaldırır, verisini
+    `legacy_billing_archive` JSON arşivine taşır (`011` numarası kullanılmadı).
+12. `013_repair_conversation_last_message`: en yeni mesajı silinen
+    konuşmaların `last_message_id` işaretçisini onarır.
+13. `014_outbox_reliability`: outbox `type`/`status` enum'larını text + CHECK
+    yapar; `event_id`, `schema_version`, `correlation_id`, `published_at`,
+    `published`/`dead` durumları ve `processed_events` tablosunu ekler.
+14. `015_posts_author_timeline_index`: `posts (user_id, created_at DESC, id
+    DESC) INCLUDE (visibility, post_type)` kapsayan indeksi; ana sayfa akışının
+    yazar başına index-only taramasını sağlar. 300.000 gönderide ilk sayfa
+    4–8 sn → 1,3 ms. Büyük bir tabloda önce elle `CREATE INDEX CONCURRENTLY`
+    ile kurulmalıdır (migrator transaction içinde çalışır).
 
 Migration komutu:
 
@@ -730,8 +788,9 @@ Migration komutu:
 corepack pnpm --filter @motionmeet/backend migrate:postgres
 ```
 
-Server başlangıcında da aynı migrator çalışır; `RUN_MIGRATIONS=false` ile ayrı
-release job modeline geçilebilir. Çoklu instance başlatmada Kysely/PostgreSQL
+Server başlangıcında da aynı migrator çalışır; production compose'da
+`RUN_MIGRATIONS=false` ve migration'ları her dağıtımda önce çalışan tek
+seferlik `migrate` servisi uygular. Çoklu instance başlatmada Kysely/PostgreSQL
 migration lock sıralaması kullanılır.
 
 ## 8. Redis mimarisi
@@ -783,7 +842,9 @@ Redis'in dört görevi vardır:
    `motionmeet:rate-limit:*`.
 3. **Realtime:** Socket.IO publisher/subscriber adapter ve instance'lar arası room
    yayını.
-4. **Koordinasyon:** cron lease'leri ve socket message/typing sayaçları.
+4. **Koordinasyon:** socket message/typing sayaçları ve feed audience epoch'u
+   (8.1). Zamanlanmış görev kilitleri artık Redis'te değil, PostgreSQL advisory
+   lock'tadır (6.10).
 
 ### 8.1 Cache invalidation politikası
 
@@ -802,6 +863,17 @@ beğenisi `liked_by_me`'de, kendi takibi `author_followed_by_me`'de. Herkes içi
 değişen şey bir sayacın bir artmasıdır ve onu 30 saniyelik TTL zaten taşır.
 Başkalarının cache'indeki yazar snapshot'ı ayrıca `user.profile.updated` outbox
 event'iyle tazelenir.
+
+**İstisna: erişimi daraltan yazımlar.** Görmeyi geri alan bir değişiklik TTL'i
+bekleyemez, çünkü o zaman bayat sayfa bir gizlilik sızıntısıdır:
+
+- iki belirli üye arasında (takipten çıkma, kaldırılan bağlantı, reddedilen
+  istek) her iki üyenin feed ve profil cache'i silinir;
+- listelenemeyen bir kitleyi etkileyenlerde (hesabın gizliye alınması,
+  antrenmanların akıştan gizlenmesi, gönderi veya hesap silme) Redis'teki
+  feed audience epoch sayacı artırılır. Epoch her feed cache alan adının
+  başındadır; tek bir `INCR` önbellekteki bütün sayfaları geçersiz kılar
+  (ADR 004). Gerçek Redis'le `tests/integration/feedPrivacy.test.ts` doğrular.
 
 `KEYS` hiçbir yerde kullanılmaz; prefix `SCAN` de artık kullanılmaz.
 
@@ -829,7 +901,8 @@ Redis opsiyoneldir. Bağlantı yoksa:
 - cache doğrudan PostgreSQL'e düşer;
 - Express limiter adaptive store içindeki process-local memory fallback'i kullanır;
 - socket limitleri process-local Map'e düşer;
-- cron lock görevi doğrudan çalıştırır;
+- zamanlanmış görevler etkilenmez: kilitleri PostgreSQL advisory lock'tadır,
+  Redis yokken de aynı görevi iki süreç birden çalıştırmaz;
 - Socket.IO yalnız aynı instance içinde realtime yayın yapar;
 - PostgreSQL'deki kalıcı veri ve durable job'lar kaybolmaz;
 - `wasDone` her zaman `false` döner, yani tekrarlanan iş atlanmaz ama yanlış da
@@ -868,12 +941,22 @@ Web/Mobile dosyayı seçer ve MIME/size doğrular
   -> upload_reservations satırını 1 saat expiry ile yazar
   -> istemci binary'yi doğrudan S3'e PUT eder
   -> istemci entity create/update isteğinde yalnız object key gönderir
-  -> backend reservation sahipliği/expiry/purpose kontrolü yapar
-  -> S3 HEAD ile size ve Content-Type doğrular
+  -> backend reservation sahipliği/expiry/purpose kontrolü yapar (aynı key iki kez reddedilir)
+  -> S3 HEAD ile size (12 B – purpose üst sınırı) ve Content-Type doğrular
   -> ilk 32 byte range read ile gerçek dosya imzasını doğrular
   -> ImageKit public URL'sini üretir
   -> entity + reservation commit aynı DB transaction'ında tamamlanır
+     (gönderide: her post_media satırı kendi doğrulanmış MIME ve byte boyutunu
+     taşır, post tipi istemcinin beyanından değil eklerden türetilir,
+     media.uploaded olayı outbox'a yazılır)
+  -> media worker sonradan görsellerin genişlik/yüksekliğini (sharp, ilk
+     256 KB) ve videoların süre/boyutunu (ffprobe, kısa ömürlü presigned URL)
+     post_media'ya yazar
 ```
+
+Oluşturma başarısız olursa istemcinin doğrudan yüklediği key'ler silinmez,
+rezerve kalır; aynı operation id ile tekrar deneme aynı key'leri bağlayabilir.
+Kullanılmayanları terk edilmiş upload süpürmesi bir saat sonra temizler.
 
 Bu yaklaşım büyük dosyanın API process belleğinden geçmesini engeller. Eski veya
 fallback multipart endpoint'ler için Multer memory storage hâlâ bulunur; profile/
@@ -1104,7 +1187,9 @@ Vercel dağıtımında API/Socket origin'i external HTTPS/WSS olmalıdır.
 
 ### 12.1 Uygulama kimliği ve teknoloji
 
-- Expo SDK 54, React Native 0.81.5, React 19.1.
+- Expo SDK 58 (58.0.23), React Native 0.88.1, React 19.3. Native modüller
+  SDK'nın `bundledNativeModules.json` listesine hizalıdır (`expo install
+  --check`: "Dependencies are up to date").
 - Uygulama adı/slug: `MotionMeet` / `motionmeet`.
 - Deep-link scheme: `motionmeet`.
 - Android package ve iOS bundle ID: `app.motionmeet.mobile`.
@@ -1117,7 +1202,7 @@ Vercel dağıtımında API/Socket origin'i external HTTPS/WSS olmalıdır.
 - iOS tablet desteği açık.
 - Android keyboard layout mode `resize`; uygulama backup'ı kapalı, legacy harici
   depolama izinleri engelli ve ImagePicker mikrofon izni kapalıdır.
-- Konum izinleri (SDK 54, `expo-location` ~19.0):
+- Konum izinleri (`expo-location` ~58.0):
   - iOS: yalnız `locationWhenInUsePermission` metni tanımlıdır;
     `locationAlwaysAndWhenInUsePermission` ve background location kapalıdır.
   - Android: `ACCESS_COARSE_LOCATION` ve `ACCESS_FINE_LOCATION` eklenir.
@@ -1295,10 +1380,14 @@ işaretlenip yine kullanılır.
 
 ### 12.6 Mobile medya
 
-Expo ImagePicker asset'i Blob'a çevrilir. İstemci mümkünse gerçek magic byte'tan
-MIME türünü algılar, dosya uzantısını bu türle eşler, presign alır ve S3'e doğrudan
-PUT eder. Bu özellikle Android üreticilerinin yanlış/eksik MIME metadata
-döndürdüğü durumlarda backend signature rejection'ını önler.
+Dosyanın tamamı JS tarafına okunmaz: istemci `expo-file-system` ile yalnız ilk
+32 byte'ı ve diskteki boyutu okur, gerçek magic byte'tan MIME türünü algılar,
+dosya uzantısını bu türle eşler, presign alır ve dosyayı `createUploadTask` ile
+diskten doğrudan S3'e PUT eder. Bu özellikle Android üreticilerinin yanlış/eksik
+MIME metadata döndürdüğü durumlarda backend signature rejection'ını önler.
+Yükleme gerçek ilerleme yüzdesi raporlar; 30 sn ilerleme olmazsa veya dosya
+boyutuyla büyüyen toplam süre dolarsa native aktarım iptal edilir. Story ve
+gönderi oluşturucusu yükleme sırasında kapatılırsa aktarım da iptal edilir.
 
 **Görüntüleme tarafında uzun listeler `expo-image` kullanır**, React Native'in
 `Image`'ı değil: `PostCard` (feed), `Explore` ızgarası, `UserCard`,
@@ -1910,11 +1999,13 @@ Picker/File
  -> /api/media/presign
  -> upload_reservations
  -> istemci -> S3 PUT
- -> /api/post/add(object keys + operationId)
+ -> /api/post/add(object keys + operationId; açıklama opsiyonel)
  -> S3 HEAD + range signature kontrolü
  -> ImageKit URL
- -> posts + post_media + quota + reservation commit transaction
+ -> posts + post_media (dosya başına MIME/boyut) + quota + reservation commit
+    + media.uploaded outbox satırı, tek transaction
  -> yalnız yazarın feed cache'i düşürülür (8.1)
+ -> worker: görsel boyutları / video süresi post_media'ya yazılır
 ```
 
 Takipçilerin feed'i burada dokunulmaz; 30 saniyelik TTL yeni gönderiyi zaten
@@ -2022,8 +2113,16 @@ Yazar kendi hikâyesini açar
 | `JWT_SECRET` | Zorunlu; production'da en az 32 karakter/random byte seviyesi. |
 | `FRONTEND_URL` | Browser origin ve e-mail link kökü; production HTTPS. |
 | `CORS_ORIGINS` | Virgülle ayrılmış tam origin allowlist'i. |
-| `RUN_MIGRATIONS` | Startup migration kontrolü; varsayılan açık. |
-| `RUN_SCHEDULED_JOBS` | Cron worker'ları açar/kapatır. |
+| `RUN_MIGRATIONS` | Startup migration kontrolü; varsayılan açık. Production compose'da kapalı (ayrı `migrate` servisi). |
+| `RUN_SCHEDULED_JOBS` | API sürecinde zamanlanmış görevler + doğrudan outbox relay (yerel tek süreç). Production'da `false`; işi `scheduler` ve `worker` yapar. |
+| `MOTIONMEET_PROCESS_ROLE` | `api` / `worker` / `scheduler`; giriş noktaları ayarlar, veritabanı bağlantı adı ve metrik etiketi olur. |
+| `OUTBOX_TRANSPORT` | `direct` (varsayılan, broker yok) veya `rabbitmq`. |
+| `RABBITMQ_URL`, `ALLOW_INSECURE_RABBITMQ_TLS`, `RABBITMQ_QUEUE_TYPE`, `RABBITMQ_PREFETCH` | Broker bağlantısı (production'da `amqps://` + kimlik), kuyruk tipi (`quorum`), tüketici prefetch'i. |
+| `OUTBOX_POLL_INTERVAL_MS` | Relay'in boş claim sonrası bekleme süresi; varsayılan 1000. |
+| `METRICS_PORT` | Özel ops portu (`/metrics`, sağlık); reverse proxy'den yayınlanmaz. |
+| `READINESS_REQUIRE_REDIS` | Çok replikalı API'de Redis yokken not-ready. |
+| `FFPROBE_PATH` | Worker'ın video ölçümü için ffprobe yolu (`media-runtime` imajında var). |
+| `MEDIA_FETCH_ALLOWED_HOSTS` | Sunucunun medya indirebileceği ek host'lar (share card); ImageKit endpoint'i her zaman izinli. |
 | `GLOBAL_RATE_LIMIT_PER_15_MIN` | 100–10000 arasında global API limiti. |
 | `MEDIA_UPLOADS_ENABLED` | S3/ImageKit capability feature flag'i. |
 | `EMAIL_ENABLED` | SMTP/outbox e-mail capability flag'i. |
@@ -2174,7 +2273,9 @@ Varsayılan portlar:
 - Redis 7.4 Alpine, AOF açık, `noeviction`, kalıcı `redis_dev_data`;
 - backend dev image, source bind mount ve health dependency;
 - Vite web dev image;
-- `mobile` profile seçilirse Expo LAN servisi.
+- `mobile` profile seçilirse Expo LAN servisi;
+- `queue` profile seçilirse RabbitMQ 4.2 (yönetim paneli yalnız loopback'te);
+- `workers` profile seçilirse `worker` ve `scheduler` süreçleri.
 
 PostgreSQL ve Redis health check başarılı olmadan backend; backend readiness
 başarılı olmadan web/mobile başlatılmaz.
@@ -2182,35 +2283,46 @@ başarılı olmadan web/mobile başlatılmaz.
 ```bash
 docker compose up --build --wait
 docker compose --profile mobile up --build
+docker compose --profile queue --profile workers up --build
 ```
 
 ### 18.2 Test Compose
 
-`docker-compose.test.yml` host 5433'e açılan, data dizini tmpfs olan izole
-`postgres-test` sağlar. Test bitiminde veri kalıcı değildir.
+`docker-compose.test.yml` tmpfs üzerinde, test bitince silinen izole servisler
+sağlar: `postgres-test` (5433), `rabbitmq-test` (5673) ve `redis-test` (6381).
+Entegrasyon testleri üçünü de kullanır (RabbitMQ ve Redis testleri ilgili URL
+yoksa çalışmayı reddeder).
 
 ```bash
-docker compose -f docker-compose.test.yml up -d --wait
-DATABASE_URL='postgresql://postgres:motionmeet-test@127.0.0.1:5433/motionmeet_test' \
-  pnpm --filter @motionmeet/backend migrate:postgres
-DATABASE_URL='postgresql://postgres:motionmeet-test@127.0.0.1:5433/motionmeet_test' \
-  pnpm --filter @motionmeet/backend test:integration
+docker compose -f docker-compose.test.yml up -d --wait postgres-test rabbitmq-test redis-test
+export DATABASE_URL='postgresql://postgres:motionmeet-test@127.0.0.1:5433/motionmeet_test' \
+  RABBITMQ_URL='amqp://motionmeet:motionmeet-test@127.0.0.1:5673' \
+  REDIS_URL='redis://127.0.0.1:6381'
+pnpm --filter @motionmeet/backend migrate:postgres
+pnpm --filter @motionmeet/backend test:integration
 docker compose -f docker-compose.test.yml down
 ```
 
 ### 18.3 Production Compose
 
-Production Compose yalnız backend ve web'i paketler. PostgreSQL ve Redis image'ı
-bilinçli olarak içermez; authenticated, TLS, backup/failover özellikli managed
-servis URL'leri beklenir.
+Production Compose tek backend imajını dört rolde çalıştırır: her dağıtımda
+önce çalışıp çıkan `migrate`, arka plan işi yapmayan `backend` (API + Socket.IO),
+`worker` (outbox relay + tüketiciler; FFmpeg içeren `media-runtime` hedefi) ve
+`scheduler`; ayrıca `web`. PostgreSQL, Redis ve RabbitMQ image'ı bilinçli olarak
+içermez; authenticated, TLS, backup/failover özellikli managed servis URL'leri
+beklenir. Aynı imajlarla tek makinede prova için `docker-compose.local.yml`
+(bkz. `docs/operations/DEPLOYMENT.md`).
 
 - Backend multi-stage build'de shared ve backend TypeScript derlenir; runtime'a
   production dependency ve `dist` dışında kaynak taşınmaz.
-- Runtime `node` user'ı ve `tini` ile çalışır.
+- Runtime `node` user'ı ve PID 1 olarak `tini` ile çalışır (compose'ta ayrıca
+  `init: true` yoktur).
 - Web Vite build'i unprivileged Nginx ile servis edilir.
 - Container'lar read-only filesystem, tmpfs, `no-new-privileges` ve tüm Linux
   capability'lerini drop ederek çalışır.
 - Backend dışarı doğrudan publish edilmez; edge network'te web proxy arkasındadır.
+  Nginx `backend` adını Docker DNS'i ile istek başına çözümler; backend yeniden
+  dağıtıldığında web'in yeniden başlatılması gerekmez.
 
 ```bash
 docker compose -f docker-compose.prod.yml config
@@ -2225,16 +2337,27 @@ korunmalıdır.
 
 ### 19.1 Mevcut otomatik kontroller
 
-- Backend unit testleri (55 test): auth validation, environment validation,
+- Backend unit testleri (89 test; 2026-11-06): auth validation, environment validation
+  (broker/rol kuralları dahil), domain event envelope ve backoff, W3C trace
+  bağlamı, post tipinin eklerden türetilmesi, görsel/video ölçümü (sharp,
+  ffprobe çıktısı),
   pagination, security helpers, workout metrics, DB contract, hikâye katmanı
   doğrulaması (`tests/storyOverlays.test.ts` — clamp, enum fallback, hex-renk
   filtresi, id yeniden üretimi ve bozuk gövde reddi) ve cache stampede koruması
   (`tests/singleFlight.test.ts` — 1.000 eşzamanlı çağrının tek çalıştırmaya
   indiği, farklı anahtarların birbirini bloklamadığı, bir hatanın anahtarı
   zehirlemediği).
-- PostgreSQL concurrency integration: retry idempotency, sayaç yarışları, quota,
-  conversation uniqueness, analytics ve durable media deletion davranışı.
-- Shared contract testleri (11 test), medya varyant URL'lerinin davranışı dâhil:
+- Backend integration (21 test, PostgreSQL 18 + RabbitMQ 4.2 + Redis 8, seri):
+  retry idempotency, sayaç yarışları, quota, conversation uniqueness,
+  analytics, durable media deletion; outbox (tek seferlik uygulama, dead +
+  redrive, advisory lock), gerçek RabbitMQ (broker yokken bekleme, çift
+  yayında tek etki, zehirli mesajın dead kuyruğa düşmesi, retry katmanı),
+  oturum doğrulama, ana sayfa akışı eşdeğerliği ve sayfalama, gerçek Redis'le
+  feed cache gizliliği (FEED-01/02), açılış kontratının katalogdan okunması.
+- E2E yetki taraması (`test:e2e`, çalışan bir yığına karşı): gizli hesap
+  sahibi, takipçi ve yabancıyla her kimlikli kaynak için okuma/eylem/silme
+  denemeleri, mass assignment, admin ve token'sız istekler (10 senaryo).
+- Shared contract testleri (22 test), medya varyant URL'lerinin davranışı dâhil:
   mevcut `tr` dönüşümünün korunması, virgüllerin encode edilmemesi, videonun
   yeniden boyutlandırılmaması ve ImageKit olmayan URL'lerin aynen dönmesi.
 - Web: lint, strict typecheck, production Vite build, public artefakt güvenlik
@@ -2243,7 +2366,12 @@ korunmalıdır.
   güvenlik testi; export bundle/source-map/secret ve büyüme bütçesi.
 - Kök: Turbo üzerinden bütün paketlerde lint/typecheck/test/build.
 - CI: production dependency audit (`high` seviyesi), frozen install ve production
-  Compose config kontrolü; izole PostgreSQL başlatma, migration ve test.
+  Compose config kontrolü; izole PostgreSQL + RabbitMQ + Redis başlatma,
+  migration ve entegrasyon testleri; production imajlarının build'i (API
+  imajında FFmpeg olmadığı, worker imajında ffprobe olduğu, giriş
+  noktalarının imajda bulunduğu kontrolleri).
+- Yük provası: `scripts/load` (sentetik veri, sorgu planları, k6);
+  sonuçlar `docs/quality/PERFORMANCE_BASELINE.md`.
 - OpenAPI: `redocly.yaml` mevcut; lint komutu kök script'e henüz bağlanmamıştır.
 - Responsive native davranış için `docs/mobile-responsive-audit.md` içinde cihaz,
   dp, font scale, keyboard, safe-area ve modal regresyon matrisi bulunur.
@@ -2323,7 +2451,9 @@ Production'da izlenmesi gerekenler:
 - PostgreSQL pool saturation, connection timeout ve slow query planları;
 - Redis ready/degraded durumu ve reconnect olayları;
 - Socket bağlantı sayısı ve instance'lar arası adapter sağlığı;
-- outbox pending/attempt/lag;
+- outbox pending/dead/en eski bekleyen olay yaşı ve tüketici retry/dead sayıları
+  (`motionmeet_outbox_*`, `motionmeet_events_consumed_total`; Grafana panosu
+  `infra/grafana/motionmeet-overview.json`; müdahale: `docs/operations/RUNBOOKS.md`);
 - media deletion backlog ve S3 hata oranı;
 - boot'taki `location_geometry_mode` satırı: production'da `postgis` beklenir,
   `bounding-box` görülüyorsa extension kurulmamış demektir;
@@ -2412,9 +2542,11 @@ Bu bölüm mevcut kaynak durumunu dürüstçe kaydeder:
     build.gradle` içinde release buildType hâlâ `signingConfigs.debug`
     kullanıyor. Mağaza dağıtımı için ayrı bir release keystore ve secret
     yönetimi gerekir.
-15. **Runtime performans ölçümü yok.** p50/p95/p99 istek gecikmesi, cache
-    hit/miss oranı, event loop lag, pool doluluğu ve slow query eşiği
-    ölçülmüyor. Structured logging request süresini kaydediyor ama toplanmıyor.
+15. **Süreç metrikleri toplanmıyor.** Her süreç Prometheus formatında metrik
+    üretir (route bazında gecikme, event loop lag, outbox/tüketici/zamanlayıcı
+    sayaçları) ve Grafana'da PostgreSQL tabanlı bir pano vardır, ama bu
+    metrikleri kazıyan bir Prometheus henüz kurulmadı. Yük ölçümleri
+    `docs/quality/PERFORMANCE_BASELINE.md`'dedir.
 16. **Mobil `package.json` doğrudan import edilmeyen paketler taşıyor**
     (`fbjs`, `styleq`, `invariant`, `merge-options`, `html-parse-stringify`,
     `use-latest-callback`, `use-sync-external-store`, `socket.io-parser`,

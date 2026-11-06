@@ -18,7 +18,7 @@ The W3C `traceparent` header carries the originating request's trace.
 |---|---|---|---|---|---|
 | `user.profile.updated` v1 | `userService.updateUser` when name, username or picture changes | changed fields (informational; consumer re-reads `users`) | `profile-projection` → `motionmeet.profile-projection` | transactional, exactly-once effect | public profile fields only |
 | `connection.requested` v1 | `userService.createConnection` | `senderId`, `recipientId` | `connection-request-email` → `motionmeet.connection-request-email` | external (SMTP), at-least-once; no-op with `EMAIL_ENABLED=false` | ids only; email address read at send time, never in the event |
-| `media.uploaded` v1 | `postService.createPost` when the post has images | `postId` | `media-metadata` → `motionmeet.media-metadata` | external (S3 read), idempotent update of rows still missing a width | ids only; no URLs, keys or presigned links |
+| `media.uploaded` v1 | `postService.createPost` when the post has any media | `postId` | `media-metadata` → `motionmeet.media-metadata` | external (S3 read; ffprobe for videos), idempotent: fills only image rows missing a width and video rows missing a duration | ids only; no URLs, keys or presigned links in the event, and ffprobe errors are logged by exit code so the signed URL is never written anywhere |
 
 ## Retry and failure
 

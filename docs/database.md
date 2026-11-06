@@ -7,7 +7,7 @@ for cache, rate limiting and coordination; S3 remains the binary-media store.
 
 | Domain | Source tables | Derived/materialized data |
 | --- | --- | --- |
-| Plans and users | `plans`, `plan_billing_cycles`, `users` | User counters and quota state |
+| Users | `users` (paid plans were retired in migration 012; their data is archived in `legacy_billing_archive`) | User counters and quota state |
 | Exercises | `exercises`, secondary-muscle and instruction tables | Cached list/detail responses |
 | Training | `routines`, `workouts`, exercise/set child tables | Daily stats and personal records |
 | Social graph | `user_follows`, `connections` | User follower/following/connection counters |
@@ -15,7 +15,7 @@ for cache, rate limiting and coordination; S3 remains the binary-media store.
 | Messaging | `conversations`, participants, `messages` | Unread and last-message state |
 | Authentication | `sessions`, `password_reset_tokens` | Redis rate-limit/token coordination |
 | Media lifecycle | `upload_reservations`, `media_deletion_jobs` | S3 objects and signed/public URLs |
-| Async work | `outbox_events` | Profile propagation and realtime events |
+| Async work | `outbox_events`, `processed_events` | Profile propagation, connection email, media metadata; per-consumer deduplication |
 
 Bounded exercise and set arrays from the API are normalized into ordered child
 tables. Workout/routine exercises retain immutable exercise-name, muscle-group
@@ -43,13 +43,28 @@ Migrations are registered in `packages/backend/db/migrator.ts`:
 2. `002_partial_idempotency_indexes` installs retry-safe partial indexes.
 3. `003_detached_exercise_snapshots` preserves historical snapshots while
    allowing deleted master exercises.
+4. `004`-`013`: body measurements, exercise media paths, locations and
+   proximity, follow requests and notifications, story overlays, search
+   indexes, story likes, billing retirement (`011` is unused), conversation
+   repair. Each is described in [PROJECT_STRUCTURE.md](../PROJECT_STRUCTURE.md) §7.7.
+5. `014_outbox_reliability` turns the outbox enums into text with CHECK
+   constraints and adds `event_id`, `schema_version`, `correlation_id`,
+   `published_at`, the `published`/`dead` statuses and `processed_events`.
+6. `015_posts_author_timeline_index` adds the covering index the home feed
+   reads per followed author. On a large table build it `CONCURRENTLY` by hand
+   first; the migrator runs in a transaction.
+
+Migrations are expand-only: the previous release keeps working against the new
+schema during a rollout. Down migrations exist but are a last resort — see
+[operations/RUNBOOKS.md](operations/RUNBOOKS.md).
 
 ```bash
 corepack pnpm --filter @motionmeet/backend migrate:postgres
 ```
 
 Kysely records applied migrations and serializes concurrent migration runners.
-The same migration is safe during horizontally scaled startup.
+In production a one-shot `migrate` service applies them before the other
+services start; the API itself runs with `RUN_MIGRATIONS=false`.
 
 ## Offline legacy import
 
@@ -76,8 +91,15 @@ compares record counts, mapping coverage, orphan counts and critical fields.
 - Frequently filtered foreign keys and `(owner, created_at, id)` access paths
   have composite indexes.
 - Expensive workout charts read maintained daily aggregate tables.
-- Cache keys are scoped by endpoint and user; writes invalidate the matching
-  prefixes. Redis failures fall through to PostgreSQL.
+- Caches are owner-addressed (one Redis hash per member/profile, dropped with
+  one `DEL`; no prefix scans). Writes that narrow access drop both members'
+  entries or bump the feed audience epoch (ADR 004). Redis failures fall
+  through to PostgreSQL.
+- The home feed is read audience-first (viewer, followees, connections → each
+  one's newest posts on `posts_author_timeline_idx`), so its cost follows the
+  audience size rather than the size of `posts`. Plans for both feeds:
+  `scripts/load/explain-feeds.sql`; synthetic production-shaped data:
+  `scripts/load/seed-synthetic.sql`.
 - Validate production-shaped queries with `EXPLAIN (ANALYZE, BUFFERS)` and add
   indexes from measured plans, not speculation.
 

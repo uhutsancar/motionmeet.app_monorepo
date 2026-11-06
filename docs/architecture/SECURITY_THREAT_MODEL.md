@@ -18,6 +18,9 @@ are unchanged and covered by `docs/security-verification/`.
 | Information disclosure: PII in events | outbox/broker | Payloads are ids and scalars; no tokens, URLs, emails, message bodies or coordinates (EVENT_CATALOG.md) |
 | Denial of service: poison message blocks a queue | consumers | Malformed or permanently failing messages go to `.dead`; delivery limit for crash loops; bounded prefetch |
 | Denial of service: decompression bomb | media worker | sharp `limitInputPixels` 100 MP; at most 256 KB read, 25 MB fallback |
+| Tampering / DoS: hostile video file | media worker (FFmpeg) | ffprobe only (no decoding to disk), https-only protocol whitelist, bounded probe size and analyse duration, 30 s timeout, non-root read-only container; FFmpeg is absent from the API image |
+| Information disclosure: signed URL in logs | media worker | ffprobe failures are logged by exit code only; execFile's message, which carries the command line, is never logged or stored |
+| Elevation: access through cached privileges after a role/privacy change | feed, sockets | access is re-evaluated on every single-post read; feed caches retired on access-narrowing writes; socket permission cache invalidated across instances |
 | Denial of service: retry storm | outbox/consumers | Jittered exponential backoff, attempt ceilings, TTL retry tiers |
 | Elevation: worker credentials | deployment | Same least-privilege DB user as the API today; a separate role per process is a follow-up |
 

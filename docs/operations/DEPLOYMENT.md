@@ -8,7 +8,7 @@ Redis and (optionally) RabbitMQ are external managed services named in
 |---|---|---|
 | `migrate` | `node dist/scripts/migrate.js` | runs once per `up`; the others wait for it to succeed |
 | `backend` | `node dist/server.js` | `RUN_MIGRATIONS=false`, `RUN_SCHEDULED_JOBS=false`, `METRICS_PORT=9464` |
-| `worker` | `node dist/entrypoints/worker.js` | pool 10, 1 CPU / 512 MB, 30 s stop grace |
+| `worker` | `node dist/entrypoints/worker.js` | image target `media-runtime` (FFmpeg for video metadata; the API image has none), pool 10, 1 CPU / 512 MB, 30 s stop grace |
 | `scheduler` | `node dist/entrypoints/scheduler.js` | pool 5, 0.5 CPU / 256 MB, 30 s stop grace |
 | `web` | Nginx static build | unchanged |
 
@@ -79,6 +79,16 @@ data-service setting is overridden, so it never touches a natively running
 development database. Only port 8088 and the loopback-bound broker UI are
 published. Load rehearsal: `scripts/load/feed-read.k6.js` (header of the file
 has the command).
+
+## Notes for large databases
+
+- Migration 015 builds `posts_author_timeline_idx` with a plain `CREATE
+  INDEX` (the migrator runs in a transaction). On a large `posts` table build
+  it by hand first with `CREATE INDEX CONCURRENTLY IF NOT EXISTS` - same
+  definition as in the migration - so the migration becomes a no-op.
+- The web container's nginx resolves `backend` through Docker's embedded DNS
+  (`resolver 127.0.0.11`). Outside Docker, point `resolver` at the platform's
+  DNS.
 
 ## Database settings this code assumes
 

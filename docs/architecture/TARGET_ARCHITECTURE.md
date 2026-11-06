@@ -38,7 +38,7 @@ traffic but never hold the only copy of anything.
 | Role | Entry point | Does | Scales |
 |---|---|---|---|
 | `api` | `server.ts` | HTTP API, Socket.IO, synchronous upload verification | Horizontally; Redis required for >1 replica (`READINESS_REQUIRE_REDIS=true`) |
-| `worker` | `entrypoints/worker.ts` | Outbox relay; event consumers (`messaging/consumers.ts`) | Horizontally; outbox claims skip each other, a queue load-balances its consumers |
+| `worker` | `entrypoints/worker.ts`, image target `media-runtime` (adds FFmpeg) | Outbox relay; event consumers (`messaging/consumers.ts`), including image and video measurement | Horizontally; outbox claims skip each other, a queue load-balances its consumers |
 | `scheduler` | `entrypoints/scheduler.ts` | Story expiry, abandoned uploads, usage counters, media deletions, event-history retention | Any number; each task holds a PostgreSQL advisory lock |
 | `migrate` | `scripts/migrate.ts` | Schema migrations, then exits | One per deploy |
 
@@ -63,13 +63,20 @@ every reconnect.
 
 ## Key flows
 
-**Post with photos.** Client sniffs 32 bytes and the on-disk size → `POST
-/api/media/presign` (reservation row) → native PUT straight to S3 with progress
-→ `POST /api/post` with `uploadedKeys` → server HEADs and signature-checks each
-key, then in one transaction inserts the post, one `post_media` row per file
+**Post with photos or a video.** Client sniffs 32 bytes and the on-disk size →
+`POST /api/media/presign` (reservation row) → native PUT straight to S3 with
+progress → `POST /api/post/add` with `uploadedKeys` (a caption is optional) →
+server HEADs and signature-checks each key, derives the post type from the
+files, then in one transaction inserts the post, one `post_media` row per file
 with its verified MIME and size, consumes the reservations and writes a
-`media.uploaded` outbox row → response. The worker later measures the images
-and fills `width`/`height`.
+`media.uploaded` outbox row → response. The worker later fills `width`/`height`
+(sharp, first 256 KB) and, for videos, `duration_seconds` (ffprobe over a
+short-lived presigned URL).
+
+**Home feed.** Cache hit → Redis. Miss → audience-first query: the viewer,
+their followees and connections; each one's newest posts from the covering
+`posts_author_timeline_idx` (index-only, stops at the page size); rows for the
+final page only (ADR 004).
 
 **Profile rename.** `users` update + `user.profile.updated` outbox row in one
 transaction → relay → (RabbitMQ) → `profile-projection` consumer rewrites the
@@ -77,6 +84,14 @@ author snapshot on the member's posts, deduplicated by `processed_events`.
 
 **Logout.** Session revoked → the session's sockets are disconnected on every
 instance through the adapter; open sockets also re-check their session.
+
+**Web proxy.** The web container's nginx resolves `backend` per request through
+Docker's DNS (`resolver 127.0.0.11`), so a redeployed backend container is
+reached at its new address without restarting the web container.
+
+**Observability.** Prometheus-format metrics per process on the private ops
+port; business and pipeline health in Grafana from PostgreSQL
+(`infra/grafana/motionmeet-overview.json`).
 
 ## Deliberately not added
 

@@ -445,7 +445,15 @@ paths:
       tags: [Social]
       summary: Create a post
       operationId: postPostAdd
-      description: Direct-upload clients pass uploadedKeys obtained from /api/media/presign.
+      description: >-
+        Direct-upload clients pass uploadedKeys obtained from /api/media/presign.
+        A post needs content, at least one upload or a workout; a caption is
+        optional when media is attached. Each key is verified against object
+        storage (owner, purpose, size, stored type and file signature) before
+        it is attached, and the same key may not appear twice. The stored
+        post_type is derived from the attachments. If creation fails, directly
+        uploaded keys stay reserved so a retry with the same Idempotency-Key can
+        attach them again.
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -900,9 +908,9 @@ paths:
       security: []
       responses:
         "200":
-          description: Database, Redis and capability readiness
+          description: Database, Redis, capability and outbox-transport readiness
         "503":
-          description: A required dependency is unavailable
+          description: PostgreSQL is unavailable, or Redis is unavailable while READINESS_REQUIRE_REDIS=true
 components:
   securitySchemes:
     bearerAuth:
@@ -1053,6 +1061,17 @@ components:
         _id: { type: string }
         user: { $ref: "#/components/schemas/User" }
         content: { type: string }
+        post_type:
+          enum: [text, image, text_with_image, video, workout]
+          description: Derived by the server from the attachments and the workout, not taken from the request.
+        visibility: { enum: [public, followers, private] }
+        image_urls:
+          type: array
+          items: { type: string, format: uri }
+        media:
+          type: array
+          maxItems: 4
+          items: { $ref: "#/components/schemas/PostMedia" }
         like_count: { type: integer, minimum: 0 }
         liked_by_me: { type: boolean }
         comment_count: { type: integer, minimum: 0 }
@@ -1063,6 +1082,23 @@ components:
           maxItems: 20
           items: { type: object, additionalProperties: true }
       additionalProperties: true
+    PostMedia:
+      type: object
+      required: [id, url, mediaType, position]
+      properties:
+        id: { type: string }
+        url: { type: string, format: uri }
+        mediaType: { enum: [image, video] }
+        position: { type: integer, minimum: 0, maximum: 3 }
+        width:
+          type: [integer, "null"]
+          description: Display width in pixels, filled by the media worker shortly after the post is created (rotation applied).
+        height:
+          type: [integer, "null"]
+          description: Display height in pixels, filled by the media worker.
+        durationSeconds:
+          type: [number, "null"]
+          description: Video duration, filled by the media worker; null for images.
     Page:
       type: object
       required: [success]

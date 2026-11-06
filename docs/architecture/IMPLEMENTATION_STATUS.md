@@ -9,14 +9,20 @@ scenario results: [../quality/TEST_MATRIX.md](../quality/TEST_MATRIX.md).
 ## Work context
 
 - Start: `0774d92` (`main`) + uncommitted work snapshotted as `4e45dbc`.
-- Branch: `arch/master-plan`.
-- Commits: `22e1c24` P0 fixes · `387b101` outbox/RabbitMQ/processes/metrics ·
+  Developed on `arch/master-plan`, fast-forwarded into `main` and pushed.
+- First pass: `22e1c24` P0 fixes · `387b101` outbox/RabbitMQ/processes/metrics ·
   `edd4ef2` socket sessions · `dd87c53` media worker · `f7ba3cf` message
-  catch-up · this documentation commit.
-- Verification at the end: backend typecheck, lint, 86 unit tests, 16
-  integration tests (PostgreSQL 18 + RabbitMQ 4.2), migration run twice
-  (second a no-op); mobile and web typecheck + lint; worker/scheduler process
-  smoke test; prod/dev compose `config` validation.
+  catch-up · `8266a90` docs.
+- Second pass: `89faa49` dependency security · `5e82ea9` web composer
+  progress · `ee3fb85` Docker rehearsal stack · `0cc0e09` Grafana dashboard ·
+  `063a451` authorization sweep · `519424f` video metadata · `f8c0d61`
+  home-feed rewrite · `158bf86` boot contract · `190caf7` nginx re-resolve ·
+  docs commits.
+- Latest verification (2026-11-06, after all of the above): backend
+  typecheck, lint, **89 unit** and **21 integration** tests (PostgreSQL 18,
+  RabbitMQ 4.2, Redis 8), migrations run twice (second a no-op), **10/10**
+  authorization sweep against the production images, shared/web/mobile
+  typecheck + lint + tests, native backend boot and smoke check.
 - Second pass (same day): dependency security upgrade, production images built
   and run as a full local stack (`docker-compose.local.yml`) with an
   end-to-end check through nginx (real S3 upload, worker, RabbitMQ), worker

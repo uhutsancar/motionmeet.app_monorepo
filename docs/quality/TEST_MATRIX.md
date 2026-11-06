@@ -1,12 +1,12 @@
 # Test matrix
 
 Status of the plan's scenario ids. PASS means an automated test ran and passed
-on 2026-11-06 (unit: 86, integration: 19 against PostgreSQL 18, RabbitMQ 4.2
-and Redis 8 in `docker-compose.test.yml`). NOT_RUN and BLOCKED are stated as such.
+on 2026-11-06 (unit: 89, integration: 21 against PostgreSQL 18, RabbitMQ 4.2
+and Redis 8 in `docker-compose.test.yml`; e2e authorization sweep: 10). NOT_RUN and BLOCKED are stated as such.
 
 | Id | Scenario | Status | Where |
 |---|---|---|---|
-| P0-PUBLISH-001 | Caption-less presigned photo post | PASS (type resolution, unit) · controller path with real S3: NOT_RUN | `tests/postMedia.test.ts` |
+| P0-PUBLISH-001 | Caption-less presigned photo post | PASS (type resolution, unit) · PASS end to end with real S3 for a photo and a video (manual, rehearsal stack) | `tests/postMedia.test.ts` |
 | P0-PUBLISH-002 | Duplicate create with one idempotency key → one post | PASS (existing) | `tests/integration/databaseConcurrency.test.ts` |
 | P0-PUBLISH-003 | Per-file MIME and size on `post_media` | PASS | `tests/integration/outbox.test.ts` |
 | P0-MOBILE-004 | No full Blob; native cancel | Code review + typecheck/lint · device: NOT_RUN | `mobile/src/api/mediaUpload.ts` |
