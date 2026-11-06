@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { markSessionsRevoked } from "../configs/redis.js";
 import type { Request, RequestHandler, Response } from "express";
 import type { InternalUser } from "../repositories/entities.js";
 import * as authService from "../services/authService.js";
@@ -147,8 +148,12 @@ export const refreshSession: RequestHandler = async (req, res, next) => {
 export const logoutUser: RequestHandler = async (req, res, next) => {
   try {
     const revokedSessionId = await revokeRefreshSession(getRefreshTokenFromRequest(req));
-    // A socket opened under this session must not outlive the logout.
-    if (revokedSessionId) disconnectSessionSockets(revokedSessionId);
+    // Neither a socket nor an access token issued under this session may
+    // outlive the logout.
+    if (revokedSessionId) {
+      disconnectSessionSockets(revokedSessionId);
+      await markSessionsRevoked([revokedSessionId]);
+    }
     clearRefreshCookie(res);
     return res.json({ success: true });
   } catch (error) {

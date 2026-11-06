@@ -19,7 +19,7 @@ Status values: `NOT_STARTED`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-ENV`
 | WP-08 | DONE | see `git log --grep WP-08` | `integration/notificationAtomicity.test.ts` (7: like, toggle-like, comment, follow/request/accept, story like each rolled back with their failing notification via a trigger; idempotent comment incl. a concurrent pair; throwing socket delivery does not fail the request); migration 017 down×2/up×2 verified | Delivery stays best effort (socket); clients send `operationId` for comments (web + mobile) and reuse it on retry |
 | WP-09 | DONE | see `git log --grep WP-09` | `integration/poolSelfDeadlock.test.ts` (child process, `DATABASE_POOL_MAX=1`, 10 write paths each < 2 s) | Scan of every `withTransaction` block (accountService, authService ×2, exerciseService, measurementService, mediaDeletionService, mediaUploadService, messageService ×3, postInteractionService ×4, postService ×2, relationshipService ×4, routineService ×3, storyService ×2, userService ×4, workoutService, cronJobs ×2, consumers): the only helper reading through the global pool was `storyService.hydrate` (fixed). All other helpers called inside transactions either take the executor (`findHydratedPost`, `hydratePosts`, `findWorkoutById`, `applyWorkoutAnalytics`, `commitReservedUploads`, `queueMediaDeletions`, `enqueueOutboxEvent`, `reserveQuota`, `hydrateMessages`) or are pure |
 | WP-10 | NOT_STARTED | | | |
-| WP-11 | NOT_STARTED | | | |
+| WP-11 | DONE | see `git log --grep WP-11` | `integration/sessions.test.ts` (+4: logout, password reset and account deletion refuse the old access token at once; sensitive routes refuse a revoked session without the Redis marker) | D-09 default applied. Accepted risk (in SECURITY_THREAT_MODEL.md): with Redis down, non-sensitive routes accept a revoked token for ≤ 15 min. There is no "log out all devices" endpoint to wire |
 | WP-12 | NOT_STARTED | | | |
 | WP-13 | NOT_STARTED | | | |
 | WP-14 | N/A | | | The plan has no WP-14 (numbering skips from 13 to 15). |
@@ -65,6 +65,8 @@ Status values: `NOT_STARTED`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-ENV`
   existing "no picture" value every client renders as the default avatar) instead of `null`, so `PublicUser` stays
   non-nullable. (3) A stored URL on a foreign host (not ImageKit) is passed through — it was never private media of ours.
   (4) Share-page preview images get a 7-day window (bots fetch late; public posts of public accounts only).
+- **WP-11 — D-09 varsayılanı uygulandı:** Redis revocation list checked in `protect`; `requireActiveSession` (DB) on
+  account deletion, export, profile update (covers e-mail change) and privacy settings.
 - **WP-01 — plan dışı karar:** `OwnerRead.generation` is `number | null` (null = no usable cache, nothing is
   written) and `OwnerRead` carries `hit`, so a cached `false`/`null` value is distinguishable from a miss.
 

@@ -456,6 +456,47 @@ export const invalidateCacheOwners = async (...owners: string[]): Promise<void> 
 };
 
 /**
+ * Revoked sessions, for the HTTP access check (D-09 in the 2026-11 audit).
+ *
+ * An access token is a stateless JWT valid for 15 minutes. Logout, a password
+ * reset and account deletion revoke the session in PostgreSQL, but a token
+ * issued before that kept working for the rest of its life. Each revoked
+ * session id is therefore also written here, for exactly the lifetime of the
+ * longest access token it could have issued, and `protect` refuses a token
+ * whose session is listed - one `EXISTS` per request.
+ */
+export const REVOKED_SESSION_TTL_SECONDS = 15 * 60;
+const revokedSessionKey = (sessionId: string): string => `${CACHE_PREFIX}revoked-session:${sessionId}`;
+
+/** Lists sessions as revoked. Retried like an invalidation; a final failure is logged. */
+export const markSessionsRevoked = async (sessionIds: readonly string[]): Promise<void> => {
+  if (!sessionIds.length || !loadEnvironment().redisUrl || !redisRequested) return;
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt <= INVALIDATION_RETRY_DELAYS_MS.length; attempt += 1) {
+    if (attempt > 0) await wait(INVALIDATION_RETRY_DELAYS_MS[attempt - 1]!);
+    const client = getRedisClient();
+    if (!client) { lastError = new Error("Redis client is not ready"); continue; }
+    try {
+      const transaction = client.multi();
+      for (const sessionId of sessionIds) transaction.set(revokedSessionKey(sessionId), "1", { EX: REVOKED_SESSION_TTL_SECONDS });
+      await transaction.exec();
+      return;
+    } catch (error: unknown) {
+      lastError = error;
+    }
+  }
+  logger.warn("session_revocation_marker_failed", { sessions: sessionIds.length, ...safeErrorMetadata(lastError) });
+};
+
+/** True when the session was revoked; null when Redis cannot answer (the caller decides). */
+export const isSessionMarkedRevoked = async (sessionId: string): Promise<boolean | null> => {
+  const client = getRedisClient();
+  if (!client) return null;
+  try { return Boolean(await client.exists(revokedSessionKey(sessionId))); }
+  catch { return null; }
+};
+
+/**
  * Remembers that a piece of work has already been done, so a repeat of it can
  * be skipped rather than redone to the same effect.
  *

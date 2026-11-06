@@ -8,6 +8,7 @@ are unchanged and covered by `docs/security-verification/`.
 | Threat (STRIDE) | Where | Control |
 |---|---|---|
 | Spoofing: a stolen access token keeps a socket alive after logout | Socket.IO | Handshake requires an active session; logout, password reset and account deletion disconnect the session's or member's sockets on every instance; open sockets re-check every ~10 min |
+| Spoofing: an HTTP access token used after logout, password reset or account deletion | `protect` | The revoked session ids are listed in Redis for the access token's 15-minute life and `protect` refuses them (one `EXISTS` per request, D-09). Account deletion, export, profile and privacy updates also check the session row in PostgreSQL (`requireActiveSession`). Accepted risk: with Redis unavailable, other routes accept a revoked token until it expires (≤ 15 min), and a deleted account's token can then reach a handler and fail on a missing row |
 | Spoofing: forged event on the broker | RabbitMQ | Broker on a private network, per-deployment credentials, `amqps://` required in production (`ALLOW_INSECURE_RABBITMQ_TLS` only for a private network); consumers re-read state instead of trusting payloads |
 | Tampering: client claims a file is an image | upload | Server checks S3 stored type, size bounds and the file's leading bytes before attaching; post type derived from the files, not from the request |
 | Tampering: attaching someone else's upload | post/story/message create | Reservation must match owner, purpose and expiry; duplicates refused |

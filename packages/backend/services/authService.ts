@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { markSessionsRevoked } from "../configs/redis.js";
 import { database, withTransaction } from "../configs/database.js";
 import { serializeUser, type InternalUser } from "../repositories/entities.js";
 
@@ -46,14 +47,18 @@ export const createPasswordResetToken = async (userId: string): Promise<string> 
 /** Sets the new password and revokes every session; returns the user's id, or null when the token is not valid. */
 export const resetPasswordWithToken = async (rawToken: unknown, hashedPassword: string): Promise<string | null> => {
   if (typeof rawToken !== "string" || rawToken.length < 32 || rawToken.length > 256) return null;
-  return withTransaction(async (transaction) => {
+  let revokedSessionIds: string[] = [];
+  const userId = await withTransaction(async (transaction) => {
     const token = await transaction.updateTable("password_reset_tokens").set({ consumed_at: new Date() })
       .where("token_hash", "=", hashResetToken(rawToken)).where("consumed_at", "is", null).where("expires_at", ">", new Date())
       .returning("user_id").executeTakeFirst();
     if (!token) return null;
     const user = await transaction.updateTable("users").set({ password_hash: hashedPassword }).where("id", "=", token.user_id).executeTakeFirst();
     if (Number(user.numUpdatedRows) !== 1) throw new Error("Password reset user no longer exists");
-    await transaction.updateTable("sessions").set({ revoked_at: new Date() }).where("user_id", "=", token.user_id).where("revoked_at", "is", null).execute();
+    revokedSessionIds = (await transaction.updateTable("sessions").set({ revoked_at: new Date() }).where("user_id", "=", token.user_id).where("revoked_at", "is", null).returning("id").execute()).map((row) => row.id);
     return token.user_id;
   });
+  // Access tokens of every revoked session stop working now, not in 15 minutes.
+  await markSessionsRevoked(revokedSessionIds);
+  return userId;
 };

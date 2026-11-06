@@ -30,7 +30,7 @@ import {
   getRelationship,
   sendFollowRequest,
 } from "../controllers/followRequestController.js";
-import { protect } from "../middlewares/auth.js";
+import { protect, requireActiveSession } from "../middlewares/auth.js";
 import { imageUpload } from "../configs/multer.js";
 import { getUserRecentMessages } from "../controllers/messageController.js";
 import { createRateLimitStore } from "../configs/redis.js";
@@ -51,12 +51,16 @@ const sensitiveAccountLimiter = rateLimit({
 
 userRouter.get("/data", protect, getUserData);
 userRouter.get("/privacy", protect, getPrivacySettings);
-userRouter.patch("/privacy", protect, updatePrivacySettings);
-userRouter.get("/export", protect, sensitiveAccountLimiter, exportAccount);
-userRouter.delete("/account", protect, sensitiveAccountLimiter, deleteAccount);
+// Sensitive routes also check the session in PostgreSQL (D-09): a revoked
+// session is refused here even when Redis, and with it `protect`'s revocation
+// check, is unavailable.
+userRouter.patch("/privacy", protect, requireActiveSession, updatePrivacySettings);
+userRouter.get("/export", protect, requireActiveSession, sensitiveAccountLimiter, exportAccount);
+userRouter.delete("/account", protect, requireActiveSession, sensitiveAccountLimiter, deleteAccount);
 userRouter.post(
   "/update",
   protect,
+  requireActiveSession,
   imageUpload.fields([
     { name: "profile", maxCount: 1 },
     { name: "cover", maxCount: 1 },

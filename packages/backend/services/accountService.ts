@@ -1,7 +1,7 @@
 import type { Response } from "express";
 import { sql } from "kysely";
 import { database, withTransaction } from "../configs/database.js";
-import { invalidateCacheOwners } from "../configs/redis.js";
+import { invalidateCacheOwners, markSessionsRevoked } from "../configs/redis.js";
 import { exerciseListOwner } from "./exerciseService.js";
 import { feedCacheOwner, profileCacheOwner, revokeFeedAudience } from "./feedCache.js";
 import { queueMediaDeletions } from "./mediaDeletionService.js";
@@ -334,7 +334,11 @@ export const streamAccountData = async (userId: string, response: Response): Pro
 
 export const deleteAccountData = async (userId: string): Promise<boolean> => {
   const exists = await database.selectFrom("users").select("id").where("id", "=", userId).executeTakeFirst(); if (!exists) return false;
+  let sessionIds: string[] = [];
   await withTransaction(async (transaction) => {
+    // Read before the cascade removes them: their access tokens must stop
+    // working when the account is gone (NEW-11).
+    sessionIds = (await transaction.selectFrom("sessions").select("id").where("user_id", "=", userId).where("revoked_at", "is", null).execute()).map((row) => row.id);
     const user = await transaction.selectFrom("users").select(["profile_picture_key", "cover_photo_key"]).where("id", "=", userId).forUpdate().executeTakeFirstOrThrow();
     await queueMediaDeletions([user.profile_picture_key, user.cover_photo_key], { transaction });
     await sql`insert into media_deletion_jobs (object_key) select pm.object_key from post_media pm join posts p on p.id = pm.post_id where p.user_id = ${userId} and pm.object_key <> '' on conflict (object_key) do nothing`.execute(transaction);
@@ -356,6 +360,7 @@ export const deleteAccountData = async (userId: string): Promise<boolean> => {
   await Promise.all([
     invalidateCacheOwners(profileCacheOwner(userId), feedCacheOwner(userId), exerciseListOwner(userId)),
     revokeFeedAudience(),
+    markSessionsRevoked(sessionIds),
   ]);
   return true;
 };
