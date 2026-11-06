@@ -9,7 +9,11 @@ import {
   StyleSheet,
   TextInput,
   View,
+  useWindowDimensions,
   type ListRenderItem,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  type TextInputContentSizeChangeEvent,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets, type EdgeInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -116,6 +120,28 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
   const flatListRef = useRef<FlatList<Message> | null>(null);
   const typingRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const skipAutoScrollRef = useRef(false);
+  // Whether the reader is at the newest message. Someone scrolled up into the
+  // history is not dragged back down by every message that arrives.
+  const nearBottomRef = useRef(true);
+  const onListScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    nearBottomRef.current = contentSize.height - (contentOffset.y + layoutMeasurement.height) < 160;
+  }, []);
+
+  /*
+   * The composer's height is set from the text's measured size rather than
+   * left to the field. On iOS a multiline field cleared from code kept the
+   * height of the long message it had held, so after sending one the pill
+   * stayed a 124pt empty box with the placeholder at its top. An empty field
+   * is always one line; anything else grows to about five lines, then scrolls.
+   */
+  const { fontScale } = useWindowDimensions();
+  const composerMax = Math.round(COMPOSER_MAX_HEIGHT * Math.min(Math.max(fontScale, 1), 1.5));
+  const [measuredInputHeight, setMeasuredInputHeight] = useState(COMPOSER_MIN_HEIGHT + 2);
+  const onInputContentSize = useCallback((event: TextInputContentSizeChangeEvent) => {
+    const next = Math.ceil(event.nativeEvent.contentSize.height);
+    setMeasuredInputHeight((current) => (Math.abs(current - next) < 1 ? current : next));
+  }, []);
   const typingActiveRef = useRef(false);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const sendTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -259,13 +285,16 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
         skipAutoScrollRef.current = false;
         return;
       }
+      const newest = messages[messages.length - 1];
+      const mine = entityId(newest?.from_user_id) === currentUser?._id;
+      if (!nearBottomRef.current && !mine) return;
       clearTimeout(scrollTimeoutRef.current);
       scrollTimeoutRef.current = setTimeout(
         () => flatListRef.current?.scrollToEnd({ animated: true }),
         100,
       );
     }
-  }, [messages, partnerTyping]);
+  }, [currentUser?._id, messages, partnerTyping]);
 
   // Opening the keyboard shrinks the list from the bottom; the latest messages
   // are brought back into view rather than left behind the composer.
@@ -512,7 +541,7 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
                   pressed && onLongPress ? { opacity: 0.85 } : null,
                 ]}
               >
-                <Text selectable style={[s.bubbleText, { color: mine ? '#FFFFFF' : theme.text }]}>
+                <Text selectable style={[s.bubbleText, { color: mine ? theme.onPrimary : theme.text }]}>
                   {msg.text}
                 </Text>
               </Pressable>
@@ -649,6 +678,8 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
             keyExtractor={(item, i) => item._id || String(i)}
             style={s.messageList}
             contentContainerStyle={s.msgList}
+            onScroll={onListScroll}
+            scrollEventThrottle={100}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
@@ -707,12 +738,21 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
               accessibilityRole="button"
               accessibilityLabel={t('feed.select_media', 'Select media')}
             >
-              <Ionicons name="image" size={17} color="#FFFFFF" />
+              <Ionicons name="image" size={17} color={theme.onPrimary} />
             </Pressable>
             {/* A plain RN input: Paper's outlined field ignored maxHeight once
                 multiline, so a long draft grew the field instead of scrolling. */}
             <TextInput
-              style={s.input}
+              style={[
+                s.input,
+                {
+                  maxHeight: composerMax,
+                  height: text
+                    ? Math.min(composerMax, Math.max(COMPOSER_MIN_HEIGHT + 2, measuredInputHeight))
+                    : COMPOSER_MIN_HEIGHT + 2,
+                },
+              ]}
+              onContentSizeChange={onInputContentSize}
               placeholder={t('messages.type_message', 'Message...')}
               placeholderTextColor={theme.textMuted}
               value={text}

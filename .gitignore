@@ -70,3 +70,6 @@ yarn-error.log*
 file_list.txt
 fix_getStyles.js
 generate_inventory.js
+
+# Design QA screenshots and direction sheets (local only)
+.taste-skill/

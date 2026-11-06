@@ -138,7 +138,8 @@ export const getWorkoutShareCard: RequestHandler = async (req, res, next) => {
     const template = isShareCardTemplate(req.query.template) ? req.query.template : "summary";
     const size = isShareCardSize(req.query.size) ? req.query.size : "story";
 
-    const data = await buildWorkoutShareCardData(workoutId, req.userId);
+    const lang = req.query.lang === "en" ? "en" : "tr";
+    const data = await buildWorkoutShareCardData(workoutId, req.userId, lang);
     if (!data) return res.status(404).json({ success: false, message: "Workout not found" });
 
 

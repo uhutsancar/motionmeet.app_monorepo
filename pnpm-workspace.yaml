@@ -95,6 +95,7 @@ allowBuilds:
 
 patchedDependencies:
   minimatch@3.1.5: patches/minimatch@3.1.5.patch
+  react-native-google-mobile-ads@15.8.0: patches/react-native-google-mobile-ads@15.8.0.patch
 
 minimumReleaseAgeExclude:
   - '@expo/cli@58.1.15'

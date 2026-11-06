@@ -23,15 +23,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import {
   API_ROUTES,
+  SHARE_CARD_DESIGN_VERSION,
   SHARE_CARD_SIZES,
   SHARE_CARD_TEMPLATES,
   buildShareCardSvg,
+  shareCardLocaleFor,
   buildShareCardText,
   type ShareCardData,
   type ShareCardTemplate,
 } from '@motionmeet/shared';
 import { useAuthContext } from '../context/AuthProvider';
 import StoryComposer from './StoryComposer';
+import { useAfterModalDismiss } from '../hooks/useAfterModalDismiss';
 import { SHARE_CARD_FILE_PREFIX } from '../utils/shareCardCache';
 import { fetchStories } from '../features/stories/storiesSlice';
 import { useAppDispatch } from '../store/hooks';
@@ -48,6 +51,8 @@ interface WorkoutShareSheetProps {
   /** A link to the post the workout was shared as, when there is one. */
   shareUrl?: string | null;
   onClose: () => void;
+  /** iOS: called once the sheet has finished animating away. */
+  onDismissed?: () => void;
 }
 
 interface ShareAction {
@@ -98,8 +103,8 @@ const ACTION_MIN_WIDTH = 74;
  * server, which rasterises the identical card. Nothing here captures a view, so
  * it all runs in Expo Go with no native module of its own.
  */
-const WorkoutShareSheet = ({ visible, data, workoutId, shareUrl, onClose }: WorkoutShareSheetProps) => {
-  const { t } = useTranslation();
+const WorkoutShareSheet = ({ visible, data, workoutId, shareUrl, onClose, onDismissed }: WorkoutShareSheetProps) => {
+  const { t, i18n } = useTranslation();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const { getToken } = useAuthContext();
@@ -118,6 +123,7 @@ const WorkoutShareSheet = ({ visible, data, workoutId, shareUrl, onClose }: Work
   const [done, setDone] = useState<Record<string, boolean>>({});
   /** The card being turned into a MotionMeet story, while the editor is open. */
   const [storyCard, setStoryCard] = useState<ImagePickerAsset | null>(null);
+  const afterStory = useAfterModalDismiss();
   /**
    * Fetched files by workout and template, so a second tap is instant. The
    * workout is part of the key because the same sheet can be reopened for a
@@ -195,15 +201,20 @@ const WorkoutShareSheet = ({ visible, data, workoutId, shareUrl, onClose }: Work
    */
   const fetchCardFile = useCallback(async (): Promise<string | null> => {
     if (!workoutId) return null;
-    const cacheKey = `${workoutId}:${template}`;
+    // The language and the drawing's version are part of the key: a card
+    // fetched in Turkish, or drawn by an older layout, is a different picture.
+    const lang = shareCardLocaleFor(i18n.language).slice(0, 2);
+    const cacheKey = `${workoutId}:${template}:${lang}:v${SHARE_CARD_DESIGN_VERSION}`;
     const cached = cacheRef.current.get(cacheKey);
-    if (cached) return cached;
+    // The OS may have cleared the cache directory since; a path that no longer
+    // has a file behind it is fetched again rather than handed to the share sheet.
+    if (cached && (await FileSystem.getInfoAsync(cached)).exists) return cached;
 
     const token = await getToken();
     if (!token) return null;
 
-    const target = `${FileSystem.cacheDirectory}${CARD_FILE_PREFIX}${workoutId}-${template}.png`;
-    const url = `${API_URL}${API_ROUTES.workout.shareCard(workoutId)}?template=${template}&size=story`;
+    const target = `${FileSystem.cacheDirectory}${CARD_FILE_PREFIX}${workoutId}-${template}-${lang}-v${SHARE_CARD_DESIGN_VERSION}.png`;
+    const url = `${API_URL}${API_ROUTES.workout.shareCard(workoutId)}?template=${template}&size=story&lang=${lang}&v=${SHARE_CARD_DESIGN_VERSION}`;
     // downloadAsync takes the remote URL first and the destination second.
     const result = await FileSystem.downloadAsync(url, target, {
       headers: { Authorization: `Bearer ${token}` },
@@ -215,7 +226,7 @@ const WorkoutShareSheet = ({ visible, data, workoutId, shareUrl, onClose }: Work
     }
     cacheRef.current.set(cacheKey, result.uri);
     return result.uri;
-  }, [getToken, template, workoutId]);
+  }, [getToken, i18n.language, template, workoutId]);
 
   /**
    * Runs one action and ticks it when it resolves. An action returns `false`
@@ -428,6 +439,7 @@ const WorkoutShareSheet = ({ visible, data, workoutId, shareUrl, onClose }: Work
       statusBarTranslucent
       navigationBarTranslucent
       onRequestClose={onClose}
+      onDismiss={onDismissed}
     >
       <View style={[styles.root, { backgroundColor: theme.background, paddingTop: insets.top + 12 }]}>
         <Text style={[styles.title, { color: theme.text }]}>{t('workout.share_title', 'Güzeldi!')}</Text>
@@ -502,7 +514,7 @@ const WorkoutShareSheet = ({ visible, data, workoutId, shareUrl, onClose }: Work
           accessibilityRole="button"
           accessibilityLabel={t('story.done', 'Bitti')}
         >
-          <Text style={styles.doneLabel}>{t('story.done', 'Bitti')}</Text>
+          <Text style={[styles.doneLabel, { color: theme.onPrimary }]}>{t('story.done', 'Bitti')}</Text>
         </Pressable>
       </View>
 
@@ -510,13 +522,16 @@ const WorkoutShareSheet = ({ visible, data, workoutId, shareUrl, onClose }: Work
         visible={Boolean(storyCard)}
         initialMedia={storyCard}
         onClose={() => setStoryCard(null)}
+        onDismiss={afterStory.onDismiss}
         onSuccess={() => {
           setDone((current) => ({ ...current, story: true }));
           // Pull the rail so the new story is on it the moment the sheet goes.
           void getToken().then((token) => (
             token ? dispatch(fetchStories(token)).unwrap().catch(() => undefined) : undefined
           ));
-          onClose();
+          // The editor goes first; closing both at once froze a picture of
+          // this sheet on the next screen on iOS.
+          afterStory.schedule(onClose);
         }}
       />
     </Modal>

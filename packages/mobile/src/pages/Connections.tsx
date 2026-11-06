@@ -4,6 +4,7 @@ import { Alert, FlatList, RefreshControl, ScrollView, StatusBar, StyleSheet, Vie
 // views and keeps a memory + disk cache where React Native's Image does not.
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { ActivityIndicator, Divider, Surface, Text, TouchableRipple } from 'react-native-paper';
 import SoftButton from '../components/ui/SoftButton';
 import { useAuthContext } from "../context/AuthProvider";
@@ -33,6 +34,14 @@ interface ConnectionsProps extends NavigationOnlyProps {
 }
 interface ConnectionPage { items: PublicUser[]; nextCursor: string | null; loaded: boolean; loading: boolean }
 type ConnectionPages = Record<ConnectionTabKey, ConnectionPage>;
+
+const EMPTY_ICON: Record<ConnectionTabKey, React.ComponentProps<typeof Ionicons>['name']> = {
+  Requests: 'mail-open-outline',
+  Followers: 'people-outline',
+  Following: 'person-add-outline',
+  Pending: 'time-outline',
+  Connections: 'link-outline',
+};
 
 const TABS = [
   // `Requests` is the follow-request inbox; `Pending` is the older two-way
@@ -392,9 +401,20 @@ const Connections = ({ navigation, route }: ConnectionsProps) => {
               : undefined
           }
           ListEmptyComponent={
-            <Text style={{ textAlign: 'center', marginTop: 48, color: theme.textMuted }}>
-              {t('connections.empty', 'Henüz kimse yok')}
-            </Text>
+            currentPage.loading ? undefined : (
+              // Each list is empty for a different reason, and says which.
+              <View style={{ alignItems: 'center', gap: 8, marginTop: 56, paddingHorizontal: 32 }}>
+                <View style={{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceLight }}>
+                  <Ionicons name={EMPTY_ICON[currentTab]} size={24} color={theme.textSecondary} />
+                </View>
+                <Text style={{ color: theme.text, fontSize: 16, fontWeight: '700', textAlign: 'center' }}>
+                  {t(`connections.empty_${currentTab.toLowerCase()}_title`, t('connections.empty', 'Henüz kimse yok'))}
+                </Text>
+                <Text style={{ color: theme.textMuted, fontSize: 13.5, lineHeight: 19, textAlign: 'center' }}>
+                  {t(`connections.empty_${currentTab.toLowerCase()}_body`, '')}
+                </Text>
+              </View>
+            )
           }
         />
       )}

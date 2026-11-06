@@ -15,7 +15,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Link as RouterLink, useNavigate } from "react-router";
+import { Link as RouterLink, useNavigate, useSearchParams } from "react-router";
 import AuthShell from "~/components/AuthShell";
 import { useAuthContext } from "../context/AuthProvider";
 import { AUTH_LIMITS, hasValidPasswordByteLength } from "@motionmeet/shared";
@@ -28,7 +28,14 @@ const Signup = () => {
   const { t } = useTranslation();
   const { register } = useAuthContext();
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({ email: "", password: "", username: "", full_name: "" });
+  // The landing page's sign-up form hands over the username typed there.
+  const [searchParams] = useSearchParams();
+  const [formData, setFormData] = useState(() => ({
+    email: "",
+    password: "",
+    username: (searchParams.get("username") ?? "").replace(/^@/, "").slice(0, 30),
+    full_name: "",
+  }));
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);

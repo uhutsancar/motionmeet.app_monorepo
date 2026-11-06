@@ -4,6 +4,7 @@ import {
   SHARE_CARD_TEMPLATES,
   buildShareCardSvg,
   workoutToShareCardData,
+  shareCardLocaleFor,
   type ShareCardData,
   type ShareCardSize,
   type ShareCardTemplate,
@@ -12,6 +13,7 @@ import { database } from "../configs/database.js";
 import { findWorkoutById } from "../repositories/workoutRepository.js";
 import { findHydratedPost } from "../repositories/postRepository.js";
 import { canAccessPost } from "./accessControlService.js";
+import { fetchImageBounded } from "../utils/boundedFetch.js";
 
 /**
  * Turns a workout into the picture people post about it.
@@ -44,6 +46,7 @@ export const isShareCardSize = (value: unknown): value is ShareCardSize =>
 export const buildWorkoutShareCardData = async (
   workoutId: string,
   userId: string,
+  language?: string,
 ): Promise<ShareCardData | null> => {
   const workout = await findWorkoutById(workoutId);
   if (!workout || workout.userId !== userId) return null;
@@ -54,7 +57,13 @@ export const buildWorkoutShareCardData = async (
     .where("id", "=", userId)
     .executeTakeFirst();
 
-  return workoutToShareCardData(workout, user?.username || user?.full_name || "motionmeet");
+  // The app previews the card in its own language; the file has to match it.
+  return workoutToShareCardData(
+    workout,
+    user?.username || user?.full_name || "motionmeet",
+    undefined,
+    shareCardLocaleFor(language),
+  );
 };
 
 /**
@@ -77,6 +86,7 @@ export const renderShareCardPng = async (
 /** Beyond this a picture is a download, not a share card ingredient. */
 const MAX_PHOTO_BYTES = 25 * 1024 * 1024;
 const PHOTO_FETCH_TIMEOUT_MS = 8000;
+const MAX_PHOTO_PIXELS = 40_000_000;
 
 /**
  * The Strava arrangement: the member's own photo, with the numbers on it.
@@ -123,7 +133,9 @@ export const renderPostShareCardPng = async (
 
   // Cover, not contain: the card is a fixed shape and a letterboxed photo with
   // bars down the side is not something anybody posts.
-  return sharp(photo)
+  // A small file can still decode to an enormous bitmap; past ~40 MP it is
+  // refused rather than allowed to eat the server's memory.
+  return sharp(photo, { limitInputPixels: MAX_PHOTO_PIXELS })
     .resize(width, height, { fit: "cover", position: "attention" })
     .composite([{ input: svg, top: 0, left: 0 }])
     .png({ compressionLevel: 9 })
@@ -133,19 +145,9 @@ export const renderPostShareCardPng = async (
 /**
  * Pulls the post's photo down so it can be composited.
  *
- * Bounded on both time and size: this runs inside a request, and the URL points
- * at a CDN that could be slow or, in a misconfiguration, at something very
- * large. A failure is not an error — the card falls back to the brand plate.
+ * Only from the media hosts this server uses, without following redirects,
+ * and cut off at the size limit while streaming. A failure is not an error —
+ * the card falls back to the brand plate.
  */
-const fetchPhoto = async (url: string): Promise<Buffer | null> => {
-  try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(PHOTO_FETCH_TIMEOUT_MS) });
-    if (!response.ok) return null;
-    const length = Number(response.headers.get("content-length") ?? 0);
-    if (length > MAX_PHOTO_BYTES) return null;
-    const buffer = Buffer.from(await response.arrayBuffer());
-    return buffer.byteLength > MAX_PHOTO_BYTES ? null : buffer;
-  } catch {
-    return null;
-  }
-};
+const fetchPhoto = (url: string): Promise<Buffer | null> =>
+  fetchImageBounded(url, { maxBytes: MAX_PHOTO_BYTES, timeoutMs: PHOTO_FETCH_TIMEOUT_MS });

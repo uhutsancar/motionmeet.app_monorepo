@@ -11,6 +11,7 @@ import { findUserById } from "../repositories/userRepository.js";
 import { hydratePosts } from "../repositories/postRepository.js";
 import { hydratePostInteractions } from "./postInteractionService.js";
 import { commitReservedUploads } from "./mediaUploadService.js";
+import { invalidateMessagePermissions } from "../realtime/socketRegistry.js";
 import { queueMediaDeletions } from "./mediaDeletionService.js";
 import { extractS3Key } from "../utils/s3Utils.js";
 import { escapeLikePattern, isUserId } from "../utils/validation.js";
@@ -84,6 +85,11 @@ export const updateUser = async (userId: string, input: UserUpdate, { reservatio
     }
   });
   await invalidateMember(userId);
+  // Who may message this member can have just changed; sockets that cached
+  // the old answer must not keep acting on it.
+  if (["privacy.allowMessages", "privacy.publicProfile", "privacy.allowFollowers"].some((key) => typeof input[key as keyof UserUpdate] === "boolean")) {
+    invalidateMessagePermissions(userId);
+  }
   return getUserById(userId);
 };
 

@@ -35,6 +35,14 @@ import Messages from '../pages/Messages';
  * this block rather than for the file.
  */
 /* eslint-disable @typescript-eslint/no-require-imports */
+/** The route on screen, however deeply the navigators are nested. */
+type AnyState = { index?: number; routes: Array<{ name: string; params?: object; state?: AnyState }> };
+const focusedRoute = (state: AnyState | undefined) => {
+  let route = state?.routes[state.index ?? 0];
+  while (route?.state) route = route.state.routes[route.state.index ?? 0];
+  return route;
+};
+
 const loadSettings = () => require('../pages/Settings').default;
 const loadProfileEdit = () => require('../pages/ProfileEditScreen').default;
 const loadChatBox = () => require('../pages/ChatBox').default;
@@ -194,7 +202,15 @@ const TabNavigator = () => {
    */
   useEffect(() => {
     if (!socket) return;
+    // A reconnect can replay a message the member was already shown.
+    const announced = new Set<string>();
     const onMessage = async (message: Message) => {
+      const messageId = message?._id;
+      if (messageId) {
+        if (announced.has(messageId)) return;
+        announced.add(messageId);
+        if (announced.size > 200) announced.delete(announced.values().next().value as string);
+      }
       try {
         const stored = await AsyncStorage.getItem('@mm_notification_prefs');
         const preferences: { newMessage?: boolean } = stored ? JSON.parse(stored) : {};
@@ -203,12 +219,17 @@ const TabNavigator = () => {
         // Invalid preferences fall back to enabled.
       }
       const sender = typeof message.from_user_id === 'object' ? message.from_user_id : null;
+      const senderId = sender?._id ?? (typeof message.from_user_id === 'string' ? message.from_user_id : null);
+      // Already reading that conversation: the message is on screen.
+      const route = focusedRoute(rootNavigation.getState());
+      if (route?.name === 'ChatBox' && (route.params as { userId?: string } | undefined)?.userId === senderId) return;
       Toast.show({
-        type: 'info',
+        type: 'message',
         text1: sender?.full_name || sender?.username || t('notifications.new_message', 'Yeni Mesaj'),
-        text2: message?.text || t('notifications.you_have_message', 'Size yeni bir mesaj geldi.'),
+        text2: message?.text?.trim()
+          || (message?.message_type === 'image' ? t('notifications.sent_photo', 'Bir fotoğraf gönderdi') : t('notifications.you_have_message', 'Size yeni bir mesaj geldi.')),
+        props: { avatar: sender?.profile_picture ?? null, name: sender?.full_name || sender?.username },
         position: 'top',
-        topOffset: 60,
         visibilityTime: 4000,
         onPress: () => {
           Toast.hide();

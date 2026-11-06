@@ -10,6 +10,7 @@ export * from "./types/story.js";
 export * from "./types/user.js";
 export * from "./types/workout.js";
 export * from "./share/shareCard.js";
+export * from "./share/bodyFigure.js";
 
 export const API_ROUTES = Object.freeze({
   auth: Object.freeze({ login: "/api/auth/login", logout: "/api/auth/logout", forgotPassword: "/api/auth/forgot-password", resetPassword: "/api/auth/reset-password", me: "/api/auth/me", refresh: "/api/auth/refresh", register: "/api/auth/register" }),

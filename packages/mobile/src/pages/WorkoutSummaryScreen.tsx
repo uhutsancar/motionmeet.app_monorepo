@@ -18,6 +18,7 @@ import KeyboardAwareScrollView from '../components/KeyboardAwareScrollView';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import ScreenHeader from '../components/ScreenHeader';
 import WorkoutShareSheet from '../components/WorkoutShareSheet';
+import { useAfterModalDismiss } from '../hooks/useAfterModalDismiss';
 import { WEB_URL } from '../config/environment';
 import { useAppSelector } from '../store/hooks';
 import {
@@ -32,6 +33,7 @@ import {
   buildPostShareUrl,
   createOperationId,
   workoutToShareCardData,
+  shareCardLocaleFor,
   type PostVisibility,
   type ShareCardData,
 } from '@motionmeet/shared';
@@ -47,7 +49,7 @@ type WorkoutRequest = Record<string, unknown> & { operationId: string };
 const VISIBILITY_OPTIONS: PostVisibility[] = ['public', 'followers', 'private'];
 
 const WorkoutSummaryScreen = ({ navigation, route }: WorkoutSummaryProps) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   
   const VISIBILITY_LABELS: Record<PostVisibility, string> = {
     public: t('workout_summary.everyone', 'Herkese Açık'), 
@@ -82,6 +84,7 @@ const WorkoutSummaryScreen = ({ navigation, route }: WorkoutSummaryProps) => {
     postId: string | null;
   } | null>(null);
   const savedWorkoutIdRef = useRef<string | null>(null);
+  const afterShare = useAfterModalDismiss();
   // Comes from the stored draft, so a save retried after the app was killed
   // mid-request finds the first attempt instead of making a second workout.
   const workoutOperationIdRef = useRef(routeParams?.operationId ?? createOperationId('workout'));
@@ -266,7 +269,8 @@ const WorkoutSummaryScreen = ({ navigation, route }: WorkoutSummaryProps) => {
           {
             name: workoutData.name || t('workout.my_workout', 'Antrenmanım'),
             startTime: new Date(Date.now() - (workoutData.duration || 0) * 1000).toISOString(),
-            durationMinutes: Math.round((workoutData.duration || 0) / 60),
+            // Unrounded: a 40-second session is "<1 dk" on the card, not "0 dk".
+            durationMinutes: (workoutData.duration || 0) / 60,
             volumeKg: workoutData.totalVolume || 0,
             totalSets: workoutData.totalSets || 0,
             exercises: (workoutData.exercises || []).map((exercise) => ({
@@ -284,7 +288,9 @@ const WorkoutSummaryScreen = ({ navigation, route }: WorkoutSummaryProps) => {
             volume: t('workout_summary.volume', 'Hacim'),
             sets: t('workout_summary.sets', 'Set'),
             untitled: t('workout.my_workout', 'Antrenmanım'),
+            moreExercises: t('workout.share_more_exercises', '+{{n}} egzersiz daha', { n: '{count}' }),
           },
+          shareCardLocaleFor(i18n.language),
         ),
       });
     } catch (error) {
@@ -508,8 +514,11 @@ const WorkoutSummaryScreen = ({ navigation, route }: WorkoutSummaryProps) => {
         shareUrl={shareCard?.postId ? buildPostShareUrl(WEB_URL, shareCard.postId) : null}
         onClose={() => {
           setShareCard(null);
-          navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });
+          // Resetting the stack unmounts this screen and the sheet with it; on
+          // iOS that has to wait until the sheet is off screen.
+          afterShare.schedule(() => navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] }));
         }}
+        onDismissed={afterShare.onDismiss}
       />
     </SafeAreaView>
   );

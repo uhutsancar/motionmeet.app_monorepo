@@ -39,3 +39,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Native project from before the SDK 58 prebuild, kept for reference (2026-10-27)
+/android.pre-sdk58-backup

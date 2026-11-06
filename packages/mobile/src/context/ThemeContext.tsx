@@ -13,6 +13,7 @@ export const lightTheme = {
   textMuted: '#69717D',
   border: '#E0E4DF',
   primary: '#5D50E6',
+  onPrimary: '#FFFFFF',
   primaryPressed: '#493CCB',
   primarySoft: '#EEECFF',
   secondary: '#078E79',
@@ -37,6 +38,8 @@ export const darkTheme = {
   textMuted: '#929AA5',
   border: '#292E35',
   primary: '#948AFF',
+  // Dark ink on the light violet: white on #948AFF is 2.9:1, under the 4.5:1 body text needs.
+  onPrimary: '#14102E',
   primaryPressed: '#AAA2FF',
   primarySoft: '#2A2645',
   secondary: '#48CDB3',
@@ -134,7 +137,7 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
       colors: {
         ...paperBase.colors,
         primary: palette.primary,
-        onPrimary: '#FFFFFF',
+        onPrimary: palette.onPrimary,
         primaryContainer: palette.primarySoft,
         onPrimaryContainer: palette.text,
         secondary: palette.secondary,

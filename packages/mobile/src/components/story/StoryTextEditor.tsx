@@ -33,6 +33,8 @@ interface StoryTextEditorProps {
   overlay: StoryOverlay;
   onCancel: () => void;
   onDone: (overlay: StoryOverlay) => void;
+  /** An explicit delete, for anyone who cannot drag the caption to the bin. */
+  onDelete?: () => void;
 }
 
 /** Which of the two option strips, if either, is currently open. */
@@ -70,7 +72,7 @@ const NEXT_BACKDROP: Record<StoryOverlayBackdrop, StoryOverlayBackdrop> = {
  * the bottom third of the picture; one strip opens at a time, only when asked
  * for, and closes again on the next choice.
  */
-const StoryTextEditor = ({ overlay, onCancel, onDone }: StoryTextEditorProps) => {
+const StoryTextEditor = ({ overlay, onCancel, onDone, onDelete }: StoryTextEditorProps) => {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -141,6 +143,20 @@ const StoryTextEditor = ({ overlay, onCancel, onDone }: StoryTextEditorProps) =>
       />
 
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+        {onDelete && overlay.text.trim() ? (
+          <Pressable
+            onPress={() => {
+              Keyboard.dismiss();
+              onDelete();
+            }}
+            hitSlop={10}
+            style={styles.toolChip}
+            accessibilityRole="button"
+            accessibilityLabel={t('story.delete_text', 'Metni sil')}
+          >
+            <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+          </Pressable>
+        ) : null}
         <Pressable
           onPress={() => setDraft((current) => ({ ...current, align: NEXT_ALIGN[current.align] }))}
           hitSlop={10}

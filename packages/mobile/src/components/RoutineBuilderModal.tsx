@@ -371,7 +371,7 @@ const getStyles = (theme: MotionTheme) => StyleSheet.create({
   headerTitle: { flex: 1, minWidth: 0, textAlign: 'center', color: theme.text, fontSize: 16.5, fontWeight: '700' },
   iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   saveBtn: { backgroundColor: theme.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-  saveBtnText: { color: '#fff', fontWeight: '700' },
+  saveBtnText: { color: theme.onPrimary, fontWeight: '700' },
   scroll: { flex: 1, padding: 20 },
   scrollContent: { width: '100%', maxWidth: 620, alignSelf: 'center', paddingBottom: 40 },
   inputGroup: { marginBottom: 4 },

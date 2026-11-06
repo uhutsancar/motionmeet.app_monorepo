@@ -1,7 +1,7 @@
 import type { RelationshipState } from "@motionmeet/shared";
 import { database, withTransaction } from "../configs/database.js";
 import { invalidateMember } from "./feedCache.js";
-import { emitToUser } from "../realtime/socketRegistry.js";
+import { emitToUser, invalidateMessagePermissions } from "../realtime/socketRegistry.js";
 import { logger, safeErrorMetadata } from "../utils/logger.js";
 import * as notificationService from "./notificationService.js";
 
@@ -101,6 +101,9 @@ export const getRelationshipMap = async (
 };
 
 const notifyRelationshipChange = async (leftId: string, rightId: string): Promise<void> => {
+  // Messaging between the two may have just opened or closed.
+  invalidateMessagePermissions(rightId, [leftId]);
+  invalidateMessagePermissions(leftId, [rightId]);
   try {
     const [forLeft, forRight] = await Promise.all([
       getRelationshipState(leftId, rightId),

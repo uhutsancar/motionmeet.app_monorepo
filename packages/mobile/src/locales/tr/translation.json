@@ -433,6 +433,16 @@
         "sent_photo": "Fotoğraf gönderdi"
     },
     "connections": {
+        "empty_requests_title": "Bekleyen takip isteği yok",
+        "empty_requests_body": "Gizli hesabını takip etmek isteyenler burada görünür.",
+        "empty_followers_title": "Henüz takipçin yok",
+        "empty_followers_body": "Antrenmanlarını paylaştıkça seni takip edenler burada listelenir.",
+        "empty_following_title": "Kimseyi takip etmiyorsun",
+        "empty_following_body": "Keşfet ya da Yakındakiler ekranından sporcuları bulup takip edebilirsin.",
+        "empty_pending_title": "Bekleyen bağlantı yok",
+        "empty_pending_body": "Gönderdiğin bağlantı istekleri yanıtlanana kadar burada kalır.",
+        "empty_connections_title": "Henüz bağlantın yok",
+        "empty_connections_body": "Karşılıklı kabul edilen bağlantılar burada görünür.",
         "accept": "Kabul et",
         "unfollow": "Takibi bırak",
         "empty": "Henüz kimse yok",
@@ -626,6 +636,7 @@
         "leave_without_sharing": "Paylaşmadan çık",
         "share_title": "Güzeldi!",
         "share_subtitle": "Antrenmanını paylaş",
+        "share_more_exercises": "+{{n}} egzersiz daha",
         "share_stories": "Hikayeler",
         "share_more": "Daha fazla",
         "share_download": "İndir",
@@ -736,6 +747,7 @@
         "weekly_report": "Haftalık Rapor",
         "weekly_sub": "Her Pazartesi gönderilir",
         "you_have_message": "Yeni bir mesajınız var.",
+        "sent_photo": "Bir fotoğraf gönderdi",
         "in_app_message_sub": "Yeni mesajlar için uygulama içi bildirim göster"
     },
     "privacy": {
@@ -952,6 +964,7 @@
         "location_manual_hint": "Yakında yer bulunamadı — yer adını kendin yazabilirsin.",
         "change_media": "Fotoğrafı değiştir",
         "drag_to_delete": "Silmek için sürükle",
+        "delete_text": "Metni sil",
         "delete": "Hikayeyi sil",
         "delete_failed": "Hikaye silinemedi",
         "previous": "Önceki hikaye",

@@ -1,4 +1,5 @@
 import imagekit from "../configs/imageKit.js";
+import { invalidateMessagePermissions } from "../realtime/socketRegistry.js";
 import type { RequestHandler } from "express";
 import bcrypt from "bcryptjs";
 import { extractS3Key } from "../utils/s3Utils.js";
@@ -376,6 +377,9 @@ export const acceptConnectionRequest: RequestHandler = async (req, res, next) =>
     }
 
     const connection = await userService.acceptConnection(req.userId, senderId);
+    // A connection is one of the ways messaging opens up between two members.
+    invalidateMessagePermissions(senderId, [req.userId]);
+    invalidateMessagePermissions(req.userId, [senderId]);
     if (!connection) return res.json({ success: false, message: "Connection not found" });
 
     return res.json({ success: true, message: "Connection accepted successfully" });
@@ -391,6 +395,9 @@ export const removeConnection: RequestHandler = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Invalid user" });
     }
     const removed = await userService.removeConnection(req.userId, targetId);
+    // A connection is one of the ways messaging opens up between two members.
+    invalidateMessagePermissions(targetId, [req.userId]);
+    invalidateMessagePermissions(req.userId, [targetId]);
     if (!removed) {
       return res.status(404).json({ success: false, message: "Connection not found" });
     }

@@ -33,7 +33,7 @@ import { requestContext } from "./middlewares/requestContext.js";
 import { parseJsonBody, rejectUnsupportedApiContentType } from "./middlewares/browserSecurity.js";
 import { answerRetiredBilling, RETIRED_BILLING_PATHS } from "./middlewares/retiredBilling.js";
 import { handleSocketConnection } from "./realtime/socketHandlers.js";
-import { setSocketServer, type SocketData } from "./realtime/socketRegistry.js";
+import { setSocketServer, type InterServerEvents, type SocketData } from "./realtime/socketRegistry.js";
 import { ensureApplicationData } from "./services/bootstrapService.js";
 import { assertDatabaseContract } from "./services/databaseMigrationService.js";
 import { detectGeometrySupport } from "./services/locationGeometry.js";
@@ -88,7 +88,7 @@ try {
 const app = express();
 app.disable("x-powered-by");
 const httpServer = createServer(app);
-const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>(httpServer, { cors: corsOptions });
+const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(httpServer, { cors: corsOptions });
 setSocketServer(io);
 // Fires immediately if the connection already won the race, otherwise when it
 // lands - either way the in-memory adapter is replaced for multi-instance fan-out.

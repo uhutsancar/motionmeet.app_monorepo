@@ -7,10 +7,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Divider, Surface, Switch, Text, TouchableRipple } from 'react-native-paper';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTranslation } from 'react-i18next';
-import { NEARBY_SCOPES, mediaVariantUrl, type NearbyScope, type NearbySettings, type NearbyUser } from '@motionmeet/shared';
+import { mediaVariantUrl, type NearbyScope, type NearbySettings, type NearbyUser } from '@motionmeet/shared';
 import { useAuthContext } from '../context/AuthProvider';
 import { useTheme } from '../context/ThemeContext';
 import { BAND_LABELS, SCOPE_LABELS } from '../config/nearbyLabels';
+
+const DISTANCE_SCOPES: readonly NearbyScope[] = ['5km', '10km', '25km', '50km'];
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useDeviceLocation, type LocationOutcome } from '../hooks/useDeviceLocation';
 import {
@@ -207,10 +209,10 @@ const NearbyScreen = ({ navigation }: NavigationOnlyProps) => {
     <TouchableRipple onPress={() => navigation.navigate('Profile', { userId: item._id })}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 }}>
         {item.profile_picture ? (
-          <Image source={{ uri: mediaVariantUrl(item.profile_picture, 'avatar') }} style={{ width: 46, height: 46, borderRadius: 23 }} contentFit="cover" cachePolicy="memory-disk" recyclingKey={item._id} />
+          <Image source={{ uri: mediaVariantUrl(item.profile_picture, 'avatar') }} style={{ width: 50, height: 50, borderRadius: 25 }} contentFit="cover" cachePolicy="memory-disk" recyclingKey={item._id} />
         ) : (
-          <View style={{ width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.surfaceLight }}>
-            <Text style={{ color: theme.textSecondary, fontSize: 17, fontWeight: '500' }}>
+          <View style={{ width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.primarySoft }}>
+            <Text style={{ color: theme.primary, fontSize: 18, fontWeight: '700' }}>
               {item.full_name?.charAt(0)?.toUpperCase() || 'U'}
             </Text>
           </View>
@@ -224,11 +226,13 @@ const NearbyScreen = ({ navigation }: NavigationOnlyProps) => {
             </Text>
           ) : null}
         </View>
-        <View style={{ paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8, backgroundColor: theme.surfaceLight }}>
-          <Text style={{ color: theme.textSecondary, fontSize: 10.5, fontWeight: '700' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999, backgroundColor: theme.secondarySoft }}>
+          <Ionicons name="navigate" size={10} color={theme.secondary} />
+          <Text style={{ color: theme.secondary, fontSize: 11, fontWeight: '700' }}>
             {t(BAND_LABELS[item.distanceBand].key, BAND_LABELS[item.distanceBand].fallback)}
           </Text>
         </View>
+        <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
       </View>
     </TouchableRipple>
   ), [navigation, t, theme]);
@@ -376,26 +380,63 @@ const NearbyScreen = ({ navigation }: NavigationOnlyProps) => {
                 <Text style={{ color: theme.textMuted, fontSize: 10.5, fontWeight: '700', letterSpacing: 1.1, marginLeft: 4, marginBottom: 8 }}>
                   {t('nearby.radius', 'RADIUS')}
                 </Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
-                  {NEARBY_SCOPES.map((scope) => {
-                    const active = settings?.scope === scope;
+                {/* The four radii are one choice and read as one segmented
+                    control; "same city" is a different kind of filter, so it
+                    stands apart beside them instead of wrapping onto a line of
+                    its own. */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View
+                    accessibilityRole="radiogroup"
+                    style={{
+                      flex: 1, minWidth: 0, flexDirection: 'row', padding: 3, borderRadius: 12,
+                      backgroundColor: theme.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
+                    }}
+                  >
+                    {DISTANCE_SCOPES.map((scope) => {
+                      const active = settings?.scope === scope;
+                      return (
+                        <TouchableRipple
+                          key={scope}
+                          onPress={() => void changeScope(scope)}
+                          borderless
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected: active }}
+                          style={{
+                            flex: 1, minHeight: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 9,
+                            backgroundColor: active ? theme.primarySoft : 'transparent',
+                          }}
+                        >
+                          <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ color: active ? theme.primary : theme.textSecondary, fontSize: 12.5, fontWeight: '700' }}>
+                            {t(SCOPE_LABELS[scope].key, SCOPE_LABELS[scope].fallback)}
+                          </Text>
+                        </TouchableRipple>
+                      );
+                    })}
+                  </View>
+                  {(() => {
+                    const active = settings?.scope === 'city';
                     return (
                       <TouchableRipple
-                        key={scope}
-                        onPress={() => void changeScope(scope)}
+                        onPress={() => void changeScope('city')}
+                        borderless
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: active }}
                         style={{
-                          paddingHorizontal: 13, height: 34, justifyContent: 'center', borderRadius: 17,
+                          minHeight: 44, paddingHorizontal: 12, borderRadius: 12, justifyContent: 'center',
                           borderWidth: StyleSheet.hairlineWidth,
                           borderColor: active ? theme.primary : theme.border,
                           backgroundColor: active ? theme.primarySoft : theme.surface,
                         }}
                       >
-                        <Text style={{ color: active ? theme.primary : theme.textSecondary, fontSize: 12, fontWeight: '700' }}>
-                          {t(SCOPE_LABELS[scope].key, SCOPE_LABELS[scope].fallback)}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                          <Ionicons name="business-outline" size={14} color={active ? theme.primary : theme.textSecondary} />
+                          <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ color: active ? theme.primary : theme.textSecondary, fontSize: 12.5, fontWeight: '700' }}>
+                            {t(SCOPE_LABELS.city.key, SCOPE_LABELS.city.fallback)}
+                          </Text>
+                        </View>
                       </TouchableRipple>
                     );
-                  })}
+                  })()}
                 </View>
               </View>
             ) : null}

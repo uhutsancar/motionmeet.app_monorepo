@@ -13,6 +13,7 @@ import {
   SHARE_CARD_TEMPLATES,
   buildShareCardSvg,
   buildShareCardText,
+  shareCardLocaleFor,
   workoutToShareCardData,
   type ShareCardTemplate,
   type Workout,
@@ -60,7 +61,7 @@ const cardToPngBlob = (svg: string): Promise<Blob> =>
  * share card now, and this is it.
  */
 const WorkoutCompleteShare = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const user = useAppSelector((state) => state.user.value);
@@ -85,9 +86,11 @@ const WorkoutCompleteShare = () => {
               exercises: workout.exercises ?? [],
             },
             user?.username || user?.full_name || "motionmeet",
+            undefined,
+            shareCardLocaleFor(i18n.language),
           )
         : null,
-    [user, workout],
+    [i18n.language, user, workout],
   );
 
   const svg = useMemo(

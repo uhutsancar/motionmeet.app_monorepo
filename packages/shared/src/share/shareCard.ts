@@ -17,6 +17,7 @@
  * If the two had separate implementations the preview would drift from the file
  * people actually share, which is the one thing a share card may not do.
  */
+import { BODY_FIGURE_ASPECT, bodyFigureSvg, regionsForMuscles } from "./bodyFigure.js";
 
 /** Every layout the picker offers, in the order it shows them. */
 export const SHARE_CARD_TEMPLATES = [
@@ -27,6 +28,12 @@ export const SHARE_CARD_TEMPLATES = [
   "minimal",
 ] as const;
 export type ShareCardTemplate = (typeof SHARE_CARD_TEMPLATES)[number];
+
+/**
+ * Bumped whenever the drawing changes, so a file cached by an earlier version
+ * is never handed out as if it were the card on screen.
+ */
+export const SHARE_CARD_DESIGN_VERSION = 2;
 
 export const SHARE_CARD_SIZES = {
   /** Instagram/WhatsApp stories, and the shape the picker previews. */
@@ -39,10 +46,14 @@ export type ShareCardSize = keyof typeof SHARE_CARD_SIZES;
 export interface ShareCardStat {
   label: string;
   value: string;
+  /** Which number this is, so a template can pick the one worth featuring. */
+  key?: "duration" | "volume" | "sets" | (string & {});
+  /** The raw amount behind `value`; zero or less means "nothing to feature". */
+  amount?: number;
 }
 
 export interface ShareCardExercise {
-  /** How many sets were logged, rendered as the "3x" prefix. */
+  /** How many sets were logged, rendered as the "3×" figure. */
   sets: number;
   name: string;
   /** Equipment code, so the row can carry the right little drawing. */
@@ -54,20 +65,22 @@ export interface ShareCardExercise {
 export interface ShareCardData {
   /** The workout's name — the headline of every template that has one. */
   title: string;
-  /** Shown under the mark; the "@" is added here, not by the caller. */
+  /** Shown beside the mark; the "@" is added here, not by the caller. */
   username: string;
   stats: ShareCardStat[];
   exercises: ShareCardExercise[];
-  /** Optional line under the title: a date, a place, anything short. */
+  /** Optional line over the title: a date, a place, anything short. */
   subtitle?: string;
   /**
-   * Regions to shade on the body diagram.
+   * Muscle codes to shade on the body figure.
    *
    * Derived from the workout's exercises rather than asked for: a chest day
-   * shades the chest. Empty means the diagram is left out entirely, which is
-   * what happens for a session whose movements carry no muscle data.
+   * shades the chest. When none of them is a code the figure knows, the figure
+   * is left out entirely rather than drawn as an empty, meaningless body.
    */
   muscles?: string[];
+  /** "+{count} more" in the card's language, for a list that does not fit. */
+  moreExercisesLabel?: string;
   /**
    * Draw the card for laying over a photo instead of on the brand plate.
    *
@@ -83,14 +96,16 @@ export interface ShareCardData {
 
 /** The mark's own palette, so a card can never drift from the logo. */
 export const SHARE_CARD_COLORS = Object.freeze({
-  plateTop: "#141C2E",
+  plateTop: "#16203A",
   plateMiddle: "#0D1424",
-  plateBottom: "#070B15",
+  plateBottom: "#060A13",
   accentStart: "#3B82F6",
   accentMiddle: "#2FA9F4",
   accentEnd: "#22D3EE",
   text: "#F5F7FB",
   textMuted: "rgba(245,247,251,0.62)",
+  textFaint: "rgba(245,247,251,0.42)",
+  hairline: "rgba(245,247,251,0.14)",
 });
 
 const escapeXml = (value: string): string =>
@@ -108,11 +123,30 @@ const escapeXml = (value: string): string =>
  * server rasterise with different text engines, and a layout that depends on
  * one of them agreeing with the other about the width of a string is a layout
  * that breaks on somebody's phone. A fixed character budget breaks in the same
- * place everywhere.
+ * place everywhere. Counted in code points, so an emoji is never cut in half.
  */
 const clip = (value: string, max: number): string => {
-  const trimmed = value.trim();
-  return trimmed.length <= max ? trimmed : `${trimmed.slice(0, max - 1).trimEnd()}…`;
+  const chars = Array.from(value.trim());
+  return chars.length <= max ? chars.join("") : `${chars.slice(0, max - 1).join("").trimEnd()}…`;
+};
+
+/**
+ * Breaks a headline into at most `maxLines` lines of `perLine` characters,
+ * on word boundaries, with an ellipsis on the last line if anything was left.
+ */
+const wrapText = (value: string, perLine: number, maxLines: number): string[] => {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let index = 0;
+  while (index < words.length && lines.length < maxLines) {
+    let line = words[index++];
+    while (index < words.length && Array.from(`${line} ${words[index]}`).length <= perLine) {
+      line = `${line} ${words[index++]}`;
+    }
+    lines.push(line);
+  }
+  if (index < words.length && lines.length) lines[lines.length - 1] += "…";
+  return lines.map((line) => clip(line, perLine));
 };
 
 /**
@@ -125,6 +159,9 @@ const clip = (value: string, max: number): string => {
  */
 const FONT = "'DejaVu Sans','Helvetica Neue',Helvetica,Roboto,Arial,sans-serif";
 
+/** A grotesque's average advance, as a fraction of the size, for fitting. */
+const ADVANCE = 0.6;
+
 interface TextOptions {
   x: number;
   y: number;
@@ -133,41 +170,63 @@ interface TextOptions {
   fill?: string;
   anchor?: "start" | "middle" | "end";
   spacing?: number;
-  opacity?: number;
 }
 
-const text = (value: string, options: TextOptions): string => {
-  const {
-    x,
-    y,
-    size,
-    weight = 400,
-    fill = SHARE_CARD_COLORS.text,
-    anchor = "start",
-    spacing = 0,
-    opacity = 1,
-  } = options;
-  return `<text x="${x}" y="${y}" font-family="${FONT}" font-size="${size}" font-weight="${weight}" fill="${fill}" text-anchor="${anchor}" letter-spacing="${spacing}" opacity="${opacity}">${escapeXml(value)}</text>`;
+const text = (value: string, options: TextOptions, inner = ""): string => {
+  const { x, y, size, weight = 400, fill = SHARE_CARD_COLORS.text, anchor = "start", spacing = 0 } = options;
+  return `<text x="${x}" y="${y}" font-family="${FONT}" font-size="${size}" font-weight="${weight}" fill="${fill}" text-anchor="${anchor}" letter-spacing="${spacing}">${escapeXml(value)}${inner}</text>`;
 };
 
+const hairline = (x: number, y: number, width: number): string =>
+  `<rect x="${x}" y="${y}" width="${width}" height="2" fill="${SHARE_CARD_COLORS.hairline}"/>`;
+
 /** The mark, drawn at any size, from the same path as `brand/`. */
-const mark = (x: number, y: number, size: number): string => {
+const mark = (x: number, y: number, size: number, stroke = "url(#mmAccent)", opacity = 1): string => {
   const scale = size / 512;
-  return `<g transform="translate(${x} ${y}) scale(${scale})">
-<path d="M112 380V166l144 138 144-138v214" fill="none" stroke="url(#mmAccent)" stroke-width="62" stroke-linecap="round" stroke-linejoin="round"/>
+  return `<g transform="translate(${x} ${y}) scale(${scale})" opacity="${opacity}">
+<path d="M112 380V166l144 138 144-138v214" fill="none" stroke="${stroke}" stroke-width="62" stroke-linecap="round" stroke-linejoin="round"/>
 </g>`;
 };
 
+/* ── Layout ───────────────────────────────────────────────────────────────── */
+
+interface Frame {
+  width: number;
+  height: number;
+  /** Left edge and usable width of the content column. */
+  left: number;
+  inner: number;
+  /** First line any content may sit on, and the brand row's baseline. */
+  top: number;
+  footer: number;
+  /** The square: less height, so fewer rows and smaller type. */
+  compact: boolean;
+}
+
+/**
+ * Story apps lay their own controls over the top and bottom of a story - the
+ * progress bar and profile row above, the reply field below - so on the story
+ * size the card keeps its content clear of both.
+ */
+const frameFor = (size: ShareCardSize): Frame => {
+  const { width, height } = SHARE_CARD_SIZES[size];
+  const left = 88;
+  return size === "story"
+    ? { width, height, left, inner: width - left * 2, top: 268, footer: 1660, compact: false }
+    : { width, height, left, inner: width - left * 2, top: 112, footer: 1000, compact: true };
+};
+
 /** Mark plus wordmark plus handle — the footer every template shares. */
-const brandRow = (x: number, y: number, username: string, width: number): string => {
-  const markSize = 56;
+const brandRow = (frame: Frame, username: string): string => {
+  const markSize = 54;
+  const y = frame.footer;
   return [
-    mark(x, y - markSize + 8, markSize),
-    text("MotionMeet", { x: x + markSize + 18, y, size: 40, weight: 700, spacing: -0.5 }),
-    text(`@${username}`, {
-      x: x + width,
+    mark(frame.left - 6, y - markSize + 9, markSize),
+    text("MotionMeet", { x: frame.left + markSize + 10, y, size: 36, weight: 700, spacing: -0.4 }),
+    text(`@${clip(username, 22)}`, {
+      x: frame.left + frame.inner,
       y,
-      size: 34,
+      size: 32,
       weight: 500,
       anchor: "end",
       fill: SHARE_CARD_COLORS.textMuted,
@@ -175,171 +234,107 @@ const brandRow = (x: number, y: number, username: string, width: number): string
   ].join("\n");
 };
 
-/**
- * The largest type a row of values will fit in.
- *
- * A stat row divides the card evenly, so three short numbers ("4", "240 kg")
- * can be set large while "1 sa 10 dk" beside "20.6 km/sa" cannot — at a fixed
- * size the two collided. 0.58em is a grotesque's average advance width, which
- * is close enough to keep the columns apart without measuring anything.
- */
-const fittedValueSize = (values: string[], columnWidth: number, preferred: number): number => {
-  const longest = Math.max(1, ...values.map((value) => value.length));
-  return Math.max(30, Math.min(preferred, Math.floor((columnWidth * 0.92) / (longest * 0.58))));
+/** "360 kg" → 360 + kg, so the number can be set large and the unit small. */
+const splitValue = (value: string): { amount: string; unit: string } => {
+  const match = /^([<>~]?[\d.,]+)\s+([^\d\s][^\d]*)$/u.exec(value.trim());
+  return match ? { amount: match[1], unit: match[2] } : { amount: value.trim(), unit: "" };
 };
 
-/** One stat, drawn as a big number over a small label. */
-const statBlock = (stat: ShareCardStat, x: number, y: number, valueSize: number, anchor: TextOptions["anchor"] = "start"): string =>
+const UNIT_RATIO = 0.42;
+
+/** Estimated drawn width of a value with its unit, for fitting a column. */
+const valueWidth = (value: string, size: number): number => {
+  const { amount, unit } = splitValue(value);
+  const unitWidth = unit ? (Array.from(unit).length + 0.6) * ADVANCE * size * UNIT_RATIO : 0;
+  return Array.from(amount).length * ADVANCE * size + unitWidth;
+};
+
+/** The largest size, up to `preferred`, at which every value fits `width`. */
+const fitSize = (values: string[], width: number, preferred: number, floor = 30): number => {
+  const widest = Math.max(1, ...values.map((value) => valueWidth(value, 1)));
+  return Math.max(floor, Math.min(preferred, Math.floor(width / widest)));
+};
+
+/** A value with its unit set smaller and quieter beside it. */
+const valueText = (value: string, options: TextOptions): string => {
+  const { amount, unit } = splitValue(value);
+  const unitMarkup = unit
+    ? `<tspan dx="${Math.round(options.size * 0.12)}" font-size="${Math.round(options.size * UNIT_RATIO)}" font-weight="600" fill="${SHARE_CARD_COLORS.textMuted}">${escapeXml(unit)}</tspan>`
+    : "";
+  return text(amount, { weight: 700, spacing: -1, ...options }, unitMarkup);
+};
+
+const labelText = (value: string, options: TextOptions): string =>
+  text(value.toLocaleUpperCase(), {
+    weight: 700,
+    spacing: 3,
+    fill: SHARE_CARD_COLORS.textFaint,
+    ...options,
+  });
+
+/** One stat: the value over a small capitalised label. Returns its markup. */
+const statBlock = (stat: ShareCardStat, x: number, baseline: number, size: number, anchor: TextOptions["anchor"] = "start"): string =>
   [
-    text(stat.value, { x, y, size: valueSize, weight: 700, anchor, spacing: -1 }),
-    text(stat.label.toUpperCase(), {
-      x,
-      y: y + valueSize * 0.62,
-      size: valueSize * 0.3,
-      weight: 600,
-      anchor,
-      spacing: 2.2,
-      fill: SHARE_CARD_COLORS.textMuted,
-    }),
+    valueText(stat.value, { x, y: baseline, size, anchor }),
+    labelText(stat.label, { x, y: baseline + Math.max(30, size * 0.46), size: Math.max(22, Math.round(size * 0.3)), anchor }),
   ].join("\n");
 
+/** Height a statBlock takes from the value's cap height to the label's baseline. */
+const statBlockHeight = (size: number): number => size * 0.74 + Math.max(30, size * 0.46);
+
+/** Stats side by side, divided by hairlines. */
+const statRow = (stats: ShareCardStat[], x: number, top: number, width: number, preferred: number): { markup: string; bottom: number } => {
+  if (!stats.length) return { markup: "", bottom: top };
+  const column = width / stats.length;
+  const size = fitSize(stats.map((stat) => stat.value), column - 28, preferred);
+  const baseline = top + Math.round(size * 0.74);
+  const markup = stats.map((stat, index) => [
+    index ? `<rect x="${Math.round(x + column * index - 16)}" y="${top - 4}" width="2" height="${Math.round(statBlockHeight(size) + 8)}" fill="${SHARE_CARD_COLORS.hairline}"/>` : "",
+    statBlock(stat, Math.round(x + column * index + (index ? 12 : 0)), baseline, size),
+  ].join("\n"));
+  return { markup: markup.join("\n"), bottom: top + statBlockHeight(size) };
+};
+
+/** Stats stacked one over another. */
+const statStack = (stats: ShareCardStat[], x: number, top: number, width: number, preferred: number, gap: number): { markup: string; bottom: number } => {
+  if (!stats.length) return { markup: "", bottom: top };
+  const size = fitSize(stats.map((stat) => stat.value), width, preferred);
+  const step = statBlockHeight(size) + gap;
+  const markup = stats.map((stat, index) => statBlock(stat, x, top + Math.round(size * 0.74 + step * index), size));
+  return { markup: markup.join("\n"), bottom: top + step * stats.length - gap };
+};
+
+/** Date over headline. Returns the markup and the y the next block may start at. */
+const header = (
+  data: ShareCardData,
+  frame: Frame,
+  top: number,
+  options: { size: number; perLine: number; maxLines: number; width?: number },
+): { markup: string; bottom: number } => {
+  const parts: string[] = [];
+  let y = top;
+  if (data.subtitle) {
+    const eyebrow = Math.max(26, Math.round(options.size * 0.3));
+    y += eyebrow;
+    parts.push(text(clip(data.subtitle, 34).toLocaleUpperCase(), {
+      x: frame.left,
+      y,
+      size: eyebrow,
+      weight: 700,
+      spacing: 4,
+      fill: SHARE_CARD_COLORS.accentEnd,
+    }));
+    y += Math.max(18, Math.round(options.size * 0.3));
+  }
+  const lines = wrapText(data.title, options.perLine, options.maxLines);
+  lines.forEach((line, index) => {
+    y += Math.round(options.size * (index ? 1.04 : 0.86));
+    parts.push(text(line, { x: frame.left, y, size: options.size, weight: 800, spacing: -2 }));
+  });
+  return { markup: parts.join("\n"), bottom: y + Math.round(options.size * 0.3) };
+};
+
 /* ── Drawings ─────────────────────────────────────────────────────────────── */
-
-/**
- * The regions a muscle code can shade, and every name that maps onto one.
- *
- * The exercise dataset says "upper arms", the app's catalogue says "arms" and a
- * movement's `target` says "triceps"; all three have to light the same part of
- * the figure, so they are folded together here.
- */
-type MuscleRegion = "chest" | "back" | "legs" | "shoulders" | "arms" | "abs";
-
-const REGION_BY_MUSCLE: Record<string, MuscleRegion> = {
-  chest: "chest", pectorals: "chest",
-  back: "back", lats: "back", "upper back": "back", traps: "back", spine: "back",
-  legs: "legs", "upper legs": "legs", "lower legs": "legs", quads: "legs",
-  hamstrings: "legs", glutes: "legs", calves: "legs", adductors: "legs", abductors: "legs",
-  shoulders: "shoulders", delts: "shoulders", neck: "shoulders",
-  arms: "arms", "upper arms": "arms", "lower arms": "arms", biceps: "arms",
-  triceps: "arms", forearms: "arms",
-  abs: "abs", waist: "abs", core: "abs",
-};
-
-const regionFor = (muscle: string): MuscleRegion | null =>
-  REGION_BY_MUSCLE[muscle.trim().toLowerCase().replace(/[_\s]+/g, " ")] ?? null;
-
-/**
- * How wide the body diagram is, as a fraction of its height.
- *
- * Callers place the figure by its right edge, so they need its width without
- * having to know the drawing's grid.
- */
-export const SHARE_CARD_BODY_ASPECT = 59 / 176;
-
-/** Left edge of the drawn figure on its grid; the margin either side is trimmed. */
-const BODY_LEFT = 18.5;
-/** Full height of the grid the parts below are authored on. */
-const BODY_GRID_HEIGHT = 176;
-
-/** Joins the emitted paths; named so the literal survives every editor. */
-const NEWLINE = String.fromCharCode(10);
-
-/**
- * The body, as a silhouette and a set of muscle plates laid over it.
- *
- * Everything below is authored on a 96 x 176 grid with the spine on x = 48, and
- * only the left half is written out: the right half is the same paths mirrored
- * about the spine, so the two sides can never drift apart.
- *
- * The silhouette is drawn first, in one group with a single opacity so the
- * overlapping limbs do not stack into darker seams where they meet. The plates
- * then sit on top of it, and only they ever take the brand colour.
- */
-const BODY_SILHOUETTE: string[] = [
-  // Head and neck.
-  "M47.4 2.4h.6a10.6 10.6 0 0 1 0 21.2h-.6Z",
-  "M43 21h5.6v13H46a3 3 0 0 1-3-3Z",
-  // Torso, tapering from the shoulders to the waist.
-  "M32 36C38 31.4 42.8 29.6 48.6 29.6V98H35L29 56C28.4 47 29 40 32 36Z",
-  // Hips, so the trunk does not end in mid-air above the legs.
-  "M34 94h14.6v20h-7.6c-4 0-6.5-2-7-6Z",
-  // Upper arm, forearm and hand, hanging beside the body.
-  "M19.5 46c4-3 8-2.5 10.5 1.5l1.5 28c.3 4-2 6.3-5.6 6.3s-5.8-2.3-6-6.3l-1-23c-.2-3.4 0-5.4.6-6.5Z",
-  "M19.8 80c3.2-1.4 6.6-1.2 9.4.6l1.4 24c.2 3.2-1.6 5-4.8 5s-5-1.8-5.2-5Z",
-  "M21 106h9.4l.5 8.6c.1 2.6-1.6 4-4.7 4s-4.9-1.4-5-4Z",
-  // Thigh, shin and foot.
-  "M33 104c5-2.4 10-2.4 14.6 0l-.6 32c-.1 4.4-2.7 6.6-7.4 6.6s-7.2-2.2-7.4-6.6l-.8-24c-.06-4 .2-6.6 1.6-8Z",
-  "M35 140c4-1.6 7.8-1.6 11.2 0l-.7 24c-.1 3.6-2 5.4-5 5.4s-4.8-1.8-4.9-5.4Z",
-  "M35.6 166.6h9.6v4c0 1.9-1.4 2.9-4.2 2.9h-9.6c-1.9 0-2.8-.8-2.8-2.4Z",
-];
-
-const BODY_MUSCLES: Array<{ d: string; region: MuscleRegion }> = [
-  // Trapezius and latissimus: the two parts of a back a front view can show.
-  { region: "back", d: "M32.5 37.4C38 32.4 42.8 30 47.2 29.4V37.6C43.4 38.4 39.6 40.4 36.4 43.4Z" },
-  { region: "back", d: "M31.2 51.4 35.8 53C35.8 60.6 36.8 67.6 38.8 74L34.6 80.6C31.4 72.4 30.2 62.6 31.2 51.4Z" },
-  // Deltoid, capping the shoulder.
-  { region: "shoulders", d: "M31.8 38.6C26.4 41 22.8 45.2 21.8 51.4 21.2 55 22.8 57 26.2 57.2 29.4 57.4 31.2 55.6 31.8 52 32.4 47.6 34 44.2 36.6 41.8Z" },
-  // Pectoral, hung off the sternum and running out under the deltoid.
-  { region: "chest", d: "M47.2 40.6V60.8H38.2C33.6 60.8 31.4 58.4 31.4 53.8V48.6C31.4 44.6 33.8 42.2 38.4 41.2 41.4 40.5 44.3 40.3 47.2 40.6Z" },
-  // Abdominals: three rows of blocks, the oblique beside them, the wedge below.
-  { region: "abs", d: "M39.8 62.4H46.6V70.8H39.8Z" },
-  { region: "abs", d: "M39.8 72.4H46.6V80.8H39.8Z" },
-  { region: "abs", d: "M39.8 82.4H46.6V90.8H39.8Z" },
-  { region: "abs", d: "M35.6 80 38.8 81.6V98.4L35.2 92C34.2 90.2 34.6 84 35.6 80Z" },
-  { region: "abs", d: "M39.8 92.8H46.6V98L42.6 106.4C41.2 109.2 39.8 108.4 39.8 105.6Z" },
-  // Biceps and forearm, read together as the arm.
-  { region: "arms", d: "M20.4 47.4C23.8 45 27.2 45.4 29.4 48.6L30.8 74.6C31 78.4 28.8 80.4 25.4 80.4 22 80.4 20 78.4 19.8 74.6L18.9 53.4C18.75 50.2 19.3 48.2 20.4 47.4Z" },
-  { region: "arms", d: "M20.5 81.2C23.4 80 26.4 80.2 29 81.8L30.3 104.4C30.5 107.4 28.9 109 25.9 109 22.9 109 21.2 107.4 21 104.4Z" },
-  // Quadriceps and calf.
-  { region: "legs", d: "M33.6 105.4C38.4 103 43.2 103 47 105.4L46.4 135.8C46.3 140 44 142 39.9 142 35.8 142 33.6 140 33.5 135.8L32.8 114C32.75 109.8 33 106.6 33.6 105.4Z" },
-  { region: "legs", d: "M35.8 141.6C39.4 140.2 43 140.2 46.2 141.6L45.6 162.6C45.5 166 43.6 167.6 40.9 167.6 38.2 167.6 36.4 166 36.3 162.6Z" },
-];
-
-/**
- * The figure, with everything the session worked lit up.
- *
- * The old drawing was a stick outline about an eighth of the card tall, and at
- * that size nobody could tell a chest day from a leg day — which is the one
- * question it exists to answer. This one is built the way an anatomy chart is:
- * a quiet body with the muscle groups laid over it as separate plates, so a
- * worked group is a solid block of brand colour against a body that is barely
- * there, and it reads at a glance from a story feed.
- *
- * Drawn rather than photographed so it scales, recolours and needs no asset
- * pipeline — and so the card the app previews and the file the server renders
- * really are the same picture.
- */
-const bodyDiagram = (muscles: string[], x: number, y: number, height: number): string => {
-  const worked = new Set(muscles.map(regionFor).filter((region): region is MuscleRegion => Boolean(region)));
-  const scale = height / BODY_GRID_HEIGHT;
-
-  const plate = ({ d, region }: (typeof BODY_MUSCLES)[number]): string =>
-    worked.has(region)
-      ? `<path d="${d}" fill="${SHARE_CARD_COLORS.accentEnd}" opacity="0.97"/>`
-      : `<path d="${d}" fill="#FFFFFF" opacity="0.2"/>`;
-
-  // One opacity on the group, not on each path: the limbs overlap where they
-  // join, and per-path transparency turned every one of those joins into a
-  // visible darker seam.
-  const mirror = (markup: string): string =>
-    `<g transform="translate(96 0) scale(-1 1)">${NEWLINE}${markup}${NEWLINE}</g>`;
-
-  const outline = BODY_SILHOUETTE.map((d) => `<path d="${d}"/>`).join(NEWLINE);
-  // One opacity, applied once to both halves together. Two half-groups meeting
-  // at the spine composited their transparency twice and drew a dark stripe
-  // straight down the middle of the body.
-  const silhouette = `<g fill="#FFFFFF" opacity="0.11">${NEWLINE}${outline}${NEWLINE}${mirror(outline)}${NEWLINE}</g>`;
-  const plates = BODY_MUSCLES.map(plate).join(NEWLINE);
-
-  // The grid is wider than the body so the paths could be written about a
-  // round-numbered spine; the empty margin is trimmed here instead, which is
-  // what lets a caller place the figure by its real right edge.
-  return `<g transform="translate(${x - BODY_LEFT * scale} ${y}) scale(${scale})">
-${silhouette}
-${plates}
-${mirror(plates)}
-</g>`;
-};
 
 /**
  * The little drawing beside an exercise, telling you what it was done with.
@@ -378,247 +373,275 @@ const EQUIPMENT_ALIASES: Record<string, string> = {
   suspension: "bodyweight", trx: "bodyweight",
 };
 
-const equipmentGlyph = (equipment: string | undefined, x: number, y: number, size: number): string => {
+/** The equipment drawing on a soft disc, `size` across, centred on (cx, cy). */
+const equipmentBadge = (equipment: string | undefined, cx: number, cy: number, size: number): string => {
   const key = (equipment ?? "").trim().toLowerCase().replace(/[_\s]+/g, " ");
   const name = EQUIPMENT_PATHS[key] ? key : EQUIPMENT_ALIASES[key] ?? "other";
-  const scale = size / 24;
-  return `<g transform="translate(${x} ${y}) scale(${scale})"><path d="${EQUIPMENT_PATHS[name]}" fill="none" stroke="${SHARE_CARD_COLORS.text}" stroke-opacity="0.72" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>`;
+  const glyph = size * 0.56;
+  const scale = glyph / 24;
+  return `<circle cx="${cx}" cy="${cy}" r="${size / 2}" fill="#FFFFFF" fill-opacity="0.07"/>
+<g transform="translate(${cx - glyph / 2} ${cy - glyph / 2}) scale(${scale})"><path d="${EQUIPMENT_PATHS[name]}" fill="none" stroke="${SHARE_CARD_COLORS.text}" stroke-opacity="0.85" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>`;
 };
 
-interface Frame {
-  width: number;
-  height: number;
-  /** Left edge of the content column. */
-  left: number;
-  /** Usable width inside the margins. */
-  inner: number;
-  /** Vertical middle of the card, where a single block is centred. */
-  middle: number;
-  /** Baseline of the brand row. */
-  footer: number;
-}
+/**
+ * The movements, one per row, with the sets on the right. Rows that do not
+ * fit are not dropped silently: the last row says how many more there were.
+ */
+const exerciseList = (
+  data: ShareCardData,
+  frame: Frame,
+  top: number,
+  width: number,
+  maxRows: number,
+  options: { size: number; rowHeight: number },
+): { markup: string; bottom: number } => {
+  const total = data.exercises.length;
+  if (!total || maxRows < 1) return { markup: "", bottom: top };
+  const overflow = total > maxRows;
+  const shown = data.exercises.slice(0, overflow ? Math.max(0, maxRows - 1) : total);
+  const { size, rowHeight } = options;
+  const badge = Math.round(rowHeight * 0.68);
+  const nameX = frame.left + badge + 26;
+  const perLine = Math.max(8, Math.floor((width - badge - 26 - size * 2.6) / (size * 0.56)));
 
-const frameFor = (size: ShareCardSize): Frame => {
-  const { width, height } = SHARE_CARD_SIZES[size];
-  const margin = Math.round(width * 0.085);
-  return {
-    width,
-    height,
-    left: margin,
-    inner: width - margin * 2,
-    middle: Math.round(height / 2),
-    footer: height - margin,
-  };
+  const rows = shown.map((exercise, index) => {
+    const middle = top + rowHeight * index + rowHeight / 2;
+    return [
+      index ? hairline(nameX, Math.round(top + rowHeight * index), frame.left + width - nameX) : "",
+      equipmentBadge(exercise.equipment, frame.left + badge / 2, middle, badge),
+      text(clip(exercise.name, perLine), { x: nameX, y: Math.round(middle + size * 0.36), size, weight: 600 }),
+      text(`${exercise.sets}×`, {
+        x: frame.left + width,
+        y: Math.round(middle + size * 0.36),
+        size,
+        weight: 700,
+        anchor: "end",
+        fill: SHARE_CARD_COLORS.accentEnd,
+      }),
+    ].join("\n");
+  });
+
+  if (overflow) {
+    const rest = total - shown.length;
+    const middle = top + rowHeight * shown.length + rowHeight / 2;
+    const label = (data.moreExercisesLabel ?? "+{count}").replace("{count}", String(rest));
+    rows.push([
+      shown.length ? hairline(nameX, Math.round(top + rowHeight * shown.length), frame.left + width - nameX) : "",
+      text(label, { x: nameX, y: Math.round(middle + size * 0.36), size: Math.round(size * 0.9), weight: 600, fill: SHARE_CARD_COLORS.textMuted }),
+    ].join("\n"));
+  }
+  return { markup: rows.join("\n"), bottom: top + rowHeight * rows.length };
+};
+
+/** Whether the figure would show anything: a body with nothing lit says nothing. */
+const hasFigure = (data: ShareCardData): boolean => regionsForMuscles(data.muscles ?? []).size > 0;
+
+const figure = (data: ShareCardData, x: number, y: number, height: number): string =>
+  bodyFigureSvg(data.muscles ?? [], { x, y, height });
+
+/**
+ * The number a "highlight" card features: the volume if anything was lifted,
+ * then the time, then the sets. Never a zero - "0 kg" is not a highlight.
+ */
+const featuredStat = (stats: ShareCardStat[]): ShareCardStat | undefined => {
+  const usable = stats.filter((stat) => stat.amount === undefined || stat.amount > 0);
+  const byKey = (key: string) => usable.find((stat) => stat.key === key);
+  return byKey("volume") ?? byKey("duration") ?? byKey("sets") ?? usable[0];
 };
 
 type TemplateRenderer = (data: ShareCardData, frame: Frame) => string;
 
-/** Title, a body diagram, the numbers, then what was actually done. */
+/** Centres a block of `height` between the header's bottom and the footer. */
+const centredTop = (from: number, to: number, height: number): number =>
+  Math.round(from + Math.max(0, (to - from - height) / 2));
+
+/* ── Templates ────────────────────────────────────────────────────────────── */
+
+/** Headline, then the body and the numbers side by side, then the movements. */
 const renderSummary: TemplateRenderer = (data, frame) => {
   const stats = data.stats.slice(0, 3);
-  const rowHeight = 84;
-  const ceiling = Math.round(frame.height * 0.12);
-  const floor = frame.footer - 120;
-  const muscles = data.muscles ?? [];
+  const withFigure = hasFigure(data);
+  const head = header(data, frame, frame.top, frame.compact
+    ? { size: 80, perLine: 20, maxLines: 1 }
+    : { size: 104, perLine: 15, maxLines: 2 });
+  const floor = frame.footer - (frame.compact ? 84 : 120);
+  const parts = [head.markup];
 
-  /* The figure stands beside the numbers, so the two together are one band
-     rather than the diagram costing the card a whole section of its own. It is
-     the second thing read after the title — what the session actually worked —
-     so it is sized to be legible from a story feed, not tucked into a corner. */
-  const diagramHeight = muscles.length ? Math.round(frame.height * 0.26) : 0;
-  const diagramWidth = Math.round(diagramHeight * SHARE_CARD_BODY_ASPECT);
-  const statsWidth = diagramWidth ? frame.inner - diagramWidth - 48 : frame.inner;
-  const columnWidth = statsWidth / Math.max(stats.length, 1);
+  if (withFigure) {
+    const figureHeight = frame.compact ? Math.min(560, floor - head.bottom - 24) : 600;
+    const figureWidth = Math.round(figureHeight * BODY_FIGURE_ASPECT.both);
+    const column = frame.inner - figureWidth - 40;
+    const rowHeight = frame.compact ? 70 : 88;
+    const listRows = frame.compact ? 0 : Math.floor((floor - head.bottom - 48 - figureHeight - 40) / rowHeight);
+    const bandTop = centredTop(head.bottom + 24, floor, figureHeight + (listRows > 0 ? 40 + rowHeight * Math.min(listRows, data.exercises.length) : 0));
+    parts.push(figure(data, frame.left + frame.inner - figureWidth, bandTop, figureHeight));
 
-  const titleHeight = 88 + (data.subtitle ? 54 : 0);
-  const bandHeight = Math.max(stats.length ? 150 : 0, diagramHeight);
-  const maxRows = Math.max(
-    1,
-    Math.floor((floor - ceiling - titleHeight - bandHeight - 40) / rowHeight),
-  );
-  const rows = data.exercises.slice(0, maxRows);
-  const blockHeight = titleHeight + bandHeight + 40 + rows.length * rowHeight;
-  const top = Math.max(ceiling, Math.round((ceiling + floor - blockHeight) / 2));
-
-  let cursor = top + 88;
-  const parts = [text(clip(data.title, 20), { x: frame.left, y: cursor, size: 88, weight: 700, spacing: -2 })];
-
-  if (data.subtitle) {
-    cursor += 54;
-    parts.push(
-      text(clip(data.subtitle, 40), {
-        x: frame.left,
-        y: cursor,
-        size: 34,
-        weight: 500,
-        fill: SHARE_CARD_COLORS.textMuted,
-      }),
-    );
+    const stack = statStack(stats, frame.left, bandTop + 16, column, frame.compact ? 76 : 112, frame.compact ? 40 : 64);
+    parts.push(stack.markup);
+    if (frame.compact) {
+      // The square has no room under the figure, so the movements share the
+      // column the numbers stand in.
+      const rowsLeft = Math.floor((bandTop + figureHeight - stack.bottom - 36) / 64);
+      parts.push(exerciseList(data, frame, stack.bottom + 36, column, rowsLeft, { size: 30, rowHeight: 64 }).markup);
+    } else {
+      parts.push(exerciseList(data, frame, bandTop + figureHeight + 40, frame.inner, listRows, { size: 38, rowHeight }).markup);
+    }
+  } else {
+    const rowHeight = frame.compact ? 72 : 92;
+    const row = statRow(stats, frame.left, head.bottom + 40, frame.inner, frame.compact ? 76 : 96);
+    const rows = Math.floor((floor - row.bottom - 56) / rowHeight);
+    const top = centredTop(head.bottom + 40, floor, row.bottom - head.bottom - 40 + 56 + rowHeight * Math.min(rows, data.exercises.length));
+    const placed = statRow(stats, frame.left, top, frame.inner, frame.compact ? 76 : 96);
+    parts.push(placed.markup);
+    parts.push(exerciseList(data, frame, placed.bottom + 56, frame.inner, rows, { size: frame.compact ? 32 : 40, rowHeight }).markup);
   }
 
-  const bandTop = cursor + 34;
-
-  if (diagramHeight) {
-    parts.push(
-      bodyDiagram(muscles, frame.left + frame.inner - diagramWidth, bandTop, diagramHeight),
-    );
-  }
-
-  if (stats.length) {
-    // Set smaller than the title on purpose: the session is the headline and
-    // the numbers are the detail under it, not the other way round.
-    const valueSize = fittedValueSize(stats.map((stat) => stat.value), columnWidth, 50);
-    const statsY = bandTop + Math.round(bandHeight / 2) - 10;
-    parts.push(
-      ...stats.map((stat, index) => statBlock(stat, frame.left + columnWidth * index, statsY, valueSize)),
-    );
-  }
-
-  const listTop = bandTop + bandHeight + 40;
-  rows.forEach((exercise, index) => {
-    const y = listTop + 32 + rowHeight * index;
-    parts.push(
-      equipmentGlyph(exercise.equipment, frame.left, y - 32, 46),
-      text(`${exercise.sets}x`, {
-        x: frame.left + 66,
-        y,
-        size: 38,
-        weight: 700,
-        fill: SHARE_CARD_COLORS.accentEnd,
-      }),
-      text(clip(exercise.name, 21), { x: frame.left + 140, y, size: 38, weight: 500 }),
-    );
-  });
-
-  parts.push(brandRow(frame.left, frame.footer, data.username, frame.inner));
+  parts.push(brandRow(frame, data.username));
   return parts.filter(Boolean).join("\n");
 };
 
-/** Only the numbers, stacked and centred. Reads from across a room. */
+/** The numbers, big and stacked, each over its label. Reads from across a room. */
 const renderStats: TemplateRenderer = (data, frame) => {
-  const stats = data.stats.slice(0, 4);
-  const gap = 200;
-  const first = frame.middle - ((stats.length - 1) * gap) / 2 - 60;
-  const centre = frame.width / 2;
+  const stats = data.stats.slice(0, 3);
+  if (!stats.length) return renderMinimal(data, frame);
+  const head = header(data, frame, frame.top, frame.compact
+    ? { size: 56, perLine: 28, maxLines: 1 }
+    : { size: 68, perLine: 22, maxLines: 2 });
+  const floor = frame.footer - (frame.compact ? 70 : 110);
+  const preferred = frame.compact ? 120 : 190;
+  const gap = frame.compact ? 44 : 84;
+  const size = fitSize(stats.map((stat) => stat.value), frame.inner, preferred);
+  const blockHeight = (statBlockHeight(size) + gap) * stats.length - gap;
+  const top = centredTop(head.bottom + 30, floor, blockHeight);
 
-  return [
-    ...stats.map((stat, index) => statBlock(stat, centre, first + gap * index, 96, "middle")),
-    brandRow(frame.left, frame.footer, data.username, frame.inner),
-  ].join("\n");
+  const parts = [head.markup];
+  stats.forEach((stat, index) => {
+    const blockTop = top + (statBlockHeight(size) + gap) * index;
+    if (index) parts.push(hairline(frame.left, Math.round(blockTop - gap / 2), frame.inner));
+    parts.push(statBlock(stat, frame.left, Math.round(blockTop + size * 0.74), size));
+  });
+  parts.push(brandRow(frame, data.username));
+  return parts.join("\n");
 };
 
 /** The session as a list of movements, each with the kit it was done on. */
 const renderExercises: TemplateRenderer = (data, frame) => {
-  const rowHeight = 88;
-  const ceiling = Math.round(frame.height * 0.14);
-  const floor = frame.footer - 130;
-  const muscles = data.muscles ?? [];
-  const diagramHeight = muscles.length ? Math.round(frame.height * 0.22) : 0;
-  const diagramWidth = Math.round(diagramHeight * SHARE_CARD_BODY_ASPECT);
-  const header = 200 + (diagramHeight ? diagramHeight + 24 : 0);
-  const maxRows = Math.max(1, Math.floor((floor - ceiling - header) / rowHeight));
-  const rows = data.exercises.slice(0, maxRows);
-  const blockHeight = header + rows.length * rowHeight;
-  const top = Math.max(ceiling, Math.round((ceiling + floor - blockHeight) / 2));
+  const floor = frame.footer - (frame.compact ? 70 : 110);
+  const rowHeight = frame.compact ? 78 : 100;
+  const listOptions = { size: frame.compact ? 34 : 42, rowHeight };
+  const gap = frame.compact ? 28 : 56;
+  const parts: string[] = [];
 
-  return [
-    text(clip(data.title, 20), { x: frame.left, y: top + 92, size: 92, weight: 700, spacing: -2 }),
-    diagramHeight
-      ? bodyDiagram(muscles, frame.left + frame.inner - diagramWidth, top + 118, diagramHeight)
-      : "",
-    ...rows.map((exercise, index) => {
-      const y = top + header + rowHeight * index;
-      return [
-        equipmentGlyph(exercise.equipment, frame.left, y - 32, 44),
-        text(`${exercise.sets}x`, {
-          x: frame.left + 64,
-          y,
-          size: 42,
-          weight: 700,
-          fill: SHARE_CARD_COLORS.accentEnd,
-        }),
-        text(clip(exercise.name, 20), { x: frame.left + 140, y, size: 42, weight: 500 }),
-      ].join("\n");
-    }),
-    brandRow(frame.left, frame.footer, data.username, frame.inner),
-  ]
-    .filter(Boolean)
-    .join("\n");
+  if (!data.exercises.length) {
+    const head = header(data, frame, frame.top, { size: frame.compact ? 72 : 92, perLine: frame.compact ? 22 : 17, maxLines: 2 });
+    parts.push(head.markup, statRow(data.stats.slice(0, 3), frame.left, head.bottom + gap, frame.inner, 88).markup);
+    parts.push(brandRow(frame, data.username));
+    return parts.join("\n");
+  }
+
+  // A short session leaves room under its list, and that room goes to a large
+  // figure; a long one keeps the room for rows and tucks a small figure in
+  // beside the headline instead.
+  const fullHead = header(data, frame, frame.top, frame.compact
+    ? { size: 72, perLine: 22, maxLines: 1 }
+    : { size: 92, perLine: 17, maxLines: 2 });
+  const fullTop = fullHead.bottom + gap;
+  const rows = Math.min(data.exercises.length, Math.floor((floor - fullTop) / rowHeight));
+  const spare = floor - fullTop - rows * rowHeight;
+
+  if (hasFigure(data) && spare >= (frame.compact ? 300 : 440)) {
+    const figureHeight = Math.min(spare - gap, frame.compact ? 380 : 640);
+    const figureWidth = Math.round(figureHeight * BODY_FIGURE_ASPECT.both);
+    const listBottom = fullTop + rows * rowHeight;
+    parts.push(fullHead.markup);
+    parts.push(exerciseList(data, frame, fullTop, frame.inner, rows, listOptions).markup);
+    parts.push(figure(data, Math.round(frame.left + (frame.inner - figureWidth) / 2), centredTop(listBottom + gap / 2, floor, figureHeight), figureHeight));
+  } else if (hasFigure(data) && !frame.compact) {
+    const figureHeight = 300;
+    const figureWidth = Math.round(figureHeight * BODY_FIGURE_ASPECT.both);
+    const head = header(data, frame, frame.top, { size: 92, perLine: 10, maxLines: 3 });
+    const listTop = Math.max(head.bottom, frame.top + figureHeight) + gap;
+    parts.push(head.markup, figure(data, frame.left + frame.inner - figureWidth, frame.top, figureHeight));
+    parts.push(exerciseList(data, frame, listTop, frame.inner, Math.floor((floor - listTop) / rowHeight), listOptions).markup);
+  } else {
+    parts.push(fullHead.markup);
+    parts.push(exerciseList(data, frame, fullTop, frame.inner, Math.floor((floor - fullTop) / rowHeight), listOptions).markup);
+  }
+  parts.push(brandRow(frame, data.username));
+  return parts.join("\n");
 };
 
-/** One number, as big as it will go. For a session worth bragging about. */
+/** One real number, as big as it will go, with the rest beneath it. */
 const renderHighlight: TemplateRenderer = (data, frame) => {
-  const hero = data.stats[0];
-  const rest = data.stats.slice(1, 3);
-  const centre = frame.width / 2;
+  const hero = featuredStat(data.stats);
+  if (!hero) return renderMinimal(data, frame);
+  const rest = data.stats.filter((stat) => stat !== hero).slice(0, 2);
+  const head = header(data, frame, frame.top, frame.compact
+    ? { size: 56, perLine: 28, maxLines: 1 }
+    : { size: 68, perLine: 22, maxLines: 2 });
+  const floor = frame.footer - (frame.compact ? 70 : 110);
 
-  return [
-    text(clip(data.title, 24), {
-      x: centre,
-      y: frame.middle - 220,
-      size: 52,
-      weight: 600,
-      anchor: "middle",
-      fill: SHARE_CARD_COLORS.textMuted,
-    }),
-    hero
-      ? [
-          text(hero.value, {
-            x: centre,
-            y: frame.middle,
-            size: 200,
-            weight: 700,
-            anchor: "middle",
-            spacing: -6,
-          }),
-          text(hero.label.toUpperCase(), {
-            x: centre,
-            y: frame.middle + 80,
-            size: 40,
-            weight: 600,
-            anchor: "middle",
-            spacing: 4,
-            fill: SHARE_CARD_COLORS.textMuted,
-          }),
-        ].join("\n")
-      : "",
-    ...rest.map((stat, index) =>
-      statBlock(
-        stat,
-        centre + (index === 0 ? -220 : 220),
-        frame.middle + 260,
-        fittedValueSize(rest.map((entry) => entry.value), 420, 60),
-        "middle",
-      ),
-    ),
-    brandRow(frame.left, frame.footer, data.username, frame.inner),
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const heroSize = fitSize([hero.value], frame.inner, frame.compact ? 230 : 300, 90);
+  const labelSize = frame.compact ? 30 : 36;
+  const restHeight = rest.length ? 60 + statBlockHeight(frame.compact ? 60 : 72) : 0;
+  const blockHeight = labelSize + 28 + heroSize * 0.74 + restHeight;
+  const top = centredTop(head.bottom + 30, floor, blockHeight);
+
+  const parts = [head.markup];
+  parts.push(labelText(hero.label, { x: frame.left, y: top + labelSize, size: labelSize, fill: SHARE_CARD_COLORS.accentEnd }));
+  const heroBaseline = Math.round(top + labelSize + 28 + heroSize * 0.74);
+  parts.push(valueText(hero.value, { x: frame.left - Math.round(heroSize * 0.04), y: heroBaseline, size: heroSize, spacing: -Math.round(heroSize * 0.03) }));
+  if (rest.length) {
+    const rowTop = heroBaseline + 60;
+    parts.push(hairline(frame.left, rowTop - 30, frame.inner));
+    parts.push(statRow(rest, frame.left, rowTop, frame.inner * (rest.length === 1 ? 0.5 : 1), frame.compact ? 60 : 72).markup);
+  }
+  parts.push(brandRow(frame, data.username));
+  return parts.join("\n");
 };
 
-/** Title and mark, nothing else. The one that never fights a photo. */
-const renderMinimal: TemplateRenderer = (data, frame) => [
-  text(clip(data.title, 18), {
-    x: frame.left,
-    y: frame.middle,
-    size: 110,
-    weight: 700,
-    spacing: -3,
-  }),
-  data.subtitle
-    ? text(clip(data.subtitle, 40), {
-        x: frame.left,
-        y: frame.middle + 70,
-        size: 40,
-        weight: 500,
-        fill: SHARE_CARD_COLORS.textMuted,
-      })
-    : "",
-  brandRow(frame.left, frame.footer, data.username, frame.inner),
-]
-  .filter(Boolean)
-  .join("\n");
+/**
+ * The headline set big at the foot of the card, a quiet line of numbers and
+ * the mark drawn large and faint above. The one that never fights a photo.
+ */
+const renderMinimal: TemplateRenderer = (data, frame) => {
+  const size = frame.compact ? 104 : 136;
+  const lines = wrapText(data.title, frame.compact ? 14 : 11, frame.compact ? 2 : 3);
+  const inline = data.stats
+    .filter((stat) => stat.amount === undefined || stat.amount > 0)
+    .slice(0, 3)
+    // A bare "26" says nothing on its own, so a unitless number keeps its label.
+    .map((stat) => (splitValue(stat.value).unit || /[^\d.,<>~\s]/u.test(stat.value) ? stat.value : `${stat.value} ${stat.label.toLocaleLowerCase()}`))
+    .join("  ·  ");
+  const statsSize = frame.compact ? 32 : 38;
+  const bottom = frame.footer - (frame.compact ? 100 : 150);
+  const titleBottom = inline ? bottom - statsSize - 34 : bottom;
+  const firstBaseline = titleBottom - Math.round(size * 1.02 * (lines.length - 1));
+
+  const parts = [
+    // The mark, drawn large and faint, gives the empty top of the card a shape
+    // without adding anything else to read.
+    mark(frame.left + frame.inner - (frame.compact ? 380 : 560), frame.top - (frame.compact ? 40 : 10), frame.compact ? 420 : 620, "#FFFFFF", 0.06),
+  ];
+  if (data.subtitle) {
+    parts.push(text(clip(data.subtitle, 34).toLocaleUpperCase(), {
+      x: frame.left,
+      y: firstBaseline - size - 8,
+      size: Math.round(size * 0.24),
+      weight: 700,
+      spacing: 4,
+      fill: SHARE_CARD_COLORS.accentEnd,
+    }));
+  }
+  lines.forEach((line, index) => {
+    parts.push(text(line, { x: frame.left - 4, y: firstBaseline + Math.round(size * 1.02 * index), size, weight: 800, spacing: -3 }));
+  });
+  if (inline) {
+    parts.push(text(inline, { x: frame.left, y: bottom, size: statsSize, weight: 600, fill: SHARE_CARD_COLORS.textMuted }));
+  }
+  parts.push(brandRow(frame, data.username));
+  return parts.join("\n");
+};
 
 const RENDERERS: Record<ShareCardTemplate, TemplateRenderer> = {
   summary: renderSummary,
@@ -645,10 +668,12 @@ export const buildShareCardSvg = (
   const render = RENDERERS[template] ?? renderSummary;
 
   // Over a photo the ground is the photo, so only the scrim that keeps the type
-  // readable is drawn; everywhere else the card is the brand plate.
+  // readable is drawn; everywhere else the card is the brand plate, with a
+  // soft glow of the accent behind the content so it is not a flat fill.
   const background = data.overPhoto
     ? `<rect width="${frame.width}" height="${frame.height}" fill="url(#mmScrim)"/>`
-    : `<rect width="${frame.width}" height="${frame.height}" fill="url(#mmPlate)"/>`;
+    : `<rect width="${frame.width}" height="${frame.height}" fill="url(#mmPlate)"/>
+<rect width="${frame.width}" height="${frame.height}" fill="url(#mmGlow)"/>`;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${frame.width}" height="${frame.height}" viewBox="0 0 ${frame.width} ${frame.height}">
 <defs>
@@ -657,6 +682,10 @@ export const buildShareCardSvg = (
 <stop offset=".5" stop-color="${SHARE_CARD_COLORS.plateMiddle}"/>
 <stop offset="1" stop-color="${SHARE_CARD_COLORS.plateBottom}"/>
 </linearGradient>
+<radialGradient id="mmGlow" cx="${frame.width * 0.85}" cy="${frame.height * 0.08}" r="${frame.width * 0.9}" gradientUnits="userSpaceOnUse">
+<stop offset="0" stop-color="${SHARE_CARD_COLORS.accentStart}" stop-opacity=".22"/>
+<stop offset="1" stop-color="${SHARE_CARD_COLORS.accentStart}" stop-opacity="0"/>
+</radialGradient>
 <linearGradient id="mmAccent" x1="96" y1="128" x2="416" y2="384" gradientUnits="userSpaceOnUse">
 <stop offset="0" stop-color="${SHARE_CARD_COLORS.accentStart}"/>
 <stop offset=".55" stop-color="${SHARE_CARD_COLORS.accentMiddle}"/>
@@ -691,13 +720,21 @@ export const buildShareCardText = (data: ShareCardData, url?: string): string =>
 
 /* ── Turning a workout into card data ─────────────────────────────────────── */
 
-/** Minutes the way a person says them: "48 dk", or "1 sa 12 dk" past the hour. */
-export const formatShareDuration = (minutes: number): string => {
-  const total = Math.max(0, Math.round(minutes));
-  if (total < 60) return `${total} dk`;
+const isEnglish = (locale: string): boolean => locale.toLowerCase().startsWith("en");
+
+/**
+ * Minutes the way a person says them: "48 dk", or "1 sa 12 dk" past the hour.
+ * A session under a minute is "<1 dk" rather than a misleading "0 dk".
+ */
+export const formatShareDuration = (minutes: number, locale = "tr-TR"): string => {
+  const [min, hr] = isEnglish(locale) ? ["min", "h"] : ["dk", "sa"];
+  if (!Number.isFinite(minutes) || minutes <= 0) return `0 ${min}`;
+  if (minutes < 1) return `<1 ${min}`;
+  const total = Math.round(minutes);
+  if (total < 60) return `${total} ${min}`;
   const hours = Math.floor(total / 60);
   const rest = total % 60;
-  return rest ? `${hours} sa ${rest} dk` : `${hours} sa`;
+  return rest ? `${hours} ${hr} ${rest} ${min}` : `${hours} ${hr}`;
 };
 
 /** Volume rounded to something readable, and switched to tonnes past 1000 kg. */
@@ -717,6 +754,7 @@ export const formatShareDate = (iso: string, locale = "tr-TR"): string => {
 export interface ShareCardWorkoutLike {
   name: string;
   startTime: string;
+  /** May be fractional: a 40-second session is 0.67, shown as "<1 dk". */
   durationMinutes: number;
   volumeKg: number;
   totalSets: number;
@@ -733,6 +771,8 @@ export interface ShareCardLabels {
   volume: string;
   sets: string;
   untitled: string;
+  /** "+{count} more" for an exercise list that does not fit. */
+  moreExercises?: string;
 }
 
 export const DEFAULT_SHARE_CARD_LABELS: ShareCardLabels = {
@@ -740,7 +780,24 @@ export const DEFAULT_SHARE_CARD_LABELS: ShareCardLabels = {
   volume: "Hacim",
   sets: "Set",
   untitled: "Antrenman",
+  moreExercises: "+{count} egzersiz daha",
 };
+
+const ENGLISH_SHARE_CARD_LABELS: ShareCardLabels = {
+  duration: "Time",
+  volume: "Volume",
+  sets: "Sets",
+  untitled: "Workout",
+  moreExercises: "+{count} more",
+};
+
+/** The card's wording for a locale; Turkish unless the locale is English. */
+export const shareCardLabelsFor = (locale = "tr-TR"): ShareCardLabels =>
+  isEnglish(locale) ? ENGLISH_SHARE_CARD_LABELS : DEFAULT_SHARE_CARD_LABELS;
+
+/** The card's locale for a language code such as an i18n "en" or "tr". */
+export const shareCardLocaleFor = (language: string | undefined | null): string =>
+  isEnglish(language ?? "") ? "en-US" : "tr-TR";
 
 /**
  * Builds the card's contents from a finished workout.
@@ -749,34 +806,45 @@ export const DEFAULT_SHARE_CARD_LABELS: ShareCardLabels = {
  * built from one function: same rounding, same wording, same order. A card
  * whose numbers shift between the picker and the download would be worse than
  * no card at all.
+ *
+ * A missing time (no timer ran) and a volume of nothing (a bodyweight session)
+ * are left off rather than printed as "0 dk" and "0 kg".
  */
 export const workoutToShareCardData = (
   workout: ShareCardWorkoutLike,
   username: string,
-  labels: ShareCardLabels = DEFAULT_SHARE_CARD_LABELS,
+  labels?: ShareCardLabels,
   locale = "tr-TR",
-): ShareCardData => ({
-  title: workout.name?.trim() || labels.untitled,
-  username: username || "motionmeet",
-  subtitle: formatShareDate(workout.startTime, locale),
-  stats: [
-    { label: labels.duration, value: formatShareDuration(workout.durationMinutes) },
-    { label: labels.volume, value: formatShareVolume(workout.volumeKg) },
-    { label: labels.sets, value: String(workout.totalSets) },
-  ],
-  exercises: workout.exercises.map((exercise) => ({
-    sets: exercise.sets.length,
-    name: exercise.exerciseName,
-    equipment: exercise.equipment,
-    muscleGroup: exercise.muscleGroup,
-  })),
-  // Every distinct muscle the session touched, so the figure shades all of
-  // them rather than only whatever the first movement happened to work.
-  muscles: [
-    ...new Set(
-      workout.exercises
-        .map((exercise) => exercise.muscleGroup)
-        .filter((group): group is string => Boolean(group && group.trim())),
-    ),
-  ],
-});
+): ShareCardData => {
+  const words = { ...shareCardLabelsFor(locale), ...labels };
+  const duration = Number(workout.durationMinutes) || 0;
+  const volume = Number(workout.volumeKg) || 0;
+  const sets = Number(workout.totalSets) || 0;
+  const stats: ShareCardStat[] = [];
+  if (duration > 0) stats.push({ key: "duration", label: words.duration, value: formatShareDuration(duration, locale), amount: duration });
+  if (volume > 0) stats.push({ key: "volume", label: words.volume, value: formatShareVolume(volume), amount: volume });
+  stats.push({ key: "sets", label: words.sets, value: String(sets), amount: sets });
+
+  return {
+    title: workout.name?.trim() || words.untitled,
+    username: username || "motionmeet",
+    subtitle: formatShareDate(workout.startTime, locale),
+    stats,
+    exercises: workout.exercises.map((exercise) => ({
+      sets: exercise.sets.length,
+      name: exercise.exerciseName,
+      equipment: exercise.equipment,
+      muscleGroup: exercise.muscleGroup,
+    })),
+    moreExercisesLabel: words.moreExercises,
+    // Every distinct muscle the session touched, so the figure shades all of
+    // them rather than only whatever the first movement happened to work.
+    muscles: [
+      ...new Set(
+        workout.exercises
+          .map((exercise) => exercise.muscleGroup)
+          .filter((group): group is string => Boolean(group && group.trim())),
+      ),
+    ],
+  };
+};

@@ -20,16 +20,24 @@ interface StoryDraggableOverlayProps {
   overlay: StoryOverlay;
   frameWidth: number;
   frameHeight: number;
-  /** Fired continuously while a finger is down, so the frame can show the bin. */
-  onDragStateChange: (dragging: boolean, overTrash: boolean) => void;
+  /** Fired when a drag really starts and when it ends, so the frame can show the bin. */
+  onDragStateChange: (dragging: boolean) => void;
+  /**
+   * Where the finger is, in root-view points. The pan writes into these on the
+   * UI thread, so the bin can light up under the finger without JavaScript
+   * hearing about every move.
+   */
+  fingerX: Animated.Value;
+  fingerY: Animated.Value;
+  /** The bin's own hit test, measured from the bin that is actually drawn. */
+  isOverTrash: (absoluteX: number, absoluteY: number) => boolean;
   onCommit: (overlay: StoryOverlay) => void;
   onDelete: (overlayId: string) => void;
   onEdit: (overlayId: string) => void;
 }
 
-/** Half-width and height of the drop-to-delete target at the bottom centre. */
-const TRASH_RADIUS_X = 92;
-const TRASH_HEIGHT = 148;
+/** Parked far off screen between drags, so the bin never starts out lit. */
+export const FINGER_AT_REST = -10000;
 
 /** A caption may be nudged to the very edge, but never off the frame. */
 const MIN_FRACTION = 0.02;
@@ -60,6 +68,9 @@ const StoryDraggableOverlay = ({
   frameWidth,
   frameHeight,
   onDragStateChange,
+  fingerX,
+  fingerY,
+  isOverTrash,
   onCommit,
   onDelete,
   onEdit,
@@ -90,7 +101,6 @@ const StoryDraggableOverlay = ({
     y: overlay.y * frameHeight,
     rotation: (overlay.rotation * Math.PI) / 180,
     scale: overlay.scale,
-    overTrash: false,
   }).current;
 
   // Resetting the multiplier during the render that carries the new font size
@@ -125,52 +135,42 @@ const StoryDraggableOverlay = ({
     });
   }, [frameHeight, frameWidth, live, onCommit, overlay]);
 
+  // No JavaScript listener: on the new architecture a native-driven event's
+  // listener was never called on iOS, so the bin never lit up and a caption
+  // dropped on it survived. Everything the bin needs travels natively instead.
   const onPanEvent = useMemo(
     () =>
       Animated.event<PanGestureHandlerGestureEvent>(
-        [{ nativeEvent: { translationX: dragX, translationY: dragY } }],
-        {
-          useNativeDriver: true,
-          // The bin only needs to know when the caption crosses into it, so
-          // JavaScript is woken on that change rather than on every frame.
-          listener: (event) => {
-            const { translationX, translationY } = (
-              event as unknown as PanGestureHandlerGestureEvent
-            ).nativeEvent;
-            const dropX = live.x + translationX;
-            const dropY = live.y + translationY;
-            const overTrash =
-              dropY > frameHeight - TRASH_HEIGHT &&
-              Math.abs(dropX - frameWidth / 2) < TRASH_RADIUS_X;
-            if (overTrash !== live.overTrash) {
-              live.overTrash = overTrash;
-              onDragStateChange(true, overTrash);
-            }
-          },
-        },
+        [{ nativeEvent: { translationX: dragX, translationY: dragY, absoluteX: fingerX, absoluteY: fingerY } }],
+        { useNativeDriver: true },
       ),
-    [dragX, dragY, frameHeight, frameWidth, live, onDragStateChange],
+    [dragX, dragY, fingerX, fingerY],
   );
 
   const onPanStateChange = useCallback(
     (event: PanGestureHandlerStateChangeEvent) => {
-      const { state, oldState, translationX, translationY } = event.nativeEvent;
+      const { state, oldState, translationX, translationY, absoluteX, absoluteY } = event.nativeEvent;
 
-      if (state === State.BEGAN) {
-        live.overTrash = false;
-        onDragStateChange(true, false);
+      // The bin appears once the caption is really moving - a tap that opens
+      // the editor must not flash it.
+      if (state === State.ACTIVE) {
+        fingerX.setValue(absoluteX);
+        fingerY.setValue(absoluteY);
+        onDragStateChange(true);
         return;
       }
+      if (oldState !== State.ACTIVE) return;
 
-      if (oldState !== State.ACTIVE) {
-        if (state === State.FAILED || state === State.CANCELLED) onDragStateChange(false, false);
-        return;
-      }
+      onDragStateChange(false);
+      fingerX.setValue(FINGER_AT_REST);
+      fingerY.setValue(FINGER_AT_REST);
 
-      onDragStateChange(false, false);
-
-      if (live.overTrash) {
-        live.overTrash = false;
+      // Decided from where the finger is let go, not from any earlier move: a
+      // quick flick into the bin still counts, and leaving it again does not.
+      // A cancelled drag (a call, the app going to the background) never deletes.
+      if (state === State.END && isOverTrash(absoluteX, absoluteY)) {
+        dragX.setValue(0);
+        dragY.setValue(0);
         onDelete(overlay.id);
         return;
       }
@@ -191,8 +191,11 @@ const StoryDraggableOverlay = ({
       commit,
       dragX,
       dragY,
+      fingerX,
+      fingerY,
       frameHeight,
       frameWidth,
+      isOverTrash,
       live,
       onDelete,
       onDragStateChange,

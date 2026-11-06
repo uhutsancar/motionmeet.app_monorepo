@@ -390,6 +390,16 @@
         "sent_photo": "Sent a photo"
     },
     "connections": {
+        "empty_requests_title": "No follow requests",
+        "empty_requests_body": "People who ask to follow your private account appear here.",
+        "empty_followers_title": "No followers yet",
+        "empty_followers_body": "As you share workouts, the people who follow you are listed here.",
+        "empty_following_title": "You're not following anyone",
+        "empty_following_body": "Find athletes in Explore or Nearby and follow them.",
+        "empty_pending_title": "No pending connections",
+        "empty_pending_body": "Connection requests you send stay here until they are answered.",
+        "empty_connections_title": "No connections yet",
+        "empty_connections_body": "Connections both of you accepted appear here.",
         "accept": "Accept",
         "unfollow": "Unfollow",
         "empty": "No one here yet",
@@ -585,6 +595,7 @@
         "leave_without_sharing": "Leave without sharing",
         "share_title": "Nice one!",
         "share_subtitle": "Share your workout",
+        "share_more_exercises": "+{{n}} more",
         "share_stories": "Stories",
         "share_more": "More",
         "share_download": "Download",
@@ -695,6 +706,7 @@
         "weekly_report": "Weekly Report",
         "weekly_sub": "Sent every Monday",
         "you_have_message": "You have a new message.",
+        "sent_photo": "Sent a photo",
         "in_app_message_sub": "Show an in-app notification for new messages"
     },
     "privacy": {
@@ -911,6 +923,7 @@
         "location_manual_hint": "No nearby places found — you can type a place name instead.",
         "change_media": "Change photo",
         "drag_to_delete": "Drag here to delete",
+        "delete_text": "Delete text",
         "delete": "Delete story",
         "delete_failed": "The story could not be deleted",
         "previous": "Previous story",

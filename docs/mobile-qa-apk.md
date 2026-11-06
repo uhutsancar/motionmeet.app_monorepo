@@ -13,10 +13,9 @@ address baked in and no firewall rule needed.
 
 ## Build
 
-Put the origins in the **workspace root** `.env.local` — it is gitignored, and
-it is where the release bundler reads dotenv from, because `react.root` points
-at the workspace (see `plugins/withMonorepoBundleRoot.js`). A copy in
-`packages/mobile/.env.local` is ignored by the release build. Exporting the
+Put the origins in `packages/mobile/.env.local` — it is gitignored, and since
+SDK 58 the release bundler runs from the app package (`react.root` is the
+default), so that is where it reads dotenv from. Exporting the
 values in the shell that runs Gradle is **not** enough either: they never reach
 the Metro transform, and the build then produces a bundle that crashes on the
 config guard as though nothing had been set.
@@ -25,7 +24,7 @@ Only `EXPO_PUBLIC_*` names are inlined, so nothing else in the file reaches the
 app.
 
 ```bash
-cat > .env.local <<'EOF'
+cat > packages/mobile/.env.local <<'EOF'
 EXPO_PUBLIC_API_URL=http://127.0.0.1:4000
 EXPO_PUBLIC_WEB_URL=http://127.0.0.1:5173
 EXPO_PUBLIC_ALLOW_INSECURE_LAN=true
@@ -55,12 +54,13 @@ by hand — `pnpm exec expo prebuild -p android` applies them:
     `virtual-store-dir-max-length=30`, worth about 60 characters. Both settings
     are load-bearing for the Android build; changing them means re-checking
     that a release APK still links.
-* **The bundler is told where the workspace is.** Gradle passes the entry file
-  relative to `react.root`, which defaults to the app package, while Metro
-  resolves against the workspace root — so a release build fails with "Unable to
-  resolve module ./index.ts" even though `expo export` bundles the same entry
-  without complaint. `plugins/withMonorepoBundleRoot.js` points `react.root` at
-  the workspace.
+* **The bundle is built from the app package.** Up to SDK 54 Gradle passed
+  the entry file relative to `react.root`, so a plugin pointed `react.root` at
+  the workspace. SDK 58 passes it as an absolute path, and bundling from the
+  workspace root now fails instead: Expo swaps HMRClient for
+  `expo/src/async-require/hmr.ts` and resolves it from the bundle root, where
+  pnpm 11 links no `expo` (it ignores the hoist patterns in `.npmrc`). The
+  plugin was removed on 2026-10-27; `react.root` is left at its default.
 
 `metro-runtime` is a direct devDependency of the workspace for the same family
 of reasons: the app uses dynamic `import()`, whose runtime helper Metro resolves

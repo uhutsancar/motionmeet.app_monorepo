@@ -1,0 +1,24 @@
+diff --git a/android/src/main/java/io/invertase/googlemobileads/ReactNativeGoogleMobileAdsFullScreenAdModule.kt b/android/src/main/java/io/invertase/googlemobileads/ReactNativeGoogleMobileAdsFullScreenAdModule.kt
+index 75cd58f98fd88ecf98d3f1f580228eead1ebb4a7..e96ce4e29223d2a9f5335b133781713e522f0b0c 100644
+--- a/android/src/main/java/io/invertase/googlemobileads/ReactNativeGoogleMobileAdsFullScreenAdModule.kt
++++ b/android/src/main/java/io/invertase/googlemobileads/ReactNativeGoogleMobileAdsFullScreenAdModule.kt
+@@ -69,7 +69,8 @@ abstract class ReactNativeGoogleMobileAdsFullScreenAdModule<T>(
+   fun load(
+     requestId: Int, adUnitId: String, adRequestOptions: ReadableMap
+   ) {
+-    val activity = currentActivity
++    // RN 0.88 turned the module getter into a function; read it from the context instead.
++    val activity = reactApplicationContext.currentActivity
+     if (activity == null) {
+       val error = Arguments.createMap()
+       error.putString("code", "null-activity")
+@@ -105,7 +106,8 @@ abstract class ReactNativeGoogleMobileAdsFullScreenAdModule<T>(
+   fun show(
+     requestId: Int, adUnitId: String, showOptions: ReadableMap, promise: Promise
+   ) {
+-    val activity = currentActivity
++    // RN 0.88 turned the module getter into a function; read it from the context instead.
++    val activity = reactApplicationContext.currentActivity
+     if (activity == null) {
+       rejectPromiseWithCodeAndMessage(
+         promise,
