@@ -296,6 +296,24 @@ export const followUser: RequestHandler = async (req, res, next) => {
   }
 };
 
+/**
+ * Removes someone from the caller's followers (D-08). Idempotent: removing a
+ * member who does not follow answers 200 with `removed: false`.
+ */
+export const removeFollowerHandler: RequestHandler = async (req, res, next) => {
+  try {
+    const followerId = req.params.followerId;
+    if (!isUserId(followerId) || followerId === req.userId) {
+      return res.status(400).json({ success: false, message: "Invalid follower" });
+    }
+    const removed = await userService.removeFollower(req.userId, followerId);
+    const relationship = await userService.getRelationshipState(req.userId, followerId);
+    return res.json({ success: true, removed, relationship });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 /** Stops following, and withdraws a request that was never approved. */
 export const unfollowUser: RequestHandler = async (req, res, next) => {
   try {

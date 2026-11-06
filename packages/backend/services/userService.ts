@@ -133,7 +133,7 @@ export const validateTargetUser = async (requesterId: string, targetId: unknown,
 
 // Following is a request/accept handshake now; both directions live in
 // relationshipService so there is one implementation of the counter bookkeeping.
-export { requestFollow, acceptFollowRequest, declineFollowRequest, cancelFollowRequest, getRelationshipState } from "./relationshipService.js";
+export { requestFollow, acceptFollowRequest, declineFollowRequest, cancelFollowRequest, getRelationshipState, removeFollower } from "./relationshipService.js";
 export const unfollowUser = (userId: string, targetId: string): Promise<void> => unfollow(userId, targetId);
 
 export const getConnectionBetweenUsers = async (left: string, right: string) => {

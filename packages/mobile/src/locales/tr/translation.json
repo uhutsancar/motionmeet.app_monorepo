@@ -434,6 +434,8 @@
         "sent_photo": "Fotoğraf gönderdi"
     },
     "connections": {
+        "remove_follower": "Kaldır",
+        "remove_follower_confirm": "Bu takipçiyi kaldırmak istiyor musun? Bildirim gönderilmez; takipçiye özel paylaşımlarını görmek için seni yeniden takip etmesi gerekir.",
         "empty_requests_title": "Bekleyen takip isteği yok",
         "empty_requests_body": "Gizli hesabını takip etmek isteyenler burada görünür.",
         "empty_followers_title": "Henüz takipçin yok",

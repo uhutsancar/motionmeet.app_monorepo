@@ -126,6 +126,14 @@ export const requestFollow = async (userId: string, token: Token): Promise<Relat
   return data;
 };
 
+/** Takes someone off the caller's followers; they are not notified. */
+export const removeFollower = async (userId: string, token: Token): Promise<RelationshipResponse & { removed?: boolean }> => {
+  const { data } = await api.delete(API_ROUTES.user_extras.removeFollower(userId), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data;
+};
+
 export const unfollowUser = async (userId: string, token: Token): Promise<RelationshipResponse> => {
   const { data } = await api.post(API_ROUTES.user_extras.unfollow, { id: userId }, {
     headers: { Authorization: `Bearer ${token}` },

@@ -20,6 +20,7 @@ import {
   getProfileLocation,
   saveProfileLocation,
   updateProfileLocationVisibility,
+  removeFollowerHandler,
 } from "../controllers/userController.js";
 import {
   acceptFollowRequest as acceptFollowRequestHandler,
@@ -86,6 +87,7 @@ userRouter.delete("/follow-requests/:targetId", protect, cancelFollowRequest);
 // route name is kept so older installs keep working instead of failing silently.
 userRouter.post("/follow", protect, followUser);
 userRouter.post("/unfollow", protect, unfollowUser);
+userRouter.delete("/followers/:followerId", protect, removeFollowerHandler);
 userRouter.post("/connect", protect, sendConnectionRequest);
 userRouter.post("/accept", protect, acceptConnectionRequest);
 userRouter.delete("/connection", protect, removeConnection);

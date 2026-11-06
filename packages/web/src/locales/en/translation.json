@@ -663,7 +663,9 @@
     "empty": "Nobody here yet",
     "empty_body": "People you follow and requests waiting for you appear on this page.",
     "privacy_hint": "Private accounts approve each follower before their posts become visible.",
-    "settings_hint": "Follow requests, followers and following"
+    "settings_hint": "Follow requests, followers and following",
+    "remove_follower": "Remove",
+    "remove_follower_confirm": "Remove this follower? They won't be notified, and they will have to follow you again to see your followers-only posts."
   },
   "measurements": {
     "title": "Measurements",

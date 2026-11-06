@@ -23,7 +23,7 @@ export const API_ROUTES = Object.freeze({
   workout: Object.freeze({ base: "/api/workout", stats: "/api/workout/stats", shareCard: (workoutId: string) => `/api/workout/${workoutId}/share-card` }),
   routine: Object.freeze({ base: "/api/routine" }),
   exercise: Object.freeze({ base: "/api/exercise", byId: (exerciseId: string) => `/api/exercise/${exerciseId}`, records: "/api/exercise/records", stats: (exerciseId: string) => `/api/exercise/${exerciseId}/stats`, history: (exerciseId: string) => `/api/exercise/${exerciseId}/history` }),
-  user_extras: Object.freeze({ update: "/api/user/update", profiles: "/api/user/profiles", discover: "/api/user/discover", follow: "/api/user/follow", unfollow: "/api/user/unfollow", connect: "/api/user/connect", accept: "/api/user/accept", remove_connection: "/api/user/connection", connections: "/api/user/connections", recent_messages: "/api/user/recent-messages", suggested: "/api/user/suggested", relationship: (userId: string) => `/api/user/${userId}/relationship` }),
+  user_extras: Object.freeze({ update: "/api/user/update", profiles: "/api/user/profiles", discover: "/api/user/discover", follow: "/api/user/follow", unfollow: "/api/user/unfollow", connect: "/api/user/connect", accept: "/api/user/accept", remove_connection: "/api/user/connection", removeFollower: (followerId: string) => `/api/user/followers/${followerId}`, connections: "/api/user/connections", recent_messages: "/api/user/recent-messages", suggested: "/api/user/suggested", relationship: (userId: string) => `/api/user/${userId}/relationship` }),
   followRequest: Object.freeze({
     /** Ask to follow someone; answers with the resulting relationship state. */
     send: "/api/user/follow-requests",

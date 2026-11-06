@@ -186,6 +186,14 @@ test("profile: a private account reveals no posts and no location to a stranger"
   assert.equal(header?.statistics, null, "training totals are withheld from a stranger (D-04)");
 });
 
+test("remove follower: a member can only remove their own followers", async () => {
+  const reply = await call("DELETE", `/api/user/followers/${follower.id}`, { token: stranger.token });
+  assertOk(reply, "removing someone who does not follow you is a no-op");
+  assert.equal(reply.body.removed, false);
+  const still = await call("GET", `/api/user/${owner.id}/relationship`, { token: follower.token });
+  assert.equal((still.body.relationship as { isFollowing?: boolean } | undefined)?.isFollowing, true, "the owner's follower is untouched");
+});
+
 test("export: whatever id is sent, a member exports only their own account", async () => {
   const reply = await call("GET", `/api/user/export?userId=${owner.id}&id=${owner.id}`, { token: stranger.token });
   assertOk(reply, "a member exports their own data");

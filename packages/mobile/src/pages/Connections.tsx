@@ -17,6 +17,7 @@ import {
   getIncomingFollowRequests,
   getUserConnections,
   unfollowUser,
+  removeFollower,
 } from '../api/endpoints';
 import { useTheme } from '../context/ThemeContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
@@ -130,6 +131,28 @@ const Connections = ({ navigation, route }: ConnectionsProps) => {
   useEffect(() => {
     if (!pages[currentTab].loaded) void loadSection(currentTab);
   }, [currentTab, loadSection, pages]);
+
+  /** Takes a member off this account's followers (D-08); they are not told. */
+  const handleRemoveFollower = async (userId: string) => {
+    try {
+      setActionLoading(true);
+      const token = await getToken();
+      if (!token) throw new Error('Authentication required');
+      const data = await removeFollower(userId, token);
+      if (data.success) {
+        await Promise.all([
+          loadSection('Followers'),
+          dispatch(fetchConnections(token)),
+        ]);
+      } else {
+        Alert.alert(t('common.error', 'Hata'), data.message);
+      }
+    } catch (error: unknown) {
+      Alert.alert(t('common.error', 'Hata'), error instanceof Error ? error.message : 'Request failed');
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const handleUnfollow = async (userId: string) => {
     try {
@@ -267,6 +290,21 @@ const Connections = ({ navigation, route }: ConnectionsProps) => {
               [
                 { text: t('common.cancel', 'Vazgeç'), style: 'cancel' },
                 { text: t('connections.unfollow', 'Takibi bırak'), style: 'destructive', onPress: () => void handleUnfollow(user._id) },
+              ],
+            )}
+          />
+        )}
+        {currentTab === 'Followers' && (
+          <SoftButton
+            fill={false}
+            label={t('connections.remove_follower', 'Kaldır')}
+            dimmed={actionLoading}
+            onPress={() => Alert.alert(
+              user.full_name || user.username,
+              t('connections.remove_follower_confirm', 'Bu takipçiyi kaldırmak istiyor musun? Bildirim gönderilmez; takipçiye özel paylaşımlarını görmek için seni yeniden takip etmesi gerekir.'),
+              [
+                { text: t('common.cancel', 'Vazgeç'), style: 'cancel' },
+                { text: t('connections.remove_follower', 'Kaldır'), style: 'destructive', onPress: () => void handleRemoveFollower(user._id) },
               ],
             )}
           />

@@ -367,6 +367,35 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/Success"
+  /api/user/followers/{followerId}:
+    delete:
+      tags: [User]
+      summary: Remove a follower
+      description: |
+        Takes `followerId` off the caller's followers (their follow edge and any
+        pending follow request toward the caller are deleted, counters move,
+        both members' cached feeds and profiles are retired). The removed member
+        is not notified. Idempotent: removing someone who does not follow
+        answers 200 with `removed: false`.
+      operationId: deleteUserFollower
+      parameters:
+        - name: followerId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Done; `relationship` is the caller's state toward the member afterwards
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  removed: { type: boolean }
+                  relationship: { type: object, additionalProperties: true }
+        "400":
+          $ref: "#/components/responses/BadRequest"
   /api/user/profiles:
     post:
       tags: [User]

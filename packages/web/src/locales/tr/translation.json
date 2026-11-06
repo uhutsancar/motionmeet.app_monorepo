@@ -662,7 +662,9 @@
     "empty": "Henüz kimse yok",
     "empty_body": "Takip ettiğin kişiler ve seni bekleyen istekler bu sayfada görünür.",
     "privacy_hint": "Gizli hesaplar, gönderileri görünür olmadan önce her takipçiyi onaylar.",
-    "settings_hint": "Takip istekleri, takipçiler ve takip edilenler"
+    "settings_hint": "Takip istekleri, takipçiler ve takip edilenler",
+    "remove_follower": "Kaldır",
+    "remove_follower_confirm": "Bu takipçiyi kaldırmak istiyor musun? Bildirim gönderilmez; takipçiye özel paylaşımlarını görmek için seni yeniden takip etmesi gerekir."
   },
   "measurements": {
     "title": "Ölçümler",

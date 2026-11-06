@@ -304,31 +304,54 @@ export const declineFollowRequest = async (userId: string, requesterId: string):
 };
 
 /** Stops following, and also withdraws a request that never got approved. */
-export const unfollow = async (userId: string, targetId: string): Promise<void> => {
-  await withTransaction(async (transaction) => {
-    await transaction.deleteFrom("follow_requests").where("requester_id", "=", userId).where("target_id", "=", targetId).execute();
+/**
+ * Cuts the edge `followerId -> followeeId` along with any pending request in
+ * that direction and its actionable notification, and moves both counters.
+ * Returns whether there was an edge. Both members' caches and sockets are
+ * refreshed either way, so a stale button corrects itself.
+ */
+const dropFollow = async (followerId: string, followeeId: string): Promise<boolean> => {
+  const removed = await withTransaction(async (transaction) => {
+    await transaction.deleteFrom("follow_requests").where("requester_id", "=", followerId).where("target_id", "=", followeeId).execute();
+    await notificationService.clearFollowRequestNotification(followeeId, followerId, { transaction });
     const deleted = await transaction
       .deleteFrom("user_follows")
-      .where("follower_id", "=", userId)
-      .where("followee_id", "=", targetId)
+      .where("follower_id", "=", followerId)
+      .where("followee_id", "=", followeeId)
       .returning("follower_id")
       .executeTakeFirst();
-    if (!deleted) return;
+    if (!deleted) return false;
     await transaction
       .updateTable("users")
       .set((expression) => ({ following_count: expression.fn<number>("greatest", [expression("following_count", "-", 1), expression.val(0)]) }))
-      .where("id", "=", userId)
+      .where("id", "=", followerId)
       .execute();
     await transaction
       .updateTable("users")
       .set((expression) => ({ followers_count: expression.fn<number>("greatest", [expression("followers_count", "-", 1), expression.val(0)]) }))
-      .where("id", "=", targetId)
+      .where("id", "=", followeeId)
       .execute();
+    return true;
   });
-  await notificationService.clearFollowRequestNotification(targetId, userId);
-  await invalidateFor(userId, targetId);
-  await notifyRelationshipChange(userId, targetId);
+  await invalidateFor(followerId, followeeId);
+  await notifyRelationshipChange(followerId, followeeId);
+  return removed;
 };
+
+export const unfollow = async (userId: string, targetId: string): Promise<void> => {
+  await dropFollow(userId, targetId);
+};
+
+/**
+ * "Remove follower" (D-08 of the 2026-11 audit). Until now an account - a
+ * private one especially - could approve a follower but never take that back:
+ * the follower kept its followers-only posts, stories and, with a mutual
+ * follow, the ability to message. Removing cuts the follower's edge, drops the
+ * follower's cached feed (WP-01, race-safe) and its socket's message
+ * permission. The removed member is not notified. Blocking is a separate
+ * product decision and not part of this.
+ */
+export const removeFollower = (ownerId: string, followerId: string): Promise<boolean> => dropFollow(followerId, ownerId);
 
 interface RequestPage { items: Array<{ user: { id: string; _id: string; full_name: string; username: string; profile_picture: string }; createdAt: string }>; nextCursor: string | null }
 

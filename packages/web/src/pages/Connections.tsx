@@ -26,6 +26,7 @@ import {
   getConnections,
   getIncomingFollowRequests,
   unfollowUser,
+  removeFollower,
 } from "~/api/endpoints";
 import { useAppDispatch } from "~/app/hooks";
 import { EmptyState, PageHeader, PageShell } from "~/components/AppPage";
@@ -146,6 +147,28 @@ const Connections = () => {
       setPages((current) => ({
         ...current,
         Following: { ...current.Following, items: current.Following.items.filter((user) => user._id !== userId) },
+      }));
+      await dispatch(fetchConnections(token));
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Request failed"));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  /** Takes a member off this account's followers (D-08); they are not told. */
+  const handleRemoveFollower = async (userId: string) => {
+    if (!window.confirm(t("connections.remove_follower_confirm", "Remove this follower? They won't be notified, and they will have to follow you again to see your followers-only posts."))) return;
+    setActionLoading(true);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Authentication required");
+      const data = await removeFollower(userId, token);
+      if (!data.success) throw new Error(data.message);
+      if (data.relationship) dispatch(setRelationship({ userId, relationship: data.relationship }));
+      setPages((current) => ({
+        ...current,
+        Followers: { ...current.Followers, items: current.Followers.items.filter((user) => user._id !== userId) },
       }));
       await dispatch(fetchConnections(token));
     } catch (error: unknown) {
@@ -309,6 +332,11 @@ const Connections = () => {
               {currentTab === "Following" && (
                 <Button size="small" color="inherit" disabled={actionLoading} onClick={() => handleUnfollow(user._id)}>
                   {t("connections.unfollow", "Unfollow")}
+                </Button>
+              )}
+              {currentTab === "Followers" && (
+                <Button size="small" color="inherit" disabled={actionLoading} onClick={() => handleRemoveFollower(user._id)}>
+                  {t("connections.remove_follower", "Remove")}
                 </Button>
               )}
             </Stack>

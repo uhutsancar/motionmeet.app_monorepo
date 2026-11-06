@@ -391,6 +391,8 @@
         "sent_photo": "Sent a photo"
     },
     "connections": {
+        "remove_follower": "Remove",
+        "remove_follower_confirm": "Remove this follower? They won't be notified, and they will have to follow you again to see your followers-only posts.",
         "empty_requests_title": "No follow requests",
         "empty_requests_body": "People who ask to follow your private account appear here.",
         "empty_followers_title": "No followers yet",
