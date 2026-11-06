@@ -59,8 +59,12 @@ export const SocketProvider = ({ children }: PropsWithChildren) => {
       },
       transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: 15,
+      // Never give up: after fifteen failed attempts the app used to stay
+      // without realtime until it was restarted. The backoff grows to 30 s,
+      // and coming back to the foreground still reconnects at once.
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 2000,
+      reconnectionDelayMax: 30_000,
       timeout: 15000,
     }) as MotionSocket;
 

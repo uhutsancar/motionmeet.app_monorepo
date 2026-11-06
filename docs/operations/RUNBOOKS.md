@@ -85,6 +85,46 @@ Only if a release older than migration 014 must run against this database.
 into `pending`, drops `processed_events` and restores the enums. Run it with
 the Kysely migrator from a maintenance shell; take a backup first.
 
+## Migration 016 (message sync) on a large `messages` table
+
+The migration adds `messages.seq`, numbers every existing message in one
+`UPDATE` and adds a unique index, all in the migrator's single transaction.
+`ALTER TABLE` takes an exclusive lock on `messages` for the duration, so
+sends and reads of messages wait.
+
+1. Restore a recent snapshot into staging and time `node dist/scripts/migrate.js`
+   there. Under a few seconds: run it in the normal release.
+2. Longer: deploy it in a quiet window, or split it by hand first - add the
+   column and backfill in batches per conversation range (`backfillMessageSequence`
+   in `db/migrations/016_message_sync.ts` is idempotent: it only touches rows
+   without a number), build `messages_conversation_seq_idx` with
+   `CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS`, then let the migration
+   run (its statements are `IF NOT EXISTS` / `OR REPLACE` and become cheap).
+
+Roll back only after the clients have been rolled back or are known to
+tolerate a 404 on `/api/message/sync` (they do): `down` drops both triggers,
+both functions, `message_deletions`, the indexes and the columns.
+
+## A conversation keeps resyncing (`resyncRequired` on every `/api/message/sync`)
+
+A client that reloads the newest page on every reconnect is being told its
+cursor cannot be continued. Check the conversation:
+
+```sql
+select id, last_seq, tombstone_floor_seq from conversations where pair_key = '<idA>:<idB>';
+```
+
+- The client's `conversationId` differs from `id`: the thread was deleted and
+  started again; the client should adopt the new id after its reload. If it
+  does not, the client build is at fault.
+- The client's cursor is below `tombstone_floor_seq`: it was offline longer
+  than tombstone retention (30 days). One reload is expected; repeated ones
+  mean the client is not storing the cursor from the reloaded page.
+- The cursor is above `last_seq`: the client carries a cursor from another
+  conversation or from before a restore. One reload fixes it.
+
+Sync never marks anything read, so a resync loop costs reads, not data.
+
 ## Restore drill
 
 Not automated here. Restore the latest PITR snapshot into a scratch instance,

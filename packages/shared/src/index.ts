@@ -11,13 +11,14 @@ export * from "./types/user.js";
 export * from "./types/workout.js";
 export * from "./share/shareCard.js";
 export * from "./share/bodyFigure.js";
+export * from "./messageSync.js";
 
 export const API_ROUTES = Object.freeze({
   auth: Object.freeze({ login: "/api/auth/login", logout: "/api/auth/logout", forgotPassword: "/api/auth/forgot-password", resetPassword: "/api/auth/reset-password", me: "/api/auth/me", refresh: "/api/auth/refresh", register: "/api/auth/register" }),
   user: Object.freeze({ account: "/api/user/account", data: "/api/user/data", export: "/api/user/export", privacy: "/api/user/privacy" }),
   media: Object.freeze({ presign: "/api/media/presign" }),
   post: Object.freeze({ add: "/api/post/add", comment: "/api/post/comment/add", byId: (postId: string) => `/api/post/${postId}`, publicById: (postId: string) => `/api/post/${postId}/public`, shareCard: (postId: string) => `/api/post/${postId}/share-card`, comments: (postId: string) => `/api/post/${postId}/comments`, delete: (postId: string) => `/api/post/${postId}`, feed: "/api/post/feed", like: "/api/post/like", likeIdempotent: (postId: string) => `/api/post/${postId}/like`, unlike: (postId: string) => `/api/post/${postId}/like` }),
-  message: Object.freeze({ get: "/api/message/get", send: "/api/message/send", seen: "/api/message/seen", recent: "/api/message/recent", delete: (messageId: string) => `/api/message/delete/${messageId}`, conversations: "/api/message/conversations" }),
+  message: Object.freeze({ get: "/api/message/get", sync: "/api/message/sync", send: "/api/message/send", seen: "/api/message/seen", recent: "/api/message/recent", delete: (messageId: string) => `/api/message/delete/${messageId}`, conversations: "/api/message/conversations" }),
   story: Object.freeze({ get: "/api/story/get", create: "/api/story/create", delete: (storyId: string) => `/api/story/delete/${storyId}`, view: (storyId: string) => `/api/story/${storyId}/view`, viewers: (storyId: string) => `/api/story/${storyId}/viewers`, like: (storyId: string) => `/api/story/${storyId}/like` }),
   workout: Object.freeze({ base: "/api/workout", stats: "/api/workout/stats", shareCard: (workoutId: string) => `/api/workout/${workoutId}/share-card` }),
   routine: Object.freeze({ base: "/api/routine" }),

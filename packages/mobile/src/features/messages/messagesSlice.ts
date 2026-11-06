@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { getMessages } from '../../api/endpoints';
 import { type PayloadAction } from '@reduxjs/toolkit';
-import type { Message, PublicUser } from '@motionmeet/shared';
+import { applySyncPage as applySyncPageToList, markSeenUpTo, mergeMessages, type Message, type MessageSyncResult, type PublicUser } from '@motionmeet/shared';
 
 interface MessagesState { messages: Message[]; currentChat: PublicUser | null; loading: boolean; error: string | null }
 
@@ -48,10 +48,15 @@ const messagesSlice = createSlice({
      * send order.
      */
     mergeLatestMessages: (state, action: PayloadAction<Message[]>) => {
-      const byId = new Map(state.messages.map((message) => [message._id, message]));
-      for (const message of action.payload) byId.set(message._id, message);
-      state.messages = [...byId.values()].sort((left, right) =>
-        Date.parse(left.createdAt) - Date.parse(right.createdAt) || String(left._id).localeCompare(String(right._id)));
+      state.messages = mergeMessages(state.messages, action.payload);
+    },
+    /** One page of a message sync (ADR 005): new messages in, deleted ones out, own messages marked read. */
+    applySyncPage: (state, action: PayloadAction<{ page: Pick<MessageSyncResult, 'messages' | 'deletedMessageIds' | 'partnerLastReadSeq'>; selfId: string }>) => {
+      state.messages = applySyncPageToList(state.messages, action.payload.page, action.payload.selfId);
+    },
+    /** The partner has read every message to them up to `lastReadSeq`. */
+    markOwnMessagesSeenUpTo: (state, action: PayloadAction<{ selfId: string; lastReadSeq: number }>) => {
+      state.messages = markSeenUpTo(state.messages, action.payload.selfId, action.payload.lastReadSeq);
     },
     removeMessage: (state, action: PayloadAction<string>) => {
       state.messages = state.messages.filter(msg => msg._id !== action.payload);
@@ -84,6 +89,8 @@ export const {
   addMessage,
   prependMessages,
   mergeLatestMessages,
+  applySyncPage,
+  markOwnMessagesSeenUpTo,
   removeMessage,
   markMessagesSeenByUser,
 } = messagesSlice.actions;

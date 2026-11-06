@@ -358,10 +358,20 @@ export interface ConnectionTable extends BaseTable {
   status: Generated<"pending" | "accepted">;
 }
 
+/**
+ * `bigint` columns come back from node-postgres as strings; convert with
+ * `Number()` (sequence numbers stay far below 2^53).
+ */
+type BigintCounter = ColumnType<string, string | number | undefined, string | number>;
+
 export interface ConversationTable extends BaseTable {
   pair_key: string;
   last_message_id: string | null;
   last_message_at: NullableTimestamp;
+  /** Last sequence number handed out in this conversation, to a message or a deletion (migration 016). */
+  last_seq: BigintCounter;
+  /** Tombstones up to this change_seq have been purged; a sync from before it must start over. */
+  tombstone_floor_seq: BigintCounter;
 }
 
 export interface ConversationParticipantTable {
@@ -381,6 +391,16 @@ export interface MessageTable extends BaseTable {
   media_url: Generated<string>;
   media_key: Generated<string>;
   seen: Generated<boolean>;
+  /** Assigned by the `messages_assign_seq` trigger; never written by the application. */
+  seq: ColumnType<string, never, never>;
+}
+
+/** One deleted message, written by the `messages_record_deletion` trigger (migration 016). */
+export interface MessageDeletionTable {
+  message_id: string;
+  conversation_id: string;
+  change_seq: ColumnType<string, string | number, string | number>;
+  deleted_at: GeneratedTimestamp;
 }
 
 export interface SessionTable extends BaseTable {
@@ -526,6 +546,7 @@ export interface Database {
   conversations: ConversationTable;
   conversation_participants: ConversationParticipantTable;
   messages: MessageTable;
+  message_deletions: MessageDeletionTable;
   sessions: SessionTable;
   password_reset_tokens: PasswordResetTokenTable;
   upload_reservations: UploadReservationTable;

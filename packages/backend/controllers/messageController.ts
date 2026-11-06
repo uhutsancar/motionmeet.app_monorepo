@@ -125,11 +125,43 @@ export const getChatMessages: RequestHandler = async (req, res, next) => {
     }
 
     const pagination = parsePagination(req.query, { defaultLimit: 50, maxLimit: 100 });
-    const { items: messages, nextCursor } =
+    const { items: messages, nextCursor, readSeq } =
       await messageService.getChatMessagesList(req.userId, recipientId, pagination);
-    emitToUser(recipientId, "messages_seen", { by_user_id: req.userId });
+    // Only the first page marks the conversation read; paging back through
+    // history must not tell the partner their messages were just seen.
+    if (readSeq !== null) emitToUser(recipientId, "messages_seen", { by_user_id: req.userId, lastReadSeq: readSeq });
 
     return res.json({ success: true, messages, nextCursor });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * What happened in one conversation after the client's cursor (ADR 005).
+ * Read-only: it neither marks messages seen nor emits anything; a client that
+ * shows the conversation calls `/seen` itself.
+ */
+export const syncMessages: RequestHandler = async (req, res, next) => {
+  try {
+    const recipientId = req.body?.to_user_id;
+    if (!isUserId(recipientId) || recipientId === req.userId) {
+      return res.status(400).json({ success: false, message: "Invalid conversation user" });
+    }
+    const afterSeq = Number(req.body?.afterSeq);
+    if (!Number.isSafeInteger(afterSeq) || afterSeq < 0) {
+      return res.status(400).json({ success: false, message: "afterSeq must be a non-negative integer" });
+    }
+    const conversationId = req.body?.conversationId ?? null;
+    if (conversationId !== null && !isUuid(conversationId)) {
+      return res.status(400).json({ success: false, message: "Invalid conversationId" });
+    }
+    const requestedLimit = req.body?.limit === undefined ? messageService.MESSAGE_SYNC_DEFAULT_LIMIT : Number(req.body.limit);
+    if (!Number.isSafeInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > messageService.MESSAGE_SYNC_MAX_LIMIT) {
+      return res.status(400).json({ success: false, message: `limit must be between 1 and ${messageService.MESSAGE_SYNC_MAX_LIMIT}` });
+    }
+    const result = await messageService.syncConversationMessages(req.userId, recipientId, { afterSeq, conversationId, limit: requestedLimit });
+    return res.json({ success: true, ...result });
   } catch (error) {
     return next(error);
   }
@@ -165,8 +197,8 @@ export const markSeen: RequestHandler = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Invalid conversation user" });
     }
 
-    await messageService.markMessagesSeen(req.userId, senderId);
-    emitToUser(senderId, "messages_seen", { by_user_id: req.userId });
+    const readSeq = await messageService.markMessagesSeen(req.userId, senderId);
+    if (readSeq !== null) emitToUser(senderId, "messages_seen", { by_user_id: req.userId, lastReadSeq: readSeq });
     return res.json({ success: true });
   } catch (error) {
     return next(error);

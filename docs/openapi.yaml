@@ -695,7 +695,42 @@ paths:
                 to_user_id: { type: string }
       responses:
         "200":
-          description: Cursor-paginated conversation
+          description: |
+            Cursor-paginated conversation, newest page first in send order.
+            The first page (no cursor) marks the conversation read and emits
+            `messages_seen` (with `lastReadSeq`) to the partner; older pages do
+            neither. Messages carry `seq`.
+  /api/message/sync:
+    post:
+      tags: [Messages]
+      summary: Catch up with a conversation after a sequence number
+      description: |
+        Returns what happened in the caller's conversation with `to_user_id`
+        after `afterSeq`: new messages and deletions as one event stream in
+        sequence order, cut at `limit`. Continue with `nextAfterSeq` while
+        `hasMore`; never use `latestSeq` as the cursor. Read-only: it marks
+        nothing seen and emits nothing. See docs/architecture/adr/005-message-sync.md.
+      operationId: postMessageSync
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to_user_id, afterSeq]
+              properties:
+                to_user_id: { type: string }
+                conversationId: { type: [string, "null"], format: uuid }
+                afterSeq: { type: integer, minimum: 0 }
+                limit: { type: integer, minimum: 1, maximum: 200, default: 100 }
+      responses:
+        "200":
+          description: One page of events
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageSyncResult" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
   /api/message/send:
     post:
       tags: [Messages]
@@ -1056,6 +1091,50 @@ components:
         isPrivate: { type: boolean }
         canViewContent: { type: boolean }
         canMessage: { type: boolean }
+    Message:
+      type: object
+      required: [id, conversationId, from_user_id, to_user_id, text, message_type, seen, createdAt]
+      properties:
+        id: { type: string }
+        conversationId: { type: string }
+        seq:
+          type: integer
+          description: Position in the conversation in commit order; not contiguous (deletions use numbers too). Absent from older servers.
+        from_user_id: {}
+        to_user_id: {}
+        text: { type: string }
+        message_type: { type: string, enum: [text, image] }
+        media_url: { type: string }
+        seen: { type: boolean }
+        operationId: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    MessageSyncResult:
+      type: object
+      required: [success, conversationId, conversationGone, resyncRequired, messages, deletedMessageIds, nextAfterSeq, hasMore, latestSeq, partnerLastReadSeq]
+      properties:
+        success: { type: boolean }
+        conversationId: { type: [string, "null"] }
+        conversationGone:
+          type: boolean
+          description: The two members have no conversation (never had one, or it was deleted).
+        resyncRequired:
+          type: boolean
+          description: |
+            The cursor cannot be continued - the conversation was recreated
+            (conversationId differs), deletions after the cursor were purged
+            (cursor below the tombstone floor), or the cursor is ahead of the
+            conversation. Reload the newest page.
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/Message" }
+        deletedMessageIds:
+          type: array
+          items: { type: string }
+        nextAfterSeq: { type: integer, description: Cursor for the next request. }
+        hasMore: { type: boolean }
+        latestSeq: { type: integer, description: Newest position in this snapshot; informational, not a cursor. }
+        partnerLastReadSeq: { type: integer, description: The partner has seen every message to them up to here. }
     AuthResponse:
       type: object
       required: [success, user, token, accessTokenExpiresAt]

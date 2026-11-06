@@ -1,6 +1,7 @@
 import express from "express";
 import {
   getChatMessages,
+  syncMessages,
   sendMessage,
   getUserConversations,
   getUserRecentMessages,
@@ -14,6 +15,7 @@ const messageRouter = express.Router();
 
 messageRouter.post("/send", protect, attachDbUser, imageUpload.single("image"), sendMessage);
 messageRouter.post("/get", protect, getChatMessages);
+messageRouter.post("/sync", protect, syncMessages);
 messageRouter.get("/conversations", protect, getUserConversations);
 messageRouter.get("/recent", protect, getUserRecentMessages);
 messageRouter.post("/seen", protect, markSeen);

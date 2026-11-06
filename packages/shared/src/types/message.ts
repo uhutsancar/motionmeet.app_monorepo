@@ -11,6 +11,46 @@ export interface Message extends Timestamped, IdempotentRequest {
   message_type: "text" | "image";
   media_url: string;
   seen: boolean;
+  /**
+   * Position in the conversation, assigned at commit order. Not contiguous:
+   * deletions take numbers from the same counter. Absent from servers older
+   * than the message sync release.
+   */
+  seq?: number;
+}
+
+/**
+ * `POST /api/message/sync`: what happened in one conversation after
+ * `afterSeq`. Messages and deletions are one event stream cut at one limit;
+ * the next request continues from `nextAfterSeq` (never from `latestSeq`).
+ */
+export interface MessageSyncRequest {
+  to_user_id: EntityId;
+  /** The conversation the client's cursor belongs to; null when it has none yet. */
+  conversationId?: EntityId | null;
+  afterSeq: number;
+  /** 1..200, default 100. */
+  limit?: number;
+}
+
+export interface MessageSyncResult {
+  /** The conversation as the server knows it now. */
+  conversationId: EntityId | null;
+  /** The two members have no conversation (never had one, or it was deleted). */
+  conversationGone: boolean;
+  /** The cursor cannot be continued; reload the conversation from its newest page. */
+  resyncRequired: boolean;
+  /** Message events in this page, oldest first. */
+  messages: Message[];
+  /** Deletion events in this page. Ids the client does not hold can be ignored. */
+  deletedMessageIds: EntityId[];
+  /** Cursor for the next request: the position of the last event in this page. */
+  nextAfterSeq: number;
+  hasMore: boolean;
+  /** The conversation's newest position in this snapshot. Informational only. */
+  latestSeq: number;
+  /** The partner has read every message to them up to this position. */
+  partnerLastReadSeq: number;
 }
 
 export interface Conversation {
@@ -56,7 +96,8 @@ export interface ServerToClientEvents {
   message_received: (message: Message) => void;
   message_sent: (message: Message) => void;
   message_deleted: (payload: { messageId: EntityId }) => void;
-  messages_seen: (payload: { by_user_id: EntityId }) => void;
+  /** `lastReadSeq`: the reader has seen every message to them up to this position (absent from older servers). */
+  messages_seen: (payload: { by_user_id: EntityId; lastReadSeq?: number }) => void;
   online_users: (userIds: EntityId[]) => void;
   user_online: (payload: { userId: EntityId }) => void;
   user_offline: (payload: { userId: EntityId }) => void;

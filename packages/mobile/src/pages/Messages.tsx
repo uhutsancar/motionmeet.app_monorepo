@@ -168,6 +168,19 @@ const Messages = ({ navigation }: NavigationOnlyProps) => {
     }
   }, []);
 
+  // Unread counts and last messages may have moved while the socket was down
+  // (the app in the background); the first page is fetched again on reconnect.
+  useEffect(() => {
+    if (!socket) return undefined;
+    const onReconnect = () => {
+      getToken()
+        .then((token) => (token ? loadConversations(token) : undefined))
+        .catch(() => undefined);
+    };
+    socket.on('connect', onReconnect);
+    return () => { socket.off('connect', onReconnect); };
+  }, [getToken, loadConversations, socket]);
+
   const loadConnectionPage = useCallback(async (token: string, cursor: string | null = null) => {
     try {
       if (cursor) setLoadingMoreConnections(true);

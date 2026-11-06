@@ -23,9 +23,9 @@ import ListItemAvatar from '@mui/material/ListItemAvatar';
 import ListItemText from '@mui/material/ListItemText';
 import Paper from '@mui/material/Paper';
 import Button from '@mui/material/Button';
-import { CONTENT_LIMITS, createOperationId, type Conversation, type Message, type PublicUser } from '@motionmeet/shared';
+import { CONTENT_LIMITS, advanceForSocketMessage, applySyncPage, createOperationId, initialSyncState, markSeenUpTo, mergeMessages, runMessageSync, type ConversationSyncState, type Conversation, type Message, type PublicUser } from '@motionmeet/shared';
 
-import { getConversations, getMessages, markSeen, deleteMessage } from '../services/messageService';
+import { getConversations, getMessages, markSeen, deleteMessage, syncMessages } from '../services/messageService';
 import { getConnections } from '../services/userService';
 
 interface AvatarProps { user: PublicUser | null | undefined; size?: number; online?: boolean }
@@ -96,6 +96,16 @@ const WebMessages = () => {
   const typingActiveRef = useRef(false);
   const sendTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const pendingOperationIdRef = useRef<string | null>(null);
+  /*
+   * Message sync (ADR 005). The open conversation's cursor - every event up to
+   * this sequence number is applied - whether a sync is running, whether
+   * another was asked for meanwhile, and a generation that retires answers
+   * meant for a conversation the member has since left.
+   */
+  const syncStateRef = useRef<ConversationSyncState>({ conversationId: null, cursor: 0 });
+  const syncRunningRef = useRef(false);
+  const syncAgainRef = useRef(false);
+  const syncGenerationRef = useRef(0);
 
   const loadConversations = useCallback(async (
     token: string,
@@ -181,6 +191,8 @@ const WebMessages = () => {
     setNextCursor(null);
     setPartnerTyping(false);
     setLoadingMsgs(true);
+    syncGenerationRef.current += 1;
+    syncStateRef.current = { conversationId: null, cursor: 0 };
     const requestId = ++conversationRequestRef.current;
     setConversations(prev => prev.map(c => c.partner?._id === conv.partner?._id ? { ...c, unreadCount: 0 } : c));
     try {
@@ -190,6 +202,7 @@ const WebMessages = () => {
       if (conversationRequestRef.current === requestId && data.success) {
         setMessages(data.messages || []);
         setNextCursor(data.nextCursor);
+        syncStateRef.current = initialSyncState(data.messages || []);
       }
     } catch (error: unknown) {
       if (conversationRequestRef.current === requestId) {
@@ -272,6 +285,89 @@ const WebMessages = () => {
     if (target) openConversation(target);
   }, [activeConv, connections, conversations, loadingConvs, openConversation, requestedUserId]);
 
+  /**
+   * Catches the open conversation up with the server: new messages and
+   * deletions since the cursor, page by page (ADR 005). Runs on reconnect and
+   * whenever a socket message reveals a gap. A request for a sync while one is
+   * running runs once more afterwards, never in parallel.
+   */
+  const syncActiveConversation = useCallback(async () => {
+    if (syncRunningRef.current) { syncAgainRef.current = true; return; }
+    syncRunningRef.current = true;
+    try {
+      do {
+        syncAgainRef.current = false;
+        const partnerId = activeConvRef.current?.partner?._id;
+        const selfId = currentUser?.id;
+        if (!partnerId || !selfId) return;
+        const generation = syncGenerationRef.current;
+        const stillOpen = () => syncGenerationRef.current === generation && activeConvRef.current?.partner?._id === partnerId;
+        const token = await getToken();
+        if (!token) return;
+        let received = false;
+        try {
+          const outcome = await runMessageSync(
+            syncStateRef.current,
+            (afterSeq, conversationId) => syncMessages(token, partnerId, afterSeq, conversationId),
+            (page) => {
+              if (!stillOpen()) throw new Error('The conversation was left during the sync');
+              received ||= page.messages.length > 0;
+              setMessages((current) => applySyncPage(current, page, selfId));
+              syncStateRef.current = { conversationId: page.conversationId ?? syncStateRef.current.conversationId, cursor: page.nextAfterSeq };
+            },
+          );
+          if (!stillOpen()) continue;
+          if (outcome.kind === 'synced') {
+            syncStateRef.current = outcome.state;
+          } else {
+            // resync / gone: the list cannot be patched, so it is replaced by
+            // the newest page. unsupported (an older backend): the newest page
+            // is merged in, as before the sync endpoint existed.
+            const data = await getMessages(token, partnerId);
+            if (!data.success || !stillOpen()) continue;
+            received = true;
+            if (outcome.kind === 'unsupported') {
+              setMessages((current) => mergeMessages(current, data.messages || []));
+            } else {
+              setMessages(data.messages || []);
+              setNextCursor(data.nextCursor);
+            }
+            syncStateRef.current = initialSyncState(data.messages || []);
+          }
+          // Somebody looking at the conversation has read what just arrived.
+          if (received && document.visibilityState === 'visible') await markSeen(token, partnerId);
+        } catch {
+          // A failed page leaves the cursor where the last applied page put
+          // it; the next reconnect or gap continues from there.
+        }
+      } while (syncAgainRef.current);
+    } finally {
+      syncRunningRef.current = false;
+    }
+  }, [currentUser?.id, getToken]);
+
+  /** Unread counts and last messages may have moved while the socket was down. */
+  const refreshConversationList = useCallback(async () => {
+    const token = await getToken();
+    if (!token) return;
+    const data = await getConversations(token);
+    if (!data.success) return;
+    setConversations((current) => {
+      const incoming = (data.conversations || []).map((item) => (
+        activeConvRef.current?.partner?._id === item.partner?._id ? { ...item, unreadCount: 0 } : item
+      ));
+      const refreshed = new Set(incoming.map((item) => item.partner?._id));
+      return [...incoming, ...current.filter((item) => !refreshed.has(item.partner?._id))];
+    });
+  }, [getToken]);
+
+  /** Keeps the cursor in step with socket messages; a gap starts a sync. */
+  const trackSocketMessage = useCallback((msg: Message) => {
+    const decision = advanceForSocketMessage(syncStateRef.current, msg, syncRunningRef.current);
+    syncStateRef.current = decision.state;
+    if (decision.syncNeeded) void syncActiveConversation();
+  }, [syncActiveConversation]);
+
   useEffect(() => {
     if (!socket) return;
 
@@ -279,6 +375,7 @@ const WebMessages = () => {
       const partnerId = userIdOf(msg.from_user_id);
       if (activeConvRef.current?.partner?._id === partnerId) {
         setMessages(prev => prev.some(item => item._id === msg._id) ? prev : [...prev, msg]);
+        trackSocketMessage(msg);
         getToken()
           .then((token) => token ? markSeen(token, partnerId) : null)
           .catch(() => undefined);
@@ -309,6 +406,7 @@ const WebMessages = () => {
           }
           return prev;
         });
+        trackSocketMessage(msg);
       }
       setConversations(prev => {
         const partnerInfo = activeConvRef.current?.partner?._id === partnerId ? activeConvRef.current.partner : publicUserOf(msg.to_user_id);
@@ -344,8 +442,15 @@ const WebMessages = () => {
     socket.on('message_error', restorePendingDraft);
     const onDisconnect = () => restorePendingDraft();
     socket.on('disconnect', onDisconnect);
-    const onSeen = ({ by_user_id: byUserId }: { by_user_id: string }) => {
+    const onSeen = ({ by_user_id: byUserId, lastReadSeq }: { by_user_id: string; lastReadSeq?: number }) => {
       if (activeConvRef.current?.partner?._id !== byUserId) return;
+      const selfId = currentUser?.id;
+      // A current server says how far the partner read; an older one only that
+      // they opened the conversation.
+      if (typeof lastReadSeq === 'number' && selfId) {
+        setMessages((current) => markSeenUpTo(current, selfId, lastReadSeq));
+        return;
+      }
       setMessages((current) => current.map((message) => {
         const toId = userIdOf(message.to_user_id);
         return toId === byUserId ? { ...message, seen: true } : message;
@@ -356,23 +461,13 @@ const WebMessages = () => {
       setMessages(prev => prev.filter(m => m._id !== messageId));
     };
     socket.on('message_deleted', onDeleted);
-    // Messages are persisted before they are emitted, so anything sent while
-    // this socket was down is on the server: after a reconnect the open
-    // conversation's newest page is fetched again and merged in send order.
+    // Messages are persisted before they are emitted, so anything sent - or
+    // deleted - while this socket was down is on the server: after a reconnect
+    // the open conversation is synced from its cursor (ADR 005) and the
+    // conversation list, with its unread counts, is fetched again.
     const onReconnect = () => {
-      const partnerId = activeConvRef.current?.partner?._id;
-      if (!partnerId) return;
-      getToken()
-        .then((token) => (token ? getMessages(token, partnerId) : null))
-        .then((data) => {
-          if (!data?.success || activeConvRef.current?.partner?._id !== partnerId) return;
-          setMessages((current) => {
-            const byId = new Map(current.map((message) => [message._id, message]));
-            for (const message of data.messages || []) byId.set(message._id, message);
-            return [...byId.values()].sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt) || String(left._id).localeCompare(String(right._id)));
-          });
-        })
-        .catch(() => undefined);
+      void syncActiveConversation();
+      refreshConversationList().catch(() => undefined);
     };
     socket.on('connect', onReconnect);
     return () => {
@@ -386,7 +481,7 @@ const WebMessages = () => {
       socket.off('messages_seen', onSeen);
       socket.off('message_deleted', onDeleted);
     };
-  }, [getToken, socket]);
+  }, [currentUser?.id, getToken, refreshConversationList, socket, syncActiveConversation, trackSocketMessage]);
 
   const handleSend = useCallback(() => {
     if (!text.trim() || !activeConv || sending) return;

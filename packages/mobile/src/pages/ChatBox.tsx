@@ -28,16 +28,20 @@ import {
   getUserProfile,
   markMessageSeen,
   sendMessage as sendMessageHTTP,
+  syncMessages,
 } from '../api/endpoints';
 import { uploadMedia } from '../api/mediaUpload';
 import {
   setMessages,
   addMessage,
+  applySyncPage,
   markMessagesSeenByUser,
+  markOwnMessagesSeenUpTo,
   mergeLatestMessages,
   prependMessages,
   removeMessage,
 } from '../features/messages/messagesSlice';
+import { advanceForSocketMessage, initialSyncState, runMessageSync, type ConversationSyncState } from '@motionmeet/shared';
 import dayjs from '../utils/dayjs';
 
 import { Avatar, Text, Surface, ActivityIndicator, useTheme as usePaperTheme, TouchableRipple } from 'react-native-paper';
@@ -119,6 +123,16 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
   const [sending, setSending] = useState(false);
 
   const flatListRef = useRef<FlatList<Message> | null>(null);
+  /*
+   * Message sync (ADR 005): the cursor of the open chat - every event up to
+   * this sequence number is applied - whether a sync is running, whether
+   * another was asked for meanwhile, and a generation that retires answers
+   * meant for a chat that has since been left or switched.
+   */
+  const syncStateRef = useRef<ConversationSyncState>({ conversationId: null, cursor: 0 });
+  const syncRunningRef = useRef(false);
+  const syncAgainRef = useRef(false);
+  const syncGenerationRef = useRef(0);
   const typingRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const skipAutoScrollRef = useRef(false);
   // Whether the reader is at the newest message. Someone scrolled up into the
@@ -190,6 +204,8 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
     setInitialLoading(true);
     dispatch(setMessages([]));
     setNextCursor(null);
+    syncGenerationRef.current += 1;
+    syncStateRef.current = { conversationId: null, cursor: 0 };
     let cancelled = false;
     const load = async () => {
       try {
@@ -199,6 +215,7 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
         if (!cancelled && data.success) {
           dispatch(setMessages(data.messages));
           setNextCursor(data.nextCursor);
+          syncStateRef.current = initialSyncState(data.messages || []);
         }
       } catch (_error) {
         if (!cancelled) {
@@ -212,6 +229,75 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
     return () => { cancelled = true; };
   }, [dispatch, getToken, t, userId]);
 
+  /**
+   * Catches the open chat up with the server: new messages and deletions since
+   * the cursor, page by page (ADR 005). Runs on every reconnect - the app
+   * coming back to the foreground reconnects the socket - and whenever a
+   * socket message reveals a gap. Never two at once: a request made while one
+   * runs makes it run once more afterwards.
+   */
+  const syncChat = useCallback(async () => {
+    if (syncRunningRef.current) { syncAgainRef.current = true; return; }
+    syncRunningRef.current = true;
+    try {
+      do {
+        syncAgainRef.current = false;
+        const partnerId = userId;
+        const selfId = currentUser?._id;
+        if (!partnerId || !selfId) return;
+        const generation = syncGenerationRef.current;
+        const stillOpen = () => syncGenerationRef.current === generation;
+        const token = await getToken();
+        if (!token) return;
+        let received = false;
+        try {
+          const outcome = await runMessageSync(
+            syncStateRef.current,
+            (afterSeq, conversationId) => syncMessages(partnerId, token, afterSeq, conversationId),
+            (page) => {
+              if (!stillOpen()) throw new Error('The chat was left during the sync');
+              received ||= page.messages.length > 0;
+              dispatch(applySyncPage({ page, selfId }));
+              syncStateRef.current = { conversationId: page.conversationId ?? syncStateRef.current.conversationId, cursor: page.nextAfterSeq };
+            },
+          );
+          if (!stillOpen()) continue;
+          if (outcome.kind === 'synced') {
+            syncStateRef.current = outcome.state;
+          } else {
+            // resync / gone: the list cannot be patched, so it is replaced by
+            // the newest page. unsupported (an older backend): the newest page
+            // is merged in, as before the sync endpoint existed.
+            const data = await getMessages(partnerId, token);
+            if (!data.success || !stillOpen()) continue;
+            received = true;
+            if (outcome.kind === 'unsupported') {
+              dispatch(mergeLatestMessages(data.messages || []));
+            } else {
+              dispatch(setMessages(data.messages || []));
+              setNextCursor(data.nextCursor);
+            }
+            syncStateRef.current = initialSyncState(data.messages || []);
+          }
+          // The chat is on screen, so what just arrived has been read.
+          if (received) await markMessageSeen(partnerId, token);
+        } catch {
+          // A failed page leaves the cursor where the last applied page put
+          // it; the next reconnect or gap continues from there.
+        }
+      } while (syncAgainRef.current);
+    } finally {
+      syncRunningRef.current = false;
+    }
+  }, [currentUser?._id, dispatch, getToken, userId]);
+
+  /** Keeps the cursor in step with socket messages; a gap starts a sync. */
+  const trackSocketMessage = useCallback((msg: Message) => {
+    const decision = advanceForSocketMessage(syncStateRef.current, msg, syncRunningRef.current);
+    syncStateRef.current = decision.state;
+    if (decision.syncNeeded) void syncChat();
+  }, [syncChat]);
+
   useEffect(() => {
     if (!socket) return;
 
@@ -219,6 +305,7 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
       const fromId = entityId(msg.from_user_id);
       if (fromId === userId) {
         dispatch(addMessage(msg));
+        trackSocketMessage(msg);
         setPartnerTyping(false);
         getToken()
           .then((token) => token && userId ? markMessageSeen(userId, token) : null)
@@ -234,6 +321,7 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
       pendingOperationIdRef.current = null;
       setSending(false);
       dispatch(addMessage(msg));
+      trackSocketMessage(msg);
     };
 
     const onTypStart = ({ from_user_id }: { from_user_id: string }) => { if (from_user_id === userId) setPartnerTyping(true); };
@@ -250,8 +338,13 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
       setSending(false);
       showError(t('common.error', 'Error'), message || t('messages.send_failed', 'Failed to send message'));
     };
-    const onMessagesSeen = ({ by_user_id: byUserId }: { by_user_id: string }) => {
-      if (byUserId === userId) dispatch(markMessagesSeenByUser(byUserId));
+    const onMessagesSeen = ({ by_user_id: byUserId, lastReadSeq }: { by_user_id: string; lastReadSeq?: number }) => {
+      if (byUserId !== userId) return;
+      // A current server says how far the partner read; an older one only that
+      // they opened the chat.
+      const selfId = currentUser?._id;
+      if (typeof lastReadSeq === 'number' && selfId) dispatch(markOwnMessagesSeenUpTo({ selfId, lastReadSeq }));
+      else dispatch(markMessagesSeenByUser(byUserId));
     };
 
     socket.on('message_received', onMsg);
@@ -271,22 +364,17 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
       socket.off('message_error', onMessageError);
       socket.off('messages_seen', onMessagesSeen);
     };
-  }, [dispatch, getToken, socket, t, userId]);
+  }, [currentUser?._id, dispatch, getToken, socket, t, trackSocketMessage, userId]);
 
-  // Every message is persisted before it is emitted, so whatever arrived while
-  // this socket was down (the app backgrounded disconnects it) is on the
-  // server: on each reconnect the newest page is fetched and merged.
+  // Every message is persisted before it is emitted, so whatever arrived - or
+  // was deleted - while this socket was down (the app backgrounded disconnects
+  // it) is on the server: each reconnect syncs the chat from its cursor.
   useEffect(() => {
     if (!socket || !userId) return undefined;
-    const onReconnect = () => {
-      getToken()
-        .then((token) => (token ? getMessages(userId, token) : null))
-        .then((data) => { if (data?.success) dispatch(mergeLatestMessages(data.messages)); })
-        .catch(() => undefined);
-    };
+    const onReconnect = () => { void syncChat(); };
     socket.on('connect', onReconnect);
     return () => { socket.off('connect', onReconnect); };
-  }, [dispatch, getToken, socket, userId]);
+  }, [socket, syncChat, userId]);
 
   useEffect(() => () => {
     clearTimeout(typingRef.current);

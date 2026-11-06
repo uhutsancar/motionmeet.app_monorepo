@@ -116,3 +116,15 @@ docker compose -f docker-compose.test.yml down
 
 The concurrency suite verifies retry idempotency, counters, quota races,
 conversation uniqueness, analytics and durable media-deletion jobs.
+
+## Message sync (migration 016)
+
+| Object | Purpose |
+| --- | --- |
+| `conversations.last_seq` | Last sequence number handed out in the conversation (to a message or a deletion) |
+| `conversations.tombstone_floor_seq` | Tombstones up to this number have been purged; a sync cursor below it must resync |
+| `messages.seq` | Position in commit order, assigned by trigger `messages_assign_seq`; unique per conversation (`messages_conversation_seq_idx`) |
+| `messages_unseen_seq_idx` | Partial index (`WHERE NOT seen`) for the partner's read position |
+| `message_deletions` | One tombstone per deleted message (`change_seq` from the same counter), written by trigger `messages_record_deletion`; kept 30 days; no foreign key |
+
+See docs/architecture/adr/005-message-sync.md.

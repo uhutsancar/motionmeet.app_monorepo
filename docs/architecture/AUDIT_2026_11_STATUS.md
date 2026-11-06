@@ -13,7 +13,7 @@ Status values: `NOT_STARTED`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-ENV`
 | WP-02 | DONE | see `git log --grep WP-02` | `auditRegressions.test.ts` R1, R2, two-viewer delete (profile + feeds + single post), workout statistics | Like/comment counts on profiles still follow the 60 s TTL by design. No workout delete path exists, so only creation invalidates |
 | WP-03 | DONE | see `git log --grep WP-03` | `auditRegressions.test.ts` R3, R7, hidden-distance on cache hit (band + area), `lastActiveAt` to the hour, no coordinate keys in the response | A target's *position* can be ≤ 45 s old in cached candidates (moves bands only). EXPLAIN (20 000 synthetic members, rolled back): the per-request lookup is 50 `user_locations_pkey` + 30 `users_pkey` index scans, ~240 buffers |
 | WP-04 | BLOCKED-ENV | see `git log --grep WP-04` | `integration/accountExport.test.ts` (6: empty, full with nesting + secrets scan, 5 000 messages + 2 000 likes heap < 50 MB, client abort leaves no active query, mid-stream failure breaks the connection over real HTTP, early failure is a 500), R5; e2e sweep scenario added | Code done. Device check of the mobile file share (Ek B-11) pending. Mobile uses the already-installed `expo-file-system`/`expo-sharing` — **no new native module, no new APK needed**. e2e sweep updated but not run (needs a stack built from this branch) |
-| WP-05 | NOT_STARTED | | | |
+| WP-05 | BLOCKED-ENV | see `git log --grep WP-05` | `integration/messageSync.test.ts` (14: commit order with 40 parallel writers and a reader syncing throughout, paging, interleaved deletions, offline insert+delete, legacy delete tombstone, gone/recreated conversation, cursor ahead, tombstone floor + orphan purge, read position incl. own messages, read-only, stranger, backfill); `shared/tests/messageSync.test.ts` (12); migration 016 down×2/up×2 verified | Code done for backend, web and mobile. Real-device background/foreground and real-browser reconnect flows not automated (Ek B-11). Plan said three requests for 200 messages / limit 100; with the limit+1 lookahead it is two, and a third from the final cursor is asserted empty |
 | WP-06 | NOT_STARTED | | | |
 | WP-07 | DONE | see `git log --grep WP-07` | `auditRegressions.test.ts` R6b + positive follower/public checks | D-04 default applied. Old store builds: no release tags in the repo; the last 60 mobile commits never read `statistics`/`weight`/`height` of another member without optional chaining, so `null` is safe for them |
 | WP-08 | NOT_STARTED | | | |
@@ -55,6 +55,8 @@ Status values: `NOT_STARTED`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-ENV`
 - **WP-04 — D-05 varsayılanı uygulandı:** `user_locations` (coordinates included) is exported to its owner.
 - **WP-04 — plan dışı karar:** `uploadReservations` no longer exports `object_key` either (storage keys are ours, not the
   member's), and `notifications`/`conversations` omit internal ids of other tables beyond what identifies the row.
+- **WP-05 — D-06 varsayılanı uygulandı:** "delete for everyone" stays a hard delete; tombstones are kept 30 days
+  (`message-tombstone-retention`, daily 04:23).
 - **WP-01 — plan dışı karar:** `OwnerRead.generation` is `number | null` (null = no usable cache, nothing is
   written) and `OwnerRead` carries `hit`, so a cached `false`/`null` value is distinguishable from a miss.
 

@@ -4,6 +4,7 @@ import { extractS3Key } from "../utils/s3Utils.js";
 import { runExclusive } from "../utils/advisoryLock.js";
 import { processMediaDeletionJobs, queueMediaDeletions } from "../services/mediaDeletionService.js";
 import { purgeOutboxHistory } from "../services/outboxService.js";
+import { purgeMessageTombstones } from "../services/messageService.js";
 import { scheduledTaskDuration, scheduledTaskRuns } from "../observability/metrics.js";
 import { childContext, runWithContext } from "../observability/context.js";
 import { logger, safeErrorMetadata } from "../utils/logger.js";
@@ -48,6 +49,11 @@ const purgeEventHistory = async (): Promise<void> => {
   if (purged.outbox || purged.processed) logger.info("event_history_purged", purged);
 };
 
+const purgeTombstones = async (): Promise<void> => {
+  const purged = await purgeMessageTombstones();
+  if (purged) logger.info("message_tombstones_purged", { purged });
+};
+
 interface TaskDefinition { name: string; schedule: string; run: () => Promise<void> }
 
 /**
@@ -63,6 +69,7 @@ export const SCHEDULED_TASKS: readonly TaskDefinition[] = [
   { name: "expired-usage", schedule: "17 * * * *", run: deleteExpiredUsage },
   { name: "media-deletions", schedule: "*/10 * * * *", run: deleteQueuedMedia },
   { name: "event-history-retention", schedule: "41 3 * * *", run: purgeEventHistory },
+  { name: "message-tombstone-retention", schedule: "23 4 * * *", run: purgeTombstones },
 ];
 
 /**

@@ -28,6 +28,7 @@ export const SocketProvider = ({ children }: PropsWithChildren) => {
 
     let active = true;
     let connection: MotionMeetSocket | null = null;
+    let detachWakeListeners: (() => void) | null = null;
 
     void (async () => {
       const { io } = await import("socket.io-client");
@@ -45,18 +46,37 @@ export const SocketProvider = ({ children }: PropsWithChildren) => {
           }
         },
         transports: ["websocket", "polling"],
-        reconnectionAttempts: 10,
+        // Never give up. After ten failed attempts the tab used to stay without
+        // realtime until it was reloaded; now the backoff just grows to 30 s.
+        reconnectionAttempts: Infinity,
         reconnectionDelay: 1500,
+        reconnectionDelayMax: 30_000,
       }) as MotionMeetSocket;
 
       socketRef.current = connection;
       setSocket(connection);
 
       attachHandlers(connection);
+
+      // The network coming back, or the tab becoming visible again (a laptop
+      // waking up), is a reason to try now rather than wait out the backoff.
+      // It also recovers a socket the server disconnected, which the client
+      // never retries on its own.
+      const socket = connection;
+      const reconnectNow = (): void => {
+        if (!socket.connected && document.visibilityState === "visible") socket.connect();
+      };
+      window.addEventListener("online", reconnectNow);
+      document.addEventListener("visibilitychange", reconnectNow);
+      detachWakeListeners = () => {
+        window.removeEventListener("online", reconnectNow);
+        document.removeEventListener("visibilitychange", reconnectNow);
+      };
     })();
 
     return () => {
       active = false;
+      detachWakeListeners?.();
       connection?.disconnect();
       socketRef.current = null;
       setSocket(null);

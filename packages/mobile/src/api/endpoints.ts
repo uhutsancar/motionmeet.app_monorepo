@@ -1,3 +1,4 @@
+import { isAxiosError } from 'axios';
 import api from './client';
 import {
   API_ROUTES,
@@ -12,6 +13,7 @@ import {
   type ExerciseStats,
   type LocationSuggestion,
   type Message,
+  type MessageSyncResult,
   type NearbySettings,
   type NearbyUser,
   type Notification,
@@ -275,6 +277,23 @@ export const getMessages = async (userId: string, token: Token, cursor?: Cursor)
     params: cursor ? { cursor } : undefined,
   });
   return data;
+};
+
+/**
+ * One page of what changed in a conversation after `afterSeq` (ADR 005).
+ * Resolves to null when the backend predates the endpoint (404), so the
+ * caller can fall back to merging the newest page.
+ */
+export const syncMessages = async (userId: string, token: Token, afterSeq: number, conversationId: string | null): Promise<MessageSyncResult | null> => {
+  try {
+    const { data } = await api.post<MessageSyncResult & BasicResponse>(API_ROUTES.message.sync, { to_user_id: userId, afterSeq, conversationId }, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return data;
+  } catch (error) {
+    if (isAxiosError(error) && error.response?.status === 404) return null;
+    throw error;
+  }
 };
 
 export const sendMessage = async (messageData: OperationPayload, token: Token): Promise<MessageResponse> => {
