@@ -32,13 +32,21 @@ only when their media is `ready`.
 - **Retries keep their keys.** A failed create leaves directly uploaded keys
   reserved; the abandoned-upload sweep removes them after an hour.
 
+## Video metadata (implemented, second pass)
+
+The same `media-metadata` consumer measures videos with ffprobe: duration and
+display size (rotation-aware), read over a five-minute presigned URL with
+https-only protocols, bounded probe size and a 30-second timeout; errors are
+logged by exit code only so the signed URL never reaches logs or the outbox.
+FFmpeg ships only in the worker's `media-runtime` image target.
+
 ## Next step (not built)
 
 When video volume or processing cost justifies it: a `media_assets` table
 (reserved → uploaded → validating → processing → ready → deleted) beside the
 current columns (expand/contract), a private staging prefix, a `processing`
-post state hidden from every read path, an ffprobe/FFmpeg worker for duration,
-poster frames and faststart MP4. HLS only if playback metrics show the need.
+post state hidden from every read path, poster frames and faststart MP4. HLS
+only if playback metrics show the need.
 
 ## Measurements that would change this
 

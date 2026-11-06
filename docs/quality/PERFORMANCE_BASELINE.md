@@ -47,3 +47,38 @@ record a week of real traffic before turning any of them into alerts.
 
 Load and soak tests (k6), Socket.IO connection scaling, `fetchSockets`
 presence cost, share-card render CPU, mobile FPS/crash rates, web vitals.
+
+## Production-shaped data (2026-11-06, second pass)
+
+`scripts/load/seed-synthetic.sql` on the rehearsal stack: 20 000 members (10 %
+private), 779 718 follows on a power-law graph (top account: 15 597
+followers), 20 000 connections, 300 014 posts over 90 days, 999 668 likes.
+Plans: `scripts/load/explain-feeds.sql`.
+
+| Query / path | Before | After | Change |
+|---|---|---|---|
+| Home (following) feed, first page, DB time | 3.7–8.1 s — scanned 543 735 index entries and ran the connection sub-query 282 253 times | 1.3 ms warm, 150–230 ms for a never-seen viewer (21 cold heap reads) | audience-first query + covering `posts_author_timeline_idx` (migration 015) |
+| Same query issued by the API under load (parameterised) | 10–13 s per cache miss, timeouts | see k6 below | two-step read: ids from the index (index-only, stops at the page size), rows only for the final page |
+| Keşfet first page, DB time | 0.5–0.8 ms | unchanged | partial index already served it |
+| API boot, `database_contract` phase | 15 s → statement timeout → the API could not start | 0.4 s, boot 0.6 s | catalogue check of validated CHECK constraints instead of counting rows |
+
+Disk note: the rehearsal database lives in Docker Desktop's VM on this
+machine; a cold random page read measured about 9 ms, so cold-path numbers
+are pessimistic next to a managed database on SSD.
+
+### Load through the API on the same data (k6, `scripts/load/feed-read.k6.js`)
+
+20 VUs for 60 s over 300 distinct seeded members (`TOKENS_FILE`), so most
+requests miss the 30-second per-member feed cache, through nginx:
+
+| Run | Following p95 | Keşfet p95 | Errors | Throughput |
+|---|---|---|---|---|
+| Table-scan query (before) | 3.64 s, max 15.8 s | 306 ms | 1.18 % (statement timeouts) | 28 req/s |
+| Audience-first, two-step (after) | **212 ms** (median 4.9 ms) | **40 ms** (median 5.0 ms) | **0 %** of 4 168 | 69 req/s |
+
+### Video metadata (worker, real S3)
+
+2-second test video: presign → direct PUT → post (type derived as `video`)
+→ the media worker's ffprobe read the object over a presigned URL and stored
+2.000 s and 320×240 within 2.6 s of the post; the API returns
+`durationSeconds: 2`. The test object was deleted afterwards.

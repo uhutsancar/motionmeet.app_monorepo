@@ -66,3 +66,14 @@ delete attempts are refused while the follower's and owner's allowed reads
 succeed. Also covered: share link without login, profile of a private
 account, mass assignment of role/counters/author, admin routes, requests
 without a token.
+
+## Second pass (2026-11-06)
+
+| Id | Scenario | Status | Where |
+|---|---|---|---|
+| FEED-05 | Home feed: exact allowed set, newest first, cursor walk without repeats or gaps — passes on the old and the new query | PASS | `tests/integration/followingFeed.test.ts` |
+| — | Boot integrity contract is a catalogue check (bounded time) | PASS | `tests/integration/databaseContracts.test.ts` |
+| — | ffprobe output parsing: first video stream, side-data and legacy rotation, unusable probes | PASS | `tests/mediaProbe.test.ts` |
+| E2E video | Real S3 upload → worker ffprobe → `durationSeconds` in the API → deletion | PASS (manual) | rehearsal stack |
+| OPS-03 | Backend redeploy with web untouched keeps the API reachable | PASS (manual): 200 within ~3 s | `packages/web/nginx.conf` |
+| P2-PERF-001 | Same k6 scenario before/after on production-shaped data | PASS: 0 % errors, following p95 212 ms | `docs/quality/PERFORMANCE_BASELINE.md` |

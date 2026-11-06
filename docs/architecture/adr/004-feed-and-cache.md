@@ -26,6 +26,17 @@ other members' cached pages serving content they could no longer see.
 - The access check itself never depends on the cache: single-post, comment,
   like and share-card endpoints evaluate access on every request.
 
+## Home feed read path (second pass)
+
+Measured on 300 000 posts, the original home-feed query scanned every public
+and followers-only post and tested each against the graph (4–8 s). It now
+reads audience-first: list the viewer, their followees and connections; walk
+each one's newest posts on the covering `posts_author_timeline_idx`
+(index-only, stopping at the page size); fetch rows for the final page only.
+Cost scales with the audience, not the table. A viewer following thousands
+of accounts makes thousands of short index walks — fine at today's follow
+cap, and the point to revisit before raising it.
+
 ## Consequences
 
 An epoch bump turns the next request of every active member into a cache miss.

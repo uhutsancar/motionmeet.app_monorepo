@@ -32,7 +32,7 @@ scenario results: [../quality/TEST_MATRIX.md](../quality/TEST_MATRIX.md).
 |---|---|---|---|
 | MM-P0-01 | End-to-end measurement | PARTIAL | Server: W3C trace + sanitised request id in every log line, outbox rows and AMQP headers; per-route latency histogram. Client timings and an OTel exporter: NOT_STARTED |
 | MM-P0-02 | Post creation bugs | DONE | Presigned-only posts, duplicate keys, post type from files, retry keeps keys |
-| MM-P0-03 | Real media metadata | PARTIAL | Per-file MIME + size (DONE); image width/height by worker (DONE); video duration and backfill of old rows: NOT_STARTED |
+| MM-P0-03 | Real media metadata | DONE for new uploads | Per-file MIME + size; image width/height and video width/height/duration by the media worker (`durationSeconds` in the API). Backfill of rows created before: NOT_STARTED |
 | MM-P0-04 | Mobile upload memory/cancel/timeout | DONE in code | 32-byte sniff, native progress, real cancel, stall + size-scaled deadline. Device measurement NOT_RUN; multipart/resumable not needed without data |
 | MM-P0-05 | Privacy regression | DONE | Two cache leaks fixed and covered by Redis-backed tests (FEED-01/02), story expiry enforced at read, workout masquerade closed, authorisation sweep passes (see MM-P1-21) |
 | MM-P1-01/02/03 | Outbox, RabbitMQ, idempotent consumers | DONE | Migration 014, confirms + mandatory, retry tiers, `.dead`, `processed_events`, redrive script |
@@ -41,16 +41,16 @@ scenario results: [../quality/TEST_MATRIX.md](../quality/TEST_MATRIX.md).
 | MM-P1-06 | `media_assets` / variants | NOT_STARTED (by decision) | ADR 003: verify synchronously, enrich asynchronously until video volume justifies the asset model |
 | MM-P1-07 | Upload/finalize/publish contract | PARTIAL | Contract unchanged and backward compatible; `media.uploaded` event added |
 | MM-P1-08 | Image processing | PARTIAL | Dimensions + EXIF orientation. Variants: ImageKit already serves them |
-| MM-P1-09 | Video pipeline | NOT_STARTED | Needs ffprobe/FFmpeg image and usage data |
+| MM-P1-09 | Video pipeline | PARTIAL | Metadata done: ffprobe in a separate `media-runtime` image for the worker only (API image stays without FFmpeg), reading the object over a 5-minute presigned URL with https-only, bounded probe size and a timeout; verified end to end with real S3. Poster frames, faststart normalisation and HLS: NOT_STARTED (ADR 003) |
 | MM-P1-10 | Publish UX | PARTIAL | Mobile and web story/post composers: percent, cancel on close/unmount, cancelled uploads not reported as errors. A server-side `processing` state is not part of this design (ADR 003) |
 | MM-P1-11 | Share card | PARTIAL | SSRF bounding was already in place; render cost NOT_MEASURED |
-| MM-P1-12 | Feed | PARTIAL | Privacy invalidation (ADR 004). Benchmarks/EXPLAIN on synthetic data: NOT_STARTED |
+| MM-P1-12 | Feed | DONE | Privacy invalidation (ADR 004); measured on 300 000 posts: home feed rewritten audience-first with a two-step read and covering index (migration 015) — DB 4–8 s → 1.3 ms warm, API p95 under load 3.64 s → 212 ms. Equivalence pinned by `followingFeed.test.ts` (passes on old and new query) |
 | MM-P1-13 | Likes/comments | No change needed | `UPDATE … RETURNING` counters kept; existing concurrency test passes |
 | MM-P2-14 | Social graph policy matrix | NOT_STARTED | |
 | MM-P1-15 | Message durability | PARTIAL | Reconnect catch-up (mobile/web); sockets bound to sessions. `delivered` status: NOT_STARTED |
 | MM-P1-16 | Socket.IO scaling | PARTIAL | `READINESS_REQUIRE_REDIS`; presence cost NOT_MEASURED |
 | MM-P2-17 | Notifications/push/email | NOT_STARTED | Activity rows already durable; there is no device push (FCM/APNs) to make durable |
-| MM-P1-18 | Query planning | NOT_STARTED | Needs `pg_stat_statements` and representative data |
+| MM-P1-18 | Query planning | PARTIAL | Feed queries planned and fixed on synthetic data (`scripts/load/seed-synthetic.sql`, `explain-feeds.sql`). Boot-time integrity check made O(1) (was 15 s on the same data and blocked startup). Other hot paths and `pg_stat_statements` in production: NOT_STARTED |
 | MM-P1-19 | Migration discipline | DONE for 014 | Expand-only, documented down path, idempotent re-run |
 | MM-P2-20 | Replicas/sharding | Not needed | Single PostgreSQL kept |
 | MM-P1-21 | Auth/session/API security | DONE for this scope | Socket session binding; black-box BOLA/IDOR sweep `tests/e2e/authorization.e2e.test.ts` (10 scenarios, every resource type with an id, positive controls, mass assignment, admin, unauthenticated) passes against the production images. Finding: the server-rendered share page with post-specific Open Graph tags is not reachable behind the web nginx (`/post/:id` serves the SPA shell, which reads `/api/post/:id/public`); private data does not leak, but link previews stay generic — routing `/post/` to the backend is a product decision |
@@ -62,7 +62,7 @@ scenario results: [../quality/TEST_MATRIX.md](../quality/TEST_MATRIX.md).
 | MM-P1-29 | Production compose | DONE | migrate → backend + worker + scheduler; images built and run healthy locally; RabbitMQ health check no longer races the Erlang cookie |
 | MM-P2-30 | AWS alternative | NOT_STARTED (by design) | Nothing provisioned |
 | MM-P1-31 | CI | PARTIAL | Integration job runs RabbitMQ. Contract/architecture-boundary checks: NOT_STARTED |
-| MM-P1-34 | Load/soak tests | PARTIAL | `scripts/load/feed-read.k6.js` run against the rehearsal stack (PERFORMANCE_BASELINE.md); soak and production-sized data: NOT_STARTED |
+| MM-P1-34 | Load/soak tests | PARTIAL | k6 on production-shaped data (20k members, 300k posts, 780k follows, 1M likes): 0 % errors, following p95 212 ms, Keşfet p95 40 ms. Soak (hours) and write-heavy scenarios: NOT_STARTED |
 | MM-P1-37 | Chaos | PARTIAL | Broker unavailable at publish time (EVT-01), poison message, transient failure covered |
 | MM-P1-38 | RabbitMQ cutover | Documented | DEPLOYMENT.md; default stays `direct` |
 | MM-P1-40 | Disaster recovery | NOT_STARTED | Restore drill outline in RUNBOOKS.md |
@@ -123,6 +123,26 @@ Base images checked the same day: `node:24.22.1-alpine` digest unchanged
 announced a HIGH security release for 22/24/26 on or after 11 November 2026 —
 not yet published; raise the pins when it ships.
 
+## Found by running the production images on production-shaped data
+
+- **API could not start on a large database.** The boot integrity check
+  counted rows in follows, connections and messages; at 780 000 follows it hit
+  the 15-second statement timeout and the API crash-looped. Now it checks the
+  validated CHECK constraints in the catalogue (0.4 s, size-independent).
+- **Every backend redeploy broke the web proxy.** nginx resolved `backend`
+  once at startup; a recreated backend container got a new address and the
+  web container answered 502 until it was restarted too. It now re-resolves
+  through Docker's DNS (`resolver 127.0.0.11 valid=10s`); verified by
+  recreating only the backend: 200 again within ~3 s.
+- **Duplicate init.** Compose `init: true` in front of the image's tini
+  produced a warning and a second PID-1 shim; removed.
+- **The API image picked up FFmpeg** when the Dockerfile gained its media
+  stage (an untargeted build takes the last stage). Every backend service now
+  builds `target: runtime`; CI asserts the API image has no ffprobe.
+- **Share links' server-rendered preview page is unreachable behind nginx**
+  (`/post/:id` serves the SPA shell). No data leaks; link previews are
+  generic. Routing `/post/` to the backend is a product decision, left open.
+
 ## Open risks
 
 - Node.js security release pending (see above).
@@ -135,6 +155,12 @@ not yet published; raise the pins when it ships.
   fine at current volume, watch it (ADR 004).
 
 ## Next work package
+
+(Updated after the second pass.) Device verification of the mobile changes
+on a new QA APK (native modules changed with RN 0.88.1), then the open
+product decision on share-link previews, then a soak run.
+
+Previous note:
 
 **Device verification of the mobile changes**, then **web composer progress
 wiring**. Prerequisites: backend running, Expo Go on the iPhone (SDK 58), a
