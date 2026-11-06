@@ -117,6 +117,7 @@ export interface NearbyUser {
   distanceBand: DistanceBand;
   /** Coarse label of the other member's area, subject to their settings. */
   approximateArea: string | null;
+  /** When the member's position was last refreshed, rounded down to the hour. */
   lastActiveAt: string | null;
   /** Follow graph, so the card opens on the correct button. */
   isFollowing?: boolean;

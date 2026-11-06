@@ -11,7 +11,7 @@ Status values: `NOT_STARTED`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-ENV`
 | WP-00 | DONE | see `git log --grep WP-00` | `tests/integration/auditRegressions.test.ts` (R1–R7 as `todo`) | Baseline: lint 4/4, typecheck 6/6, unit 89/89, integration 21/21 |
 | WP-01 | DONE | see `git log --grep WP-01` | `integration/cacheCore.test.ts` (8), `cacheCoreWithoutRedis.test.ts` (3), R4 in `auditRegressions`, `environment.test.ts` | Mixed-version window during the deploy that switches to `v2`: ≤ TTL staleness unless `CACHE_READS_ENABLED=false` is used (DEPLOYMENT.md). Invalidation is skipped in processes that never connect to Redis (worker/scheduler) — today all cache-relevant writes are in the API |
 | WP-02 | DONE | see `git log --grep WP-02` | `auditRegressions.test.ts` R1, R2, two-viewer delete (profile + feeds + single post), workout statistics | Like/comment counts on profiles still follow the 60 s TTL by design. No workout delete path exists, so only creation invalidates |
-| WP-03 | NOT_STARTED | | | |
+| WP-03 | DONE | see `git log --grep WP-03` | `auditRegressions.test.ts` R3, R7, hidden-distance on cache hit (band + area), `lastActiveAt` to the hour, no coordinate keys in the response | A target's *position* can be ≤ 45 s old in cached candidates (moves bands only). EXPLAIN (20 000 synthetic members, rolled back): the per-request lookup is 50 `user_locations_pkey` + 30 `users_pkey` index scans, ~240 buffers |
 | WP-04 | NOT_STARTED | | | |
 | WP-05 | NOT_STARTED | | | |
 | WP-06 | NOT_STARTED | | | |

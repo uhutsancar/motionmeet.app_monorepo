@@ -167,7 +167,16 @@ export interface NearbyListResult {
   reason: "disabled" | "no_fix" | "stale_fix" | "no_results" | null;
 }
 
-interface NearbyRow {
+/**
+ * What the nearby cache holds: the expensive part of a search - which members
+ * are inside the scope and how far away - and nothing that decides whether
+ * they may be shown. Internal only: it never reaches a client and is never
+ * logged. The distance is rounded to 100 m before it is stored, which is still
+ * ten times finer than the coarsest band boundary it feeds.
+ */
+interface NearbyCandidate { id: string; distanceMeters: number }
+
+interface PresentationRow {
   id: string;
   full_name: string;
   username: string;
@@ -175,7 +184,6 @@ interface NearbyRow {
   bio: string;
   location: string;
   location_visibility: string;
-  distance_meters: number;
   distance_visibility: DistanceVisibility;
   city_id: number | null;
   city_name: string | null;
@@ -184,9 +192,32 @@ interface NearbyRow {
 }
 
 /**
+ * A fix's timestamp as shown to other members: to the hour. Enough for "active
+ * in the last hour / today", and it no longer tells a stranger the exact
+ * second somebody's phone last reported a position.
+ */
+const toHour = (value: Date): string => {
+  const hour = new Date(value);
+  hour.setUTCMinutes(0, 0, 0);
+  return hour.toISOString();
+};
+
+/**
  * Members within the requested scope, ordered by real distance but reported in
- * bands. The searcher's own row, opted-out rows and stale fixes are excluded in
- * SQL so they never reach the serialiser.
+ * bands.
+ *
+ * Privacy is applied on every request, after the cache. The cache used to hold
+ * the finished cards, so a member who switched visibility off, deleted their
+ * location, left search, deleted their account or switched their distance to
+ * "hidden" stayed in everyone else's cached results - band and area label
+ * included - for up to 45 seconds (R3/R7 in the 2026-11 audit). Now it only
+ * holds the candidate ids and distances; every request re-reads those members'
+ * current switches, labels and follow state in one primary-key lookup, and
+ * anyone who no longer qualifies simply drops out.
+ *
+ * A target's *position* can still be up to 45 seconds old in somebody's
+ * results. That only moves them between bands; it never shows anyone who has
+ * opted out.
  */
 export const listNearbyUsers = async (userId: string, requestedLimit = 20): Promise<NearbyListResult> => {
   const settings = await getNearbySettings(userId);
@@ -201,31 +232,28 @@ export const listNearbyUsers = async (userId: string, requestedLimit = 20): Prom
   if (isStale(own.location_updated_at)) return { users: [], settings, reason: "stale_fix" };
 
   const limit = Math.min(Math.max(requestedLimit, 1), MAX_RESULTS);
-  const owner = nearbyOwner(userId);
   const field = `${own.scope}:${limit}:${new Date(own.location_updated_at).getTime()}`;
-  const users = await cachedOwnerField(owner, field, RESULTS_CACHE_SECONDS, () => queryNearbyUsers(userId, own, limit));
+  const candidates = await cachedOwnerField(nearbyOwner(userId), field, RESULTS_CACHE_SECONDS, () => queryNearbyCandidates(userId, own, limit));
+  const users = await presentCandidates(userId, own.city_id, candidates);
   return { users, settings, reason: users.length ? null : "no_results" };
 };
 
-const queryNearbyUsers = async (
+/**
+ * The distance search. The searcher's own row, opted-out rows and stale fixes
+ * are excluded in SQL here too, so a fresh result never even lists them.
+ */
+const queryNearbyCandidates = async (
   userId: string,
   own: { latitude: number; longitude: number; city_id: number | null; scope: NearbyScope },
   limit: number,
-): Promise<NearbyUser[]> => {
+): Promise<NearbyCandidate[]> => {
   const freshAfter = new Date(Date.now() - FIX_VALIDITY_MS);
   const distance = distanceMeters("ul", own.latitude, own.longitude);
 
   let query = database
     .selectFrom("user_locations as ul")
     .innerJoin("users as u", "u.id", "ul.user_id")
-    .leftJoin("location_cities as c", "c.id", "ul.city_id")
-    .leftJoin("location_states as s", "s.id", "c.state_id")
-    .select([
-      "u.id", "u.full_name", "u.username", "u.profile_picture_url", "u.bio", "u.location", "u.location_visibility",
-      "ul.distance_visibility", "ul.city_id", "ul.location_updated_at",
-      "c.name as city_name", "s.name as region_name",
-      distance.as("distance_meters"),
-    ])
+    .select(["u.id", distance.as("distance_meters")])
     .where("ul.enabled", "=", true)
     .where("ul.visible", "=", true)
     .where("ul.user_id", "!=", userId)
@@ -245,26 +273,59 @@ const queryNearbyUsers = async (
     query = query.where(withinRadius("ul", own.latitude, own.longitude, NEARBY_SCOPE_METERS["50km"]));
   }
 
-  const rows = await query.orderBy(sql`distance_meters`, "asc").orderBy("u.id", "asc").limit(limit).execute() as unknown as NearbyRow[];
+  const rows = await query.orderBy(sql`distance_meters`, "asc").orderBy("u.id", "asc").limit(limit).execute() as unknown as Array<{ id: string; distance_meters: number }>;
+  return rows.map((row) => ({ id: row.id, distanceMeters: Math.round(Number(row.distance_meters) / 100) * 100 }));
+};
 
-  // One extra query for the whole page, so each card can open on the right
-  // follow state instead of offering "Takip et" for someone already followed.
-  const relationships = await getRelationshipMap(userId, rows.map((row) => row.id));
+/**
+ * Turns cached candidates into cards using each member's *current* state. The
+ * `where` clause is the same opt-out set as the search itself; a candidate the
+ * lookup no longer returns is dropped, not shown with stale data.
+ */
+const presentCandidates = async (viewerId: string, ownCityId: number | null, candidates: NearbyCandidate[]): Promise<NearbyUser[]> => {
+  if (!candidates.length) return [];
+  const freshAfter = new Date(Date.now() - FIX_VALIDITY_MS);
+  const [rows, relationships] = await Promise.all([
+    database
+      .selectFrom("user_locations as ul")
+      .innerJoin("users as u", "u.id", "ul.user_id")
+      .leftJoin("location_cities as c", "c.id", "ul.city_id")
+      .leftJoin("location_states as s", "s.id", "c.state_id")
+      .select([
+        "u.id", "u.full_name", "u.username", "u.profile_picture_url", "u.bio", "u.location", "u.location_visibility",
+        "ul.distance_visibility", "ul.city_id", "ul.location_updated_at",
+        "c.name as city_name", "s.name as region_name",
+      ])
+      .where("ul.user_id", "in", candidates.map((candidate) => candidate.id))
+      .where("ul.enabled", "=", true)
+      .where("ul.visible", "=", true)
+      .where("ul.location_updated_at", ">", freshAfter)
+      .where("u.privacy_show_in_search", "=", true)
+      .execute() as Promise<PresentationRow[]>,
+    // One extra query for the whole page, so each card can open on the right
+    // follow state instead of offering "Takip et" for someone already followed.
+    getRelationshipMap(viewerId, candidates.map((candidate) => candidate.id)),
+  ]);
+  const current = new Map(rows.map((row) => [row.id, row]));
 
-  return rows.map((row) => ({
-    id: row.id,
-    _id: row.id,
-    full_name: row.full_name,
-    username: row.username,
-    profile_picture: row.profile_picture_url,
-    bio: row.bio,
-    // A member who restricted their profile location keeps it hidden here too.
-    location: row.location_visibility === "public" ? row.location : "",
-    distanceBand: distanceBandFor(Number(row.distance_meters), row.distance_visibility, row.city_id !== null && row.city_id === own.city_id),
-    approximateArea: row.distance_visibility === "hidden"
-      ? null
-      : [row.city_name, row.region_name !== row.city_name ? row.region_name : null].filter(Boolean).join(", ") || null,
-    lastActiveAt: new Date(row.location_updated_at).toISOString(),
-    ...(relationships.get(row.id) ?? { isFollowing: false, isFollowedBy: false, requestSent: false, requestReceived: false }),
-  }));
+  return candidates.flatMap((candidate): NearbyUser[] => {
+    const row = current.get(candidate.id);
+    if (!row) return [];
+    return [{
+      id: row.id,
+      _id: row.id,
+      full_name: row.full_name,
+      username: row.username,
+      profile_picture: row.profile_picture_url,
+      bio: row.bio,
+      // A member who restricted their profile location keeps it hidden here too.
+      location: row.location_visibility === "public" ? row.location : "",
+      distanceBand: distanceBandFor(candidate.distanceMeters, row.distance_visibility, row.city_id !== null && row.city_id === ownCityId),
+      approximateArea: row.distance_visibility === "hidden"
+        ? null
+        : [row.city_name, row.region_name !== row.city_name ? row.region_name : null].filter(Boolean).join(", ") || null,
+      lastActiveAt: toHour(row.location_updated_at),
+      ...(relationships.get(row.id) ?? { isFollowing: false, isFollowedBy: false, requestSent: false, requestReceived: false }),
+    }];
+  });
 };

@@ -88,6 +88,29 @@ the deleted post on the profile, the feeds or the single-post view (the last
 never uses the cache). Otherwise the post can stay on a cached profile for at
 most the profile TTL (60 s) and on a cached feed page for at most 30 s.
 
+## Nearby: privacy is applied at read time (2026-11 audit, WP-03)
+
+The nearby cache used to hold finished cards. A member who switched
+visibility off, deleted their location, left search, deleted their account or
+set their distance to "hidden" therefore stayed in other members' cached
+results — band and area label included — for up to 45 s (R3, R7, NEW-05).
+Only the searcher's own cache was ever dropped.
+
+Decision: the cache holds only the expensive part, the ordered candidate ids
+with their distance rounded to 100 m (internal; never returned or logged).
+Every request, hit or miss, re-reads those candidates' current switches,
+labels and follow state in one primary-key lookup (≤ 50 ids, index scans on
+`user_locations_pkey` and `users_pkey`) and drops anyone who no longer
+qualifies. Band and area label come from the current `distance_visibility`.
+Opting out therefore takes effect on the very next request of every other
+member, independent of Redis.
+
+Not done: a global nearby epoch. Bumping it on every GPS update would retire
+the whole system's results on each fix. A target's *position* can be up to
+45 s old in someone's cached candidates — that moves them between bands, it
+never shows someone who opted out. `lastActiveAt` is reported to strangers
+rounded down to the hour.
+
 ## Consequences
 
 An epoch bump turns the next request of every active member into a cache miss.

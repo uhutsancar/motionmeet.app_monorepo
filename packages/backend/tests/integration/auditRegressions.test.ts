@@ -45,6 +45,9 @@ const nearbyIds = async (userId: string): Promise<string[]> => (await listNearby
 test.before(async () => { await connectDatabase(); assert.ok(await initializeRedis(), "Redis must be reachable"); });
 test.after(async () => {
   if (userIds.length) await database.deleteFrom("users").where("id", "in", userIds).execute();
+  await database.deleteFrom("location_cities").where("dataset_version", "=", "audit-test").execute();
+  await database.deleteFrom("location_states").where("dataset_version", "=", "audit-test").execute();
+  await database.deleteFrom("location_countries").where("dataset_version", "=", "audit-test").execute();
   await disconnectRedis(); await disconnectDatabase();
 });
 
@@ -96,7 +99,7 @@ test("WP-02: a logged workout shows in the cached profile statistics at once", a
   assert.equal(after?.profile.statistics?.totalWorkouts, 1);
 });
 
-test("R3 / WP-03: nearby opt-outs apply to other members' cached results", { todo: "WP-03" }, async () => {
+test("R3 / WP-03: nearby opt-outs apply to other members' cached results", async () => {
   const a = await newUser("na"); const b = await newUser("nb"); const c = await newUser("nc"); const d = await newUser("nd");
   await savePosition(a, { latitude: 41.0, longitude: 29.0 });
   await savePosition(b, { latitude: 41.001, longitude: 29.001 });
@@ -115,13 +118,59 @@ test("R3 / WP-03: nearby opt-outs apply to other members' cached results", { tod
   for (const forbidden of ["latitude", "longitude", "accuracy", "distanceMeters", "distance_meters"]) assert.ok(!raw.includes(forbidden), forbidden);
 });
 
-test("R7 / WP-03: a deleted account leaves other members' nearby results", { todo: "WP-03" }, async () => {
+test("R7 / WP-03: a deleted account leaves other members' nearby results", async () => {
   const a = await newUser("da"); const b = await newUser("db");
   await savePosition(a, { latitude: 40.0, longitude: 30.0 });
   await savePosition(b, { latitude: 40.001, longitude: 30.001 });
   assert.ok((await nearbyIds(a)).includes(b));
   await deleteAccountData(b); userIds.splice(userIds.indexOf(b), 1);
   assert.ok(!(await nearbyIds(a)).includes(b));
+});
+
+/**
+ * The test database has no location dataset, so the area-label checks get a
+ * throwaway country, region and city of their own (removed in `after`).
+ */
+const TEST_COUNTRY_ID = 990_000 + Math.floor(Math.random() * 9_000);
+const TEST_CITY = { latitude: 38.512, longitude: 27.431 };
+const seedTestCity = async (): Promise<void> => {
+  await database.insertInto("location_countries").values({
+    id: TEST_COUNTRY_ID, name: "Auditland", iso2: "ZQ", iso3: "ZQQ", search_name: "auditland", dataset_version: "audit-test",
+  }).onConflict((conflict) => conflict.doNothing()).execute();
+  await database.insertInto("location_states").values({
+    id: TEST_COUNTRY_ID, country_id: TEST_COUNTRY_ID, name: "Audit Region", search_name: "audit region", dataset_version: "audit-test",
+  } as never).onConflict((conflict) => conflict.doNothing()).execute();
+  await database.insertInto("location_cities").values({
+    id: TEST_COUNTRY_ID, country_id: TEST_COUNTRY_ID, state_id: TEST_COUNTRY_ID, name: "Audit City",
+    latitude: TEST_CITY.latitude, longitude: TEST_CITY.longitude, search_name: "audit city", dataset_version: "audit-test",
+  } as never).onConflict((conflict) => conflict.doNothing()).execute();
+};
+
+test("WP-03: switching distance to hidden takes band and area off cached results at once", async () => {
+  await seedTestCity();
+  const a = await newUser("hidea"); const b = await newUser("hideb");
+  await savePosition(a, { latitude: TEST_CITY.latitude, longitude: TEST_CITY.longitude });
+  await savePosition(b, { latitude: TEST_CITY.latitude + 0.001, longitude: TEST_CITY.longitude + 0.001 });
+  const before = (await listNearbyUsers(a)).users.find((user) => user.id === b);
+  assert.ok(before, "listed and now cached");
+  assert.equal(before.distanceBand, "nearby");
+  assert.equal(before.approximateArea, "Audit City, Audit Region");
+  await updateNearbySettings(b, { distanceVisibility: "hidden" });
+  const after = (await listNearbyUsers(a)).users.find((user) => user.id === b);
+  assert.ok(after, "hidden distance keeps the member listed");
+  assert.equal(after.distanceBand, "unknown");
+  assert.equal(after.approximateArea, null);
+});
+
+test("WP-03: other members see when somebody was last active only to the hour", async () => {
+  const a = await newUser("houra"); const b = await newUser("hourb");
+  await savePosition(a, { latitude: 39.9, longitude: 32.8 });
+  await savePosition(b, { latitude: 39.901, longitude: 32.801 });
+  const card = (await listNearbyUsers(a)).users.find((user) => user.id === b);
+  assert.ok(card?.lastActiveAt);
+  const shown = new Date(card.lastActiveAt);
+  assert.equal(shown.getUTCMinutes() + shown.getUTCSeconds() + shown.getUTCMilliseconds(), 0);
+  assert.ok(Date.now() - shown.getTime() < 3_600_000);
 });
 
 test("R4 / WP-01: a cached field expires on its own TTL, not the hash's", async () => {
