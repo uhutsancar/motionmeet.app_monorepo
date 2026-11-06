@@ -43,9 +43,33 @@ export const validateProfileImage = (file: File): string => {
   return contentType;
 };
 
-export const uploadMedia = async (file: File, purpose: UploadPurpose, token: string): Promise<string> => {
+export interface UploadOptions {
+  signal?: AbortSignal;
+  onProgress?: (progress: { sentBytes: number; totalBytes: number }) => void;
+}
+
+/**
+ * The transfer's total allowance grows with the file at a floor throughput: a
+ * fixed two minutes cut a large video off while it was still moving on a slow
+ * but healthy connection. Same rule as the mobile client.
+ */
+const BASE_DEADLINE_MS = 60_000;
+const FLOOR_THROUGHPUT_BYTES_PER_SECOND = 32 * 1024;
+const MAX_DEADLINE_MS = 30 * 60_000;
+export const uploadDeadlineMs = (sizeBytes: number): number =>
+  Math.min(MAX_DEADLINE_MS, BASE_DEADLINE_MS + Math.ceil((sizeBytes / FLOOR_THROUGHPUT_BYTES_PER_SECOND) * 1000));
+
+export class UploadCancelledError extends Error {
+  constructor() {
+    super("Media upload was cancelled");
+    this.name = "UploadCancelledError";
+  }
+}
+
+export const uploadMedia = async (file: File, purpose: UploadPurpose, token: string, options: UploadOptions = {}): Promise<string> => {
   if (!(file instanceof File)) throw new Error("A valid media file is required");
   const contentType = inferContentType(file);
+  const { signal, onProgress } = options;
 
   try {
     const { data } = await api.post<UploadReservationResponse>(
@@ -56,16 +80,21 @@ export const uploadMedia = async (file: File, purpose: UploadPurpose, token: str
         contentType,
         size: file.size,
       },
-      { headers: { Authorization: `Bearer ${token}` } }
+      { headers: { Authorization: `Bearer ${token}` }, signal }
     );
 
     await axios.put(data.uploadUrl, file, {
       headers: data.headers,
-      timeout: 120000,
+      timeout: uploadDeadlineMs(file.size),
       maxBodyLength: Infinity,
+      signal,
+      onUploadProgress: onProgress
+        ? (event) => onProgress({ sentBytes: event.loaded, totalBytes: event.total || file.size })
+        : undefined,
     });
     return data.key;
   } catch (error: unknown) {
+    if (signal?.aborted || axios.isCancel(error)) throw new UploadCancelledError();
     const failure = axios.isAxiosError<ApiFailure>(error) ? error.response?.data : undefined;
     throw new Error(
       failure?.message ||

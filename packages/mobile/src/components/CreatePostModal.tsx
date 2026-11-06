@@ -5,7 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthContext } from "../context/AuthProvider";
 import { createNewPost } from '../features/posts/postsSlice';
-import { uploadMedia } from '../api/mediaUpload';
+import { isUploadCancelled, uploadMedia } from '../api/mediaUpload';
 
 import { useTheme, type MotionTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
@@ -57,6 +57,9 @@ const CreatePostModal = ({ visible, onClose, onSuccess }: CreatePostModalProps) 
   // following feed to public + followers, so the author picks the reach here.
   const [visibility, setVisibility] = useState<PostVisibility>('public');
   const [loading, setLoading] = useState(false);
+  // Percent of all selected files sent, while uploads run; null otherwise.
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
   const operationIdRef = useRef<string | null>(null);
   const uploadCacheRef = useRef<UploadCache | null>(null);
 
@@ -66,7 +69,10 @@ const CreatePostModal = ({ visible, onClose, onSuccess }: CreatePostModalProps) 
   };
 
   const handleClose = () => {
-    if (loading) return;
+    // Closing mid-upload cancels the transfers; once the post itself is being
+    // created the short, idempotent request is allowed to finish.
+    if (loading && !uploadAbortRef.current) return;
+    uploadAbortRef.current?.abort();
     setContent('');
     setImages([]);
     resetPendingSubmission();
@@ -145,9 +151,35 @@ const CreatePostModal = ({ visible, onClose, onSuccess }: CreatePostModalProps) 
         ? uploadCacheRef.current.keys
         : null;
       if (!uploadedKeys) {
-        uploadedKeys = await Promise.all(
-          images.map((image) => uploadMedia(image, 'posts', token))
-        );
+        const controller = new AbortController();
+        uploadAbortRef.current = controller;
+        const sent = images.map(() => 0);
+        const totals = images.map((image) => image.fileSize || 0);
+        setUploadPercent(0);
+        try {
+          uploadedKeys = await Promise.all(
+            images.map((image, index) => uploadMedia(image, 'posts', token, {
+              signal: controller.signal,
+              onProgress: ({ sentBytes, totalBytes }) => {
+                sent[index] = sentBytes;
+                totals[index] = totalBytes;
+                const total = totals.reduce((sum, value) => sum + value, 0);
+                if (total > 0) {
+                  const done = sent.reduce((sum, value) => sum + value, 0);
+                  setUploadPercent(Math.min(100, Math.round((done / total) * 100)));
+                }
+              },
+            }))
+          );
+        } catch (error) {
+          // One file failing fails the post; the others stop rather than keep
+          // sending bytes nobody will attach.
+          controller.abort();
+          throw error;
+        } finally {
+          uploadAbortRef.current = null;
+          setUploadPercent(null);
+        }
         uploadCacheRef.current = { signature: mediaSignature, keys: uploadedKeys };
       }
       operationIdRef.current ||= createOperationId('post');
@@ -173,6 +205,7 @@ const CreatePostModal = ({ visible, onClose, onSuccess }: CreatePostModalProps) 
         onClose();
       }
     } catch (error) {
+      if (isUploadCancelled(error)) return;
       logHandledError('create-post', error);
       showError(
         t('common.error'),
@@ -201,8 +234,10 @@ const CreatePostModal = ({ visible, onClose, onSuccess }: CreatePostModalProps) 
         <ScreenHeader
           title={t('feed.create_post', 'Yeni gönderi')}
           backIcon="close"
-          onBack={loading ? undefined : handleClose}
-          textAction={{ label: t('feed.post_action', 'Paylaş'), onPress: () => void handlePublish(), busy: loading }}
+          onBack={loading && uploadPercent === null ? undefined : handleClose}
+          textAction={uploadPercent !== null && uploadPercent > 0
+            ? { label: `${uploadPercent}%`, onPress: () => undefined, disabled: true }
+            : { label: t('feed.post_action', 'Paylaş'), onPress: () => void handlePublish(), busy: loading }}
           style={styles.header}
         />
 

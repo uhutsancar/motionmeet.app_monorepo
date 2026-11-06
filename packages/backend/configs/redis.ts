@@ -273,6 +273,28 @@ export const setCachedField = async (owner: string, field: string, value: unknow
   } catch { /* cache is optional */ }
 };
 
+/**
+ * A counter that cache callers fold into their field names, so one `INCR`
+ * retires every entry written under the previous value - for invalidations
+ * whose set of owners cannot be listed. Without Redis there is no cache to
+ * retire and the epoch reads as 0.
+ */
+const epochKey = (name: string): string => `${CACHE_PREFIX}epoch:${name}`;
+
+export const getCacheEpoch = async (name: string): Promise<number> => {
+  const client = getRedisClient();
+  if (!client) return 0;
+  try { return Number(await client.get(epochKey(name))) || 0; }
+  catch { return 0; }
+};
+
+export const bumpCacheEpoch = async (name: string): Promise<void> => {
+  const client = getRedisClient();
+  if (!client) return;
+  try { await client.incr(epochKey(name)); }
+  catch (error: unknown) { logger.warn("cache_epoch_bump_failed", { epoch: name, ...safeErrorMetadata(error) }); }
+};
+
 /** O(1) invalidation: one `DEL` per owner, no keyspace walk. */
 export const invalidateCacheOwners = async (...owners: string[]): Promise<void> => {
   const client = getRedisClient();

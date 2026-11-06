@@ -1,4 +1,4 @@
-import { invalidateCacheOwners } from "../configs/redis.js";
+import { bumpCacheEpoch, getCacheEpoch, invalidateCacheOwners } from "../configs/redis.js";
 
 /**
  * One place that decides what a feed cache entry is called and whose entry a
@@ -20,6 +20,20 @@ import { invalidateCacheOwners } from "../configs/redis.js";
  *
  * The author snapshot embedded in other members' cached feeds is refreshed by
  * the `user.profile.updated` outbox event on top of that TTL.
+ *
+ * ## Writes that take access away
+ *
+ * The narrowing above is only safe for writes that *add* or *count* things.
+ * A write that removes somebody's right to see a post cannot wait out the TTL,
+ * because the stale entry is then a privacy leak, not a slow counter:
+ *
+ * - between two members (unfollow, removed connection, declined request) both
+ *   members' entries are dropped, which is still O(1);
+ * - an account going private, hiding its workouts, or a post being deleted
+ *   affects viewers nobody can enumerate - any Keşfet page may hold it - so
+ *   those bump the audience epoch instead. The epoch is part of every feed
+ *   field name, so one `INCR` retires every cached page at once. These writes
+ *   are rare next to reads, which is what makes a global miss acceptable.
  */
 export const FEED_CACHE_TTL_SECONDS = 30;
 export const PROFILE_CACHE_TTL_SECONDS = 60;
@@ -38,3 +52,15 @@ export const invalidateProfile = (...profileIds: string[]): Promise<void> =>
 /** A member changed something visible on both surfaces at once. */
 export const invalidateMember = (...userIds: string[]): Promise<void> =>
   invalidateCacheOwners(...userIds.flatMap((id) => [feedCacheOwner(id), profileCacheOwner(id)]));
+
+const FEED_AUDIENCE_EPOCH = "feed-audience";
+
+/** The current audience epoch; part of every feed cache field name. */
+export const feedAudienceEpoch = (): Promise<number> => getCacheEpoch(FEED_AUDIENCE_EPOCH);
+
+/**
+ * Retires every cached feed page at once, for a write that narrows who may see
+ * content to an audience that cannot be listed. See "Writes that take access
+ * away" above.
+ */
+export const revokeFeedAudience = (): Promise<void> => bumpCacheEpoch(FEED_AUDIENCE_EPOCH);

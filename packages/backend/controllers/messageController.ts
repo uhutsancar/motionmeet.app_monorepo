@@ -104,7 +104,9 @@ export const sendMessage: RequestHandler = async (req, res, next) => {
         { reservationKeys: mediaKey ? [mediaKey] : [] }
       );
     } catch (error) {
-      if (mediaKey) await discardReservedUploads([mediaKey]);
+      // Same rule as posts and stories: a directly uploaded key stays
+      // reservable for the retry; only a file this request wrote is discarded.
+      if (image && mediaKey) await discardReservedUploads([mediaKey]);
       throw error;
     }
     emitToUser(recipientId, "message_received", populated);

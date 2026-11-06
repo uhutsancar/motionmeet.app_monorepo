@@ -3,11 +3,12 @@ import { sql } from "kysely";
 import { database, withTransaction } from "../configs/database.js";
 import { getCachedField, setCachedField } from "../configs/redis.js";
 import { singleFlight } from "../utils/singleFlight.js";
-import { FEED_CACHE_TTL_SECONDS, feedCacheOwner, invalidateOwnFeed } from "./feedCache.js";
+import { FEED_CACHE_TTL_SECONDS, feedAudienceEpoch, feedCacheOwner, invalidateOwnFeed, revokeFeedAudience } from "./feedCache.js";
 import { findHydratedPost, findPostAccessRecord, hydratePosts, type PostAccessRecord } from "../repositories/postRepository.js";
 import { canAccessPost as evaluatePostAccess } from "./accessControlService.js";
 import type { Pagination } from "../utils/pagination.js";
 import { UUID_PATTERN } from "../utils/validation.js";
+import { mediaKindOf, type PostMediaInput } from "../utils/postMedia.js";
 import { commitReservedUploads } from "./mediaUploadService.js";
 import { queueMediaDeletions } from "./mediaDeletionService.js";
 import { createPostComment, deleteInteractionsForPost, getPostComments, hydratePostInteractions, likePost, togglePostLike, unlikePost } from "./postInteractionService.js";
@@ -28,7 +29,7 @@ export const findPostByOperation = async (userId: string, operationId: string): 
   return row ? findHydratedPost(row.id) : null;
 };
 
-interface NewPostInput { user: string; operationId: string; content: string; image_urls: string[]; image_keys: string[]; post_type: PostType; visibility: PostVisibility; workout?: string }
+interface NewPostInput { user: string; operationId: string; content: string; media: PostMediaInput[]; post_type: PostType; visibility: PostVisibility; workout?: string }
 const isUniqueViolation = (error: unknown): boolean => Boolean(error && typeof error === "object" && "code" in error && error.code === "23505");
 
 export const createPost = async (input: NewPostInput, { quotaLimit = -1, reservationKeys = [] }: { quotaLimit?: number; reservationKeys?: string[] } = {}): Promise<Post> => {
@@ -51,11 +52,14 @@ export const createPost = async (input: NewPostInput, { quotaLimit = -1, reserva
         author_full_name: user.full_name, author_username: user.username, author_profile_picture: user.profile_picture_url,
         content: input.content, post_type: input.post_type, visibility: input.visibility, workout_id: input.workout ?? null,
       }).returningAll().executeTakeFirstOrThrow();
-      for (const [position, url] of input.image_urls.entries()) await transaction.insertInto("post_media").values({
-        legacy_mongo_id: null, post_id: row.id, position, url, object_key: input.image_keys[position] ?? "",
-        media_type: input.post_type === "video" ? "video" : "image", mime_type: input.post_type === "video" ? "video/mp4" : "image/*",
-        file_size: null, width: null, height: null, duration_seconds: null,
-      }).execute();
+      // Each row describes its own file. Dimensions and duration stay null until
+      // something actually decodes the file; a guessed value would be worse
+      // than none for a client sizing its layout from it.
+      if (input.media.length) await transaction.insertInto("post_media").values(input.media.map((media, position) => ({
+        legacy_mongo_id: null, post_id: row.id, position, url: media.url, object_key: media.key,
+        media_type: mediaKindOf(media.contentType), mime_type: media.contentType,
+        file_size: media.sizeBytes, width: null, height: null, duration_seconds: null,
+      }))).execute();
       await commitReservedUploads(reservationKeys, { transaction, userId: input.user });
       const hydrated = await findHydratedPost(row.id, transaction);
       if (!hydrated) throw new Error("Created post could not be loaded");
@@ -87,7 +91,10 @@ export const getFeedPostsForUser = async (userId: string, pagination: Pagination
   // `(discover_rank, id)`, which does not decode into `pagination.cursor` at
   // all, so keying on the decoded date collapsed every discover page onto the
   // same entry and served page one forever.
-  const field = `${feedMode}:${pagination.rawCursor ?? "first"}:${pagination.limit}`;
+  //
+  // The audience epoch leads the field so an access-narrowing write elsewhere
+  // (an account going private, a deleted post) retires this page too.
+  const field = `${await feedAudienceEpoch()}:${feedMode}:${pagination.rawCursor ?? "first"}:${pagination.limit}`;
   const cached = await getCachedField<{ items: Post[]; nextCursor: string | null }>(owner, field);
   if (cached) return cached;
 
@@ -223,5 +230,7 @@ export const deletePostById = async (post: PostAccessRecord): Promise<void> => {
     await deleteInteractionsForPost(post.id, { transaction });
     await transaction.deleteFrom("posts").where("id", "=", post.id).where("user_id", "=", post.user).execute();
   });
-  await invalidateOwnFeed(post.user);
+  // Any member's cached page may hold the deleted post; the author expects it
+  // gone from all of them, not after the TTL.
+  await Promise.all([invalidateOwnFeed(post.user), revokeFeedAudience()]);
 };

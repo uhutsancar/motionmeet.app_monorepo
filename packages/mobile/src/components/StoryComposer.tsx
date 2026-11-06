@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createOperationId, type Story, type StoryOverlay } from '@motionmeet/shared';
 import { useAuthContext } from '../context/AuthProvider';
 import { createStory } from '../api/endpoints';
-import { uploadMedia } from '../api/mediaUpload';
+import { isUploadCancelled, uploadMedia } from '../api/mediaUpload';
 import { useAppSelector } from '../store/hooks';
 import { useStoryFrame } from '../hooks/useStoryFrame';
 import { FINGER_AT_REST } from './story/StoryDraggableOverlay';
@@ -118,6 +118,11 @@ const StoryComposer = ({ visible, onClose, onSuccess, onDismiss, initialMedia }:
   const [locationOpen, setLocationOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  // Percent of the file sent, while the upload itself is running; null otherwise.
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null);
+  // Set only while bytes are moving, so closing the composer then cancels the
+  // native transfer instead of leaving it running behind a closed screen.
+  const uploadAbortRef = useRef<AbortController | null>(null);
 
   const operationIdRef = useRef(createOperationId('story'));
   const uploadedRef = useRef<{ signature: string; key: string } | null>(null);
@@ -137,7 +142,11 @@ const StoryComposer = ({ visible, onClose, onSuccess, onDismiss, initialMedia }:
   }, []);
 
   const close = useCallback(() => {
-    if (publishing) return;
+    // During the upload, closing means "stop": the transfer is cancelled. Once
+    // the story is being created the request is short and idempotent, so the
+    // composer waits for it rather than leaving its outcome unreported.
+    if (publishing && !uploadAbortRef.current) return;
+    uploadAbortRef.current?.abort();
     reset();
     onClose();
   }, [onClose, publishing, reset]);
@@ -286,7 +295,20 @@ const StoryComposer = ({ visible, onClose, onSuccess, onDismiss, initialMedia }:
       const signature = `${media.assetId || media.uri}:${media.fileSize || 0}`;
       let uploadedKey = uploadedRef.current?.signature === signature ? uploadedRef.current.key : undefined;
       if (!uploadedKey) {
-        uploadedKey = await uploadMedia(media, 'stories', token);
+        const controller = new AbortController();
+        uploadAbortRef.current = controller;
+        setUploadPercent(0);
+        try {
+          uploadedKey = await uploadMedia(media, 'stories', token, {
+            signal: controller.signal,
+            onProgress: ({ sentBytes, totalBytes }) => {
+              if (totalBytes > 0) setUploadPercent(Math.min(100, Math.round((sentBytes / totalBytes) * 100)));
+            },
+          });
+        } finally {
+          uploadAbortRef.current = null;
+          setUploadPercent(null);
+        }
         uploadedRef.current = { signature, key: uploadedKey };
       }
 
@@ -313,6 +335,8 @@ const StoryComposer = ({ visible, onClose, onSuccess, onDismiss, initialMedia }:
       onSuccess?.();
       onClose();
     } catch (error) {
+      // The member closed the composer mid-upload; that is not a failure.
+      if (isUploadCancelled(error)) return;
       logHandledError('create-story', error);
       showError(t('common.error'), getUserFacingError(error, t('feed.story_create_failed')));
     } finally {
@@ -467,7 +491,9 @@ const StoryComposer = ({ visible, onClose, onSuccess, onDismiss, initialMedia }:
               accessibilityRole="button"
               accessibilityLabel={t('feed.post_action', 'Paylas')}
             >
-              {publishing ? (
+              {publishing && uploadPercent !== null && uploadPercent > 0 ? (
+                <Text style={styles.sendProgress}>{`${uploadPercent}%`}</Text>
+              ) : publishing ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
                 <Ionicons name="arrow-forward" size={23} color="#FFFFFF" />
@@ -633,6 +659,12 @@ const styles = StyleSheet.create({
   },
   sendButtonBusy: {
     opacity: 0.7,
+  },
+  sendProgress: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
   },
 });
 

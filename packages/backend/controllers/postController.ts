@@ -3,6 +3,7 @@ import imagekit from "../configs/imageKit.js";
 import type { RequestHandler } from "express";
 import { isOptionalString, isUuid } from "../utils/validation.js";
 import { hasValidMediaSignature } from "../utils/mediaValidation.js";
+import { resolvePostType, type PostMediaInput } from "../utils/postMedia.js";
 import * as postService from "../services/postService.js";
 import { parsePagination } from "../utils/pagination.js";
 import { findPublicPost } from "../services/sharePageService.js";
@@ -62,9 +63,6 @@ export const addPost: RequestHandler = async (req, res, next) => {
     if (workout && !(await postService.checkWorkoutExists(workout, userId))) {
       return res.status(403).json({ success: false, message: "Workout not found or not owned by user" });
     }
-    if (!content?.trim() && images.length === 0 && !workout) {
-      return res.status(400).json({ success: false, message: "Post content is required" });
-    }
     if (images.some((image) => !hasValidMediaSignature(image))) {
       return res.status(415).json({ success: false, message: "Uploaded image content is invalid" });
     }
@@ -72,16 +70,28 @@ export const addPost: RequestHandler = async (req, res, next) => {
       return res.status(503).json({ success: false, message: "Media service is not configured" });
     }
 
+    // Resolved before the emptiness check: a photo uploaded straight to object
+    // storage arrives only as a key, so a caption-less photo post has neither
+    // `content` nor multipart files and used to be refused as empty. Resolving
+    // also checks the keys' shape, owner, purpose and expiry first.
     const reservedImages = await resolveReservedUploads(
       userId,
       "posts",
       req.body?.uploadedKeys
     );
+    if (!content?.trim() && images.length === 0 && reservedImages.length === 0 && !workout) {
+      return res.status(400).json({ success: false, message: "Post content is required" });
+    }
     if (images.length + reservedImages.length > 4) {
       return res.status(400).json({ success: false, message: "A post can contain at most four images" });
     }
 
-    const uploadedImages = [...reservedImages];
+    const uploadedImages: PostMediaInput[] = reservedImages.map(({ key, url, contentType, sizeBytes }) => ({ key, url, contentType, sizeBytes }));
+    // Only objects this request wrote itself are discarded on failure. Keys the
+    // client uploaded directly stay reserved until they expire, so a retry with
+    // the same operation id can attach them again instead of failing as
+    // "expired"; the abandoned-upload sweep removes them if it never comes.
+    const directKeys: string[] = [];
     try {
       for (const image of images) {
         const { key } = await uploadAndReserve({
@@ -91,6 +101,7 @@ export const addPost: RequestHandler = async (req, res, next) => {
           purpose: "posts",
           contentType: image.mimetype,
         });
+        directKeys.push(key);
         const cleanKey = key.startsWith('/') ? key.slice(1) : key;
         uploadedImages.push({
           key,
@@ -102,23 +113,19 @@ export const addPost: RequestHandler = async (req, res, next) => {
             transformationPosition: "query",
           }),
           contentType: image.mimetype,
+          sizeBytes: image.size,
         });
       }
     } catch (error) {
-      await discardReservedUploads(uploadedImages.map(({ key }) => key));
+      await discardReservedUploads(directKeys);
       throw error;
     }
-    const imageUrls = uploadedImages.map(({ url }) => url);
 
-    let resolvedType = post_type;
-    if (!resolvedType) {
-      if (workout) resolvedType = "workout";
-      else if (uploadedImages.some(({ contentType }) => contentType?.startsWith("video/"))) {
-        resolvedType = "video";
-      }
-      else if (imageUrls.length > 0) resolvedType = content?.trim() ? "text_with_image" : "image";
-      else resolvedType = "text";
-    }
+    const resolvedType = resolvePostType({
+      hasText: Boolean(content?.trim()),
+      hasWorkout: Boolean(workout),
+      media: uploadedImages,
+    });
 
     let post;
     try {
@@ -128,8 +135,7 @@ export const addPost: RequestHandler = async (req, res, next) => {
           user: userId,
           operationId,
           content: content?.trim() || "",
-          image_urls: imageUrls,
-          image_keys: uploadedImages.map(({ key }) => key),
+          media: uploadedImages,
           post_type: resolvedType,
           visibility: visibility || "public",
           workout: workout || undefined,
@@ -140,7 +146,7 @@ export const addPost: RequestHandler = async (req, res, next) => {
         }
       );
     } catch (error) {
-      await discardReservedUploads(uploadedImages.map(({ key }) => key));
+      await discardReservedUploads(directKeys);
       throw error;
     }
     return res.json({ success: true, post, message: "Post created successfully" });

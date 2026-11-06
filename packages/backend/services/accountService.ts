@@ -3,7 +3,7 @@ import { sql } from "kysely";
 import { database, withTransaction } from "../configs/database.js";
 import { invalidateCacheOwners } from "../configs/redis.js";
 import { exerciseListOwner } from "./exerciseService.js";
-import { feedCacheOwner, profileCacheOwner } from "./feedCache.js";
+import { feedCacheOwner, profileCacheOwner, revokeFeedAudience } from "./feedCache.js";
 import { queueMediaDeletions } from "./mediaDeletionService.js";
 
 const writeChunk = async (response: Response, chunk: string): Promise<void> => {
@@ -69,9 +69,13 @@ export const deleteAccountData = async (userId: string): Promise<boolean> => {
     await transaction.deleteFrom("conversations").where("id", "in", transaction.selectFrom("conversation_participants").select("conversation_id").where("user_id", "=", userId)).execute();
     await transaction.deleteFrom("users").where("id", "=", userId).execute();
   });
-  // The account is gone, so only its own cached surfaces need dropping: its
-  // profile, its feed pages and its exercise list (custom exercises went with
-  // the cascade). Everyone else's copies age out on their own TTL.
-  await invalidateCacheOwners(profileCacheOwner(userId), feedCacheOwner(userId), exerciseListOwner(userId));
+  // The account's own cached surfaces go directly: its profile, its feed pages
+  // and its exercise list (custom exercises went with the cascade). Its posts
+  // may sit in any other member's cached feed page, and a deleted account must
+  // not keep appearing there, so the feed audience epoch is bumped as well.
+  await Promise.all([
+    invalidateCacheOwners(profileCacheOwner(userId), feedCacheOwner(userId), exerciseListOwner(userId)),
+    revokeFeedAudience(),
+  ]);
   return true;
 };

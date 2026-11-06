@@ -197,6 +197,16 @@ export const getStoryById = async (storyId: string): Promise<StoryAccess | null>
   return row ? { id: row.id, _id: row.id, user: row.user_id, media_url: row.media_url, media_key: row.media_key } : null;
 };
 
+/**
+ * A story that is still inside its 24 hours. Viewing and reacting go through
+ * this rather than `getStoryById`: the expiry sweep runs every few minutes, and
+ * a story must stop accepting views and likes at the mark, not at the sweep.
+ */
+export const getLiveStoryById = async (storyId: string): Promise<StoryAccess | null> => {
+  const row = await database.selectFrom("stories").select(["id", "user_id", "media_url", "media_key"]).where("id", "=", storyId).where("expires_at", ">", new Date()).executeTakeFirst();
+  return row ? { id: row.id, _id: row.id, user: row.user_id, media_url: row.media_url, media_key: row.media_key } : null;
+};
+
 export const deleteStoryById = async (story: StoryAccess): Promise<void> => withTransaction(async (transaction) => {
   const key = story.media_key || extractS3Key(story.media_url); if (key) await queueMediaDeletions([key], { transaction });
   await transaction.deleteFrom("story_views").where("story_id", "=", story.id).execute();

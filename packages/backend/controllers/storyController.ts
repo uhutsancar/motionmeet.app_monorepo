@@ -122,7 +122,10 @@ export const addUserStory: RequestHandler = async (req, res, next) => {
         }
       );
     } catch (error) {
-      if (mediaKey) await discardReservedUploads([mediaKey]);
+      // A key the client uploaded directly stays reserved so a retry under the
+      // same operation id can still attach it; only a file this request wrote
+      // is discarded here.
+      if (media && mediaKey) await discardReservedUploads([mediaKey]);
       throw error;
     }
     return res.json({ success: true, story });
@@ -183,7 +186,7 @@ export const viewStory: RequestHandler = async (req, res, next) => {
 
     // A story id is guessable in principle, so the audience is re-checked here
     // rather than trusting that the client only ever posts ids it was given.
-    const story = await storyService.getStoryById(storyId);
+    const story = await storyService.getLiveStoryById(storyId);
     if (!story) return res.status(404).json({ success: false, message: "Story not found" });
     if (!(await canViewStoriesOf(req.userId, story.user))) {
       return res.status(403).json({ success: false, message: "Story is not accessible" });
@@ -234,7 +237,7 @@ export const setStoryLike: RequestHandler = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Invalid story id" });
     }
 
-    const story = await storyService.getStoryById(storyId);
+    const story = await storyService.getLiveStoryById(storyId);
     if (!story) return res.status(404).json({ success: false, message: "Story not found" });
     // Ids are guessable in principle, so the audience is re-checked rather than
     // trusting that the client only ever posts ids it was handed.
