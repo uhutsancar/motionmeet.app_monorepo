@@ -53,7 +53,9 @@ Prometheus plugin (`rabbitmq_prometheus`, port 15692) — enable it on the broke
 
 ## Not yet
 
-- Grafana dashboards as JSON in the repository — NOT_STARTED.
+- Grafana: `infra/grafana/motionmeet-overview.json` (PostgreSQL datasource,
+  import into an existing Grafana; see `infra/grafana/README.md`). A
+  Prometheus datasource for the process metrics above is not set up.
 - Client-side timing (tap → upload done → visible) and crash reporting —
   NOT_STARTED; needs a chosen vendor and consent handling.
 - Slow-query capture (`pg_stat_statements`) — a database setting, documented in
