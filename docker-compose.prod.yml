@@ -13,11 +13,14 @@ x-backend-image: &backend-image
   build:
     context: .
     dockerfile: packages/backend/Dockerfile.prod
+    # Explicit: the Dockerfile's last stage is the FFmpeg-carrying worker image.
+    target: runtime
   image: motionmeet-backend:${MOTIONMEET_IMAGE_TAG:-local}
   env_file:
     - path: ${MOTIONMEET_ENV_FILE:-.env.production}
       required: true
-  init: true
+  # No `init: true`: the image's entrypoint is tini, which is PID 1 and reaps
+  # and forwards signals itself; a second init in front of it only warns.
   read_only: true
   tmpfs:
     - /tmp
@@ -68,6 +71,12 @@ services:
 
   worker:
     <<: *backend-image
+    # Same code as the API, plus FFmpeg for measuring videos (Dockerfile target).
+    build:
+      context: .
+      dockerfile: packages/backend/Dockerfile.prod
+      target: media-runtime
+    image: motionmeet-backend-media:${MOTIONMEET_IMAGE_TAG:-local}
     command: ["node", "dist/entrypoints/worker.js"]
     environment:
       NODE_ENV: production

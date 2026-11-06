@@ -2,7 +2,7 @@ import { database, withTransaction, type DatabaseTransaction } from "../configs/
 import type { OutboxEventType } from "../db/types.js";
 import sendEmail from "../configs/nodeMailer.js";
 import { escapeHtml } from "../utils/html.js";
-import { probeStoredImage } from "../services/mediaProbeService.js";
+import { probeStoredImage, probeStoredVideo } from "../services/mediaProbeService.js";
 import type { DomainEvent } from "./events.js";
 
 /**
@@ -81,12 +81,14 @@ const connectionRequestEmail: EventConsumer = {
 };
 
 /**
- * Measures a new post's images and stores their pixel size on `post_media`.
+ * Measures a new post's media and stores it on `post_media`: pixel size for
+ * images, size and duration for videos (with ffprobe, which only the media
+ * worker image carries; elsewhere videos are left as they are).
  *
  * The post went live when its upload was verified; this only adds metadata,
- * so a slow or failed probe never holds anything up. The update writes only
- * rows still missing a width, which makes a repeated delivery a no-op, and a
- * post deleted in the meantime simply has no rows left to update.
+ * so a slow or failed probe never holds anything up. Each update writes only
+ * a row still missing the value, which makes a repeated delivery a no-op, and
+ * a post deleted in the meantime simply has no rows left to update.
  */
 const mediaMetadata: EventConsumer = {
   name: "media-metadata",
@@ -97,12 +99,21 @@ const mediaMetadata: EventConsumer = {
     if (!postId) throw new PermanentEventError("media.uploaded is missing its post id");
     // Without object storage there is nothing to read.
     if (!process.env.AWS_BUCKET_NAME) return;
-    const rows = await database.selectFrom("post_media").select(["id", "object_key"])
-      .where("post_id", "=", postId).where("media_type", "=", "image").where("width", "is", null).where("object_key", "!=", "").execute();
+    const rows = await database.selectFrom("post_media").select(["id", "object_key", "media_type"])
+      .where("post_id", "=", postId).where("object_key", "!=", "")
+      .where((expression) => expression.or([
+        expression.and([expression("media_type", "=", "image"), expression("width", "is", null)]),
+        expression.and([expression("media_type", "=", "video"), expression("duration_seconds", "is", null)]),
+      ]))
+      .execute();
     for (const row of rows) {
-      const dimensions = await probeStoredImage(row.object_key);
-      if (!dimensions) continue;
-      await database.updateTable("post_media").set(dimensions).where("id", "=", row.id).where("width", "is", null).execute();
+      if (row.media_type === "image") {
+        const dimensions = await probeStoredImage(row.object_key);
+        if (dimensions) await database.updateTable("post_media").set(dimensions).where("id", "=", row.id).where("width", "is", null).execute();
+        continue;
+      }
+      const video = await probeStoredVideo(row.object_key);
+      if (video) await database.updateTable("post_media").set({ width: video.width, height: video.height, duration_seconds: String(video.durationSeconds) }).where("id", "=", row.id).where("duration_seconds", "is", null).execute();
     }
   },
 };

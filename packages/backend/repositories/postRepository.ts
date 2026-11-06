@@ -20,7 +20,7 @@ export const hydratePosts = async (rows: Array<Row<"posts">>, executor: Executor
   const workoutById = new Map(workouts.map((workout) => [workout.id, workout]));
   return rows.map((row) => {
     const mediaForPost = mediaRows.filter((media) => media.post_id === row.id);
-    const media: PostMedia[] = mediaForPost.map((entry) => ({ id: entry.id, url: entry.url, mediaType: entry.media_type, position: entry.position, width: entry.width, height: entry.height }));
+    const media: PostMedia[] = mediaForPost.map((entry) => ({ id: entry.id, url: entry.url, mediaType: entry.media_type, position: entry.position, width: entry.width, height: entry.height, durationSeconds: entry.duration_seconds === null ? null : Number(entry.duration_seconds) }));
     return {
       id: row.id, _id: row.id, operationId: row.operation_id,
       user: publicUser(row.user_id, row.author_full_name, row.author_username, row.author_profile_picture),

@@ -62,9 +62,9 @@ export const createPost = async (input: NewPostInput, { quotaLimit = -1, reserva
         file_size: media.sizeBytes, width: null, height: null, duration_seconds: null,
       }))).execute();
       await commitReservedUploads(reservationKeys, { transaction, userId: input.user });
-      // Measuring the images is the media worker's job, after the commit; the
+      // Measuring the files is the media worker's job, after the commit; the
       // event is written with the post so it cannot be lost or run early.
-      if (input.media.some((media) => mediaKindOf(media.contentType) === "image")) {
+      if (input.media.length) {
         await enqueueOutboxEvent(transaction, { type: "media.uploaded", aggregateId: row.id, payload: { postId: row.id } });
       }
       const hydrated = await findHydratedPost(row.id, transaction);

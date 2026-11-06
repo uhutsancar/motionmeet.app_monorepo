@@ -184,7 +184,7 @@ jobs:
       - name: Validate production Compose file
         run: docker compose -f docker-compose.prod.yml config --quiet
       - name: Build production images from freshly pulled bases
-        run: docker compose -f docker-compose.prod.yml build --pull backend web
+        run: docker compose -f docker-compose.prod.yml build --pull backend worker web
       - name: Backend image runs a patched Node.js as a non-root user
         run: |
           version="$(docker run --rm --entrypoint node motionmeet-backend:local --version)"
@@ -192,6 +192,10 @@ jobs:
           node scripts/check-node-security.mjs --version="${version}"
           # worker and scheduler are the same image; their entry points must be in it.
           docker run --rm --entrypoint sh motionmeet-backend:local -c 'test -f dist/entrypoints/worker.js && test -f dist/entrypoints/scheduler.js && test -f dist/scripts/migrate.js'
+          docker run --rm --entrypoint ffprobe motionmeet-backend-media:local -version | head -1
+          if docker run --rm --entrypoint sh motionmeet-backend:local -c 'command -v ffprobe'; then
+            echo "API image unexpectedly contains FFmpeg"; exit 1
+          fi
           user="$(docker image inspect --format '{{.Config.User}}' motionmeet-backend:local)"
           test "${user}" = "node" || { echo "backend image runs as '${user}', expected 'node'"; exit 1; }
       - name: Web image ships nginx only, no Node.js runtime

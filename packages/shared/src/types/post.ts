@@ -17,6 +17,8 @@ export interface PostMedia {
    */
   width?: number | null;
   height?: number | null;
+  /** Seconds, for videos, once measured; null for images and before then. */
+  durationSeconds?: number | null;
 }
 
 export interface Comment extends Timestamped {
