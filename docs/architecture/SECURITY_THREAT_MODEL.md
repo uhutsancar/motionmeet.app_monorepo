@@ -24,6 +24,27 @@ are unchanged and covered by `docs/security-verification/`.
 | Denial of service: retry storm | outbox/consumers | Jittered exponential backoff, attempt ceilings, TTL retry tiers |
 | Elevation: worker credentials | deployment | Same least-privilege DB user as the API today; a separate role per process is a follow-up |
 
+## Profile field visibility
+
+What `POST /api/user/profiles` (and the cached profile behind it) returns, by
+viewer. "Follower" is an approved follower; "connection" is an accepted legacy
+connection. Enforced in `userService.buildProfileAndPosts` and
+`accessControlService`; the client never filters.
+
+| Field | Owner | Follower | Connection | Stranger, public account | Stranger, private account |
+|---|---|---|---|---|---|
+| Name, username, avatar, bio, cover | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Follower / following / connection counts | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Weight, height, training statistics | ✓ | ✓ | ✓ | ✓ | `null` (D-04) |
+| Profile location label | ✓ | if `location_visibility` is `public` or `followers` | if `public`, `followers` or `connections` | if `public` | if `public` |
+| Profile location dataset ids | ✓ | — | — | — | — |
+| Posts | all visibilities | `public` + `followers` | `public` + `followers` | `public` | none |
+| Stories | ✓ | ✓ | ✓ | none | none |
+| Message button (`canMessage`) | — | public account: ✓; private account: only on a mutual follow | ✓ | ✓ (if the account allows messages) | only on a mutual follow |
+
+`canViewContent` is false only in the last column; that single flag gates
+posts, weight, height and statistics together.
+
 ## Open items
 
 - Separate PostgreSQL roles per process role (API needs no DDL; the migrate

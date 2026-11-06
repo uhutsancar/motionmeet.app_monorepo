@@ -11,6 +11,7 @@ import { createPost, deletePostById, getPostById } from "../../services/postServ
 import { getUserProfileAndPosts, updateUser } from "../../services/userService.js";
 import { deletePosition, listNearbyUsers, savePosition, updateNearbySettings } from "../../services/nearbyService.js";
 import { deleteAccountData, streamAccountData } from "../../services/accountService.js";
+import { acceptFollowRequest, requestFollow } from "../../services/relationshipService.js";
 
 /**
  * Regression tests for the findings reproduced in the 2026-11 audit (R1-R7 in
@@ -111,7 +112,7 @@ test("R5 / WP-04: an account export completes as valid JSON", { todo: "WP-04" },
   for (const secret of ["password_hash", "token_hash", "media_key", "object_key"]) assert.ok(!body.includes(secret), secret);
 });
 
-test("R6b / WP-07: a private profile hides weight, height and statistics from strangers", { todo: "WP-07" }, async () => {
+test("R6b / WP-07: a private profile hides weight, height and statistics from strangers", async () => {
   const owner = await newUser("priv"); const stranger = await newUser("str");
   await updateUser(owner, { "privacy.publicProfile": false });
   const result = await getUserProfileAndPosts(owner, stranger, FIRST as never);
@@ -121,4 +122,23 @@ test("R6b / WP-07: a private profile hides weight, height and statistics from st
   assert.equal(result?.profile.statistics, null);
   const own = await getUserProfileAndPosts(owner, owner, FIRST as never);
   assert.equal(Number(own?.profile.weight), 81);
+  assert.ok(own?.profile.statistics);
+});
+
+test("WP-07: approved followers and viewers of a public account still see the personal fields", async () => {
+  const owner = await newUser("privf"); const follower = await newUser("follower");
+  await updateUser(owner, { "privacy.publicProfile": false });
+  await requestFollow(follower, owner);
+  assert.equal(await acceptFollowRequest(owner, follower), true);
+  const seen = await getUserProfileAndPosts(owner, follower, FIRST as never);
+  assert.equal(seen?.profile.canViewContent, true);
+  assert.equal(Number(seen?.profile.weight), 81);
+  assert.equal(Number(seen?.profile.height), 180);
+  assert.ok(seen?.profile.statistics);
+
+  const open = await newUser("openacct"); const passerby = await newUser("passerby");
+  const stranger = await getUserProfileAndPosts(open, passerby, FIRST as never);
+  assert.equal(stranger?.profile.canViewContent, true);
+  assert.equal(Number(stranger?.profile.weight), 81);
+  assert.ok(stranger?.profile.statistics);
 });

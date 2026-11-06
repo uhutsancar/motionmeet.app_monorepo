@@ -15,7 +15,7 @@ Status values: `NOT_STARTED`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-ENV`
 | WP-04 | NOT_STARTED | | | |
 | WP-05 | NOT_STARTED | | | |
 | WP-06 | NOT_STARTED | | | |
-| WP-07 | NOT_STARTED | | | |
+| WP-07 | DONE | see `git log --grep WP-07` | `auditRegressions.test.ts` R6b + positive follower/public checks | D-04 default applied. Old store builds: no release tags in the repo; the last 60 mobile commits never read `statistics`/`weight`/`height` of another member without optional chaining, so `null` is safe for them |
 | WP-08 | NOT_STARTED | | | |
 | WP-09 | NOT_STARTED | | | |
 | WP-10 | NOT_STARTED | | | |
@@ -45,7 +45,8 @@ Status values: `NOT_STARTED`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-ENV`
 
 ## Decisions applied
 
-_(D-0x defaults and any decision the plan did not cover, recorded per WP.)_
+- **WP-07 — D-04 varsayılanı uygulandı:** `canViewContent=false` iken `weight`, `height`, `statistics` → `null`.
+  `User` (the owner's own record) keeps them non-nullable in the shared types.
 
 ## Environment-only work (Ek B)
 

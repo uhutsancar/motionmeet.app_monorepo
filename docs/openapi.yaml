@@ -366,6 +366,17 @@ paths:
       responses:
         "200":
           description: Privacy-filtered profile and visible posts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  profile: { $ref: "#/components/schemas/UserProfile" }
+                  posts:
+                    type: array
+                    items: { $ref: "#/components/schemas/Post" }
+                  nextCursor: { type: [string, "null"] }
   /api/user/suggested:
     get:
       tags: [User]
@@ -995,6 +1006,38 @@ components:
         profile_picture: { type: string }
         bio: { type: string }
         privacy: { $ref: "#/components/schemas/Privacy" }
+    UserProfile:
+      type: object
+      description: |
+        A profile as one viewer sees it. When `canViewContent` is false (a
+        private account the viewer does not follow and is not connected to),
+        `weight`, `height` and `statistics` are null; name, username, avatar,
+        bio, cover and counts stay visible.
+      required: [id, username, full_name, weight, height, statistics]
+      properties:
+        id: { type: string }
+        username: { type: string }
+        full_name: { type: string }
+        profile_picture: { type: string }
+        cover_photo: { type: string }
+        bio: { type: string }
+        location: { type: string }
+        weight: { type: [number, "null"] }
+        height: { type: [number, "null"] }
+        followers_count: { type: integer }
+        following_count: { type: integer }
+        connections_count: { type: integer }
+        statistics:
+          oneOf:
+            - type: "null"
+            - type: object
+              properties:
+                totalWorkouts: { type: integer }
+                totalDurationMinutes: { type: number }
+                totalVolumeKg: { type: number }
+        isPrivate: { type: boolean }
+        canViewContent: { type: boolean }
+        canMessage: { type: boolean }
     AuthResponse:
       type: object
       required: [success, user, token, accessTokenExpiresAt]

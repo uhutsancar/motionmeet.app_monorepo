@@ -64,12 +64,17 @@ export interface UserProfile extends PublicUser, Timestamped {
    * which only need the label.
    */
   profileLocation?: ProfileLocation | null;
-  weight: number;
-  height: number;
+  /**
+   * Null when the viewer may not see the account's content (`canViewContent`
+   * false): a private account withholds body measurements and training totals
+   * from anyone it has not let in.
+   */
+  weight: number | null;
+  height: number | null;
   followers_count: number;
   following_count: number;
   connections_count: number;
-  statistics: UserStatistics;
+  statistics: UserStatistics | null;
   isFollowing?: boolean;
   isConnection?: boolean;
   connectionPending?: boolean;
@@ -90,7 +95,11 @@ export interface AuthUser extends PublicUser {
   privacy: PrivacySettings;
 }
 
+/** The account owner's own record: every personal field is always present. */
 export interface User extends UserProfile {
+  weight: number;
+  height: number;
+  statistics: UserStatistics;
   email: string;
   role: Role;
   privacy: PrivacySettings;

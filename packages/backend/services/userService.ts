@@ -268,13 +268,17 @@ const buildProfileAndPosts = async (profileId: string, requesterId: string, pagi
   const locationVisible = owner || row.location_visibility === "public"
     || (row.location_visibility === "followers" && (isFollowing || isConnection))
     || (row.location_visibility === "connections" && isConnection);
+  // Body weight, height and training totals are personal data, not part of the
+  // header a locked account still shows; they follow the same gate as the posts
+  // (D-04 in the 2026-11 audit). The full field-by-viewer matrix lives in
+  // docs/architecture/SECURITY_THREAT_MODEL.md.
   const profile: UserProfile = {
     id: internal.id, _id: internal._id, full_name: internal.full_name, username: internal.username,
     profile_picture: internal.profile_picture, bio: internal.bio, cover_photo: internal.cover_photo,
     location: locationVisible ? internal.location : "", profileLocation: owner ? internal.profileLocation : null,
-    weight: internal.weight, height: internal.height,
+    weight: canViewContent ? internal.weight : null, height: canViewContent ? internal.height : null,
     followers_count: internal.followers_count, following_count: internal.following_count, connections_count: internal.connections_count,
-    statistics: internal.statistics, createdAt: internal.createdAt, updatedAt: internal.updatedAt,
+    statistics: canViewContent ? internal.statistics : null, createdAt: internal.createdAt, updatedAt: internal.updatedAt,
     isFollowing, isConnection, connectionPending, isFollowedBy, requestSent, requestReceived,
     isPrivate, canViewContent, canMessage: owner ? false : messagePermission.allowed,
   };
