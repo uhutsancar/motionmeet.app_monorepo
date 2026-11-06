@@ -2,6 +2,7 @@ import { consumeDistributedLimit } from "../configs/redis.js";
 import * as messageService from "../services/messageService.js";
 import * as userService from "../services/userService.js";
 import { isUserId } from "../utils/validation.js";
+import { isSessionActive } from "../utils/authTokens.js";
 import { logger, safeErrorMetadata } from "../utils/logger.js";
 import { emitToUser, emitToUsers, getOnlineUserIds, isUserOnline, joinUserRoom, leaveLocalUser, type MotionSocket } from "./socketRegistry.js";
 
@@ -15,6 +16,13 @@ export const emitPresenceToConnections = async (userId: string, eventName: "user
 const SENDER_REFRESH_MS = 300_000;
 /** How long a socket may reuse a decided "may I message this person" answer. */
 const PERMISSION_CACHE_MS = 30_000;
+/**
+ * How often an open socket re-checks its login session. Logout and password
+ * reset disconnect sockets directly; this is the backstop for a socket that
+ * only listens, whose revocation broadcast was lost. Jittered so sockets that
+ * connected together do not re-check together.
+ */
+const SESSION_RECHECK_MS = 10 * 60_000;
 
 export const handleSocketConnection = async (socket: MotionSocket): Promise<void> => {
   const userId = socket.data.userId; const wasOffline = !(await isUserOnline(userId)); await joinUserRoom(socket, userId);
@@ -35,8 +43,10 @@ export const handleSocketConnection = async (socket: MotionSocket): Promise<void
   let senderLoadedAt = Date.now();
   const currentSender = async (): Promise<typeof socket.data.user | null> => {
     if (Date.now() - senderLoadedAt < SENDER_REFRESH_MS) return socket.data.user;
-    const refreshed = await userService.getUserById(userId);
-    if (!refreshed) return null;
+    const [refreshed, sessionActive] = await Promise.all([userService.getUserById(userId), isSessionActive(socket.data.sessionId, userId)]);
+    // The room-based disconnect on logout is the fast path; this catches a
+    // revocation whose broadcast was missed (an adapter outage, say).
+    if (!refreshed || !sessionActive) { socket.disconnect(true); return null; }
     socket.data.user = refreshed;
     senderLoadedAt = Date.now();
     // A role change can flip the answer, so decisions taken under the old
@@ -77,5 +87,9 @@ export const handleSocketConnection = async (socket: MotionSocket): Promise<void
     } catch (error: unknown) { logger.error("socket_typing_failed", safeErrorMetadata(error)); }
   };
   socket.on("typing_start", (payload) => { void emitTyping("typing_start", payload); }); socket.on("typing_stop", (payload) => { void emitTyping("typing_stop", payload); });
-  socket.on("disconnect", async () => { leaveLocalUser(socket, userId); if (!(await isUserOnline(userId))) await emitPresenceToConnections(userId, "user_offline", { userId }); });
+  const sessionRecheck = setInterval(() => {
+    void isSessionActive(socket.data.sessionId, userId).then((active) => { if (!active) socket.disconnect(true); }, () => undefined);
+  }, SESSION_RECHECK_MS + Math.floor(Math.random() * 60_000));
+  sessionRecheck.unref();
+  socket.on("disconnect", async () => { clearInterval(sessionRecheck); leaveLocalUser(socket, userId); if (!(await isUserOnline(userId))) await emitPresenceToConnections(userId, "user_offline", { userId }); });
 };

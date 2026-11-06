@@ -73,12 +73,26 @@ export const rotateRefreshSession = async (rawToken: unknown, request: Request):
   return { userId: session.user_id, sessionId: session.id, refreshToken: serializeRefreshToken(session.id, nextSecret) };
 };
 
-export const revokeRefreshSession = async (rawToken: unknown): Promise<void> => {
+/** Revokes the session the refresh token names; returns its id when one was actually revoked. */
+export const revokeRefreshSession = async (rawToken: unknown): Promise<string | null> => {
   const parsed = parseRefreshToken(rawToken);
-  if (!parsed) return;
-  await database.updateTable("sessions").set({ revoked_at: new Date() }).where("id", "=", parsed.sessionId)
-    .where("token_hash", "=", hashSecret(parsed.secret)).where("revoked_at", "is", null).execute();
+  if (!parsed) return null;
+  const revoked = await database.updateTable("sessions").set({ revoked_at: new Date() }).where("id", "=", parsed.sessionId)
+    .where("token_hash", "=", hashSecret(parsed.secret)).where("revoked_at", "is", null).returning("id").executeTakeFirst();
+  return revoked?.id ?? null;
 };
+
+/**
+ * Whether a session still stands: not revoked, not expired, and the user's.
+ *
+ * Access tokens are stateless for fifteen minutes, which bounds an HTTP
+ * client after logout. A socket is different - it authenticates once and can
+ * stay open for days - so the realtime layer asks this at the handshake and
+ * again periodically, rather than trusting a token it checked long ago.
+ */
+export const isSessionActive = async (sessionId: string, userId: string): Promise<boolean> =>
+  Boolean(await database.selectFrom("sessions").select("id").where("id", "=", sessionId).where("user_id", "=", userId)
+    .where("revoked_at", "is", null).where("expires_at", ">", new Date()).executeTakeFirst());
 
 export const getRefreshTokenFromRequest = (request: Request): string | null => {
   const body = typeof request.body === "object" && request.body !== null ? request.body as Record<string, unknown> : {};

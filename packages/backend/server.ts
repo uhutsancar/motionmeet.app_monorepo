@@ -38,7 +38,7 @@ import { ensureApplicationData } from "./services/bootstrapService.js";
 import { assertDatabaseContract } from "./services/databaseMigrationService.js";
 import { detectGeometrySupport } from "./services/locationGeometry.js";
 import * as userService from "./services/userService.js";
-import { verifyAccessToken } from "./utils/authTokens.js";
+import { isSessionActive, verifyAccessToken } from "./utils/authTokens.js";
 import { logger, safeErrorMetadata } from "./utils/logger.js";
 import { isUserId } from "./utils/validation.js";
 import { initCronJobs } from "./workers/cronJobs.js";
@@ -141,9 +141,13 @@ io.use(async (socket, next) => {
   try {
     const token: unknown = socket.handshake.auth?.token;
     if (typeof token !== "string" || !token || token.length > 10_000) return next(new Error("Authentication required"));
-    const payload = verifyAccessToken(token); if (!isUserId(payload.id)) return next(new Error("Invalid user identity"));
-    const user = await userService.getUserById(payload.id); if (!user) return next(new Error("User not found"));
-    socket.data.userId = payload.id; socket.data.user = user; next();
+    const payload = verifyAccessToken(token); if (!isUserId(payload.id) || !isUserId(payload.sid)) return next(new Error("Invalid user identity"));
+    // A still-valid access token can outlive its session by up to fifteen
+    // minutes; a socket opened in that window would then live on indefinitely.
+    const [user, sessionActive] = await Promise.all([userService.getUserById(payload.id), isSessionActive(payload.sid, payload.id)]);
+    if (!user) return next(new Error("User not found"));
+    if (!sessionActive) return next(new Error("Session expired"));
+    socket.data.userId = payload.id; socket.data.sessionId = payload.sid; socket.data.user = user; next();
   } catch (error: unknown) { logger.warn("socket_authentication_failed", safeErrorMetadata(error)); next(new Error("Authentication failed")); }
 });
 io.on("connection", (socket) => { void handleSocketConnection(socket).catch((error: unknown) => { logger.error("socket_initialization_failed", safeErrorMetadata(error)); socket.disconnect(true); }); });

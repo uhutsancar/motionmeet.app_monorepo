@@ -1,5 +1,5 @@
 import imagekit from "../configs/imageKit.js";
-import { invalidateMessagePermissions } from "../realtime/socketRegistry.js";
+import { disconnectUserSockets, invalidateMessagePermissions } from "../realtime/socketRegistry.js";
 import type { RequestHandler } from "express";
 import bcrypt from "bcryptjs";
 import { extractS3Key } from "../utils/s3Utils.js";
@@ -113,6 +113,8 @@ export const deleteAccount: RequestHandler = async (req, res, next) => {
     }
 
     await accountService.deleteAccountData(req.userId);
+    // The sessions went with the account; its live sockets go too.
+    disconnectUserSockets(req.userId);
     return res.json({ success: true, message: "Account permanently deleted" });
   } catch (error) {
     return next(error);

@@ -20,6 +20,7 @@ import {
   validateRegistration,
 } from "../utils/authValidation.js";
 import sendEmail from "../configs/nodeMailer.js";
+import { disconnectSessionSockets, disconnectUserSockets } from "../realtime/socketRegistry.js";
 import { escapeHtml } from "../utils/html.js";
 import { logger, safeErrorMetadata } from "../utils/logger.js";
 
@@ -145,7 +146,9 @@ export const refreshSession: RequestHandler = async (req, res, next) => {
 
 export const logoutUser: RequestHandler = async (req, res, next) => {
   try {
-    await revokeRefreshSession(getRefreshTokenFromRequest(req));
+    const revokedSessionId = await revokeRefreshSession(getRefreshTokenFromRequest(req));
+    // A socket opened under this session must not outlive the logout.
+    if (revokedSessionId) disconnectSessionSockets(revokedSessionId);
     clearRefreshCookie(res);
     return res.json({ success: true });
   } catch (error) {
@@ -217,16 +220,18 @@ export const resetPassword: RequestHandler = async (req, res, next) => {
       });
     }
     const hashedPassword = await bcrypt.hash(password, 12);
-    const passwordUpdated = await authService.resetPasswordWithToken(
+    const passwordOwner = await authService.resetPasswordWithToken(
       req.body?.token,
       hashedPassword
     );
-    if (!passwordUpdated) {
+    if (!passwordOwner) {
       return res.status(400).json({
         success: false,
         message: "Reset link is invalid or expired",
       });
     }
+    // Every session was revoked with the password; open sockets go with them.
+    disconnectUserSockets(passwordOwner);
     clearRefreshCookie(res);
     return res.json({
       success: true,

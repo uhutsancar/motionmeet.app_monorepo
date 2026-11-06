@@ -4,6 +4,8 @@ import type { InternalUser } from "../repositories/entities.js";
 
 export interface SocketData {
   userId: string;
+  /** The login session the socket authenticated under; revoking it disconnects the socket. */
+  sessionId: string;
   user: InternalUser;
   connectionIds?: string[];
   messagePermissionCache?: Map<string, { allowed: boolean; expiresAt: number }>;
@@ -18,6 +20,16 @@ export type MotionSocket = Socket<ClientToServerEvents, ServerToClientEvents, In
 export const userSockets = new Map<string, Set<string>>();
 let socketServer: MotionServer | null = null;
 const roomForUser = (userId: string): string => `user:${userId}`;
+const roomForSession = (sessionId: string): string => `session:${sessionId}`;
+
+/**
+ * Closes every socket of one login session, or of one member, on every
+ * instance - the adapter relays the room operation - so a logout, a password
+ * reset or an account deletion takes the live connection with it instead of
+ * leaving it subscribed to the member's messages.
+ */
+export const disconnectSessionSockets = (sessionId: string): void => { socketServer?.in(roomForSession(sessionId)).disconnectSockets(true); };
+export const disconnectUserSockets = (userId: string): void => { socketServer?.in(roomForUser(userId)).disconnectSockets(true); };
 export const setSocketServer = (io: MotionServer): void => {
   socketServer = io;
   io.on("invalidate_message_permissions", dropLocalMessagePermissions);
@@ -48,7 +60,7 @@ export const invalidateMessagePermissions = (recipientId: string, senderIds: str
     // In-memory adapter: there are no other instances to tell.
   }
 };
-export const joinUserRoom = async (socket: MotionSocket, userId: string): Promise<void> => { await socket.join(roomForUser(userId)); const sockets = userSockets.get(userId) ?? new Set<string>(); sockets.add(socket.id); userSockets.set(userId, sockets); };
+export const joinUserRoom = async (socket: MotionSocket, userId: string): Promise<void> => { await socket.join([roomForUser(userId), roomForSession(socket.data.sessionId)]); const sockets = userSockets.get(userId) ?? new Set<string>(); sockets.add(socket.id); userSockets.set(userId, sockets); };
 export const leaveLocalUser = (socket: MotionSocket, userId: string): void => { const sockets = userSockets.get(userId); sockets?.delete(socket.id); if (!sockets?.size) userSockets.delete(userId); };
 export const isUserOnline = async (userId: string): Promise<boolean> => Boolean(socketServer && (await socketServer.in(roomForUser(userId)).fetchSockets()).length);
 export const getOnlineUserIds = async (userIds: string[]): Promise<Set<string>> => {

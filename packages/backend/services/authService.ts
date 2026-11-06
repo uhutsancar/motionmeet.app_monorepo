@@ -43,16 +43,17 @@ export const createPasswordResetToken = async (userId: string): Promise<string> 
   return rawToken;
 };
 
-export const resetPasswordWithToken = async (rawToken: unknown, hashedPassword: string): Promise<boolean> => {
-  if (typeof rawToken !== "string" || rawToken.length < 32 || rawToken.length > 256) return false;
+/** Sets the new password and revokes every session; returns the user's id, or null when the token is not valid. */
+export const resetPasswordWithToken = async (rawToken: unknown, hashedPassword: string): Promise<string | null> => {
+  if (typeof rawToken !== "string" || rawToken.length < 32 || rawToken.length > 256) return null;
   return withTransaction(async (transaction) => {
     const token = await transaction.updateTable("password_reset_tokens").set({ consumed_at: new Date() })
       .where("token_hash", "=", hashResetToken(rawToken)).where("consumed_at", "is", null).where("expires_at", ">", new Date())
       .returning("user_id").executeTakeFirst();
-    if (!token) return false;
+    if (!token) return null;
     const user = await transaction.updateTable("users").set({ password_hash: hashedPassword }).where("id", "=", token.user_id).executeTakeFirst();
     if (Number(user.numUpdatedRows) !== 1) throw new Error("Password reset user no longer exists");
     await transaction.updateTable("sessions").set({ revoked_at: new Date() }).where("user_id", "=", token.user_id).where("revoked_at", "is", null).execute();
-    return true;
+    return token.user_id;
   });
 };
