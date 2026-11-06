@@ -53,3 +53,13 @@ test("internal object-storage keys are never serialized by public hydrators", as
   assert.equal("media_key" in message, false);
   assert.equal(JSON.stringify([post, story, message]).includes("private-key"), false);
 });
+
+test("the boot-time integrity contract checks the catalogue, not the data", async () => {
+  const { assertDatabaseContract } = await import("../../services/databaseMigrationService.js");
+  const started = Date.now();
+  await assertDatabaseContract();
+  // A full count of follows, connections and messages took 15 s at 780 000
+  // follows and stopped the API from starting; the catalogue check does not
+  // grow with the data.
+  assert.ok(Date.now() - started < 2_000, "contract check must not scan tables");
+});

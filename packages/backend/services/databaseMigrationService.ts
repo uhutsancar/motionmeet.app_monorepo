@@ -19,12 +19,34 @@ const missingTables = async (): Promise<string[]> => {
 export const assertDatabaseContract = async (): Promise<void> => {
   const missing = await missingTables();
   if (missing.length) throw new Error(`PostgreSQL schema is incomplete; missing tables: ${missing.join(", ")}`);
-  const invalid = await sql<{ invalid: string }>`
-    select (
-      (select count(*) from user_follows where follower_id = followee_id) +
-      (select count(*) from connections where from_user_id = to_user_id) +
-      (select count(*) from messages where from_user_id = to_user_id)
-    )::text as invalid
+  const unguarded = await missingSelfRelationGuards();
+  if (unguarded.length) throw new Error(`PostgreSQL integrity contract is missing validated self-relation checks on: ${unguarded.join(", ")}`);
+};
+
+/** Tables that must refuse a row relating a member to themselves, and the two columns compared. */
+const SELF_RELATION_GUARDS = [
+  ["user_follows", "follower_id", "followee_id"],
+  ["connections", "from_user_id", "to_user_id"],
+  ["messages", "from_user_id", "to_user_id"],
+] as const;
+
+/**
+ * The self-relation guards, checked in the catalogue rather than the data.
+ *
+ * Boot used to count the offending rows in each table. A validated CHECK
+ * constraint already proves there are none, and the count was a full scan of
+ * three of the largest tables on every start: at 780 000 follows it ran into
+ * the 15-second statement timeout, so the API could no longer start at all.
+ * Asking whether the validated constraints exist answers the same question
+ * in constant time, whatever the size of the data.
+ */
+const missingSelfRelationGuards = async (): Promise<string[]> => {
+  const { rows } = await sql<{ table_name: string; definition: string }>`
+    select conrelid::regclass::text as table_name, pg_get_constraintdef(oid) as definition
+    from pg_constraint
+    where contype = 'c' and convalidated and connamespace = 'public'::regnamespace
   `.execute(database);
-  if (Number(invalid.rows[0]?.invalid ?? 0) !== 0) throw new Error("PostgreSQL integrity contract contains invalid self-relations");
+  return SELF_RELATION_GUARDS
+    .filter(([table, left, right]) => !rows.some((row) => row.table_name === table && row.definition.includes(`${left} <> ${right}`)))
+    .map(([table]) => table);
 };
