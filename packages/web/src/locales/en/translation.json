@@ -23,7 +23,8 @@
     "confirm": "Confirm",
     "message_action": "Message",
     "add": "Add",
-    "clear": "Clear"
+    "clear": "Clear",
+    "media_unavailable": "This media is no longer available"
   },
   "discover": {
     "description": "Connect with amazing people and grow your network",

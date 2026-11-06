@@ -1,4 +1,6 @@
 import type { Post, PublicUser } from "@motionmeet/shared";
+import { deliveredMediaUrl } from "./mediaDelivery.js";
+import { extractS3Key } from "../utils/s3Utils.js";
 import { buildPostDeepLink, buildPostShareUrl } from "@motionmeet/shared";
 import { database } from "../configs/database.js";
 import { loadEnvironment } from "../configs/environment.js";
@@ -63,9 +65,14 @@ export const findPublicPost = async (postId: string): Promise<SharePagePost | nu
   const author = typeof post.user === "object" ? post.user : null;
   if (!author) return null;
 
-  const previewImage = post.media?.find((entry) => entry.mediaType === "image")?.url
-    ?? post.image_urls?.[0]
-    ?? null;
+  // Link previews are fetched by social networks' bots, sometimes days after
+  // the link was shared, so the preview image gets the long share window
+  // rather than the post's six hours. Only public posts of public accounts
+  // reach this point.
+  const previewUrl = post.media?.find((entry) => entry.mediaType === "image" && entry.url)?.url ?? null;
+  const previewImage = previewUrl
+    ? deliveredMediaUrl({ purpose: "sharePreview", key: extractS3Key(previewUrl), storedUrl: previewUrl, contentType: "image" })
+    : null;
 
   return { post, author, previewImage };
 };

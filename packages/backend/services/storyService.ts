@@ -7,6 +7,7 @@ import { toIsoString } from "../repositories/entities.js";
 import type { Pagination } from "../utils/pagination.js";
 import { extractS3Key } from "../utils/s3Utils.js";
 import { queueMediaDeletions } from "./mediaDeletionService.js";
+import { deliverMedia } from "./mediaDelivery.js";
 import { commitReservedUploads } from "./mediaUploadService.js";
 import * as quotaService from "./quotaService.js";
 
@@ -14,6 +15,12 @@ interface StoryAccess { id: string; _id: string; user: string; media_url: string
 interface NewStory { user: string; operationId: string; content: string; media_url: string; media_key: string; media_type: "text" | "image" | "video"; background_color: string; overlays: StoryOverlay[] }
 
 type Executor = DatabaseTransaction | typeof database;
+
+/** Signed until the story expires at the latest; "" for a text story. */
+const storyMedia = (row: { media_url: string; media_key: string; media_type: "text" | "image" | "video"; expires_at: Date }): { media_url: string | null; mediaUnavailable?: true } => {
+  const delivered = deliverMedia({ purpose: "stories", key: row.media_key, storedUrl: row.media_url, contentType: row.media_type, notAfter: new Date(row.expires_at) });
+  return delivered.unavailable ? { media_url: null, mediaUnavailable: true } : { media_url: delivered.url };
+};
 
 /**
  * Takes the executor of the caller's transaction when there is one. Reading
@@ -26,7 +33,7 @@ const hydrate = async (rows: Array<{ id: string; user_id: string; operation_id: 
   const ids = [...new Set(rows.map((row) => row.user_id))];
   const users = ids.length ? await executor.selectFrom("users").select(["id", "full_name", "username", "profile_picture_url"]).where("id", "in", ids).execute() : [];
   const byId = new Map(users.map((user) => [user.id, publicUser(user.id, user.full_name, user.username, user.profile_picture_url)]));
-  return rows.map((row) => ({ id: row.id, _id: row.id, operationId: row.operation_id, user: byId.get(row.user_id) ?? row.user_id, content: row.content, media_url: row.media_url, media_type: row.media_type, background_color: row.background_color, overlays: Array.isArray(row.overlays) ? row.overlays : [], expiresAt: toIsoString(row.expires_at) ?? new Date(0).toISOString(), createdAt: toIsoString(row.created_at) ?? new Date(0).toISOString(), updatedAt: toIsoString(row.updated_at) ?? new Date(0).toISOString() }));
+  return rows.map((row) => ({ id: row.id, _id: row.id, operationId: row.operation_id, user: byId.get(row.user_id) ?? row.user_id, content: row.content, ...storyMedia(row), media_type: row.media_type, background_color: row.background_color, overlays: Array.isArray(row.overlays) ? row.overlays : [], expiresAt: toIsoString(row.expires_at) ?? new Date(0).toISOString(), createdAt: toIsoString(row.created_at) ?? new Date(0).toISOString(), updatedAt: toIsoString(row.updated_at) ?? new Date(0).toISOString() }));
 };
 
 export const findStoryByOperation = async (userId: string, operationId: string): Promise<Story | null> => {

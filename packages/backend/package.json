@@ -15,6 +15,7 @@
     "admin:promote": "tsx scripts/setSuperadmin.ts",
     "migrate:postgres": "tsx scripts/migrate.ts",
     "outbox:redrive": "tsx scripts/redriveOutbox.ts",
+    "backfill:media-keys": "tsx scripts/backfillMediaKeys.ts",
     "worker": "tsx watch entrypoints/worker.ts",
     "scheduler": "tsx watch entrypoints/scheduler.ts",
     "lint": "eslint .",

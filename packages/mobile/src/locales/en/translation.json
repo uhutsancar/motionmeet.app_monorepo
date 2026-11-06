@@ -1,5 +1,6 @@
 {
     "common": {
+        "media_unavailable": "This media is no longer available",
         "cancel": "Cancel",
         "save": "Save",
         "error": "Error",

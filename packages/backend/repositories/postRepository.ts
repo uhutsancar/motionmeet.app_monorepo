@@ -1,12 +1,14 @@
-import type { Post, PostMedia, PublicUser } from "@motionmeet/shared";
+import { MEDIA_WIDTHS, type Post, type PostMedia, type PublicUser } from "@motionmeet/shared";
 import { database, type DatabaseTransaction } from "../configs/database.js";
 import type { Row } from "../db/types.js";
 import { hydrateWorkouts } from "./workoutRepository.js";
 import { toIsoString } from "./entities.js";
+import { deliverMedia, profileImageUrl } from "../services/mediaDelivery.js";
 
 type Executor = DatabaseTransaction | typeof database;
 
-export const publicUser = (id: string, fullName: string, username: string, picture: string): PublicUser => ({ id, _id: id, full_name: fullName, username, profile_picture: picture });
+/** Every member card in every response goes through here, so the avatar is always delivered signed. */
+export const publicUser = (id: string, fullName: string, username: string, picture: string): PublicUser => ({ id, _id: id, full_name: fullName, username, profile_picture: profileImageUrl(picture) });
 
 export const hydratePosts = async (rows: Array<Row<"posts">>, executor: Executor = database): Promise<Post[]> => {
   if (!rows.length) return [];
@@ -20,11 +22,24 @@ export const hydratePosts = async (rows: Array<Row<"posts">>, executor: Executor
   const workoutById = new Map(workouts.map((workout) => [workout.id, workout]));
   return rows.map((row) => {
     const mediaForPost = mediaRows.filter((media) => media.post_id === row.id);
-    const media: PostMedia[] = mediaForPost.map((entry) => ({ id: entry.id, url: entry.url, mediaType: entry.media_type, position: entry.position, width: entry.width, height: entry.height, durationSeconds: entry.duration_seconds === null ? null : Number(entry.duration_seconds) }));
+    // The stored URL is only a record; what the viewer gets is signed for this
+    // window from the object key (services/mediaDelivery.ts).
+    //
+    // A signed URL cannot be resized by the client any more (the width is part
+    // of what is signed), so images also carry signed variants at the widths
+    // the apps display them at.
+    const media: PostMedia[] = mediaForPost.map((entry) => {
+      const source = { purpose: "posts" as const, key: entry.object_key, storedUrl: entry.url, contentType: entry.mime_type || entry.media_type };
+      const delivered = deliverMedia(source);
+      const variants = delivered.url && entry.media_type === "image" && delivered.url !== entry.url
+        ? { variants: { thumb: deliverMedia({ ...source, width: MEDIA_WIDTHS.thumb }).url ?? delivered.url, feed: deliverMedia({ ...source, width: MEDIA_WIDTHS.feed }).url ?? delivered.url, detail: deliverMedia({ ...source, width: MEDIA_WIDTHS.detail }).url ?? delivered.url } }
+        : {};
+      return { id: entry.id, url: delivered.url, ...(delivered.unavailable ? { unavailable: true } : {}), ...variants, mediaType: entry.media_type, position: entry.position, width: entry.width, height: entry.height, durationSeconds: entry.duration_seconds === null ? null : Number(entry.duration_seconds) };
+    });
     return {
       id: row.id, _id: row.id, operationId: row.operation_id,
       user: publicUser(row.user_id, row.author_full_name, row.author_username, row.author_profile_picture),
-      content: row.content, image_urls: mediaForPost.map((entry) => entry.url), media,
+      content: row.content, image_urls: media.flatMap((entry) => entry.url ? [entry.url] : []), media,
       post_type: row.post_type, visibility: row.visibility, like_count: row.like_count, comment_count: row.comment_count,
       share_count: row.share_count, download_count: row.download_count,
       workout: row.workout_id ? workoutById.get(row.workout_id) ?? row.workout_id : null,

@@ -38,6 +38,14 @@ export interface Environment {
    * changes the cache format (docs/operations/DEPLOYMENT.md).
    */
   cacheReadsEnabled: boolean;
+  /**
+   * Hand out signed, expiring media URLs built from object keys (default).
+   * `false` serves the stored URLs again - a rollback switch for the rollout
+   * only, useless once ImageKit refuses unsigned URLs (ADR 003).
+   */
+  mediaSignedDelivery: boolean;
+  /** Also purge ImageKit's cache when a deleted file is removed from S3 (D-03; default off). */
+  imagekitPurgeOnDelete: boolean;
 }
 
 export type ProcessRole = "api" | "worker" | "scheduler";
@@ -177,6 +185,8 @@ export const loadEnvironment = (): Environment => {
     metricsPort: metricsPortValue ? integerValue("METRICS_PORT", 9464, 1, 65_535) : null,
     readinessRequiresRedis: booleanValue("READINESS_REQUIRE_REDIS", false),
     cacheReadsEnabled: booleanValue("CACHE_READS_ENABLED", true),
+    mediaSignedDelivery: booleanValue("MEDIA_SIGNED_DELIVERY", true),
+    imagekitPurgeOnDelete: booleanValue("IMAGEKIT_PURGE_ON_DELETE", false),
   };
   return cachedEnvironment;
 };

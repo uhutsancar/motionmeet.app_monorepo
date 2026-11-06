@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { MEDIA_WIDTHS, mediaSrcSet, mediaVariantUrl } from '../src/types/media.js';
+import { MEDIA_WIDTHS, mediaSrcSet, mediaSrcSetFrom, mediaVariantFrom, mediaVariantUrl } from '../src/types/media.js';
 
 const STORED = 'https://ik.imagekit.io/motionmeet/posts/user-1/1700000000-abc-photo.jpg?tr=q-auto,f-webp';
 
@@ -51,4 +51,21 @@ test('srcSet offers the next size up and nothing for a non-resizable URL', () =>
   assert.match(set, new RegExp(`w-${MEDIA_WIDTHS.detail}[^,]* ${MEDIA_WIDTHS.detail}w`));
   assert.equal(mediaSrcSet('https://example.com/photo.jpg', 'feed'), '');
   assert.equal(mediaSrcSet('', 'feed'), '');
+});
+
+test('a signed URL is never resized: the width would break its signature', () => {
+  const signed = 'https://ik.imagekit.io/motionmeet/posts/u/1-a.jpg?tr=q-auto,f-webp&ik-t=1800003600&ik-s=abc123';
+  assert.equal(mediaVariantUrl(signed, 'feed'), signed);
+  assert.equal(mediaSrcSet(signed, 'feed'), '');
+});
+
+test('signed variants from the server are used when present, the old resizing otherwise', () => {
+  const variants = { thumb: 'https://ik.imagekit.io/m/t?ik-s=1', feed: 'https://ik.imagekit.io/m/f?ik-s=2', detail: 'https://ik.imagekit.io/m/d?ik-s=3' };
+  const media = { url: 'https://ik.imagekit.io/m/x?ik-s=0', variants };
+  assert.equal(mediaVariantFrom(media, media.url, 'thumb'), variants.thumb);
+  assert.equal(mediaVariantFrom(media, media.url, 'feed'), variants.feed);
+  assert.equal(mediaVariantFrom(media, media.url, 'detail'), variants.detail);
+  assert.equal(mediaSrcSetFrom(media, media.url, 'feed'), `${variants.feed} 720w, ${variants.detail} 1440w`);
+  const legacy = 'https://ik.imagekit.io/m/posts/a.jpg?tr=q-auto';
+  assert.equal(mediaVariantFrom(undefined, legacy, 'feed'), 'https://ik.imagekit.io/m/posts/a.jpg?tr=q-auto,w-720');
 });

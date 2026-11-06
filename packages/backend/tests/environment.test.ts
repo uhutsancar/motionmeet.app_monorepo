@@ -8,7 +8,7 @@ const managedKeys = [
   "AWS_BUCKET_NAME", "IMAGEKIT_PUBLIC_KEY", "IMAGEKIT_PRIVATE_KEY", "IMAGEKIT_URL_ENDPOINT",
   "SMTP_USER", "SMTP_PASS", "SENDER_EMAIL", "ALLOW_INSECURE_REDIS_TLS",
   "OUTBOX_TRANSPORT", "RABBITMQ_URL", "ALLOW_INSECURE_RABBITMQ_TLS", "MOTIONMEET_PROCESS_ROLE", "METRICS_PORT",
-  "CACHE_READS_ENABLED",
+  "CACHE_READS_ENABLED", "MEDIA_SIGNED_DELIVERY", "IMAGEKIT_PURGE_ON_DELETE",
 ] as const;
 const original = new Map(managedKeys.map((key) => [key, process.env[key]]));
 
@@ -30,7 +30,7 @@ const productionBase = (): void => {
   process.env.MEDIA_UPLOADS_ENABLED = "false";
   process.env.EMAIL_ENABLED = "false";
   // Whatever the developer's shell exports must not leak into these cases.
-  for (const key of ["OUTBOX_TRANSPORT", "RABBITMQ_URL", "ALLOW_INSECURE_RABBITMQ_TLS", "MOTIONMEET_PROCESS_ROLE", "METRICS_PORT", "CACHE_READS_ENABLED"] as const) delete process.env[key];
+  for (const key of ["OUTBOX_TRANSPORT", "RABBITMQ_URL", "ALLOW_INSECURE_RABBITMQ_TLS", "MOTIONMEET_PROCESS_ROLE", "METRICS_PORT", "CACHE_READS_ENABLED", "MEDIA_SIGNED_DELIVERY", "IMAGEKIT_PURGE_ON_DELETE"] as const) delete process.env[key];
   resetEnvironmentForTests();
 };
 
@@ -113,5 +113,19 @@ test("the owner cache serves by default and can be switched off for a deploy win
     assert.equal(loadEnvironment().cacheReadsEnabled, false);
     process.env.CACHE_READS_ENABLED = "sometimes"; resetEnvironmentForTests();
     assert.throws(() => loadEnvironment(), /CACHE_READS_ENABLED/);
+  } finally { restore(); }
+});
+
+test("signed media delivery is on and CDN purge off unless switched", () => {
+  try {
+    productionBase();
+    const defaults = loadEnvironment();
+    assert.equal(defaults.mediaSignedDelivery, true);
+    assert.equal(defaults.imagekitPurgeOnDelete, false);
+    process.env.MEDIA_SIGNED_DELIVERY = "false"; process.env.IMAGEKIT_PURGE_ON_DELETE = "true"; resetEnvironmentForTests();
+    assert.equal(loadEnvironment().mediaSignedDelivery, false);
+    assert.equal(loadEnvironment().imagekitPurgeOnDelete, true);
+    process.env.MEDIA_SIGNED_DELIVERY = "no"; resetEnvironmentForTests();
+    assert.throws(() => loadEnvironment(), /MEDIA_SIGNED_DELIVERY/);
   } finally { restore(); }
 });

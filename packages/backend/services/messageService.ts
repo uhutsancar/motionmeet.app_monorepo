@@ -9,17 +9,24 @@ import type { Pagination } from "../utils/pagination.js";
 import { isUserId } from "../utils/validation.js";
 import { extractS3Key } from "../utils/s3Utils.js";
 import { queueMediaDeletions } from "./mediaDeletionService.js";
+import { deliverMedia } from "./mediaDelivery.js";
 import { commitReservedUploads } from "./mediaUploadService.js";
 import { evaluateMessagePermission, type MessagePermission } from "./accessControlService.js";
 
 export interface MessageAccess { id: string; _id: string; conversationId: string; from_user_id: string; to_user_id: string; media_url: string; media_key: string; seen: boolean }
 export const conversationPairKey = (left: string, right: string): string => [left, right].sort().join(":");
 
+/** A message photo, signed for this window; "" for a text message. */
+const messageMedia = (row: { media_url: string; media_key: string; message_type: "text" | "image" }): { media_url: string | null; mediaUnavailable?: true } => {
+  const delivered = deliverMedia({ purpose: "messages", key: row.media_key, storedUrl: row.media_url, contentType: row.message_type });
+  return delivered.unavailable ? { media_url: null, mediaUnavailable: true } : { media_url: delivered.url };
+};
+
 const hydrateMessages = async (rows: Array<Row<"messages">>, transaction: DatabaseTransaction | typeof database = database): Promise<Message[]> => {
   const ids = [...new Set(rows.flatMap((row) => [row.from_user_id, row.to_user_id]))];
   const users = ids.length ? await transaction.selectFrom("users").select(["id", "full_name", "username", "profile_picture_url"]).where("id", "in", ids).execute() : [];
   const byId = new Map<string, PublicUser>(users.map((user) => [user.id, publicUser(user.id, user.full_name, user.username, user.profile_picture_url)]));
-  return rows.map((row) => ({ id: row.id, _id: row.id, operationId: row.operation_id, conversationId: row.conversation_id, seq: Number(row.seq), from_user_id: byId.get(row.from_user_id) ?? row.from_user_id, to_user_id: byId.get(row.to_user_id) ?? row.to_user_id, text: row.text, message_type: row.message_type, media_url: row.media_url, seen: row.seen, createdAt: toIsoString(row.created_at) ?? new Date(0).toISOString(), updatedAt: toIsoString(row.updated_at) ?? new Date(0).toISOString() }));
+  return rows.map((row) => ({ id: row.id, _id: row.id, operationId: row.operation_id, conversationId: row.conversation_id, seq: Number(row.seq), from_user_id: byId.get(row.from_user_id) ?? row.from_user_id, to_user_id: byId.get(row.to_user_id) ?? row.to_user_id, text: row.text, message_type: row.message_type, ...messageMedia(row), seen: row.seen, createdAt: toIsoString(row.created_at) ?? new Date(0).toISOString(), updatedAt: toIsoString(row.updated_at) ?? new Date(0).toISOString() }));
 };
 
 /**

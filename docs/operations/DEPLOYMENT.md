@@ -28,6 +28,8 @@ capabilities dropped, `no-new-privileges`, non-root user, `tini` as PID 1.
 | `METRICS_PORT` | unset | private ops listener; keep it off the proxy |
 | `READINESS_REQUIRE_REDIS` | `false` | set `true` with more than one API replica |
 | `MOTIONMEET_PROCESS_ROLE` | `api` | set by the entry points; names DB connections and metrics |
+| `MEDIA_SIGNED_DELIVERY` | `true` | sign media URLs at read time; `false` only as a rollback before ImageKit restricts unsigned URLs |
+| `IMAGEKIT_PURGE_ON_DELETE` | `false` | purge ImageKit's cache when deleted media leaves S3 (D-03); check the plan's purge quota first |
 | `CACHE_READS_ENABLED` | `true` | `false` stops this replica serving and filling the owner cache (invalidations still run); see "Cache format changes" below |
 
 ## Connection budget
@@ -65,6 +67,25 @@ the Redis key prefix from `motionmeet:v1:` to `motionmeet:v2:`:
   start the new replicas with `CACHE_READS_ENABLED=false` and set it back to
   `true` (rolling restart) once no old replica is left; with serving off a
   replica reads every request from PostgreSQL.
+
+## Private media rollout (2026-11 audit, WP-06)
+
+Order matters; each step is safe to stop after.
+
+1. Deploy the backend (signed delivery on by default). ImageKit still accepts
+   unsigned URLs, so links already in clients keep working.
+2. `pnpm --filter @motionmeet/backend backfill:media-keys --dry-run`, then
+   without `--dry-run`. Watch `motionmeet_media_url_unresolvable_total`; the
+   script lists unresolvable rows by id. Get it to (near) zero.
+3. Ship web and mobile with the "media unavailable" placeholder and the
+   variant-aware image helpers. Old store builds render a missing image where
+   the new ones show the placeholder; do not go on while a large share of
+   users is on builds older than this release.
+4. Infrastructure (RUNBOOKS.md, "Media access hardening"): close anonymous
+   read on the user-media prefixes in S3 (Ek B-1), connect ImageKit to S3 with
+   a private read-only credential, then turn on ImageKit "Restrict unsigned
+   URLs" for images and videos (Ek B-2). From here on unsigned links fail and
+   `MEDIA_SIGNED_DELIVERY=false` is no longer a rollback.
 
 ## Switching the outbox to RabbitMQ
 

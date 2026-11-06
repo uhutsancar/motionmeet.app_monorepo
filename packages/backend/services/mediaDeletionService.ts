@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { database, withTransaction, type DatabaseTransaction } from "../configs/database.js";
 import type { Row } from "../db/types.js";
 import { deleteFromS3 } from "../utils/s3Utils.js";
+import { loadEnvironment } from "../configs/environment.js";
 
 const validKeys = (keys: readonly unknown[]): string[] => [...new Set(keys.filter((key): key is string => typeof key === "string" && key.length > 0))];
 
@@ -34,13 +35,45 @@ const recordFailure = async (job: Row<"media_deletion_jobs">, error: unknown): P
     .where("id", "=", job.id).where("claim_token", "=", job.claim_token).execute();
 };
 
+/**
+ * Asks ImageKit to drop every cached variant of a deleted file (D-03; off by
+ * default, `IMAGEKIT_PURGE_ON_DELETE=true`). Purges are limited and may be
+ * billed by plan, and signed URLs already stop working at the end of their
+ * window, so this only shortens how long a link handed out *before* the
+ * deletion keeps working. The trailing `*` asks for every transformation of
+ * the path; confirm the wildcard behaviour on the account's plan before
+ * enabling (Ek B-3). Nothing about the file or the request is logged.
+ */
+const purgeImageKitCache = async (objectKey: string): Promise<void> => {
+  const endpoint = process.env.IMAGEKIT_URL_ENDPOINT?.replace(/\/+$/, "");
+  const privateKey = process.env.IMAGEKIT_PRIVATE_KEY;
+  if (!endpoint || !privateKey) throw new Error("ImageKit purge is enabled but ImageKit is not configured");
+  const response = await fetch("https://api.imagekit.io/v1/files/purge", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Basic ${Buffer.from(`${privateKey}:`).toString("base64")}` },
+    body: JSON.stringify({ url: `${endpoint}/${objectKey.replace(/^\/+/, "")}*` }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) throw new Error(`ImageKit purge failed with ${response.status}`);
+};
+
+/**
+ * One job is "delete from S3, then (if enabled) purge the CDN". A purge that
+ * fails is retried with the job's backoff; the S3 delete is repeated with it,
+ * which is harmless - deleting a missing object succeeds.
+ */
+const removeEverywhere = async (objectKey: string): Promise<void> => {
+  await deleteFromS3(objectKey);
+  if (loadEnvironment().imagekitPurgeOnDelete) await purgeImageKitCache(objectKey);
+};
+
 export const processMediaDeletionJobs = async ({ limit = 200, keys }: { limit?: number; keys?: string[] } = {}): Promise<number> => {
   let processed = 0;
   while (processed < limit) {
     const job = await claimJob(keys);
     if (!job) break;
     try {
-      await deleteFromS3(job.object_key);
+      await removeEverywhere(job.object_key);
       await database.deleteFrom("media_deletion_jobs").where("id", "=", job.id).where("claim_token", "=", job.claim_token).execute();
     } catch (error: unknown) { await recordFailure(job, error); }
     processed += 1;

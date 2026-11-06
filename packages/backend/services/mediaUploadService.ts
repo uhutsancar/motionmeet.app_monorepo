@@ -6,6 +6,7 @@ import imagekit from "../configs/imageKit.js";
 import { hasValidMediaSignature } from "../utils/mediaValidation.js";
 import { createS3Key, uploadToS3 } from "../utils/s3Utils.js";
 import { processMediaDeletionJobs, queueMediaDeletions } from "./mediaDeletionService.js";
+import { transformationsFor } from "./mediaDelivery.js";
 
 const IMAGE_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"]);
 const VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
@@ -21,15 +22,16 @@ const isPurpose = (value: unknown): value is UploadPurpose => typeof value === "
 /** The shortest file whose signature bytes `hasValidMediaSignature` can read. */
 const MIN_MEDIA_BYTES = 12;
 
+/**
+ * The URL stored with an upload. It is a record and a rollback path only
+ * (`MEDIA_SIGNED_DELIVERY=false`): responses deliver a signed, expiring URL
+ * built from the object key at read time (mediaDelivery.ts).
+ */
 const transformedUrl = (purpose: UploadPurpose, key: string, contentType: string): string => {
   if (!imagekit) throw Object.assign(new Error("Media service is not configured"), { status: 503 });
   const cleanKey = key.startsWith("/") ? key.slice(1) : key;
-  if (contentType.startsWith("video/")) return imagekit.url({ path: cleanKey });
-  const transformations: Record<UploadPurpose, Array<Record<string, string>>> = {
-    profiles: [{ width: "512" }, { quality: "auto" }, { format: "webp" }], covers: [{ width: "1280" }, { quality: "auto" }, { format: "webp" }],
-    posts: [{ quality: "auto" }, { format: "webp" }], messages: [{ quality: "auto" }, { format: "webp" }, { width: "1280" }], stories: [{ quality: "auto" }, { format: "webp" }],
-  };
-  return imagekit.url({ path: cleanKey, transformation: transformations[purpose], transformationPosition: "query" });
+  const transformation = transformationsFor(purpose, contentType);
+  return imagekit.url({ path: cleanKey, ...(transformation ? { transformation, transformationPosition: "query" as const } : {}) });
 };
 
 interface ReservationInput { userId: string; purpose: unknown; fileName: unknown; contentType: unknown; size: unknown }

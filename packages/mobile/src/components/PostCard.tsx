@@ -39,6 +39,7 @@ import { formatNumber } from '../utils/format';
 import {
   CONTENT_LIMITS,
   buildPostShareUrl,
+  mediaVariantFrom,
   mediaVariantUrl,
   type Comment,
   type Exercise,
@@ -73,6 +74,8 @@ interface PostCardProps {
 
 type CarouselItem =
   | { type: 'video' | 'image'; url: string }
+  /** A file the server can no longer deliver (no signed URL could be built). */
+  | { type: 'unavailable' }
   | { type: 'workout'; data: Workout };
 
 const PostVideo = ({ source, style }: PostVideoProps) => {
@@ -755,6 +758,10 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
   } else {
     imageUrls.forEach(url => carouselData.push({ type: 'image', url }));
   }
+  for (const entry of post.media ?? []) if (entry.unavailable) carouselData.push({ type: 'unavailable' });
+  // Signed media cannot be resized by changing its URL; the server sends
+  // ready-made variants, found here by the URL they belong to.
+  const mediaFor = (url: string) => post.media?.find((entry) => entry.url === url);
 
   // 2) Append Workout exercise card so it's a swipe away
   if (hasWorkout) {
@@ -782,7 +789,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
           accessibilityHint={t('feed.double_tap_like', 'Beğenmek için iki kez dokun')}
         >
           <Image
-            source={{ uri: mediaVariantUrl(item.url, 'feed') }}
+            source={{ uri: mediaVariantFrom(mediaFor(item.url), item.url, 'feed') }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
             transition={120}
@@ -790,6 +797,14 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
             recyclingKey={item.url}
           />
         </Pressable>
+      );
+    } else if (item.type === 'unavailable') {
+      return (
+        <View style={[s.carouselSlide, { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 }]}>
+          <Text variant="bodyMedium" style={{ color: theme.textSecondary, textAlign: 'center' }}>
+            {t('common.media_unavailable', 'This media is no longer available')}
+          </Text>
+        </View>
       );
     } else if (item.type === 'workout') {
       const exercises = item.data.exercises || [];

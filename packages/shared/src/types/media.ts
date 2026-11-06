@@ -55,6 +55,10 @@ export const mediaVariantUrl = (value: unknown, variant: MediaVariant): string =
     return raw;
   }
   if (!IMAGEKIT_HOST_PATTERN.test(url.hostname)) return raw;
+  // A signed URL covers its transformation: adding a width would invalidate
+  // the signature and ImageKit would refuse the request. Servers that sign
+  // send ready-made `variants` instead (see `mediaVariantFrom`).
+  if (url.searchParams.has("ik-s")) return raw;
   // Resizing does not apply to video, and asking for it produces a transform
   // ImageKit has to reject or re-encode.
   if (VIDEO_EXTENSION_PATTERN.test(url.pathname)) return raw;
@@ -85,4 +89,29 @@ export const mediaSrcSet = (value: unknown, variant: MediaVariant): string => {
   const entries = [`${base} ${MEDIA_WIDTHS[variant]}w`];
   if (next) entries.push(`${mediaVariantUrl(value, next)} ${MEDIA_WIDTHS[next]}w`);
   return entries.join(", ");
+};
+
+/** A delivered image as the API describes it: its URL and, from servers that sign, its variants. */
+export interface DeliveredImage {
+  url: string | null;
+  variants?: { thumb: string; feed: string; detail: string };
+}
+
+const VARIANT_SOURCE: Record<MediaVariant, "thumb" | "feed" | "detail"> = { avatar: "thumb", thumb: "thumb", feed: "feed", detail: "detail" };
+
+/**
+ * The URL to display `url` at `variant`: the server's signed variant when it
+ * sent one, otherwise the URL resized the old way. `media` is the post media
+ * entry `url` came from, if the caller has it.
+ */
+export const mediaVariantFrom = (media: DeliveredImage | undefined, url: unknown, variant: MediaVariant): string =>
+  media?.variants?.[VARIANT_SOURCE[variant]] ?? mediaVariantUrl(url, variant);
+
+/** `srcset` from the server's signed variants when present, else `mediaSrcSet`. */
+export const mediaSrcSetFrom = (media: DeliveredImage | undefined, url: unknown, variant: MediaVariant): string => {
+  const variants = media?.variants;
+  if (!variants) return mediaSrcSet(url, variant);
+  const order: Array<"thumb" | "feed" | "detail"> = ["thumb", "feed", "detail"];
+  const start = order.indexOf(VARIANT_SOURCE[variant]);
+  return order.slice(start, start + 2).map((name) => `${variants[name]} ${MEDIA_WIDTHS[name]}w`).join(", ");
 };

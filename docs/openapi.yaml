@@ -1104,7 +1104,10 @@ components:
         to_user_id: {}
         text: { type: string }
         message_type: { type: string, enum: [text, image] }
-        media_url: { type: string }
+        media_url:
+          type: [string, "null"]
+          description: Signed and time-limited; "" for a text message; null when the photo cannot be delivered.
+        mediaUnavailable: { type: boolean }
         seen: { type: boolean }
         operationId: { type: [string, "null"] }
         createdAt: { type: string, format: date-time }
@@ -1227,7 +1230,20 @@ components:
       required: [id, url, mediaType, position]
       properties:
         id: { type: string }
-        url: { type: string, format: uri }
+        url:
+          type: [string, "null"]
+          format: uri
+          description: Signed and time-limited (ImageKit `ik-t`/`ik-s`); do not modify it. Null when the file cannot be delivered.
+        unavailable:
+          type: boolean
+          description: The file cannot be delivered; show a placeholder.
+        variants:
+          type: object
+          description: Signed URLs of an image at display widths (thumb 320, feed 720, detail 1440). Absent for videos.
+          properties:
+            thumb: { type: string, format: uri }
+            feed: { type: string, format: uri }
+            detail: { type: string, format: uri }
         mediaType: { enum: [image, video] }
         position: { type: integer, minimum: 0, maximum: 3 }
         width:

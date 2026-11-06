@@ -574,6 +574,11 @@ const StoryViewer = ({
     >
       <View style={styles.container}>
         <View style={[styles.storyContent, { backgroundColor }]} onLayout={onFrameLayout}>
+          {currentStory.mediaUnavailable && (
+            <Text style={styles.mediaFailed}>
+              {t('common.media_unavailable', 'This media is no longer available')}
+            </Text>
+          )}
           {currentStory.media_type === 'image' && mediaUrl && failedImageUrl === mediaUrl && (
             <Text style={styles.mediaFailed}>
               {t('story.media_failed', 'Bu hikaye yüklenemedi. Geçmek için dokun.')}

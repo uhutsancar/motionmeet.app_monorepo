@@ -624,6 +624,11 @@ const ChatBox = ({ route, navigation }: ChatBoxProps) => {
             </View>
           )}
           <View style={[s.msgColumn, { maxWidth: bubbleMaxWidth }, mine ? s.alignEnd : s.alignStart]}>
+            {msg.message_type === 'image' && msg.mediaUnavailable ? (
+              <Text style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, overflow: 'hidden', backgroundColor: theme.surfaceLight, color: theme.textSecondary }}>
+                {t('common.media_unavailable', 'This media is no longer available')}
+              </Text>
+            ) : null}
             {hasMedia && msg.media_url ? (
               <ChatPhoto
                 uri={msg.media_url}

@@ -12,6 +12,7 @@ import { distanceMeters, withinRadius } from "./locationGeometry.js";
 import { describeCity, findNearestCity } from "./locationService.js";
 import { getRelationshipMap } from "./relationshipService.js";
 import { distanceBandFor } from "../utils/distanceBands.js";
+import { profileImageUrl } from "./mediaDelivery.js";
 
 /**
  * Nearby: proximity search over device GPS fixes.
@@ -316,7 +317,7 @@ const presentCandidates = async (viewerId: string, ownCityId: number | null, can
       _id: row.id,
       full_name: row.full_name,
       username: row.username,
-      profile_picture: row.profile_picture_url,
+      profile_picture: profileImageUrl(row.profile_picture_url),
       bio: row.bio,
       // A member who restricted their profile location keeps it hidden here too.
       location: row.location_visibility === "public" ? row.location : "",

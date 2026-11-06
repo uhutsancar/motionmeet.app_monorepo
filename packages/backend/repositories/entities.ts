@@ -1,4 +1,5 @@
 import type { PrivacySettings, ProfileLocation, ProfileLocationSource, User, UserStatistics } from "@motionmeet/shared";
+import { profileImageUrl } from "../services/mediaDelivery.js";
 import type { Row } from "../db/types.js";
 
 export interface InternalUser extends User {
@@ -62,8 +63,8 @@ export const serializeUser = (row: Row<"users">, includeSensitive = false): Inte
     full_name: row.full_name,
     username: row.username,
     bio: row.bio,
-    profile_picture: row.profile_picture_url,
-    cover_photo: row.cover_photo_url,
+    profile_picture: profileImageUrl(row.profile_picture_url, row.profile_picture_key),
+    cover_photo: profileImageUrl(row.cover_photo_url, row.cover_photo_key, "covers"),
     location: row.location,
     profileLocation: profileLocation(row),
     role: row.role,

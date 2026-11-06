@@ -1,5 +1,6 @@
 {
     "common": {
+        "media_unavailable": "Bu medya artık kullanılamıyor",
         "error": "Hata",
         "saving": "Yükleniyor...",
         "success": "Başarılı",

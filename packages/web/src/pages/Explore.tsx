@@ -19,7 +19,7 @@ import { PageHeader, PageShell } from "~/components/AppPage";
 import PostCard from "~/components/PostCard";
 import { discoverUsers, getFeed } from "~/api/endpoints";
 import { useAuthContext } from "~/context/AuthProvider";
-import type { Post, PublicUser } from "@motionmeet/shared";
+import { mediaVariantFrom, type Post, type PublicUser } from "@motionmeet/shared";
 
 /** Instagram's grid, and the one people already know how to read. */
 const COLUMNS = 3;
@@ -28,8 +28,11 @@ const SEARCH_DEBOUNCE_MS = 280;
 
 const firstMedia = (post: Post): { url: string; isVideo: boolean; count: number } | null => {
   const entry = post.media?.find((item) => typeof item.url === "string" && item.url.trim());
-  if (entry) {
-    return { url: entry.url.trim(), isVideo: entry.mediaType === "video", count: post.media?.length ?? 1 };
+  const entryUrl = entry?.url?.trim();
+  if (entry && entryUrl) {
+    // A grid cell needs the thumbnail; signed URLs come with it ready-made.
+    const url = entry.mediaType === "video" ? entryUrl : mediaVariantFrom(entry, entryUrl, "thumb");
+    return { url, isVideo: entry.mediaType === "video", count: post.media?.length ?? 1 };
   }
   const legacy = post.image_urls?.find((url) => typeof url === "string" && url.trim());
   return legacy ? { url: legacy.trim(), isVideo: false, count: post.image_urls?.length ?? 1 } : null;

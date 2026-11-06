@@ -1,4 +1,5 @@
 import type { RelationshipState } from "@motionmeet/shared";
+import { profileImageUrl } from "./mediaDelivery.js";
 import { database, withTransaction } from "../configs/database.js";
 import { invalidateMember } from "./feedCache.js";
 import { emitToUser, invalidateMessagePermissions } from "../realtime/socketRegistry.js";
@@ -372,7 +373,7 @@ const listRequests = async (
   const last = selected.at(-1);
   return {
     items: selected.map((row) => ({
-      user: { id: row.user_id, _id: row.user_id, full_name: row.full_name, username: row.username, profile_picture: row.profile_picture_url },
+      user: { id: row.user_id, _id: row.user_id, full_name: row.full_name, username: row.username, profile_picture: profileImageUrl(row.profile_picture_url) },
       createdAt: new Date(row.created_at).toISOString(),
     })),
     nextCursor:

@@ -12,6 +12,7 @@ are unchanged and covered by `docs/security-verification/`.
 | Tampering: client claims a file is an image | upload | Server checks S3 stored type, size bounds and the file's leading bytes before attaching; post type derived from the files, not from the request |
 | Tampering: attaching someone else's upload | post/story/message create | Reservation must match owner, purpose and expiry; duplicates refused |
 | Repudiation | worker actions | Every log line carries the originating trace id; outbox rows kept 7 days after delivery |
+| Information disclosure: media links outlive access (deleted post, unfollow, private account, expired story) | media delivery | URLs signed per request from the object key with a window per purpose (messages/stories ≤ 65 min, posts ≤ 6 h 15 min, avatars ≤ 25 h; stories never past expiry); no new link without passing the access check; no unsigned fallback. Accepted: an already-issued link works until its expiry (D-03). Requires ImageKit "Restrict unsigned URLs" and private S3 prefixes (Ek B-1/B-2) |
 | Information disclosure: cached pages after access is withdrawn | feed/profile cache | Both members' caches dropped on removed connection/unfollow; audience epoch retires all pages when an account goes private or content is deleted |
 | Information disclosure: workout hidden from feed reappears | post create | Any post carrying a workout is stored as `workout`, so the feed filter applies |
 | Information disclosure: internals via metrics | ops port | Separate port, not routed by the proxy, low-cardinality labels with no ids |

@@ -243,6 +243,11 @@ const StoryViewer = ({ stories, open, onClose, onDeleted }: StoryViewerProps) =>
             bgcolor: story.background_color || "common.black",
           }}
         >
+          {story.mediaUnavailable && (
+            <Typography variant="body2" sx={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", px: 3, color: "grey.300", textAlign: "center" }}>
+              {t("common.media_unavailable", "This media is no longer available")}
+            </Typography>
+          )}
           {story.media_type !== "text" && story.media_url && (
             <Box
               component={story.media_type === "image" ? "img" : "video"}

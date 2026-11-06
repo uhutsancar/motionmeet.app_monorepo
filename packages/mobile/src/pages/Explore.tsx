@@ -21,7 +21,7 @@ import { getPosts } from '../api/endpoints';
 import { logHandledError } from '../utils/feedback';
 import SuggestedAthletes from '../components/SuggestedAthletes';
 import PostViewerModal from '../components/PostViewerModal';
-import { mediaVariantUrl, type Post } from '@motionmeet/shared';
+import { mediaVariantFrom, mediaVariantUrl, type Post } from '@motionmeet/shared';
 import { useScrollToTopOnTabPress } from '../hooks/useScrollToTopOnTabPress';
 import { useAdEntitlement } from '../hooks/useAdEntitlement';
 import { createAdGapSequence, newAdSeed } from '../config/ads';
@@ -64,7 +64,9 @@ const withAdTiles = (posts: Post[], seed: number): GridItem[] => {
 
 const firstMedia = (post: Post): { url: string; isVideo: boolean } | null => {
   const entry = post.media?.find((item) => typeof item.url === 'string' && item.url.trim());
-  if (entry) return { url: entry.url.trim(), isVideo: entry.mediaType === 'video' };
+  const entryUrl = entry?.url?.trim();
+  // A grid cell needs the thumbnail; signed URLs come with it ready-made.
+  if (entry && entryUrl) return { url: entry.mediaType === 'video' ? entryUrl : mediaVariantFrom(entry, entryUrl, 'thumb'), isVideo: entry.mediaType === 'video' };
   const legacy = post.image_urls?.find((url) => typeof url === 'string' && url.trim());
   return legacy ? { url: legacy.trim(), isVideo: false } : null;
 };

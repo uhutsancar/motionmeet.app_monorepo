@@ -15,11 +15,12 @@ import { invalidateMessagePermissions } from "../realtime/socketRegistry.js";
 import { queueMediaDeletions } from "./mediaDeletionService.js";
 import { enqueueOutboxEvent } from "./outboxService.js";
 import { extractS3Key } from "../utils/s3Utils.js";
+import { profileImageUrl } from "./mediaDelivery.js";
 import { escapeLikePattern, isUserId } from "../utils/validation.js";
 import type { Pagination } from "../utils/pagination.js";
 
 const MAX_RELATIONSHIPS = 10_000;
-const brief = (row: { id: string; full_name: string; username: string; profile_picture_url: string }): PublicUser => ({ id: row.id, _id: row.id, full_name: row.full_name, username: row.username, profile_picture: row.profile_picture_url });
+const brief = (row: { id: string; full_name: string; username: string; profile_picture_url: string }): PublicUser => ({ id: row.id, _id: row.id, full_name: row.full_name, username: row.username, profile_picture: profileImageUrl(row.profile_picture_url) });
 // Search and suggestion lists reach people the member has no relationship with,
 // so anything short of a public profile location is withheld there.
 const summary = (row: { id: string; full_name: string; username: string; profile_picture_url: string; bio: string; location: string; location_visibility: string; followers_count: number; following_count: number; connections_count: number }) => ({ ...brief(row), bio: row.bio, location: row.location_visibility === "public" ? row.location : "", followers_count: row.followers_count, following_count: row.following_count, connections_count: row.connections_count });

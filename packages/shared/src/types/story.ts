@@ -53,7 +53,10 @@ export interface Story extends Timestamped, IdempotentRequest {
   _id: EntityId;
   user: PublicUser | EntityId;
   content: string;
-  media_url: string;
+  /** Signed, valid until the story expires at the latest; "" for a text story; null when it cannot be delivered. */
+  media_url: string | null;
+  /** The story's media cannot be delivered; show a placeholder. */
+  mediaUnavailable?: boolean;
   media_type: "text" | "image" | "video";
   background_color: string;
   /** Captions and stickers drawn over the media, in paint order. */

@@ -28,7 +28,8 @@ import {
   API_ROUTES,
   CONTENT_LIMITS,
   buildPostShareUrl,
-  mediaSrcSet,
+  mediaSrcSetFrom,
+  mediaVariantFrom,
   mediaVariantUrl,
   type ApiFailure,
   type Comment,
@@ -61,6 +62,8 @@ interface CommentsResponse {
 type CarouselItem =
   | { type: "image"; url: string }
   | { type: "video"; url: string }
+  /** A file the server can no longer deliver (no signed URL could be built). */
+  | { type: "unavailable" }
   | { type: "workout"; data: Workout };
 
 const errorMessage = (error: unknown, fallback: string): string => {
@@ -105,7 +108,11 @@ const PostCard = ({ post }: PostCardProps) => {
 
   if (isVideo && imageUrls.length > 0) carouselData.push({ type: "video", url: imageUrls[0] });
   else imageUrls.forEach((url) => carouselData.push({ type: "image", url }));
+  for (const entry of post.media ?? []) if (entry.unavailable) carouselData.push({ type: "unavailable" });
   if (hasWorkout && workout) carouselData.push({ type: "workout", data: workout });
+  // Signed media cannot be resized by changing its URL; the server sends
+  // ready-made variants, found here by the URL they belong to.
+  const mediaFor = (url: string) => post.media?.find((entry) => entry.url === url);
 
   const handleLike = async () => {
     if (isLiking) return;
@@ -347,7 +354,7 @@ const PostCard = ({ post }: PostCardProps) => {
           >
             {carouselData.map((item, index) => (
               <Box
-                key={`${item.type}-${item.type === "workout" ? index : item.url}`}
+                key={`${item.type}-${item.type === "workout" || item.type === "unavailable" ? index : item.url}`}
                 sx={{ width: "100%", flexShrink: 0, scrollSnapAlign: "center", position: "relative", aspectRatio: { xs: "4 / 4.6", sm: "4 / 3.9" }, maxHeight: 620, bgcolor: item.type === "workout" ? "action.hover" : "common.black", borderTop: 1, borderBottom: 1, borderColor: "divider" }}
               >
                 {item.type === "video" ? (
@@ -355,14 +362,20 @@ const PostCard = ({ post }: PostCardProps) => {
                 ) : item.type === "image" ? (
                   <Box
                     component="img"
-                    src={mediaVariantUrl(item.url, "feed")}
-                    srcSet={mediaSrcSet(item.url, "feed") || undefined}
+                    src={mediaVariantFrom(mediaFor(item.url), item.url, "feed")}
+                    srcSet={mediaSrcSetFrom(mediaFor(item.url), item.url, "feed") || undefined}
                     sizes="(max-width: 720px) 100vw, 720px"
                     alt={`Slide ${index + 1}`}
                     loading="lazy"
                     decoding="async"
                     sx={{ width: "100%", height: "100%", objectFit: "cover" }}
                   />
+                ) : item.type === "unavailable" ? (
+                  <Stack sx={{ height: "100%", alignItems: "center", justifyContent: "center", px: 3, color: "grey.400" }}>
+                    <Typography variant="body2" sx={{ textAlign: "center" }}>
+                      {t("common.media_unavailable", "This media is no longer available")}
+                    </Typography>
+                  </Stack>
                 ) : (
                   <Stack spacing={2.5} sx={{ height: "100%", px: 3, justifyContent: "center" }}>
                     {item.data.exercises.slice(0, 4).map((exercise, exerciseIndex) => {

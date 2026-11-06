@@ -23,7 +23,8 @@
     "confirm": "Onayla",
     "message_action": "Mesaj gönder",
     "add": "Ekle",
-    "clear": "Temizle"
+    "clear": "Temizle",
+    "media_unavailable": "Bu medya artık kullanılamıyor"
   },
   "discover": {
     "description": "Harika insanlarla bağlantı kurun ve ağınızı büyütün",

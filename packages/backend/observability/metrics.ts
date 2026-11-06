@@ -79,5 +79,17 @@ export const cacheInvalidationFailures = new client.Counter({
   registers: [registry],
 });
 
+/**
+ * Stored media of ours whose object key could not be recovered, so no signed
+ * URL could be built and the client was told the medium is unavailable.
+ * `scripts/backfillMediaKeys.ts` reports and repairs such rows.
+ */
+export const mediaUrlUnresolvable = new client.Counter({
+  name: "motionmeet_media_url_unresolvable_total",
+  help: "Media that could not be delivered because its object key is unknown, by purpose.",
+  labelNames: ["purpose"] as const,
+  registers: [registry],
+});
+
 /** `2xx`-style class, so the status label has five values instead of sixty. */
 export const statusClass = (status: number): string => `${Math.floor(status / 100)}xx`;

@@ -9,7 +9,10 @@ export interface Message extends Timestamped, IdempotentRequest {
   to_user_id: PublicUser | EntityId;
   text: string;
   message_type: "text" | "image";
-  media_url: string;
+  /** Signed and time-limited; "" for a text message; null when the photo cannot be delivered. */
+  media_url: string | null;
+  /** The photo cannot be delivered; show a placeholder. */
+  mediaUnavailable?: boolean;
   seen: boolean;
   /**
    * Position in the conversation, assigned at commit order. Not contiguous:

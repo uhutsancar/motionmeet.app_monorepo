@@ -1,0 +1,25 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublicReadExerciseArtworkOnly",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::REPLACE_WITH_BUCKET/exercises/*"
+    },
+    {
+      "Sid": "ImageKitOriginReadsUserMedia",
+      "Effect": "Allow",
+      "Principal": { "AWS": "arn:aws:iam::REPLACE_WITH_ACCOUNT_ID:user/REPLACE_WITH_IMAGEKIT_ORIGIN_USER" },
+      "Action": "s3:GetObject",
+      "Resource": [
+        "arn:aws:s3:::REPLACE_WITH_BUCKET/posts/*",
+        "arn:aws:s3:::REPLACE_WITH_BUCKET/stories/*",
+        "arn:aws:s3:::REPLACE_WITH_BUCKET/messages/*",
+        "arn:aws:s3:::REPLACE_WITH_BUCKET/profiles/*",
+        "arn:aws:s3:::REPLACE_WITH_BUCKET/covers/*"
+      ]
+    }
+  ]
+}

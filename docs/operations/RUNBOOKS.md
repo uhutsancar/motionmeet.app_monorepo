@@ -125,6 +125,35 @@ select id, last_seq, tombstone_floor_seq from conversations where pair_key = '<i
 
 Sync never marks anything read, so a resync loop costs reads, not data.
 
+## Media URL unresolvable (`motionmeet_media_url_unresolvable_total` rising)
+
+A medium of ours had no object key and none could be read from its stored
+URL, so clients got "unavailable" instead of an image.
+
+1. `pnpm --filter @motionmeet/backend backfill:media-keys --dry-run` lists the
+   rows by id (never the URLs). Run it without `--dry-run` to write every key
+   that can be recovered.
+2. What remains has a stored URL that does not contain
+   `<purpose>/<userId>/<file>`. Look up the object in S3 by hand; if it
+   exists, set the key column (`post_media.object_key`, `stories.media_key`,
+   `messages.media_key`, `users.profile_picture_key` / `cover_photo_key`); if it
+   does not, the media is gone and "unavailable" is correct.
+
+## Media access hardening (Ek B-1, B-2)
+
+Do this only after the private media rollout steps 1-3 (DEPLOYMENT.md).
+
+1. Find the bucket behind `AWS_BUCKET_NAME` and read its policy and
+   Block Public Access settings. If user media and exercise artwork share it,
+   apply `infra/s3/user-media-bucket-policy.example.json` (public read for
+   `exercises/*` only); better, move user media to a bucket of its own.
+2. Verify from outside: `curl -I https://<bucket>.s3.<region>.amazonaws.com/posts/<known-key>`
+   must answer 403; the same for `stories/`, `messages/`, `profiles/`, `covers/`.
+3. In ImageKit, connect the origin with an IAM user that may only
+   `s3:GetObject` on those prefixes.
+4. Turn on "Restrict unsigned URLs" for images and videos. Verify: an
+   unsigned URL → 401, a signed one → 200, a signed one after its `ik-t` → 401.
+
 ## Restore drill
 
 Not automated here. Restore the latest PITR snapshot into a scratch instance,

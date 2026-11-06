@@ -788,6 +788,11 @@ const WebMessages = () => {
                       </IconButton>
                     )}
                     <Stack sx={{ maxWidth: { xs: '78%', md: '60%' }, alignItems: mine ? 'flex-end' : 'flex-start' }} spacing={0.25}>
+                      {msg.message_type === 'image' && msg.mediaUnavailable && (
+                        <Typography variant="caption" sx={{ px: 1.5, py: 1, borderRadius: 2, bgcolor: 'action.hover', color: 'text.secondary' }}>
+                          {t('common.media_unavailable', 'This media is no longer available')}
+                        </Typography>
+                      )}
                       {msg.message_type === 'image' && msg.media_url && (
                         <Box
                           component="img"

@@ -7,7 +7,19 @@ export type PostType = "text" | "image" | "text_with_image" | "video" | "workout
 
 export interface PostMedia {
   id: EntityId;
-  url: string;
+  /**
+   * Signed and time-limited; build nothing on its shape. Null when the server
+   * cannot deliver the file (see `unavailable`).
+   */
+  url: string | null;
+  /** The file cannot be delivered; show a placeholder. */
+  unavailable?: boolean;
+  /**
+   * Signed URLs of an image at the widths the apps display it at. Use these
+   * instead of resizing `url`: a signed URL cannot be changed. Absent for
+   * videos and from older servers.
+   */
+  variants?: { thumb: string; feed: string; detail: string };
   mediaType: "image" | "video";
   position: number;
   /**
@@ -40,6 +52,7 @@ export interface Post extends Timestamped, IdempotentRequest {
   _id: EntityId;
   user: PublicUser | EntityId;
   content: string;
+  /** The deliverable image/video URLs, in order; files that cannot be delivered are left out. */
   image_urls: string[];
   media?: PostMedia[];
   post_type: PostType;
