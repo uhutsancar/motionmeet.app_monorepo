@@ -17,7 +17,7 @@ Status values: `NOT_STARTED`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-ENV`
 | WP-06 | NOT_STARTED | | | |
 | WP-07 | DONE | see `git log --grep WP-07` | `auditRegressions.test.ts` R6b + positive follower/public checks | D-04 default applied. Old store builds: no release tags in the repo; the last 60 mobile commits never read `statistics`/`weight`/`height` of another member without optional chaining, so `null` is safe for them |
 | WP-08 | NOT_STARTED | | | |
-| WP-09 | NOT_STARTED | | | |
+| WP-09 | DONE | see `git log --grep WP-09` | `integration/poolSelfDeadlock.test.ts` (child process, `DATABASE_POOL_MAX=1`, 10 write paths each < 2 s) | Scan of every `withTransaction` block (accountService, authService ×2, exerciseService, measurementService, mediaDeletionService, mediaUploadService, messageService ×3, postInteractionService ×4, postService ×2, relationshipService ×4, routineService ×3, storyService ×2, userService ×4, workoutService, cronJobs ×2, consumers): the only helper reading through the global pool was `storyService.hydrate` (fixed). All other helpers called inside transactions either take the executor (`findHydratedPost`, `hydratePosts`, `findWorkoutById`, `applyWorkoutAnalytics`, `commitReservedUploads`, `queueMediaDeletions`, `enqueueOutboxEvent`, `reserveQuota`, `hydrateMessages`) or are pure |
 | WP-10 | NOT_STARTED | | | |
 | WP-11 | NOT_STARTED | | | |
 | WP-12 | NOT_STARTED | | | |

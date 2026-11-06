@@ -1,6 +1,6 @@
 import type { Story, StoryOverlay, StoryViewer } from "@motionmeet/shared";
 import { sql } from "kysely";
-import { database, withTransaction } from "../configs/database.js";
+import { database, withTransaction, type DatabaseTransaction } from "../configs/database.js";
 import { markDone, wasDone } from "../configs/redis.js";
 import { publicUser } from "../repositories/postRepository.js";
 import { toIsoString } from "../repositories/entities.js";
@@ -13,9 +13,18 @@ import * as quotaService from "./quotaService.js";
 interface StoryAccess { id: string; _id: string; user: string; media_url: string; media_key: string }
 interface NewStory { user: string; operationId: string; content: string; media_url: string; media_key: string; media_type: "text" | "image" | "video"; background_color: string; overlays: StoryOverlay[] }
 
-const hydrate = async (rows: Array<{ id: string; user_id: string; operation_id: string | null; content: string; media_url: string; media_key: string; media_type: "text" | "image" | "video"; background_color: string; overlays: StoryOverlay[] | null; expires_at: Date; created_at: Date; updated_at: Date }>): Promise<Story[]> => {
+type Executor = DatabaseTransaction | typeof database;
+
+/**
+ * Takes the executor of the caller's transaction when there is one. Reading
+ * the authors through the global pool from inside `createStory`'s transaction
+ * held one connection while waiting for a second; with the pool exhausted that
+ * request waited for itself until the connection timeout (R6 in the 2026-11
+ * audit).
+ */
+const hydrate = async (rows: Array<{ id: string; user_id: string; operation_id: string | null; content: string; media_url: string; media_key: string; media_type: "text" | "image" | "video"; background_color: string; overlays: StoryOverlay[] | null; expires_at: Date; created_at: Date; updated_at: Date }>, executor: Executor = database): Promise<Story[]> => {
   const ids = [...new Set(rows.map((row) => row.user_id))];
-  const users = ids.length ? await database.selectFrom("users").select(["id", "full_name", "username", "profile_picture_url"]).where("id", "in", ids).execute() : [];
+  const users = ids.length ? await executor.selectFrom("users").select(["id", "full_name", "username", "profile_picture_url"]).where("id", "in", ids).execute() : [];
   const byId = new Map(users.map((user) => [user.id, publicUser(user.id, user.full_name, user.username, user.profile_picture_url)]));
   return rows.map((row) => ({ id: row.id, _id: row.id, operationId: row.operation_id, user: byId.get(row.user_id) ?? row.user_id, content: row.content, media_url: row.media_url, media_type: row.media_type, background_color: row.background_color, overlays: Array.isArray(row.overlays) ? row.overlays : [], expiresAt: toIsoString(row.expires_at) ?? new Date(0).toISOString(), createdAt: toIsoString(row.created_at) ?? new Date(0).toISOString(), updatedAt: toIsoString(row.updated_at) ?? new Date(0).toISOString() }));
 };
@@ -29,7 +38,7 @@ export const createStory = async (input: NewStory, { quotaLimit = -1, reservatio
   try {
     return await withTransaction(async (transaction) => {
       const existing = await transaction.selectFrom("stories").selectAll().where("user_id", "=", input.user).where("operation_id", "=", input.operationId).executeTakeFirst();
-      if (existing) return (await hydrate([existing]))[0]!;
+      if (existing) return (await hydrate([existing], transaction))[0]!;
       if (quotaLimit !== -1) {
         const now = new Date(); const dayStart = new Date(`${now.toISOString().slice(0, 10)}T00:00:00.000Z`);
         const reserved = await quotaService.reserveQuota({ userId: input.user, bucket: quotaService.dailyBucket("stories", now), limit: quotaLimit, getCurrentCount: async () => Number((await transaction.selectFrom("stories").select((expression) => expression.fn.countAll<number>().as("count")).where("user_id", "=", input.user).where("created_at", ">=", dayStart).executeTakeFirst())?.count ?? 0), transaction, expiresAt: quotaService.shortLivedUsageExpiry(now) });
@@ -37,7 +46,7 @@ export const createStory = async (input: NewStory, { quotaLimit = -1, reservatio
       }
       const row = await transaction.insertInto("stories").values({ legacy_mongo_id: null, user_id: input.user, operation_id: input.operationId, content: input.content, media_url: input.media_url, media_key: input.media_key, media_type: input.media_type, background_color: input.background_color, overlays: sql`${JSON.stringify(input.overlays)}::jsonb`, expires_at: new Date(Date.now() + 86_400_000) }).returningAll().executeTakeFirstOrThrow();
       await commitReservedUploads(reservationKeys, { transaction, userId: input.user });
-      return (await hydrate([row]))[0]!;
+      return (await hydrate([row], transaction))[0]!;
     });
   } catch (error: unknown) {
     const unique = Boolean(error && typeof error === "object" && "code" in error && error.code === "23505");
