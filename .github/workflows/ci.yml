@@ -105,13 +105,14 @@ jobs:
       - run: pnpm exec turbo run test --filter=@motionmeet/shared --filter=@motionmeet/backend
 
   backend-postgres-integration:
-    name: Backend · PostgreSQL + RabbitMQ integration
+    name: Backend · PostgreSQL + RabbitMQ + Redis integration
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       NODE_ENV: test
       DATABASE_URL: postgresql://postgres:motionmeet-test@127.0.0.1:5433/motionmeet_test
       RABBITMQ_URL: amqp://motionmeet:motionmeet-test@127.0.0.1:5673
+      REDIS_URL: redis://127.0.0.1:6381
       JWT_SECRET: ci-test-secret-that-is-at-least-32-bytes
       FRONTEND_URL: http://localhost:5173
       CORS_ORIGINS: http://localhost:5173
@@ -129,8 +130,8 @@ jobs:
       - run: pnpm config set store-dir ~/.pnpm-store
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @motionmeet/shared build
-      - name: Start PostgreSQL and RabbitMQ test services
-        run: docker compose -f docker-compose.test.yml up -d --wait postgres-test rabbitmq-test
+      - name: Start PostgreSQL, RabbitMQ and Redis test services
+        run: docker compose -f docker-compose.test.yml up -d --wait postgres-test rabbitmq-test redis-test
       - name: Migrate PostgreSQL test schema
         run: pnpm --filter @motionmeet/backend migrate:postgres
       - name: Re-run migrations (must be a no-op)
@@ -186,10 +187,12 @@ jobs:
         run: docker compose -f docker-compose.prod.yml build --pull backend web
       - name: Backend image runs a patched Node.js as a non-root user
         run: |
-          version="$(docker run --rm --entrypoint node motionmeet_prod-backend --version)"
+          version="$(docker run --rm --entrypoint node motionmeet-backend:local --version)"
           echo "backend image node ${version}"
           node scripts/check-node-security.mjs --version="${version}"
-          user="$(docker image inspect --format '{{.Config.User}}' motionmeet_prod-backend)"
+          # worker and scheduler are the same image; their entry points must be in it.
+          docker run --rm --entrypoint sh motionmeet-backend:local -c 'test -f dist/entrypoints/worker.js && test -f dist/entrypoints/scheduler.js && test -f dist/scripts/migrate.js'
+          user="$(docker image inspect --format '{{.Config.User}}' motionmeet-backend:local)"
           test "${user}" = "node" || { echo "backend image runs as '${user}', expected 'node'"; exit 1; }
       - name: Web image ships nginx only, no Node.js runtime
         run: |

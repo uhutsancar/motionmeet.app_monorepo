@@ -1,0 +1,141 @@
+# Local production rehearsal - never deploy with this file.
+#
+# Runs the production images and the production process split (migrate, API,
+# worker, scheduler, web) on one machine, with the data services that a real
+# deployment gets from managed providers bundled here instead:
+#
+#   MOTIONMEET_ENV_FILE=.env.production.example \
+#     docker compose -f docker-compose.prod.yml -f docker-compose.local.yml up -d --build
+#
+# Then open http://localhost:8088. Nothing but the web port and the RabbitMQ
+# management UI (loopback only) is published, so it does not collide with a
+# backend, PostgreSQL or Redis running natively on the same machine.
+#
+# The data-service credentials below are for this throwaway stack only. Media
+# credentials (AWS_*, IMAGEKIT_*) are read from packages/backend/.env when it
+# exists, so uploads go to the real bucket; set LOCAL_MEDIA_UPLOADS_ENABLED=false
+# to run without them. Database, cache, broker and JWT settings from that file
+# are always overridden here, so this stack never touches the native
+# development database.
+
+x-local-env-file: &local-env-file
+  - path: ${MOTIONMEET_ENV_FILE:-.env.production}
+    required: true
+  - path: packages/backend/.env
+    required: false
+
+x-local-backend-env: &local-backend-env
+  DATABASE_URL: postgresql://motionmeet:motionmeet-local@postgres:5432/motionmeet
+  DATABASE_POOL_MIN: 0
+  REDIS_URL: redis://:motionmeet-local@redis:6379
+  ALLOW_INSECURE_REDIS_TLS: "true"
+  OUTBOX_TRANSPORT: rabbitmq
+  RABBITMQ_URL: amqp://motionmeet:motionmeet-local@rabbitmq:5672
+  ALLOW_INSECURE_RABBITMQ_TLS: "true"
+  JWT_SECRET: local-rehearsal-only-secret-never-use-in-production
+  FRONTEND_URL: https://localhost:8088
+  CORS_ORIGINS: http://localhost:8088
+  MEDIA_UPLOADS_ENABLED: "${LOCAL_MEDIA_UPLOADS_ENABLED:-true}"
+  EMAIL_ENABLED: "false"
+  # Throughput rehearsals (scripts/load) need more than the public default.
+  GLOBAL_RATE_LIMIT_PER_15_MIN: 10000
+
+x-data-ready: &data-ready
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+  rabbitmq:
+    condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: motionmeet
+      POSTGRES_USER: motionmeet
+      POSTGRES_PASSWORD: motionmeet-local
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U motionmeet -d motionmeet"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - postgres_local_data:/var/lib/postgresql
+    restart: unless-stopped
+    networks:
+      - edge
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--requirepass", "motionmeet-local", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "motionmeet-local", "--no-auth-warning", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - redis_local_data:/data
+    restart: unless-stopped
+    networks:
+      - edge
+
+  rabbitmq:
+    image: rabbitmq:4.2-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: motionmeet
+      RABBITMQ_DEFAULT_PASS: motionmeet-local
+    ports:
+      - "127.0.0.1:15673:15672"
+    healthcheck:
+      # A plain port probe. rabbitmq-diagnostics starts an Erlang VM per check
+      # and, run as root before the broker is up, creates .erlang.cookie with
+      # an owner the broker cannot read, so the first boot fails with eacces.
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 5672"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+    volumes:
+      - rabbitmq_local_data:/var/lib/rabbitmq
+    restart: unless-stopped
+    networks:
+      - edge
+
+  migrate:
+    env_file: *local-env-file
+    environment: *local-backend-env
+    depends_on: *data-ready
+
+  backend:
+    env_file: *local-env-file
+    environment: *local-backend-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  worker:
+    env_file: *local-env-file
+    environment: *local-backend-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+
+  scheduler:
+    env_file: *local-env-file
+    environment: *local-backend-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    ports: !override
+      - "${LOCAL_HTTP_PORT:-8088}:8080"
+
+volumes:
+  postgres_local_data:
+  redis_local_data:
+  rabbitmq_local_data:

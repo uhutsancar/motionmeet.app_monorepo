@@ -26,9 +26,25 @@ services:
       RABBITMQ_DEFAULT_USER: motionmeet
       RABBITMQ_DEFAULT_PASS: motionmeet-test
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      # A plain port probe. rabbitmq-diagnostics starts an Erlang VM per check
+      # and, run as root before the broker is up, creates .erlang.cookie with
+      # an owner the broker cannot read, so the first boot fails with eacces.
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 5672"]
       interval: 3s
       timeout: 10s
       retries: 40
     tmpfs:
       - /var/lib/rabbitmq
+
+  # Disposable cache for tests/integration/feedPrivacy.test.ts.
+  redis-test:
+    image: redis:8-alpine
+    ports:
+      - "${REDIS_TEST_PORT:-6381}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    tmpfs:
+      - /data
