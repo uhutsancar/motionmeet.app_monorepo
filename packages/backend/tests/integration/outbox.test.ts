@@ -77,7 +77,10 @@ test("an event nobody can handle is retried with backoff, parked as dead, and ca
     assert.ok(new Date(row.next_attempt_at).getTime() > Date.now(), "backed off into the future");
     assert.match(row.last_error, /Unknown outbox event type/);
 
-    await database.updateTable("outbox_events").set({ attempts: MAX_OUTBOX_ATTEMPTS - 1, next_attempt_at: new Date() }).where("id", "=", row.id).execute();
+    // Due by the database's clock, which is the one the claim compares with: a
+    // test process a few milliseconds ahead of PostgreSQL (Docker Desktop's VM
+    // clock drifts) would otherwise write a time that is not due yet.
+    await database.updateTable("outbox_events").set({ attempts: MAX_OUTBOX_ATTEMPTS - 1, next_attempt_at: sql<Date>`now()` }).where("id", "=", row.id).execute();
     await drain();
     row = await database.selectFrom("outbox_events").selectAll().where("id", "=", row.id).executeTakeFirstOrThrow();
     assert.equal(row.status, "dead");
