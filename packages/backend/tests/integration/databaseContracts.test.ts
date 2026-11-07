@@ -27,6 +27,31 @@ test("PostgreSQL declares cursor, relationship, and expiry indexes", async () =>
   ]) assert.ok(names.has(name), `missing PostgreSQL index: ${name}`);
 });
 
+/**
+ * Migration 019: a foreign key that cascades or sets null needs an index on
+ * its referencing columns, or every delete of a referenced row scans the
+ * referencing table. Partial indexes count (the constraint's `= $1` implies
+ * the column is not null). Only the location dataset's keys are exempt: those
+ * rows are replaced by the importer, never deleted by traffic.
+ */
+test("every cascading or nulling foreign key has an index on its referencing columns", async () => {
+  const { rows } = await sql<{ fk: string }>`
+    select c.conrelid::regclass || '(' || string_agg(a.attname, ',' order by k.n) || ')' as fk
+    from pg_constraint c
+    cross join lateral unnest(c.conkey) with ordinality as k(attnum, n)
+    join pg_attribute a on a.attrelid = c.conrelid and a.attnum = k.attnum
+    where c.contype = 'f' and c.connamespace = 'public'::regnamespace and c.confdeltype in ('c', 'n')
+      and c.confrelid::regclass::text not in ('location_countries', 'location_states', 'location_cities')
+      and not exists (
+        select 1 from pg_index i
+        where i.indrelid = c.conrelid
+          and (i.indkey::int2[])[0:cardinality(c.conkey) - 1] @> c.conkey
+          and (i.indkey::int2[])[0:cardinality(c.conkey) - 1] <@ c.conkey
+      )
+    group by c.conrelid, c.conname`.execute(database);
+  assert.deepEqual(rows.map((row) => row.fk), [], "foreign keys whose deletes scan their table");
+});
+
 test("relationship self-edges are rejected by database constraints", async () => {
   const id = randomUUID(); userIds.push(id);
   await database.insertInto("users").values({ legacy_mongo_id: null, email: `constraint-${runId}@example.test`, full_name: "Constraint User", username: `constraint_${runId}`, password_hash: "test-hash" }).execute();

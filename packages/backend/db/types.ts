@@ -408,6 +408,9 @@ export interface MessageDeletionTable {
 export interface SessionTable extends BaseTable {
   user_id: string;
   token_hash: string;
+  /** The hash this session's token had before its last rotation (migration 018). */
+  previous_token_hash: Generated<string | null>;
+  rotated_at: ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
   expires_at: Timestamp;
   revoked_at: NullableTimestamp;
   last_used_at: GeneratedTimestamp;

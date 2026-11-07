@@ -16,6 +16,9 @@ import * as outboxReliability from "./migrations/014_outbox_reliability.js";
 import * as postsAuthorTimelineIndex from "./migrations/015_posts_author_timeline_index.js";
 import * as messageSync from "./migrations/016_message_sync.js";
 import * as commentOperationId from "./migrations/017_comment_operation_id.js";
+import * as refreshRotationGrace from "./migrations/018_refresh_rotation_grace.js";
+import * as foreignKeyIndexes from "./migrations/019_foreign_key_indexes.js";
+import * as schedulerLeases from "./migrations/020_scheduler_leases.js";
 
 const migrationProvider: MigrationProvider = {
   async getMigrations() {
@@ -36,6 +39,9 @@ const migrationProvider: MigrationProvider = {
       "015_posts_author_timeline_index": postsAuthorTimelineIndex,
       "016_message_sync": messageSync,
       "017_comment_operation_id": commentOperationId,
+      "018_refresh_rotation_grace": refreshRotationGrace,
+      "019_foreign_key_indexes": foreignKeyIndexes,
+      "020_scheduler_leases": schedulerLeases,
     };
   },
 };
