@@ -5,6 +5,43 @@
 groups:
   - name: motionmeet
     rules:
+      - alert: ProcessDown
+        expr: up{job=~"motionmeet.*"} == 0
+        for: 2m
+        labels: { severity: page }
+        annotations:
+          summary: "{{ $labels.instance }} does not answer the metrics scrape"
+          runbook: "DEPLOYMENT.md#release-procedure"
+      - alert: ApiErrorRate
+        expr: |
+          sum(rate(motionmeet_http_request_duration_seconds_count{status_class="5xx"}[5m]))
+            / clamp_min(sum(rate(motionmeet_http_request_duration_seconds_count[5m])), 1) > 0.02
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: More than 2 % of API requests fail with 5xx (request_failed lines carry the cause)
+          runbook: "RUNBOOKS.md#api-errors-5xx"
+      - alert: ApiLatency
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(motionmeet_http_request_duration_seconds_bucket{route!="unmatched"}[5m]))) > 1
+        for: 10m
+        labels: { severity: ticket }
+        annotations:
+          summary: API p95 above one second
+          runbook: "DEPLOYMENT.md#connection-budget"
+      - alert: EventLoopBlocked
+        expr: max by (instance) (motionmeet_nodejs_eventloop_lag_p99_seconds) > 0.2
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: "Event loop of {{ $labels.instance }} stalls for more than 200 ms"
+          runbook: "RUNBOOKS.md#sign-in-slow-or-answering-503-motionmeet_password_hash_queue-high"
+      - alert: SignInSaturated
+        expr: sum(increase(motionmeet_password_hash_rejected_total[5m])) > 0
+        labels: { severity: page }
+        annotations:
+          summary: Sign-in refused with 503 because the password workers are saturated
+          runbook: "RUNBOOKS.md#sign-in-slow-or-answering-503-motionmeet_password_hash_queue-high"
       - alert: OutboxLagging
         expr: max(motionmeet_outbox_oldest_pending_seconds) > 300
         for: 5m

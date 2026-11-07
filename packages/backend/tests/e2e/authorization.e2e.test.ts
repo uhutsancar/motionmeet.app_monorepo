@@ -14,7 +14,7 @@ import test from "node:test";
  * follower may see followers-only content, the owner sees their own) prove
  * that a denial is the access rule at work, not a broken setup.
  *
- * Registration is limited to five per hour per address; this suite registers
+ * Registration is limited to ten per hour per address; this suite registers
  * three members.
  */
 const BASE = process.env.E2E_BASE_URL;
@@ -176,7 +176,10 @@ test("messages: another member's message cannot be deleted or read", async () =>
 });
 
 test("profile: a private account reveals no posts and no location to a stranger", async () => {
-  const profile = await call("POST", "/api/user/profiles", { token: stranger.token, body: { id: owner.id, userId: owner.id } });
+  // The field the clients send. With any other the request was refused as a
+  // bad id, and the checks below passed on an empty answer.
+  const profile = await call("POST", "/api/user/profiles", { token: stranger.token, body: { profileId: owner.id } });
+  assertOk(profile, "a stranger opens the private account's profile header");
   const text = JSON.stringify(profile.body);
   for (const key of ["publicPost", "followersPost", "privatePost"]) assert.ok(!text.includes(ids[key]), `${key} not in the profile`);
   assert.ok(!/"latitude"|"longitude"|"lat"|"lng"/.test(text), "no coordinates in the profile");

@@ -56,6 +56,13 @@ services:
       RUN_MIGRATIONS: "false"
       RUN_SCHEDULED_JOBS: "false"
       METRICS_PORT: 9464
+      # The heap stays inside the container's limit with room for the worker
+      # threads, sharp and socket buffers, so V8 collects before the kernel
+      # kills; without it V8 sizes the heap from the host's memory.
+      NODE_OPTIONS: --max-old-space-size=640
+      # One of the two CPUs hashes passwords, the other stays with the event
+      # loop (utils/passwordHashing.ts). Raise both together.
+      PASSWORD_HASH_WORKERS: 1
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -67,7 +74,15 @@ services:
       timeout: 5s
       retries: 6
       start_period: 30s
+    # The API closes sockets, drains requests and stops within 10 s
+    # (server.ts); the margin keeps Docker from killing it half-way.
+    stop_grace_period: 15s
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1024M
 
   worker:
     <<: *backend-image
@@ -83,6 +98,7 @@ services:
       MOTIONMEET_PROCESS_ROLE: worker
       METRICS_PORT: 9464
       DATABASE_POOL_MAX: 10
+      NODE_OPTIONS: --max-old-space-size=384
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -104,6 +120,7 @@ services:
       MOTIONMEET_PROCESS_ROLE: scheduler
       METRICS_PORT: 9464
       DATABASE_POOL_MAX: 5
+      NODE_OPTIONS: --max-old-space-size=192
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -140,6 +157,11 @@ services:
       - /tmp
       - /var/cache/nginx
       - /var/run
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
     security_opt:
       - no-new-privileges:true
     cap_drop:
