@@ -53,15 +53,15 @@ scenario results: [../quality/TEST_MATRIX.md](../quality/TEST_MATRIX.md).
 | MM-P1-12 | Feed | DONE | Privacy invalidation (ADR 004); measured on 300 000 posts: home feed rewritten audience-first with a two-step read and covering index (migration 015) — DB 4–8 s → 1.3 ms warm, API p95 under load 3.64 s → 212 ms. Equivalence pinned by `followingFeed.test.ts` (passes on old and new query) |
 | MM-P1-13 | Likes/comments | No change needed | `UPDATE … RETURNING` counters kept; existing concurrency test passes |
 | MM-P2-14 | Social graph policy matrix | NOT_STARTED | |
-| MM-P1-15 | Message durability | PARTIAL | Reconnect catch-up (mobile/web); sockets bound to sessions. `delivered` status: NOT_STARTED |
+| MM-P1-15 | Message durability | PARTIAL | 2026-11 audit WP-05: per-conversation `seq` in commit order and tombstones by trigger (migration 016), `POST /api/message/sync` (one event stream, `nextAfterSeq`, `resyncRequired`, read-only), shared client sync loop on web and mobile, sockets retry for ever (ADR 005). Device/browser reconnect verification: NOT_RUN. `delivered` status: NOT_STARTED |
 | MM-P1-16 | Socket.IO scaling | PARTIAL | `READINESS_REQUIRE_REDIS`; presence cost NOT_MEASURED |
 | MM-P2-17 | Notifications/push/email | NOT_STARTED | Activity rows already durable; there is no device push (FCM/APNs) to make durable |
 | MM-P1-18 | Query planning | PARTIAL | Feed queries planned and fixed on synthetic data (`scripts/load/seed-synthetic.sql`, `explain-feeds.sql`). Boot-time integrity check made O(1) (was 15 s on the same data and blocked startup). Other hot paths and `pg_stat_statements` in production: NOT_STARTED |
 | MM-P1-19 | Migration discipline | DONE for 014 | Expand-only, documented down path, idempotent re-run |
 | MM-P2-20 | Replicas/sharding | Not needed | Single PostgreSQL kept |
 | MM-P1-21 | Auth/session/API security | DONE for this scope | Socket session binding; black-box BOLA/IDOR sweep `tests/e2e/authorization.e2e.test.ts` (10 scenarios, every resource type with an id, positive controls, mass assignment, admin, unauthenticated) passes against the production images. Finding: the server-rendered share page with post-specific Open Graph tags is not reachable behind the web nginx (`/post/:id` serves the SPA shell, which reads `/api/post/:id/public`); private data does not leak, but link previews stay generic — routing `/post/` to the backend is a product decision |
-| MM-P1-22 | Object storage security | PARTIAL | Size floor, duplicate refusal. Private CDN for private media: NOT_STARTED |
-| MM-P1-23/24 | Privacy lifecycle, moderation | NOT_STARTED | Account deletion now also disconnects sockets and retires feed caches |
+| MM-P1-22 | Object storage security | PARTIAL | Size floor, duplicate refusal. 2026-11 audit WP-06: media URLs signed at read time with bounded windows on every hydration path, signed size variants, unavailable placeholder, `backfill:media-keys`, optional CDN purge (ADR 003). S3 prefix policy and ImageKit "Restrict unsigned URLs": BLOCKED-ENV (Ek B-1/B-2) |
+| MM-P1-23/24 | Privacy lifecycle, moderation | PARTIAL | 2026-11 audit: race-safe cache invalidation (WP-01/02), nearby privacy at read time (WP-03), complete export format 4 (WP-04), locked-profile fields (WP-07), revoked access tokens refused at once (WP-11), remove follower (WP-12), retention tasks (WP-13). Blocking and moderation: NOT_STARTED |
 | MM-P2-25/26 | Web/mobile performance | NOT_STARTED | Device and browser profiling needed |
 | MM-P2-27 | Ads, no payments | Unchanged | No payment, subscription or paywall code added; retired billing endpoints untouched |
 | MM-P1-28 | Local topology | DONE | `--profile queue` (RabbitMQ, UI on loopback), `--profile workers` |
@@ -73,7 +73,35 @@ scenario results: [../quality/TEST_MATRIX.md](../quality/TEST_MATRIX.md).
 | MM-P1-38 | RabbitMQ cutover | Documented | DEPLOYMENT.md; default stays `direct` |
 | MM-P1-40 | Disaster recovery | NOT_STARTED | Restore drill outline in RUNBOOKS.md |
 
-## Changed contracts
+## Changed contracts (2026-11 audit, `audit/2026-11-implementation`)
+
+Status per work package: [AUDIT_2026_11_STATUS.md](AUDIT_2026_11_STATUS.md).
+
+- **Database:** migration `016_message_sync` (`conversations.last_seq`,
+  `conversations.tombstone_floor_seq`, `messages.seq` + triggers
+  `messages_assign_seq` / `messages_record_deletion`, table
+  `message_deletions`); migration `017_comment_operation_id`
+  (`post_comments.operation_id` + partial unique index).
+- **API (all additive, old clients keep working):** `POST /api/message/sync`;
+  `DELETE /api/user/followers/{followerId}`; comment `operationId`;
+  `Message.seq`, `Message.mediaUnavailable`, `messages_seen.lastReadSeq`;
+  `PostMedia.url` nullable + `unavailable` + `variants`; `Story.media_url`
+  nullable + `mediaUnavailable`; `UserProfile.weight/height/statistics`
+  nullable for locked profiles; export `formatVersion` 4 with `complete`;
+  `401 "Session has ended"` for revoked sessions; socket transport
+  WebSocket only.
+- **Environment:** `CACHE_READS_ENABLED`, `MEDIA_SIGNED_DELIVERY`,
+  `IMAGEKIT_PURGE_ON_DELETE`; `.env.production.example` now sets
+  `RUN_SCHEDULED_JOBS=false`, `RUN_MIGRATIONS=false` and lists the outbox,
+  metrics and readiness variables.
+- **Operations:** Redis key prefix `motionmeet:v2:` (one cold cache);
+  scripts `backfill:media-keys`, `backfill:media-metadata`; scheduled tasks
+  `message-tombstone-retention`, `expired-sessions`, `password-reset-tokens`,
+  `notifications-retention`, `stale-location-wipe`; `/health/ready` no longer
+  proxied publicly; `docker-compose.replicas.yml`; `infra/prometheus/`,
+  `infra/s3/` examples.
+
+## Changed contracts (earlier)
 
 - **Database:** migration `014_outbox_reliability` (outbox enums → text +
   CHECK; `event_id`, `schema_version`, `correlation_id`, `published_at`;

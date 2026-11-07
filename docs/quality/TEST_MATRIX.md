@@ -33,6 +33,31 @@ and Redis 8 in `docker-compose.test.yml`; e2e authorization sweep: 10). NOT_RUN 
 | OPS-02 | Production image boots non-root/read-only | PASS: images built with `--pull`, Node 24.22.1 passes the security gate, user `node`, entry points present, web image has no Node; full stack healthy with read-only root filesystems | `docker-compose.prod.yml`, `docker-compose.local.yml` |
 | SEC-03 | Rate limit across replicas | Existing Redis store; with Redis down multi-replica instances go not-ready (`READINESS_REQUIRE_REDIS`) · test: NOT_RUN | `server.ts` |
 
+## 2026-11 audit (`audit/2026-11-implementation`)
+
+Final run on 2026-11-07: shared 36/36, backend unit 113/113, backend
+integration 87/87 (PostgreSQL 18, Redis 8, RabbitMQ 4.2). Work
+package status: `docs/architecture/AUDIT_2026_11_STATUS.md`.
+
+| Id | Scenario | Status | Where |
+|---|---|---|---|
+| R1–R7 | Audit reproductions (deleted/new post on cached profile, nearby opt-outs, field TTL, export, pool self-deadlock, locked-profile fields, deleted account in nearby) | PASS, no `todo` left | `integration/auditRegressions.test.ts`, `poolSelfDeadlock.test.ts` |
+| WP-01 | Field TTL, write racing an invalidation never served, single-flight across invalidation, v1/unwrapped entries ignored, maxFields, `CACHE_READS_ENABLED` | PASS (real Redis) | `integration/cacheCore.test.ts`, `cacheCoreWithoutRedis.test.ts` |
+| WP-03 | Opt-outs, account deletion and `hidden` distance apply on cache hits; `lastActiveAt` to the hour; no coordinates in responses | PASS | `auditRegressions.test.ts` |
+| WP-04 | Export: empty/full account, nesting, secrets scan, 5 000 messages within 50 MB heap, client abort, mid-stream failure breaks the HTTP connection, early failure is a 500 | PASS | `integration/accountExport.test.ts` |
+| WP-05 | Seq in commit order under 40 parallel writers, paging, interleaved deletions, offline insert+delete, legacy delete tombstone, recreated conversation, tombstone floor, read position, read-only sync, stranger, backfill; client sync loop | PASS | `integration/messageSync.test.ts`, `shared/tests/messageSync.test.ts` |
+| WP-06 | Signed, window-aligned URLs; lifetimes within `[M, W+M)`; story expiry; no unsigned fallback; variants; hydration of posts, stories, messages, avatars, covers | PASS · S3/ImageKit enforcement: BLOCKED-ENV | `mediaDelivery.test.ts`, `integration/signedMedia.test.ts` |
+| WP-08 | Like, comment, follow, request, accept, story like roll back with a failing notification; idempotent comment incl. concurrent pair; throwing socket delivery | PASS | `integration/notificationAtomicity.test.ts` |
+| WP-09 | Ten write paths with a one-connection pool | PASS | `integration/poolSelfDeadlock.test.ts` |
+| WP-10 | Probe failure classification, retry vs null, no signed URL in logs, missing ffprobe throws | PASS | `mediaProbe.test.ts` |
+| WP-11 | Logout, password reset, account deletion refuse the old access token at once; sensitive routes check PostgreSQL | PASS (real Redis) | `integration/sessions.test.ts` |
+| WP-12 | Remove follower: posts, stories, cached feed, messaging, counters, idempotent, pending request | PASS | `integration/removeFollower.test.ts` |
+| WP-13 | Retention of sessions, reset tokens, read notifications, stale coordinates | PASS | `integration/retention.test.ts` |
+| WP-15 | Routine save in two inserts | PASS | `integration/routineInsert.test.ts` |
+| WP-16 | Comment previews equal the window-function result | PASS | `integration/commentPreview.test.ts` |
+| WP-17 | `socket.data` carries identity only | PASS (unit) · two replicas with Redis adapter: BLOCKED-ENV | `socketIdentity.test.ts` |
+| e2e | Authorization sweep (+ locked-profile fields, export ownership, remove follower) | Updated · NOT_RUN (needs a stack built from this branch) | `tests/e2e/authorization.e2e.test.ts` |
+
 ## Process smoke test (manual, 2026-11-06)
 
 Worker (`OUTBOX_TRANSPORT=rabbitmq`) and scheduler started from their entry

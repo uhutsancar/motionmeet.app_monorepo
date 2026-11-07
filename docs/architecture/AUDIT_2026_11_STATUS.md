@@ -70,6 +70,50 @@ Status values: `NOT_STARTED`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-ENV`
 - **WP-01 — plan dışı karar:** `OwnerRead.generation` is `number | null` (null = no usable cache, nothing is
   written) and `OwnerRead` carries `hit`, so a cached `false`/`null` value is distinguishable from a miss.
 
+## Final verification (Section 9, 2026-11-07)
+
+Code side:
+
+- [x] `pnpm lint` 4/4, `pnpm typecheck` 6/6.
+- [x] Shared tests 36/36; backend unit 113/113 (89 at the start).
+- [x] Backend integration 87/87 against PostgreSQL 18, Redis 8 and RabbitMQ 4.2
+      (21 at the start); `auditRegressions.test.ts` has no `todo` left.
+- [x] `poolSelfDeadlock.test.ts` passes.
+- [x] Export positive/negative/abort/failure tests pass on real PostgreSQL.
+- [x] Cache race and per-field TTL tests pass on real Redis.
+- [x] Message sync tests (paging 200, deletions, read position, 40 concurrent writers) pass.
+- [x] Media signing unit tests and hydration integration tests pass.
+- [x] Migrations 001–017 on an empty database, then again as a no-op; 016 and 017
+      `down`×2 / `up`×2 verified.
+- [x] Authorization sweep updated (locked-profile fields, export ownership, remove
+      follower) — **not run**: it needs a stack built from this branch (the running
+      8088 rehearsal stack is the user's and runs the old code).
+- [x] Web build (1 m 48 s), `check:artifact` (incl. the new `/health/ready` rule) and
+      `check:performance` pass.
+- [x] Mobile configuration check passes. **No new native dependency** (export uses the
+      already installed `expo-file-system`/`expo-sharing`): no new APK is required by
+      this work, though a new JS bundle is.
+- [x] `scripts/tests` 22/22; dependency audit: high 0, critical 0. Moderate
+      `glob@13.0.6` (GHSA-3g3m-2fjr-6pw4) and `minimatch@10.2.5` (GHSA-g3hv-75wg-m249)
+      come only through `expo` → `@expo/cli` / `@expo/fingerprint` (mobile build
+      tooling). The fixes are major versions those packages pin; overriding them would
+      change the Expo toolchain the APK and Expo Go builds rely on, so they are left
+      below the gate and should be re-checked with the next Expo SDK patch.
+- [x] Section 8 documents updated (see each WP's commit).
+
 ## Environment-only work (Ek B)
 
-_(Filled in as WPs land.)_
+| # | Needed for | What is ready in the repo |
+| --- | --- | --- |
+| B-1 | WP-06 | `infra/s3/user-media-bucket-policy.example.json`, RUNBOOKS "Media access hardening" |
+| B-2 | WP-06 | Rollout order in DEPLOYMENT.md; verification steps in RUNBOOKS |
+| B-3 | WP-06 | `IMAGEKIT_PURGE_ON_DELETE` (off); purge in the deletion job; wildcard and quota to confirm |
+| B-4, B-5 | MM-SEC-03 | Unchanged by this work |
+| B-6 | WP-20 | `infra/prometheus/` scrape + alert examples |
+| B-7 | MM-OPS-04 | RUNBOOKS "Restore drill" (unchanged) |
+| B-8 | WP-17, WP-19 | `docker-compose.replicas.yml`, RUNBOOKS "Two-replica rehearsal" (incl. presence cost) |
+| B-9 | WP-20 | Connection budget table in DEPLOYMENT.md, pool gauge |
+| B-10 | WP-05 | RUNBOOKS "Migration 016 … on a large `messages` table" |
+| B-11 | WP-04, WP-05, WP-06 | New JS bundle on a device: export shared as a file, chat catch-up after background, media placeholders |
+| B-12 | WP-20 | `scripts/load` (hot-thread comments added to the seed) |
+| B-13 | — | Node.js security release pins (unchanged) |

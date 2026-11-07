@@ -125,6 +125,20 @@ select id, last_seq, tombstone_floor_seq from conversations where pair_key = '<i
 
 Sync never marks anything read, so a resync loop costs reads, not data.
 
+## Account export failing (`motionmeet_account_exports_total{outcome="failed"}`)
+
+- `account_export_failed` in the API log (with a request id, never a user
+  id) means a section query failed after the download had started; the
+  client saw a broken download, never a short file (format 4 ends with
+  `"complete": true`). Look for the query error next to it - usually a
+  `statement_timeout` on a very large account or a database outage.
+- A failure before the first byte is an ordinary 5xx in `request_failed`.
+- `409 An account export is already in progress`: the Redis lock
+  (`motionmeet:lock:account-export:<id>`, 15 min) is held by a running or
+  crashed export; it expires by itself.
+- Members on mobile get a file in the share sheet; if they report a text
+  dump instead, they are on a build older than the 2026-11 audit.
+
 ## Media URL unresolvable (`motionmeet_media_url_unresolvable_total` rising)
 
 A medium of ours had no object key and none could be read from its stored
