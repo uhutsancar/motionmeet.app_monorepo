@@ -57,7 +57,9 @@ export const SocketProvider = ({ children }: PropsWithChildren) => {
           callback({ token: '' });
         }
       },
-      transports: ['websocket', 'polling'],
+      // WebSocket only: the server accepts nothing else, so replicas need no
+      // sticky sessions (WP-19).
+      transports: ['websocket'],
       reconnection: true,
       // Never give up: after fifteen failed attempts the app used to stay
       // without realtime until it was restarted. The backoff grows to 30 s,

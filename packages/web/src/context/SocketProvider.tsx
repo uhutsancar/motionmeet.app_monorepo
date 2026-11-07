@@ -45,7 +45,9 @@ export const SocketProvider = ({ children }: PropsWithChildren) => {
             callback({ token: "" });
           }
         },
-        transports: ["websocket", "polling"],
+        // WebSocket only: the server accepts nothing else, so replicas need no
+        // sticky sessions (WP-19).
+        transports: ["websocket"],
         // Never give up. After ten failed attempts the tab used to stay without
         // realtime until it was reloaded; now the backoff just grows to 30 s.
         reconnectionAttempts: Infinity,

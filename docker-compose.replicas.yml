@@ -1,0 +1,24 @@
+# Two API replicas behind the rehearsal web proxy (WP-19 of the 2026-11 audit).
+# Local rehearsal only - never deploy with this file.
+#
+#   MOTIONMEET_ENV_FILE=.env.production.example docker compose \
+#     -f docker-compose.prod.yml -f docker-compose.local.yml -f docker-compose.replicas.yml \
+#     up -d --build --scale backend=2
+#
+# Both replicas answer to the `backend` service name. The web container's
+# nginx resolves that name per request through Docker's DNS (packages/web/
+# nginx.conf, `resolver ... valid=10s`) and spreads requests over every
+# address it gets back; a replica that refuses or times out is skipped for the
+# request (nginx's proxy_next_upstream on error/timeout). Open-source nginx
+# has no active health checks, so a stopped replica disappears from DNS when
+# Docker removes it and, until then, costs one failed attempt per request.
+#
+# Sockets need no stickiness: the server accepts WebSocket transport only.
+# The test plan is in docs/operations/RUNBOOKS.md, "Two-replica rehearsal".
+
+services:
+  backend:
+    environment:
+      # With more than one replica, sockets and rate limits are shared
+      # through Redis; a replica without it is not ready.
+      READINESS_REQUIRE_REDIS: "true"

@@ -91,7 +91,13 @@ try {
 const app = express();
 app.disable("x-powered-by");
 const httpServer = createServer(app);
-const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(httpServer, { cors: corsOptions });
+// WebSocket only (WP-19 of the 2026-11 audit). Long-polling needs every
+// request of one session to reach the same replica, i.e. sticky sessions at
+// the load balancer; a WebSocket is one connection and needs none. Clients
+// list "websocket" first, so builds that still also offer polling connect
+// the same way. Networks that block WebSockets lose realtime and fall back to
+// the REST paths (and to message sync on the next connection).
+const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(httpServer, { cors: corsOptions, transports: ["websocket"] });
 setSocketServer(io);
 // Fires immediately if the connection already won the race, otherwise when it
 // lands - either way the in-memory adapter is replaced for multi-instance fan-out.

@@ -121,6 +121,13 @@ development database. Only port 8088 and the loopback-bound broker UI are
 published. Load rehearsal: `scripts/load/feed-read.k6.js` (header of the file
 has the command).
 
+Two API replicas: add `-f docker-compose.replicas.yml` and `--scale backend=2`
+(test plan in RUNBOOKS.md, "Two-replica rehearsal"). No sticky sessions are
+needed: since the 2026-11 audit (WP-19) the Socket.IO server accepts the
+WebSocket transport only, and the web and mobile clients use only that. A
+network that blocks WebSockets loses realtime; REST and message sync still
+work.
+
 ## Notes for large databases
 
 - Migration 015 builds `posts_author_timeline_idx` with a plain `CREATE

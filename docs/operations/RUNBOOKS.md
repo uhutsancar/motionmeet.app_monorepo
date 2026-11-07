@@ -167,6 +167,40 @@ Do this only after the private media rollout steps 1-3 (DEPLOYMENT.md).
   then without `--dry-run`. It queues one `media.uploaded` per affected post;
   the consumer fills only what is still missing.
 
+## Two-replica rehearsal (Ek B-8)
+
+Start: see the header of `docker-compose.replicas.yml` (`--scale backend=2`).
+Check `docker compose ps` shows two healthy `backend` containers.
+
+1. **Messages across replicas.** Two members signed in on different browsers
+   (repeat until their sockets landed on different replicas:
+   `docker compose logs backend | grep socket` or the ops port's
+   `motionmeet_` metrics per container). Send both ways; each side receives
+   at once.
+2. **Logout across replicas.** Log out on one; within a second the other
+   replica refuses that access token (401) and its sockets for that session
+   are closed.
+3. **Permission invalidation.** Member A (private) removes follower B while
+   B's socket is on the other replica; B can no longer send A a message.
+4. **Rolling restart.** `docker compose restart backend` one container at a
+   time (`docker restart <container>`) while two members message each other
+   continuously. Expected: 5xx only from the restarting replica's in-flight
+   requests; after reconnect every message is present exactly once on both
+   sides (message sync, ADR 005), none twice.
+5. **Replica down.** `docker stop` one replica: requests keep succeeding
+   (each costs at most one failed attempt until Docker drops the address);
+   readiness of the remaining one stays 200.
+
+6. **Presence cost (WP-17).** With ~5 000 sockets spread over both replicas
+   (k6 or a socket.io client script), measure how long a connect's
+   `online_users` answer takes (it calls `fetchSockets()` across replicas),
+   then again with one replica paused (`docker pause`): the call waits for
+   the adapter's request timeout. If either is a problem, the sorted-set
+   presence design in the 2026-11 audit plan (WP-17 item 2) is the next step;
+   if not, record `NOT_NEEDED (measured)`.
+
+Record 5xx counts, p95 and any gap or duplicate in the audit status file.
+
 ## Restore drill
 
 Not automated here. Restore the latest PITR snapshot into a scratch instance,
