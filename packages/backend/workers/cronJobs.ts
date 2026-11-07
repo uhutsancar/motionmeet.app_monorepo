@@ -7,7 +7,7 @@ import { purgeOutboxHistory } from "../services/outboxService.js";
 import { purgeMessageTombstones } from "../services/messageService.js";
 import { scheduledTaskDuration, scheduledTaskRuns } from "../observability/metrics.js";
 import { childContext, runWithContext } from "../observability/context.js";
-import { logger, safeErrorMetadata } from "../utils/logger.js";
+import { errorDiagnostics, logger } from "../utils/logger.js";
 
 /**
  * Retention periods (WP-13 of the 2026-11 audit; docs/database.md has the
@@ -166,7 +166,7 @@ export const SCHEDULED_TASKS: readonly TaskDefinition[] = [
 
 /**
  * Runs one task if no other process is running it. The lock is a PostgreSQL
- * advisory lock (utils/advisoryLock.ts): with any number of scheduler or API
+ * lease (utils/advisoryLock.ts): with any number of scheduler or API
  * replicas, one runs it and the rest record `skipped_locked`.
  */
 export const runScheduledTask = async (task: TaskDefinition): Promise<"ran" | "skipped_locked" | "failed"> =>
@@ -180,7 +180,7 @@ export const runScheduledTask = async (task: TaskDefinition): Promise<"ran" | "s
       return outcome;
     } catch (error: unknown) {
       scheduledTaskRuns.inc({ task: task.name, outcome: "failed" });
-      logger.error("scheduled_task_failed", { task: task.name, ...safeErrorMetadata(error) });
+      logger.error("scheduled_task_failed", { task: task.name, ...errorDiagnostics(error) });
       return "failed";
     }
   });

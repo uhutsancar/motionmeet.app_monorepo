@@ -10,7 +10,7 @@ import { installShutdownHandlers } from "./lifecycle.js";
  * The scheduler process: the recurring housekeeping in workers/cronJobs.ts,
  * moved out of the API so an HTTP replica restart never cuts a sweep short and
  * a long sweep never shares an event loop with requests. Running two
- * schedulers is safe - each task takes a PostgreSQL advisory lock - so a
+ * schedulers is safe - each task takes a PostgreSQL lease - so a
  * rolling deploy may overlap old and new.
  */
 export const runScheduler = async (): Promise<void> => {

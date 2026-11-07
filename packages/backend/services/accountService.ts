@@ -1,6 +1,6 @@
 import type { Response } from "express";
-import { sql } from "kysely";
-import { database, withTransaction } from "../configs/database.js";
+import { sql, type RawBuilder } from "kysely";
+import { createMaintenanceDatabase, database, withTransaction, type DatabaseTransaction } from "../configs/database.js";
 import { invalidateCacheOwners, markSessionsRevoked } from "../configs/redis.js";
 import { exerciseListOwner } from "./exerciseService.js";
 import { feedCacheOwner, profileCacheOwner, retractAuthor } from "./feedCache.js";
@@ -332,31 +332,158 @@ export const streamAccountData = async (userId: string, response: Response): Pro
   return true;
 };
 
+const PURGE_BATCH = 1_000;
+/** PostgreSQL's deadlock and serialization failures: the batch is simply run again. */
+const RETRYABLE = new Set(["40P01", "40001"]);
+
+/**
+ * Runs `step` - one batch, in its own short transaction - until a batch
+ * removes fewer than `PURGE_BATCH` rows. Each batch commits on its own, so a
+ * deletion that stops half-way is continued, not repeated, by the next try.
+ */
+const purgeInBatches = async (step: (transaction: DatabaseTransaction) => Promise<number>): Promise<void> => {
+  for (let attempt = 0; ;) {
+    try {
+      if (await withTransaction(step) < PURGE_BATCH) return;
+      attempt = 0;
+    } catch (error: unknown) {
+      const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+      if (!RETRYABLE.has(code) || ++attempt > 3) throw error;
+    }
+  }
+};
+
+/** Runs a `... select count(*)::int as removed from doomed` statement and returns that count. */
+const removed = async (statement: RawBuilder<{ removed: number }>, transaction: DatabaseTransaction): Promise<number> =>
+  Number((await statement.execute(transaction)).rows[0]?.removed ?? 0);
+
+/**
+ * The bulk of an account, removed in batches before the account row itself.
+ *
+ * Deleting the account used to be one transaction: every like, comment and
+ * follow counter it touched updated, then one `DELETE FROM users` cascading
+ * into everything the member ever wrote. A long history ran past the 15 s
+ * statement timeout and the deletion failed - and while it ran, it held locks
+ * on other members' posts and profiles. Now each batch takes a thousand rows
+ * and fixes the counters for exactly those rows, in its own transaction.
+ *
+ * Messages are not batched: deleting a message writes a sync tombstone and
+ * bumps its conversation (migration 016), which is right for one message and
+ * pure waste when the conversation goes too. Conversations go whole in the
+ * final step, where the cascade skips both.
+ */
+const purgeAccountContent = async (userId: string): Promise<void> => {
+  // Likes and comments the member gave, with the counters of the posts they were on.
+  await purgeInBatches((transaction) => removed(sql<{ removed: number }>`
+    with doomed as (delete from post_likes where ctid = any(array(select ctid from post_likes where user_id = ${userId} limit ${PURGE_BATCH})) returning post_id),
+    counted as (select post_id, count(*)::int as amount from doomed group by post_id),
+    fixed as (update posts p set like_count = greatest(0, p.like_count - counted.amount) from counted where p.id = counted.post_id and p.user_id <> ${userId} returning 1)
+    select count(*)::int as removed from doomed`, transaction));
+  await purgeInBatches((transaction) => removed(sql<{ removed: number }>`
+    with doomed as (delete from post_comments where ctid = any(array(select ctid from post_comments where user_id = ${userId} limit ${PURGE_BATCH})) returning post_id),
+    counted as (select post_id, count(*)::int as amount from doomed group by post_id),
+    fixed as (update posts p set comment_count = greatest(0, p.comment_count - counted.amount) from counted where p.id = counted.post_id and p.user_id <> ${userId} returning 1)
+    select count(*)::int as removed from doomed`, transaction));
+  // Other members' reactions to the member's own posts: one popular post can
+  // carry more than any single statement should cascade into.
+  await purgeInBatches((transaction) => removed(sql<{ removed: number }>`
+    with doomed as (delete from post_likes where ctid = any(array(
+      select pl.ctid from posts p join post_likes pl on pl.post_id = p.id where p.user_id = ${userId} limit ${PURGE_BATCH})) returning 1)
+    select count(*)::int as removed from doomed`, transaction));
+  await purgeInBatches((transaction) => removed(sql<{ removed: number }>`
+    with doomed as (delete from post_comments where ctid = any(array(
+      select pc.ctid from posts p join post_comments pc on pc.post_id = p.id where p.user_id = ${userId} limit ${PURGE_BATCH})) returning 1)
+    select count(*)::int as removed from doomed`, transaction));
+  // The posts themselves, their files queued for deletion first.
+  await purgeInBatches(async (transaction) => {
+    const posts = (await transaction.selectFrom("posts").select("id").where("user_id", "=", userId).limit(PURGE_BATCH).execute()).map((row) => row.id);
+    if (!posts.length) return 0;
+    await sql`insert into media_deletion_jobs (object_key) select object_key from post_media where post_id = any(${posts}::uuid[]) and object_key <> '' on conflict (object_key) do nothing`.execute(transaction);
+    await transaction.deleteFrom("posts").where("id", "in", posts).execute();
+    return posts.length;
+  });
+  // Workouts cascade into their exercises, sets and personal records.
+  await purgeInBatches(async (transaction) => Number((await transaction.deleteFrom("workouts")
+    .where("id", "in", transaction.selectFrom("workouts").select("id").where("user_id", "=", userId).limit(PURGE_BATCH)).executeTakeFirst()).numDeletedRows));
+  await purgeInBatches((transaction) => removed(sql<{ removed: number }>`
+    with doomed as (delete from notifications where ctid = any(array(
+      select ctid from notifications where user_id = ${userId} union all select ctid from notifications where actor_id = ${userId} limit ${PURGE_BATCH})) returning 1)
+    select count(*)::int as removed from doomed`, transaction));
+  // Follows in both directions, with the other member's counter.
+  await purgeInBatches((transaction) => removed(sql<{ removed: number }>`
+    with doomed as (delete from user_follows where ctid = any(array(select ctid from user_follows where followee_id = ${userId} limit ${PURGE_BATCH})) returning follower_id),
+    fixed as (update users u set following_count = greatest(0, u.following_count - 1) from doomed where u.id = doomed.follower_id returning 1)
+    select count(*)::int as removed from doomed`, transaction));
+  await purgeInBatches((transaction) => removed(sql<{ removed: number }>`
+    with doomed as (delete from user_follows where ctid = any(array(select ctid from user_follows where follower_id = ${userId} limit ${PURGE_BATCH})) returning followee_id),
+    fixed as (update users u set followers_count = greatest(0, u.followers_count - 1) from doomed where u.id = doomed.followee_id returning 1)
+    select count(*)::int as removed from doomed`, transaction));
+  await purgeInBatches((transaction) => removed(sql<{ removed: number }>`
+    with doomed as (delete from connections where id = any(array(
+      select id from connections where from_user_id = ${userId} union all select id from connections where to_user_id = ${userId} limit ${PURGE_BATCH}))
+      returning status, case when from_user_id = ${userId} then to_user_id else from_user_id end as other_id),
+    fixed as (update users u set connections_count = greatest(0, u.connections_count - 1) from doomed where doomed.status = 'accepted' and u.id = doomed.other_id returning 1)
+    select count(*)::int as removed from doomed`, transaction));
+};
+
+/** The ceiling for the final step, which runs on its own connection without the request pool's 15 s cap. */
+const FINAL_STEP_TIMEOUT = "300s";
+
+/**
+ * Deletes an account and everything it owns.
+ *
+ * 1. Its sessions are revoked first, so nothing it still holds can act while
+ *    the rest goes (access tokens through the Redis marker).
+ * 2. The bulk goes in short batches (`purgeAccountContent`).
+ * 3. One last transaction queues the remaining files, settles any counter a
+ *    write during step 2 added, and removes the conversations and the
+ *    account. The conversations can still be large, so it runs on a
+ *    maintenance connection with a five-minute ceiling rather than the
+ *    request pool's 15 s.
+ *
+ * Every step is idempotent: if the request fails part-way, the account still
+ * exists, and signing in and deleting again finishes the job.
+ */
 export const deleteAccountData = async (userId: string): Promise<boolean> => {
   const exists = await database.selectFrom("users").select("id").where("id", "=", userId).executeTakeFirst(); if (!exists) return false;
+  const revokedFirst = (await database.updateTable("sessions").set({ revoked_at: new Date() })
+    .where("user_id", "=", userId).where("revoked_at", "is", null).returning("id").execute()).map((row) => row.id);
+  await markSessionsRevoked(revokedFirst);
+
+  await purgeAccountContent(userId);
+
   let sessionIds: string[] = [];
-  await withTransaction(async (transaction) => {
-    // Read before the cascade removes them: their access tokens must stop
-    // working when the account is gone (NEW-11).
-    sessionIds = (await transaction.selectFrom("sessions").select("id").where("user_id", "=", userId).where("revoked_at", "is", null).execute()).map((row) => row.id);
-    const user = await transaction.selectFrom("users").select(["profile_picture_key", "cover_photo_key"]).where("id", "=", userId).forUpdate().executeTakeFirstOrThrow();
-    await queueMediaDeletions([user.profile_picture_key, user.cover_photo_key], { transaction });
-    await sql`insert into media_deletion_jobs (object_key) select pm.object_key from post_media pm join posts p on p.id = pm.post_id where p.user_id = ${userId} and pm.object_key <> '' on conflict (object_key) do nothing`.execute(transaction);
-    await sql`insert into media_deletion_jobs (object_key) select media_key from stories where user_id = ${userId} and media_key <> '' on conflict (object_key) do nothing`.execute(transaction);
-    await sql`insert into media_deletion_jobs (object_key) select media_key from messages where (from_user_id = ${userId} or to_user_id = ${userId}) and media_key <> '' on conflict (object_key) do nothing`.execute(transaction);
-    await sql`insert into media_deletion_jobs (object_key) select object_key from upload_reservations where user_id = ${userId} on conflict (object_key) do nothing`.execute(transaction);
-    await sql`update posts p set like_count = greatest(0, p.like_count - x.amount) from (select post_id, count(*)::int amount from post_likes where user_id = ${userId} group by post_id) x where p.id = x.post_id and p.user_id <> ${userId}`.execute(transaction);
-    await sql`update posts p set comment_count = greatest(0, p.comment_count - x.amount) from (select post_id, count(*)::int amount from post_comments where user_id = ${userId} group by post_id) x where p.id = x.post_id and p.user_id <> ${userId}`.execute(transaction);
-    await sql`update users u set followers_count = greatest(0, u.followers_count - 1) where u.id in (select followee_id from user_follows where follower_id = ${userId})`.execute(transaction);
-    await sql`update users u set following_count = greatest(0, u.following_count - 1) where u.id in (select follower_id from user_follows where followee_id = ${userId})`.execute(transaction);
-    await sql`update users u set connections_count = greatest(0, u.connections_count - 1) where u.id in (select case when from_user_id = ${userId} then to_user_id else from_user_id end from connections where status = 'accepted' and (from_user_id = ${userId} or to_user_id = ${userId}))`.execute(transaction);
-    await transaction.deleteFrom("conversations").where("id", "in", transaction.selectFrom("conversation_participants").select("conversation_id").where("user_id", "=", userId)).execute();
-    await transaction.deleteFrom("users").where("id", "=", userId).execute();
-  });
+  const maintenance = createMaintenanceDatabase();
+  try {
+    await maintenance.transaction().execute(async (transaction) => {
+      await sql`set local statement_timeout = ${sql.lit(FINAL_STEP_TIMEOUT)}`.execute(transaction);
+      // Read before the cascade removes them: their access tokens must stop
+      // working when the account is gone (NEW-11). A sign-in during step 2
+      // opened one of these.
+      sessionIds = (await transaction.selectFrom("sessions").select("id").where("user_id", "=", userId).where("revoked_at", "is", null).execute()).map((row) => row.id);
+      const user = await transaction.selectFrom("users").select(["profile_picture_key", "cover_photo_key"]).where("id", "=", userId).forUpdate().executeTakeFirst();
+      if (!user) return;
+      await queueMediaDeletions([user.profile_picture_key, user.cover_photo_key], { transaction });
+      await sql`insert into media_deletion_jobs (object_key) select pm.object_key from post_media pm join posts p on p.id = pm.post_id where p.user_id = ${userId} and pm.object_key <> '' on conflict (object_key) do nothing`.execute(transaction);
+      await sql`insert into media_deletion_jobs (object_key) select media_key from stories where user_id = ${userId} and media_key <> '' on conflict (object_key) do nothing`.execute(transaction);
+      await sql`insert into media_deletion_jobs (object_key) select media_key from messages where (from_user_id = ${userId} or to_user_id = ${userId}) and media_key <> '' on conflict (object_key) do nothing`.execute(transaction);
+      await sql`insert into media_deletion_jobs (object_key) select object_key from upload_reservations where user_id = ${userId} on conflict (object_key) do nothing`.execute(transaction);
+      // Whatever a write during step 2 added - normally nothing.
+      await sql`update posts p set like_count = greatest(0, p.like_count - x.amount) from (select post_id, count(*)::int amount from post_likes where user_id = ${userId} group by post_id) x where p.id = x.post_id and p.user_id <> ${userId}`.execute(transaction);
+      await sql`update posts p set comment_count = greatest(0, p.comment_count - x.amount) from (select post_id, count(*)::int amount from post_comments where user_id = ${userId} group by post_id) x where p.id = x.post_id and p.user_id <> ${userId}`.execute(transaction);
+      await sql`update users u set followers_count = greatest(0, u.followers_count - 1) where u.id in (select followee_id from user_follows where follower_id = ${userId})`.execute(transaction);
+      await sql`update users u set following_count = greatest(0, u.following_count - 1) where u.id in (select follower_id from user_follows where followee_id = ${userId})`.execute(transaction);
+      await sql`update users u set connections_count = greatest(0, u.connections_count - 1) where u.id in (select case when from_user_id = ${userId} then to_user_id else from_user_id end from connections where status = 'accepted' and (from_user_id = ${userId} or to_user_id = ${userId}))`.execute(transaction);
+      await transaction.deleteFrom("conversations").where("id", "in", transaction.selectFrom("conversation_participants").select("conversation_id").where("user_id", "=", userId)).execute();
+      await transaction.deleteFrom("users").where("id", "=", userId).execute();
+    });
+  } finally {
+    await maintenance.destroy();
+  }
   // The account's own cached surfaces go directly: its profile, its feed pages
   // and its exercise list (custom exercises went with the cascade). Its posts
   // may sit in any other member's cached feed page, and a deleted account must
-  // not keep appearing there, so the feed audience epoch is bumped as well.
+  // not keep appearing there, so the author is retracted from all of them.
   await Promise.all([
     invalidateCacheOwners(profileCacheOwner(userId), feedCacheOwner(userId), exerciseListOwner(userId)),
     retractAuthor(userId, "all"),

@@ -1,37 +1,57 @@
+import { randomUUID } from "node:crypto";
+import { hostname } from "node:os";
 import { sql } from "kysely";
 import { database } from "../configs/database.js";
+import { logger, safeErrorMetadata } from "./logger.js";
 
 /**
- * Fixed first key of every advisory lock this application takes, so its locks
- * cannot collide with another tool sharing the database.
+ * How long a lease stands without renewal. A runner that dies frees its tasks
+ * after this long; the shortest schedule is five minutes, so nothing is
+ * skipped because of it.
  */
-const LOCK_NAMESPACE = 0x6d6d; // "mm"
+export const LEASE_TTL_SECONDS = 60;
+const RENEW_EVERY_MS = (LEASE_TTL_SECONDS * 1000) / 3;
 
 /**
- * Runs `task` only if no other process holds the lock called `name`.
+ * Runs `task` only if no other process holds the lease called `name`.
  *
- * A PostgreSQL session-level advisory lock, held on one dedicated pooled
- * connection for as long as the task runs. This replaces a Redis lease for
- * scheduled work, for two reasons:
+ * A row in `scheduler_leases` with an expiry (migration 020), taken with one
+ * conditional upsert and renewed while the task runs. It replaced a
+ * session-level advisory lock, which needs the same server connection from
+ * lock to unlock: through a pooler in transaction mode (PgBouncer) it could be
+ * taken and released on different connections, and it pinned a pooled
+ * connection for the whole task besides. A lease works through any pooler and
+ * holds nothing between its statements.
  *
- * - With Redis unavailable the lease used to fall back to running the task
- *   anyway, on every replica at once. PostgreSQL is the one dependency every
- *   process already needs, so there is no such fallback.
- * - A lease has a TTL that a slow run can outlive; this lock is released only
- *   when the task ends or its connection dies, so a crashed holder frees it
- *   immediately and a slow one keeps it.
+ * It is still PostgreSQL, never Redis, so there is no "lock service down, run
+ * everywhere" fallback. If renewal fails the task keeps running and another
+ * runner may start it after the lease expires; every task works in SKIP LOCKED
+ * batches, so an overlap costs duplicate effort, never wrong data.
  *
- * Returns whether the task ran. The task itself uses the ordinary pool; the
- * locked connection only holds the lock.
+ * Returns whether the task ran.
  */
-export const runExclusive = async (name: string, task: () => Promise<void>): Promise<boolean> =>
-  database.connection().execute(async (connection) => {
-    const { rows } = await sql<{ locked: boolean }>`select pg_try_advisory_lock(${LOCK_NAMESPACE}, hashtext(${name})) as locked`.execute(connection);
-    if (!rows[0]?.locked) return false;
-    try {
-      await task();
-      return true;
-    } finally {
-      await sql`select pg_advisory_unlock(${LOCK_NAMESPACE}, hashtext(${name}))`.execute(connection).catch(() => undefined);
-    }
-  });
+export const runExclusive = async (name: string, task: () => Promise<void>): Promise<boolean> => {
+  const holder = `${hostname()}:${process.pid}:${randomUUID()}`.slice(0, 200);
+  const { rows } = await sql<{ holder: string }>`
+    insert into scheduler_leases (name, holder, expires_at, acquired_at)
+    values (${name}, ${holder}, now() + make_interval(secs => ${LEASE_TTL_SECONDS}), now())
+    on conflict (name) do update set holder = excluded.holder, expires_at = excluded.expires_at, acquired_at = excluded.acquired_at
+      where scheduler_leases.expires_at < now()
+    returning holder`.execute(database);
+  if (rows[0]?.holder !== holder) return false;
+
+  const renewal = setInterval(() => {
+    void sql`update scheduler_leases set expires_at = now() + make_interval(secs => ${LEASE_TTL_SECONDS}) where name = ${name} and holder = ${holder}`
+      .execute(database)
+      .then((result) => { if (!Number(result.numAffectedRows ?? 0)) logger.warn("scheduler_lease_lost", { lease: name }); })
+      .catch((error: unknown) => { logger.warn("scheduler_lease_renewal_failed", { lease: name, ...safeErrorMetadata(error) }); });
+  }, RENEW_EVERY_MS);
+  renewal.unref();
+  try {
+    await task();
+    return true;
+  } finally {
+    clearInterval(renewal);
+    await sql`delete from scheduler_leases where name = ${name} and holder = ${holder}`.execute(database).catch(() => undefined);
+  }
+};

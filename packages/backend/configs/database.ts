@@ -2,7 +2,7 @@ import { Kysely, PostgresDialect, sql, type Transaction } from "kysely";
 import { Pool } from "pg";
 import { loadEnvironment } from "./environment.js";
 import type { Database } from "../db/types.js";
-import { logger, safeErrorMetadata } from "../utils/logger.js";
+import { errorDiagnostics, logger } from "../utils/logger.js";
 import { observeDatabasePool } from "../observability/metrics.js";
 
 const environment = loadEnvironment();
@@ -23,6 +23,10 @@ const pool = new Pool({
   // that is stalled on the network rather than on CPU.
   statement_timeout: environment.databaseStatementTimeoutMs,
   query_timeout: environment.databaseStatementTimeoutMs,
+  // A transaction left open between statements - awaiting something outside
+  // the database by mistake - holds its row locks and pins vacuum for as long
+  // as it stays open. The server ends it after this long instead.
+  idle_in_transaction_session_timeout: 60_000,
   // Long-lived pooled connections otherwise die silently behind a load balancer
   // or NAT idle timeout and surface as a failed request rather than a reconnect.
   keepAlive: true,
@@ -31,13 +35,13 @@ const pool = new Pool({
 observeDatabasePool(pool);
 
 pool.on("error", (error: Error) => {
-  logger.error("database_pool_error", safeErrorMetadata(error));
+  logger.error("database_pool_error", errorDiagnostics(error));
 });
 
 export const database = new Kysely<Database>({
   dialect: new PostgresDialect({ pool }),
   log(event) {
-    if (event.level === "error") logger.error("database_query_failed", safeErrorMetadata(event.error));
+    if (event.level === "error") logger.error("database_query_failed", errorDiagnostics(event.error));
   },
 });
 
