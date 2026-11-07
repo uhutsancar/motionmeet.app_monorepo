@@ -144,9 +144,12 @@ Sync never marks anything read, so a resync loop costs reads, not data.
 A medium of ours had no object key and none could be read from its stored
 URL, so clients got "unavailable" instead of an image.
 
-1. `pnpm --filter @motionmeet/backend backfill:media-keys --dry-run` lists the
-   rows by id (never the URLs). Run it without `--dry-run` to write every key
-   that can be recovered.
+1. List the rows by id (never the URLs):
+   ```sh
+   node dist/scripts/backfillMediaKeys.js --dry-run                      # in a backend container
+   pnpm --filter @motionmeet/backend backfill:media-keys --dry-run       # from a checkout
+   ```
+   Run it without `--dry-run` to write every key that can be recovered.
 2. What remains has a stored URL that does not contain
    `<purpose>/<userId>/<file>`. Look up the object in S3 by hand; if it
    exists, set the key column (`post_media.object_key`, `stories.media_key`,
@@ -177,8 +180,10 @@ Do this only after the private media rollout steps 1-3 (DEPLOYMENT.md).
 - `result="permanent_failure"`: files ffprobe/sharp cannot read; nothing to
   retry.
 - Posts that got no metadata before this was fixed (any failure used to be
-  recorded as done): `pnpm --filter @motionmeet/backend backfill:media-metadata --dry-run`,
-  then without `--dry-run`. It queues one `media.uploaded` per affected post;
+  recorded as done): `node dist/scripts/backfillMediaMetadata.js --dry-run`
+  in a backend container (`pnpm --filter @motionmeet/backend
+  backfill:media-metadata --dry-run` from a checkout), then without
+  `--dry-run`. It queues one `media.uploaded` per affected post;
   the consumer fills only what is still missing.
 
 ## Two-replica rehearsal (Ek B-8)

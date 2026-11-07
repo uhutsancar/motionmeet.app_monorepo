@@ -97,8 +97,9 @@ Order matters; each step is safe to stop after.
    refused while unsigned URLs are still allowed.
 1. Deploy the backend (signed delivery on by default). ImageKit still accepts
    unsigned URLs, so links already in clients keep working.
-2. `pnpm --filter @motionmeet/backend backfill:media-keys --dry-run`, then
-   without `--dry-run`. Watch `motionmeet_media_url_unresolvable_total`; the
+2. `node dist/scripts/backfillMediaKeys.js --dry-run` in a backend container
+   (`pnpm --filter @motionmeet/backend backfill:media-keys --dry-run` from a
+   checkout), then without `--dry-run`. Watch `motionmeet_media_url_unresolvable_total`; the
    script lists unresolvable rows by id. Get it to (near) zero.
 3. Check that the clients from step 0 are what most members run. Old store
    builds render a missing image where the new ones show the placeholder, and
