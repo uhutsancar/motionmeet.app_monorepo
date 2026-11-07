@@ -8,6 +8,8 @@
 - Copy `.env.production.example` to an untracked `.env.production`.
 - Generate a unique `JWT_SECRET` with at least 32 random bytes.
 - Set the exact public HTTPS origin in `FRONTEND_URL` and `CORS_ORIGINS`.
+- Set `TRUST_PROXY` to the proxies in front of the API (required; see
+  "Client addresses" in [operations/DEPLOYMENT.md](operations/DEPLOYMENT.md)).
 - Use authenticated, TLS-enabled, multi-zone managed PostgreSQL with automated
   point-in-time backups and tested restores.
 - Size `DATABASE_POOL_MAX` across all API, worker and scheduler replicas
@@ -55,7 +57,10 @@ After deployment:
 
 ```bash
 curl --fail https://app.example.com/health/live
-curl --fail https://app.example.com/health/ready
+# Readiness reports dependencies and capabilities, so the public proxy
+# answers 404 for it; ask each process on its private ops port instead.
+docker compose -f docker-compose.prod.yml exec backend \
+  node -e "fetch('http://127.0.0.1:9464/health/ready').then(async r=>{console.log(r.status, await r.text());process.exit(r.ok?0:1)})"
 ```
 
 Smoke-test registration, login/logout, password reset, profile updates,

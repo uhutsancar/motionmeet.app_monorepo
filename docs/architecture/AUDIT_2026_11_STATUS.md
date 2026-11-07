@@ -101,6 +101,60 @@ Code side:
       below the gate and should be re-checked with the next Expo SDK patch.
 - [x] Section 8 documents updated (see each WP's commit).
 
+## External review 2026-11-07 — hardening round
+
+Branch `audit/2026-11-hardening`. Each finding of the external review, checked
+against the code first, then fixed or explicitly decided. "Reviewer" is the
+review's own numbering.
+
+| Reviewer | Finding (verified) | Change | Tests |
+| --- | --- | --- | --- |
+| 1 | `trust proxy 1` behind TLS proxy + nginx resolved every client to the TLS proxy: every limit was one global budget; session addresses wrong | `TRUST_PROXY` (hop count, `false` or addresses/CIDRs), required for the API in production; limiters keyed per member after `protect`, per verified token before it, per session for refresh, per address + e-mail hash for login and reset, IPv6 /56; login and reset also get an address-wide budget; register 5 → 10/h (CGNAT) | `clientIdentity.test.ts` (real Express: old setting sees 10.0.0.5, new sees the client, forged XFF ignored), `environment.test.ts` |
+| 2 | bcryptjs cost 12 on the event loop (~255 ms of blocked loop per check); reset hashed before checking the token; unknown e-mail answered at once | `utils/passwordHashing.ts`: the same bcryptjs, hash format and cost in a bounded worker-thread pool (`PASSWORD_HASH_WORKERS`), queue capped (503 + metric past it); token checked before hashing; unknown accounts checked against a real dummy hash; forgot-password answers before any lookup (timing and SMTP latency) | `passwordHashing.test.ts` (5 ms timer keeps firing, longest gap < 150 ms with 4 checks in flight) |
+| 3 | Refresh rotation without grace: lost response or two tabs signed members out; no reuse detection | Migration 018 (`previous_token_hash`, `rotated_at`); successor derived with an HMAC so a repeat within 60 s gets the same token; the replaced token after 60 s revokes the session (`refresh_token_reuse_detected`); mobile socket no longer forces a refresh on every connect | `refreshRotation.test.ts` (lost answer, two tabs racing, reuse revokes, older tokens refused without revoking, logout with the previous token) |
+| 4 | 5xx logs empty in production; 4xx logged as errors | `errorDiagnostics`: masked message and stack, PostgreSQL constraint/table/column, never `detail`; 5xx error, 4xx info (`request_rejected`); used for every unexpected failure (uncaught, startup, consumers, scheduler, sockets) | `errorLogging.test.ts` (signed URLs, e-mails, credentials and JWTs masked) |
+| 5 | Single host, no limits on the API, no heap setting | API 2 CPU / 1 GB, heap limits on every Node process, web limits, 15 s stop grace; nginx: kept-alive upstream with runtime DNS (`resolve`), request ids, JSON access log without query strings, optional real-ip include; base image pinned by digest; alert rules for process down, 5xx ratio, p95, event-loop lag, sign-in saturation; new E2E CI job against the production images. Multi-host, restore drill and soak remain Ek B | `nginx -t` (1.30.6) with and without the include; merged compose `config` |
+| 6 | Every deletion / privacy change bumped a global epoch: every member's feed cache missed at once | Retractions: a sorted set read with `ZMSCORE` over the page's own ids; deleted posts always filtered, an author's posts only on pages read before their retraction and written before it; epoch still read (operator switch, mixed-version deploys) | `feedPrivacy.test.ts` (+2: unrelated caches survive a deletion; going private) and the existing privacy tests |
+| 7 | Presence via `fetchSockets()` on every connect/disconnect, connection list read twice, no socket limits | Presence in Redis (sorted set per member, 30 s heartbeat, 90 s TTL); one connection-list read per socket, reused for the offline notice; handlers registered before any await; ≤ 10 sockets per member per replica and 30 connects/min; 64 KB frames; clients reconnect with full jitter | `presenceAndLeases.test.ts` |
+| 8 | Account deletion in one transaction could exceed the 15 s timeout and locked other members' rows | Sessions revoked first; likes, comments, reactions to own posts, posts, workouts, notifications, follows and connections in 1 000-row batches with exact counter fixes; final step on a maintenance connection (5 min cap); conversations still cascade whole (no tombstones). **New finding:** nine foreign keys that cascade/set null had no index (migration 019) - every post deletion and story expiry scanned `notifications`, every message deletion scanned `conversations` | `accountDeletion.test.ts` (2 300 posts, > 1 batch each way, all counters back), `databaseContracts.test.ts` (every cascading FK indexed) |
+| 9 | `user.profile.updated` rewrote all of an author's posts in one transaction | `hydratePosts` reads author name/picture live (one PK query per page, in parallel); projection now only writes rows that differ, 1 000 per statement, as an idempotent external consumer | `outbox.test.ts` (projection), feed/profile tests |
+| 10 | Session-level advisory locks break behind a transaction-mode pooler | Scheduled tasks hold a lease row (migration 020, 60 s, renewed every 20 s); PgBouncer notes in DEPLOYMENT.md (statement_timeout, migrate directly) | `presenceAndLeases.test.ts` (expired lease taken over), `outbox.test.ts` |
+| low | `docs/production.md` checked `/health/ready` publicly | Uses the private ops port | — |
+| low | nginx without keepalive | Done (5) | — |
+| low | No E2E in CI | `e2e-stack` job: production images + local data services, authorization sweep. Its first run found the profile check sending `id`/`userId` instead of `profileId`: refused as a bad id, it had passed on an empty answer; it now sends what the clients send and requires a 200 | `authorization.e2e.test.ts` 12/12 against the compiled API (`dist`, plain `node`, production mode, the job's environment); images not built locally while the rehearsal stack is up |
+| low | AdMob on test units | Deliberate (no production ad units exist, docs/mobile-admob.md); needs AdMob console ids, not code | — |
+
+Found in the same pass, outside the review's list:
+
+- Multipart uploads are read into memory (a post: 4 × 20 MB) with no
+  concurrency bound: a burst could OOM the API. Process-wide upload memory
+  budget (192 MB, 503 past it, 413 for oversize declarations) and a per-member
+  upload limit; share cards (sharp, libuv pool) got a per-member limit and
+  one libvips thread per image. `uploadBudget.test.ts`.
+- Feed videos built a native player (decoder, surface, buffer) for every video
+  card in the list window, unwatched. Now tap-to-play, paused when the screen
+  loses focus (`PostCard.tsx`).
+- No `idle_in_transaction_session_timeout`: a transaction left open held its
+  locks indefinitely. 60 s on the request pool.
+- `outbox.test.ts` made a dead-lettered event due with the test process's
+  clock while the claim compares with PostgreSQL's `now()`; with Docker
+  Desktop's VM clock a few milliseconds behind, it failed now and then. It
+  uses the database clock, as the code does.
+
+Not changed, with reason: R8 stays off in release builds (device crash,
+`plugins/withReleaseMinifyOff.js`; needs keep rules tested on a device); an
+image vulnerability scanner in CI is recommended but not added (third-party
+actions must be pinned to a reviewed commit, which could not be verified
+offline).
+
+Verification (2026-11-07): backend unit 132/132; integration 99/99 against
+PostgreSQL 18, Redis 8, RabbitMQ 4.2 (migrations 018-020 applied, second run a
+no-op); E2E authorization sweep 12/12 against the compiled API and worker in
+production mode (password checks on worker threads under plain `node`);
+`pnpm lint` and `pnpm typecheck` clean across the monorepo; web build,
+artifact and performance checks clean; `scripts/tests` 22/22; Node security
+scan clean; nginx `-t` clean; merged compose valid.
+
 ## Environment-only work (Ek B)
 
 | # | Needed for | What is ready in the repo |

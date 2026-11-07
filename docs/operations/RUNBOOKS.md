@@ -63,13 +63,59 @@ queue and its `.retry.*` queues in the management UI, deploy the new worker.
 ## Scheduler not running tasks
 
 `motionmeet_scheduled_task_runs_total{outcome="skipped_locked"}` only rising →
-another process holds the lock. Find it:
+another process holds the task's lease (migration 020). Find it:
 ```sql
-select pid, application_name, state, query_start from pg_stat_activity
-where pid in (select pid from pg_locks where locktype = 'advisory');
+select name, holder, acquired_at, expires_at from scheduler_leases order by acquired_at;
 ```
-A crashed holder releases the lock with its connection; a hung one can be
-ended with `select pg_terminate_backend(<pid>)`.
+`holder` is `<host>:<pid>:<uuid>`. A holder that died frees the lease when
+`expires_at` passes (at most 60 s); a live one renews it every 20 s while its
+task runs. To hand a hung task's lease over at once, stop that process, then
+`delete from scheduler_leases where name = '<name>'`. `scheduler_lease_lost`
+in the logs means a run outlived its lease (renewal failed); the next runner
+may then overlap it, which every task tolerates (SKIP LOCKED batches).
+
+## API errors (5xx)
+
+Every 5xx writes one `request_failed` line at error level with the request
+id, route, `errorName`/`errorCode`, the masked `errorMessage` and `stack`,
+and for PostgreSQL errors the `constraint`/`table`/`column` (never row
+values). 4xx answers are `request_rejected` at info level and are not
+errors. Group the error lines by `path` and `errorCode`:
+
+- `57014` (statement timeout) or `timeout exceeded when trying to connect`:
+  the pool or a plan - see `motionmeet_db_pool_connections{state="waiting"}`
+  and `pg_stat_statements`.
+- `ECONNREFUSED`/`ETIMEDOUT` to PostgreSQL or Redis: the dependency.
+- `PasswordHashingBusyError` (503): see the next section.
+- Anything else: the stack names the line; the request id finds every log
+  line of that request, the worker's included (trace id).
+
+## Sign-in slow or answering 503 (`motionmeet_password_hash_queue` high)
+
+Passwords are hashed and checked in worker threads (`utils/passwordHashing.ts`,
+`PASSWORD_HASH_WORKERS`, cost 12, ~250 ms of CPU each). The queue is bounded
+at 40 checks per worker; past it sign-in, registration and account deletion
+answer 503 at once (`motionmeet_password_hash_rejected_total`) rather than
+holding requests for tens of seconds. The rest of the API is unaffected:
+check `motionmeet_nodejs_eventloop_lag_p99_seconds` stays low.
+
+1. A login wave (after a deploy, a push campaign): it drains by itself.
+2. Credential stuffing: `request_rejected` lines with `status: 429` on
+   `/api/auth/login` per address, many distinct e-mail addresses. Confirm
+   `TRUST_PROXY` is right (the logged addresses must be clients, not your
+   proxy), then block the source upstream.
+3. Sustained real demand: give the API container more CPUs and raise
+   `PASSWORD_HASH_WORKERS` with it (CPUs - 1).
+
+## Refresh token reuse (`refresh_token_reuse_detected` in the logs)
+
+A refresh token that had already been replaced came back more than 60 s
+later; the session was revoked (`utils/authTokens.ts`). One-offs are clients
+that lost track (a phone restored from a backup, an app killed between
+receiving and storing a token) and only cost a sign-in. Many for one member,
+or from addresses that member never used (`sessions.ip_address`), suggest a
+stolen token: treat as account compromise - reset the password (revokes
+every session).
 
 ## Redis down
 
@@ -210,13 +256,13 @@ Check `docker compose ps` shows two healthy `backend` containers.
    (each costs at most one failed attempt until Docker drops the address);
    readiness of the remaining one stays 200.
 
-6. **Presence cost (WP-17).** With ~5 000 sockets spread over both replicas
-   (k6 or a socket.io client script), measure how long a connect's
-   `online_users` answer takes (it calls `fetchSockets()` across replicas),
-   then again with one replica paused (`docker pause`): the call waits for
-   the adapter's request timeout. If either is a problem, the sorted-set
-   presence design in the 2026-11 audit plan (WP-17 item 2) is the next step;
-   if not, record `NOT_NEEDED (measured)`.
+6. **Presence (WP-17).** Presence is a sorted set per member in Redis
+   since the 2026-11-07 review (`configs/redis.ts`); no connect or
+   disconnect waits on the other replica any more. With ~5 000 sockets over
+   both replicas, `docker pause` one: connects to the other keep answering
+   `online_users` at once, and the paused replica's members drop out of
+   presence within 90 s (`PRESENCE_TTL_MS`) without anyone disconnecting
+   them. `motionmeet_socket_connections` per replica shows the spread.
 
 Record 5xx counts, p95 and any gap or duplicate in the audit status file.
 

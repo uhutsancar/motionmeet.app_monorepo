@@ -7,10 +7,14 @@ Redis and (optionally) RabbitMQ are external managed services named in
 | Service | Command | Key settings |
 |---|---|---|
 | `migrate` | `node dist/scripts/migrate.js` | runs once per `up`; the others wait for it to succeed |
-| `backend` | `node dist/server.js` | `RUN_MIGRATIONS=false`, `RUN_SCHEDULED_JOBS=false`, `METRICS_PORT=9464` |
-| `worker` | `node dist/entrypoints/worker.js` | image target `media-runtime` (FFmpeg for video metadata; the API image has none), pool 10, 1 CPU / 512 MB, 30 s stop grace |
-| `scheduler` | `node dist/entrypoints/scheduler.js` | pool 5, 0.5 CPU / 256 MB, 30 s stop grace |
-| `web` | Nginx static build | unchanged |
+| `backend` | `node dist/server.js` | `RUN_MIGRATIONS=false`, `RUN_SCHEDULED_JOBS=false`, `METRICS_PORT=9464`, 2 CPU / 1 GB (heap 640 MB), `PASSWORD_HASH_WORKERS=1`, 15 s stop grace |
+| `worker` | `node dist/entrypoints/worker.js` | image target `media-runtime` (FFmpeg for video metadata; the API image has none), pool 10, 1 CPU / 512 MB (heap 384 MB), 30 s stop grace |
+| `scheduler` | `node dist/entrypoints/scheduler.js` | pool 5, 0.5 CPU / 256 MB (heap 192 MB), 30 s stop grace |
+| `web` | Nginx static build | 1 CPU / 256 MB; kept-alive upstream to the API (`packages/web/nginx.conf`) |
+
+Every Node process has `--max-old-space-size` below its container limit: V8
+otherwise sizes its heap from the host's memory and is killed by the kernel
+before it collects. Raise a limit and its heap together.
 
 All backend services: read-only root filesystem, `/tmp` tmpfs, all
 capabilities dropped, `no-new-privileges`, non-root user, `tini` as PID 1.
@@ -31,6 +35,60 @@ capabilities dropped, `no-new-privileges`, non-root user, `tini` as PID 1.
 | `MEDIA_SIGNED_DELIVERY` | `true` | sign media URLs at read time; `false` only as a rollback before ImageKit restricts unsigned URLs |
 | `IMAGEKIT_PURGE_ON_DELETE` | `false` | purge ImageKit's cache when deleted media leaves S3 (D-03); check the plan's purge quota first |
 | `CACHE_READS_ENABLED` | `true` | `false` stops this replica serving and filling the owner cache (invalidations still run); see "Cache format changes" below |
+| `TRUST_PROXY` | — (required for the API in production) | which hops may name the client; see "Client addresses" below |
+| `PASSWORD_HASH_WORKERS` | CPUs - 1, 1-4 | worker threads for password hashing and checks; give each its own CPU |
+
+## Client addresses
+
+Every per-client rate limit, and the address stored on a session, reads the
+client from `X-Forwarded-For` through Express's `trust proxy`, set from
+`TRUST_PROXY`. The API refuses to start in production without it: the old
+fixed value of one hop, behind a TLS proxy and the web container's nginx,
+made every member the TLS proxy - ten mistyped passwords anywhere locked
+everybody out, and the API-wide budget was one budget for the world.
+
+| Topology | `TRUST_PROXY` |
+| --- | --- |
+| client → nginx (web container) → API | `1`, or the web container's network |
+| client → TLS proxy / load balancer → nginx → API (documented setup) | the networks both proxies connect from, e.g. `loopback,uniquelocal` or `10.0.0.0/8,172.16.0.0/12`; or `2` |
+| client → Cloudflare → TLS proxy → nginx → API | the above plus Cloudflare's published ranges |
+
+Prefer addresses over a hop count: with addresses, a client that reaches
+nginx directly and sends its own `X-Forwarded-For` is still seen as itself.
+Do not trust the private ranges when nginx's published port is reachable from
+the internet through Docker's userland proxy (every client then arrives from
+the Docker gateway, a private address) - trust the TLS proxy's own address
+instead. Check after a deploy: two clients on different networks must show
+different `ip_address` values in `sessions`.
+
+Signed-in requests are counted per member, refreshes per session and logins
+per address *and* e-mail address, so carrier-grade NAT does not merge mobile
+members into one budget (`packages/backend/middlewares/rateLimits.ts`).
+
+For nginx's own logs to show clients as well, mount a file at
+`/etc/nginx/motionmeet/real-ip.conf` in the web container:
+```nginx
+set_real_ip_from 10.0.0.0/8;   # the TLS proxy / load balancer
+real_ip_header X-Forwarded-For;
+real_ip_recursive on;
+```
+
+## PostgreSQL through a pooler (PgBouncer)
+
+The code assumes nothing that needs a dedicated server connection:
+scheduled tasks hold a lease row (migration 020) rather than a session-level
+advisory lock, and migrations run on their own direct connection. In
+transaction mode two settings still need care:
+
+- `statement_timeout` is sent as a connection startup parameter, which
+  PgBouncer rejects unless it is listed in `ignore_startup_parameters`. List
+  it there and set the timeout on the database role instead:
+  `ALTER ROLE motionmeet_app SET statement_timeout = '15s';` (the client-side
+  `query_timeout` still applies).
+- Run `migrate` against the database directly (session mode or the
+  server's own port): Kysely's migrator holds a session-level advisory lock
+  (`pg_advisory_lock`) for the whole run, which a transaction-mode pooler
+  cannot keep.
 
 ## Connection budget
 
@@ -153,6 +211,14 @@ work.
 
 ## Notes for large databases
 
+- Migration 019 adds nine indexes behind foreign keys that cascade or set
+  null (without them every post deletion scanned `notifications`, every
+  message deletion scanned `conversations`, and deleting an account scanned
+  `posts` once per logged workout). On large tables build them first, one
+  at a time, with `CREATE INDEX CONCURRENTLY IF NOT EXISTS` and the exact
+  names and definitions listed in
+  `packages/backend/db/migrations/019_foreign_key_indexes.ts`; the migration
+  is then a no-op.
 - Migration 015 builds `posts_author_timeline_idx` with a plain `CREATE
   INDEX` (the migrator runs in a transaction). On a large `posts` table build
   it by hand first with `CREATE INDEX CONCURRENTLY IF NOT EXISTS` - same

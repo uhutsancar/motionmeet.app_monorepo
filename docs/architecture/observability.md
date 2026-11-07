@@ -38,6 +38,9 @@ never on the public port. Every series has a `role` label (`api`, `worker`,
 | `motionmeet_db_pool_connections` | gauge | state (total, idle, waiting) | request-pool pressure; `waiting` > 0 means requests queue for a connection |
 | `motionmeet_account_exports_total` | counter | outcome (completed, failed, aborted) | account export health |
 | `motionmeet_account_export_seconds` | histogram | — | export duration |
+| `motionmeet_password_hash_queue` | gauge (api) | — | password checks waiting for a worker thread |
+| `motionmeet_password_hash_rejected_total` | counter (api) | — | sign-ins refused with 503 because that queue was full |
+| `motionmeet_socket_connections` | gauge (api) | — | Socket.IO connections open on this replica |
 | `motionmeet_process_*`, `motionmeet_nodejs_*` | prom-client defaults | — | event-loop lag, heap, GC, RSS |
 
 Cardinality rule: labels are route templates, event types, consumer and task
@@ -54,7 +57,10 @@ Prometheus plugin (`rabbitmq_prometheus`, port 15692) — enable it on the broke
 | Dead events | `increase(motionmeet_outbox_dead[15m]) > 0` or any message in a `*.dead` queue | needs an operator (RUNBOOKS.md) |
 | Consumer retries | `rate(motionmeet_events_consumed_total{outcome="retried"}[10m])` above its usual band | dependency degrading |
 | Scheduler failing | `increase(motionmeet_scheduled_task_runs_total{outcome="failed"}[1h]) > 0` | sweeps not running |
-| API errors | 5xx ratio > 1 % for 10 min | user impact |
+| Process down | `up == 0` for 2 min | a process stopped answering its scrape |
+| API errors | 5xx ratio > 2 % for 5 min | user impact; `request_failed` lines carry the cause |
+| API latency | p95 > 1 s for 10 min | pool, plans or CPU |
+| Sign-in saturated | `increase(motionmeet_password_hash_rejected_total[5m]) > 0` | login wave or credential stuffing |
 | Event loop | `motionmeet_nodejs_eventloop_lag_p99_seconds > 0.2` for 10 min | CPU work on the request path |
 | Pool waiting | `motionmeet_db_pool_connections{state="waiting"} > 0` for 5 min | pool or connection budget too small |
 | Cache invalidation | `increase(motionmeet_cache_invalidation_failures_total[10m]) > 0` | Redis trouble; privacy-narrowing writes may be stale up to the TTL |
