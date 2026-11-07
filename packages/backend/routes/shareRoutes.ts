@@ -1,7 +1,6 @@
 import express from "express";
-import rateLimit from "express-rate-limit";
 import { isUuid } from "../utils/validation.js";
-import { createRateLimitStore } from "../configs/redis.js";
+import { clientKey, createLimiter } from "../middlewares/rateLimits.js";
 import { findPublicPost, renderPostPage, renderUnavailablePage } from "../services/sharePageService.js";
 
 const shareRouter = express.Router();
@@ -15,12 +14,11 @@ const shareRouter = express.Router();
  * it — cheap, but exposed to the open internet, so it gets its own limiter
  * rather than sharing the API's budget.
  */
-const sharePageLimiter = rateLimit({
+const sharePageLimiter = createLimiter({
+  name: "share-page",
   windowMs: 60_000,
   limit: 120,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: createRateLimitStore("share-page"),
+  key: clientKey,
   message: "Too many requests",
 });
 

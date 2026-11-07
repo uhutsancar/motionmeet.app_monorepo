@@ -2,7 +2,6 @@ import "dotenv/config";
 import { createServer } from "node:http";
 import cors, { type CorsOptions } from "cors";
 import express from "express";
-import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import { Server } from "socket.io";
 import { createAdapter } from "@socket.io/redis-adapter";
@@ -26,9 +25,10 @@ import userRouter from "./routes/userRoutes.js";
 import workoutRouter from "./routes/workoutRoutes.js";
 import { checkDatabaseHealth, connectDatabase, disconnectDatabase, isDatabaseReady } from "./configs/database.js";
 import { isDevelopmentOrigin, loadEnvironment } from "./configs/environment.js";
-import { createRateLimitStore, disconnectRedis, getRedisStatus, initializeRedis, onRedisReady } from "./configs/redis.js";
+import { disconnectRedis, getRedisStatus, initializeRedis, onRedisReady } from "./configs/redis.js";
 import { migrateToLatest } from "./db/migrator.js";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler.js";
+import { bearerOrClientKey, createLimiter } from "./middlewares/rateLimits.js";
 import { requestContext } from "./middlewares/requestContext.js";
 import { parseJsonBody, rejectUnsupportedApiContentType } from "./middlewares/browserSecurity.js";
 import { answerRetiredBilling, RETIRED_BILLING_PATHS } from "./middlewares/retiredBilling.js";
@@ -103,7 +103,9 @@ setSocketServer(io);
 // lands - either way the in-memory adapter is replaced for multi-instance fan-out.
 onRedisReady((clients) => io.adapter(createAdapter(clients.publisher, clients.subscriber)));
 
-app.set("trust proxy", 1);
+// Which hops may name the client (TRUST_PROXY): every per-client limit and
+// the address recorded on a session read `request.ip` through this.
+app.set("trust proxy", environment.trustProxy);
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(requestContext);
 app.use(cors(corsOptions));
@@ -112,7 +114,9 @@ app.use(RETIRED_BILLING_PATHS, answerRetiredBilling);
 app.use("/api", rejectUnsupportedApiContentType);
 app.use(parseJsonBody);
 const configuredGlobalLimit = Number.parseInt(process.env.GLOBAL_RATE_LIMIT_PER_15_MIN ?? "", 10);
-app.use("/api", rateLimit({ windowMs: 900_000, limit: Number.isFinite(configuredGlobalLimit) ? Math.min(Math.max(configuredGlobalLimit, 100), 10_000) : 1_000, standardHeaders: true, legacyHeaders: false, store: createRateLimitStore("global"), message: { success: false, message: "Too many requests; please try again later" } }));
+// Per member when the request carries a valid access token, per address
+// otherwise, so members behind one carrier NAT do not share one budget.
+app.use("/api", createLimiter({ name: "global", windowMs: 900_000, limit: Number.isFinite(configuredGlobalLimit) ? Math.min(Math.max(configuredGlobalLimit, 100), 10_000) : 1_000, key: bearerOrClientKey, message: { success: false, message: "Too many requests; please try again later" } }));
 
 app.get("/", (_request, response) => { response.send("Server is running"); });
 app.get("/health/live", (_request, response) => { response.json({ status: "ok", uptimeSeconds: Math.floor(process.uptime()) }); });

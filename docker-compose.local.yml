@@ -39,6 +39,8 @@ x-local-backend-env: &local-backend-env
   EMAIL_ENABLED: "false"
   # Throughput rehearsals (scripts/load) need more than the public default.
   GLOBAL_RATE_LIMIT_PER_15_MIN: 10000
+  # Browser -> web nginx -> API: nginx is the only proxy here.
+  TRUST_PROXY: "1"
 
 x-data-ready: &data-ready
   postgres:

@@ -15,6 +15,13 @@ import { findHydratedPost } from "../repositories/postRepository.js";
 import { canAccessPost } from "./accessControlService.js";
 import { fetchImageBounded } from "../utils/boundedFetch.js";
 
+// One libvips thread per image: cards are rendered for many members at once,
+// on libuv's four-thread pool, and a card spreading itself over every thread
+// queued DNS lookups and file reads behind it. Results are never reused, so
+// sharp's operation cache only held memory.
+sharp.concurrency(1);
+sharp.cache(false);
+
 /**
  * Turns a workout into the picture people post about it.
  *

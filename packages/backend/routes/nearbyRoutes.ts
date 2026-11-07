@@ -1,5 +1,4 @@
 import express from "express";
-import rateLimit from "express-rate-limit";
 import {
   deletePosition,
   getSettings,
@@ -8,7 +7,7 @@ import {
   updateSettings,
 } from "../controllers/nearbyController.js";
 import { protect } from "../middlewares/auth.js";
-import { createRateLimitStore } from "../configs/redis.js";
+import { createLimiter, memberKey } from "../middlewares/rateLimits.js";
 
 const nearbyRouter = express.Router();
 
@@ -18,22 +17,20 @@ const nearbyRouter = express.Router();
  * use and tight enough that an account cannot sweep a city by posting a grid
  * of coordinates.
  */
-const positionLimiter = rateLimit({
+const positionLimiter = createLimiter({
+  name: "nearby-position",
   windowMs: 15 * 60 * 1000,
   limit: 40,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: createRateLimitStore("nearby-position"),
+  key: memberKey,
   message: { success: false, message: "Location updates are being sent too often" },
 });
 
 /** Listing is cheap but enumerable, so it is capped independently of writes. */
-const listLimiter = rateLimit({
+const listLimiter = createLimiter({
+  name: "nearby-list",
   windowMs: 15 * 60 * 1000,
   limit: 120,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: createRateLimitStore("nearby-list"),
+  key: memberKey,
   message: { success: false, message: "Too many nearby requests; please try again later" },
 });
 

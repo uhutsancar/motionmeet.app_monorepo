@@ -8,7 +8,7 @@ const managedKeys = [
   "AWS_BUCKET_NAME", "IMAGEKIT_PUBLIC_KEY", "IMAGEKIT_PRIVATE_KEY", "IMAGEKIT_URL_ENDPOINT",
   "SMTP_USER", "SMTP_PASS", "SENDER_EMAIL", "ALLOW_INSECURE_REDIS_TLS",
   "OUTBOX_TRANSPORT", "RABBITMQ_URL", "ALLOW_INSECURE_RABBITMQ_TLS", "MOTIONMEET_PROCESS_ROLE", "METRICS_PORT",
-  "CACHE_READS_ENABLED", "MEDIA_SIGNED_DELIVERY", "IMAGEKIT_PURGE_ON_DELETE",
+  "CACHE_READS_ENABLED", "MEDIA_SIGNED_DELIVERY", "IMAGEKIT_PURGE_ON_DELETE", "TRUST_PROXY", "PASSWORD_HASH_WORKERS",
 ] as const;
 const original = new Map(managedKeys.map((key) => [key, process.env[key]]));
 
@@ -29,8 +29,9 @@ const productionBase = (): void => {
   process.env.JWT_SECRET = "0123456789abcdef0123456789abcdef";
   process.env.MEDIA_UPLOADS_ENABLED = "false";
   process.env.EMAIL_ENABLED = "false";
+  process.env.TRUST_PROXY = "uniquelocal";
   // Whatever the developer's shell exports must not leak into these cases.
-  for (const key of ["OUTBOX_TRANSPORT", "RABBITMQ_URL", "ALLOW_INSECURE_RABBITMQ_TLS", "MOTIONMEET_PROCESS_ROLE", "METRICS_PORT", "CACHE_READS_ENABLED", "MEDIA_SIGNED_DELIVERY", "IMAGEKIT_PURGE_ON_DELETE"] as const) delete process.env[key];
+  for (const key of ["OUTBOX_TRANSPORT", "RABBITMQ_URL", "ALLOW_INSECURE_RABBITMQ_TLS", "MOTIONMEET_PROCESS_ROLE", "METRICS_PORT", "CACHE_READS_ENABLED", "MEDIA_SIGNED_DELIVERY", "IMAGEKIT_PURGE_ON_DELETE", "PASSWORD_HASH_WORKERS"] as const) delete process.env[key];
   resetEnvironmentForTests();
 };
 
@@ -113,6 +114,38 @@ test("the owner cache serves by default and can be switched off for a deploy win
     assert.equal(loadEnvironment().cacheReadsEnabled, false);
     process.env.CACHE_READS_ENABLED = "sometimes"; resetEnvironmentForTests();
     assert.throws(() => loadEnvironment(), /CACHE_READS_ENABLED/);
+  } finally { restore(); }
+});
+
+test("the production API must be told which proxies may name the client", () => {
+  try {
+    // A fixed hop count behind a TLS proxy and nginx made every member the
+    // TLS proxy: one rate-limit budget for the whole world.
+    productionBase(); delete process.env.TRUST_PROXY; resetEnvironmentForTests();
+    assert.throws(() => loadEnvironment(), /TRUST_PROXY is required/);
+    // Worker and scheduler serve no client traffic.
+    process.env.MOTIONMEET_PROCESS_ROLE = "worker"; resetEnvironmentForTests();
+    assert.equal(loadEnvironment().trustProxy, 1);
+    productionBase(); process.env.TRUST_PROXY = "2"; resetEnvironmentForTests();
+    assert.equal(loadEnvironment().trustProxy, 2);
+    productionBase(); process.env.TRUST_PROXY = "false"; resetEnvironmentForTests();
+    assert.equal(loadEnvironment().trustProxy, false);
+    productionBase(); process.env.TRUST_PROXY = "loopback, 10.0.0.0/8, 172.16.0.0/12, fd00::/8, 192.0.2.7"; resetEnvironmentForTests();
+    assert.deepEqual(loadEnvironment().trustProxy, ["loopback", "10.0.0.0/8", "172.16.0.0/12", "fd00::/8", "192.0.2.7"]);
+    for (const invalid of ["0", "11", "10.0.0.0/33", "proxy.example.com", "10.0.0.0/8,everything", "fd00::/129"]) {
+      productionBase(); process.env.TRUST_PROXY = invalid; resetEnvironmentForTests();
+      assert.throws(() => loadEnvironment(), /TRUST_PROXY/, invalid);
+    }
+  } finally { restore(); }
+});
+
+test("password hashing gets bounded worker threads", () => {
+  try {
+    productionBase();
+    const workers = loadEnvironment().passwordHashWorkers;
+    assert.ok(workers >= 1 && workers <= 4, String(workers));
+    process.env.PASSWORD_HASH_WORKERS = "64"; resetEnvironmentForTests();
+    assert.equal(loadEnvironment().passwordHashWorkers, 16);
   } finally { restore(); }
 });
 

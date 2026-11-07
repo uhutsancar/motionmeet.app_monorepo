@@ -1,5 +1,4 @@
 import express from "express";
-import rateLimit from "express-rate-limit";
 import {
   deleteAccount,
   exportAccount,
@@ -34,16 +33,16 @@ import {
 import { protect, requireActiveSession } from "../middlewares/auth.js";
 import { imageUpload } from "../configs/multer.js";
 import { getUserRecentMessages } from "../controllers/messageController.js";
-import { createRateLimitStore } from "../configs/redis.js";
+import { createLimiter, memberKey, multipartUploadLimiter } from "../middlewares/rateLimits.js";
+import { reserveUploadMemory } from "../middlewares/uploadBudget.js";
 
 const userRouter = express.Router();
 
-const sensitiveAccountLimiter = rateLimit({
+const sensitiveAccountLimiter = createLimiter({
+  name: "account",
   windowMs: 60 * 60 * 1000,
   limit: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: createRateLimitStore("account"),
+  key: memberKey,
   message: {
     success: false,
     message: "Too many account requests; please try again later",
@@ -62,6 +61,9 @@ userRouter.post(
   "/update",
   protect,
   requireActiveSession,
+  multipartUploadLimiter,
+  // A profile and a cover picture of up to 5 MB each, plus the form fields.
+  reserveUploadMemory(11 * 1024 * 1024),
   imageUpload.fields([
     { name: "profile", maxCount: 1 },
     { name: "cover", maxCount: 1 },

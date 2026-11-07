@@ -1,5 +1,4 @@
 import express from "express";
-import rateLimit from "express-rate-limit";
 import {
   getAttribution,
   getLocation,
@@ -9,7 +8,7 @@ import {
   searchLocations,
 } from "../controllers/locationController.js";
 import { protect } from "../middlewares/auth.js";
-import { createRateLimitStore } from "../configs/redis.js";
+import { createLimiter, memberKey } from "../middlewares/rateLimits.js";
 
 const locationRouter = express.Router();
 
@@ -18,12 +17,11 @@ const locationRouter = express.Router();
  * spends a handful of requests per search. This ceiling leaves room for fast
  * typing while making a scraper walking the 150k-row city table give up.
  */
-const searchLimiter = rateLimit({
+const searchLimiter = createLimiter({
+  name: "location-search",
   windowMs: 15 * 60 * 1000,
   limit: 300,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: createRateLimitStore("location-search"),
+  key: memberKey,
   message: { success: false, message: "Too many location searches; please slow down" },
 });
 

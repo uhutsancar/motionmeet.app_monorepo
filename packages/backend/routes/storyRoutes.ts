@@ -1,11 +1,13 @@
 import express from "express";
 import { storyMediaUpload } from "../configs/multer.js";
 import { attachDbUser, protect } from "../middlewares/auth.js";
+import { multipartUploadLimiter } from "../middlewares/rateLimits.js";
+import { reserveUploadMemory } from "../middlewares/uploadBudget.js";
 import { addUserStory, deleteStory, getStories, getStoryViewers, setStoryLike, viewStory } from "../controllers/storyController.js";
 
 const storyRouter = express.Router();
 
-storyRouter.post("/create", protect, attachDbUser, storyMediaUpload.single("media"), addUserStory);
+storyRouter.post("/create", protect, multipartUploadLimiter, reserveUploadMemory(21 * 1024 * 1024), attachDbUser, storyMediaUpload.single("media"), addUserStory);
 storyRouter.get("/get", protect, getStories);
 storyRouter.delete("/delete/:storyId", protect, deleteStory);
 storyRouter.post("/:storyId/view", protect, viewStory);

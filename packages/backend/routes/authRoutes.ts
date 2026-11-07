@@ -1,5 +1,4 @@
 import express from "express";
-import rateLimit from "express-rate-limit";
 import {
   registerUser,
   loginUser,
@@ -10,8 +9,8 @@ import {
   refreshSession,
 } from "../controllers/authController.js";
 import { protect } from "../middlewares/auth.js";
-import { createRateLimitStore } from "../configs/redis.js";
 import { verifyBrowserAuthRequest } from "../middlewares/browserSecurity.js";
+import { clientAndEmailKey, clientKey, createLimiter, refreshSessionKey } from "../middlewares/rateLimits.js";
 
 const router = express.Router();
 
@@ -20,49 +19,67 @@ const authLimiterResponse = {
   message: "Too many authentication attempts; please try again later",
 };
 
-const loginLimiter = rateLimit({
+/**
+ * Failed logins are counted per address *and* account, so one member's typos
+ * never lock out the others behind the same carrier NAT. The looser
+ * address-wide budget is what stops one address from walking many accounts.
+ */
+const loginLimiter = createLimiter({
+  name: "login",
   windowMs: 15 * 60 * 1000,
   limit: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: createRateLimitStore("login"),
+  key: clientAndEmailKey,
   skipSuccessfulRequests: true,
   message: authLimiterResponse,
 });
 
-const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  limit: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: createRateLimitStore("register"),
+const loginAddressLimiter = createLimiter({
+  name: "login-address",
+  windowMs: 15 * 60 * 1000,
+  limit: 100,
+  key: clientKey,
+  skipSuccessfulRequests: true,
   message: authLimiterResponse,
 });
 
-const refreshLimiter = rateLimit({
+const registerLimiter = createLimiter({
+  name: "register",
+  windowMs: 60 * 60 * 1000,
+  limit: 10,
+  key: clientKey,
+  message: authLimiterResponse,
+});
+
+const refreshLimiter = createLimiter({
+  name: "refresh",
   windowMs: 15 * 60 * 1000,
   limit: 60,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: createRateLimitStore("refresh"),
+  key: refreshSessionKey,
   message: authLimiterResponse,
 });
 
-const passwordResetLimiter = rateLimit({
+const passwordResetRequestLimiter = createLimiter({
+  name: "password-reset",
   windowMs: 60 * 60 * 1000,
   limit: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: createRateLimitStore("password-reset"),
+  key: clientAndEmailKey,
+  message: authLimiterResponse,
+});
+
+const passwordResetAddressLimiter = createLimiter({
+  name: "password-reset-address",
+  windowMs: 60 * 60 * 1000,
+  limit: 30,
+  key: clientKey,
   message: authLimiterResponse,
 });
 
 router.post("/register", registerLimiter, registerUser);
-router.post("/login", loginLimiter, loginUser);
+router.post("/login", loginAddressLimiter, loginLimiter, loginUser);
 router.post("/refresh", verifyBrowserAuthRequest, refreshLimiter, refreshSession);
 router.post("/logout", verifyBrowserAuthRequest, logoutUser);
-router.post("/forgot-password", passwordResetLimiter, requestPasswordReset);
-router.post("/reset-password", passwordResetLimiter, resetPassword);
+router.post("/forgot-password", passwordResetAddressLimiter, passwordResetRequestLimiter, requestPasswordReset);
+router.post("/reset-password", passwordResetAddressLimiter, resetPassword);
 router.get("/me", protect, getMe);
 
 export default router;

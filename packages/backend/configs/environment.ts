@@ -1,3 +1,6 @@
+import { isIP } from "node:net";
+import { availableParallelism } from "node:os";
+
 const MIN_PRODUCTION_SECRET_LENGTH = 32;
 
 export interface Environment {
@@ -46,6 +49,16 @@ export interface Environment {
   mediaSignedDelivery: boolean;
   /** Also purge ImageKit's cache when a deleted file is removed from S3 (D-03; default off). */
   imagekitPurgeOnDelete: boolean;
+  /**
+   * Express `trust proxy`: which hops in front of the API may say who the
+   * client is. A hop count, `false` for none, or the addresses/CIDRs (and the
+   * names `loopback`, `linklocal`, `uniquelocal`) the proxies connect from.
+   * Every per-client rate limit and the session's recorded address read the
+   * client from this, so a wrong value makes all members one client.
+   */
+  trustProxy: number | false | string[];
+  /** Worker threads that hash and check passwords; the event loop never does. */
+  passwordHashWorkers: number;
 }
 
 export type ProcessRole = "api" | "worker" | "scheduler";
@@ -104,6 +117,41 @@ export const isDevelopmentOrigin = (origin: string): boolean => {
   } catch {
     return false;
   }
+};
+
+const TRUST_PROXY_NAMES = new Set(["loopback", "linklocal", "uniquelocal"]);
+
+const isAddressOrRange = (entry: string): boolean => {
+  const [address = "", prefix, ...rest] = entry.split("/");
+  const family = isIP(address);
+  if (!family || rest.length) return false;
+  if (prefix === undefined) return true;
+  // A dotted mask (10.0.0.0/255.0.0.0) is accepted by Express as well.
+  if (family === 4 && isIP(prefix) === 4) return true;
+  return /^\d{1,3}$/.test(prefix) && Number(prefix) <= (family === 4 ? 32 : 128);
+};
+
+/**
+ * `TRUST_PROXY` in production is required for the API: the hop count that is
+ * right for one topology lets clients forge their address in another, and the
+ * old fixed `1` behind a TLS proxy and nginx made every member the TLS proxy.
+ */
+const parseTrustProxy = (value: string | undefined, required: boolean): Environment["trustProxy"] => {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    if (required) throw new Error("TRUST_PROXY is required in production: the number of proxies in front of the API, or the addresses they connect from (docs/operations/DEPLOYMENT.md)");
+    return 1;
+  }
+  if (trimmed.toLowerCase() === "false") return false;
+  if (/^\d+$/.test(trimmed)) {
+    const hops = Number(trimmed);
+    if (hops < 1 || hops > 10) throw new Error("TRUST_PROXY hop count must be between 1 and 10");
+    return hops;
+  }
+  const entries = trimmed.split(",").map((entry) => entry.trim()).filter(Boolean);
+  const invalid = entries.filter((entry) => !TRUST_PROXY_NAMES.has(entry) && !isAddressOrRange(entry));
+  if (!entries.length || invalid.length) throw new Error(`TRUST_PROXY entries must be IP addresses, CIDR ranges, loopback, linklocal or uniquelocal; invalid: ${invalid.join(", ")}`);
+  return entries;
 };
 
 let cachedEnvironment: Environment | null = null;
@@ -187,6 +235,10 @@ export const loadEnvironment = (): Environment => {
     cacheReadsEnabled: booleanValue("CACHE_READS_ENABLED", true),
     mediaSignedDelivery: booleanValue("MEDIA_SIGNED_DELIVERY", true),
     imagekitPurgeOnDelete: booleanValue("IMAGEKIT_PURGE_ON_DELETE", false),
+    trustProxy: parseTrustProxy(process.env.TRUST_PROXY, nodeEnv === "production" && processRoleValue === "api"),
+    // One core stays with the event loop; past four, a login storm would
+    // take the whole machine instead of queueing.
+    passwordHashWorkers: integerValue("PASSWORD_HASH_WORKERS", Math.max(1, Math.min(4, availableParallelism() - 1)), 1, 16),
   };
   return cachedEnvironment;
 };

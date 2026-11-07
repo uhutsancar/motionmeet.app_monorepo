@@ -1,16 +1,14 @@
 import express from "express";
 import { getExercises, getExerciseById, createExercise, getExerciseStats, getExerciseHistory, getPersonalRecords } from "../controllers/exerciseController.js";
 import { attachDbUser, protect } from "../middlewares/auth.js";
-import rateLimit from "express-rate-limit";
-import { createRateLimitStore } from "../configs/redis.js";
+import { createLimiter, memberKey } from "../middlewares/rateLimits.js";
 
 const exerciseRouter = express.Router();
-const createExerciseLimiter = rateLimit({
+const createExerciseLimiter = createLimiter({
+  name: "custom-exercise",
   windowMs: 60 * 60 * 1000,
   limit: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  store: createRateLimitStore("custom-exercise"),
+  key: memberKey,
   message: { success: false, message: "Too many custom exercises" },
 });
 
