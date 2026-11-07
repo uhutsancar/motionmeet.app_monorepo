@@ -1,0 +1,58 @@
+# Example alert rules (WP-20 of the 2026-11 audit; Ek B-6). Thresholds are
+# starting points, not measurements: tune them against the first weeks of real
+# traffic. Every alert names the runbook section that handles it
+# (docs/operations/RUNBOOKS.md).
+groups:
+  - name: motionmeet
+    rules:
+      - alert: OutboxLagging
+        expr: max(motionmeet_outbox_oldest_pending_seconds) > 300
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: Outbox events are waiting more than five minutes
+          runbook: "RUNBOOKS.md#outbox-backlog-growing-motionmeet_outbox_oldest_pending_seconds-high"
+      - alert: DeadEvents
+        expr: sum(increase(motionmeet_events_consumed_total{outcome="dead"}[15m])) > 0
+        labels: { severity: ticket }
+        annotations:
+          summary: Events reached a dead-letter queue
+          runbook: "RUNBOOKS.md#dead-events"
+      - alert: RetryStorm
+        expr: sum(rate(motionmeet_events_consumed_total{outcome="retried"}[5m])) > 1
+        for: 10m
+        labels: { severity: page }
+        annotations:
+          summary: Consumers keep retrying
+          runbook: "RUNBOOKS.md#retry-storm--consumer-failing-every-message"
+      - alert: ScheduledTaskFailing
+        expr: sum by (task) (increase(motionmeet_scheduled_task_runs_total{outcome="failed"}[1h])) > 0
+        labels: { severity: ticket }
+        annotations:
+          summary: "Scheduled task {{ $labels.task }} failed"
+          runbook: "RUNBOOKS.md#scheduler-not-running-tasks"
+      - alert: DatabasePoolWaiting
+        expr: max by (role) (motionmeet_db_pool_connections{state="waiting"}) > 0
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: "Requests queue for a database connection ({{ $labels.role }})"
+          runbook: "DEPLOYMENT.md#connection-budget"
+      - alert: CacheInvalidationFailing
+        expr: sum(increase(motionmeet_cache_invalidation_failures_total[10m])) > 0
+        labels: { severity: ticket }
+        annotations:
+          summary: Cache invalidations fail; pages can stay stale up to their TTL
+          runbook: "RUNBOOKS.md#redis-down"
+      - alert: MediaUnresolvable
+        expr: sum(increase(motionmeet_media_url_unresolvable_total[1h])) > 0
+        labels: { severity: ticket }
+        annotations:
+          summary: Media served as unavailable because its key is unknown
+          runbook: "RUNBOOKS.md#media-url-unresolvable-motionmeet_media_url_unresolvable_total-rising"
+      - alert: MediaMetadataFailing
+        expr: sum(increase(motionmeet_media_metadata_total{result="transient_failure"}[30m])) > 10
+        labels: { severity: ticket }
+        annotations:
+          summary: Media metadata probes keep failing
+          runbook: "RUNBOOKS.md#media-metadata-missing-or-failing-motionmeet_media_metadata_totalresulttransient_failure-rising"

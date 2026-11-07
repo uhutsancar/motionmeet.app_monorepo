@@ -3,6 +3,7 @@ import { Pool } from "pg";
 import { loadEnvironment } from "./environment.js";
 import type { Database } from "../db/types.js";
 import { logger, safeErrorMetadata } from "../utils/logger.js";
+import { observeDatabasePool } from "../observability/metrics.js";
 
 const environment = loadEnvironment();
 const pool = new Pool({
@@ -26,6 +27,8 @@ const pool = new Pool({
   // or NAT idle timeout and surface as a failed request rather than a reconnect.
   keepAlive: true,
 });
+
+observeDatabasePool(pool);
 
 pool.on("error", (error: Error) => {
   logger.error("database_pool_error", safeErrorMetadata(error));

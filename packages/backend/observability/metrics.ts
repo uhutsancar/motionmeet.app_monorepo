@@ -103,5 +103,40 @@ export const mediaMetadataResults = new client.Counter({
   registers: [registry],
 });
 
+/**
+ * The request pool, sampled at scrape time. `waiting` above zero for minutes
+ * means requests queue for a connection - the first sign the pool (or the
+ * connection budget in DEPLOYMENT.md) is too small, before timeouts appear.
+ */
+interface PoolCounts { totalCount: number; idleCount: number; waitingCount: number }
+let observedPool: PoolCounts | null = null;
+export const observeDatabasePool = (pool: PoolCounts): void => { observedPool = pool; };
+export const databasePoolConnections = new client.Gauge({
+  name: "motionmeet_db_pool_connections",
+  help: "Request-pool connections by state (total, idle, waiting requests).",
+  labelNames: ["state"] as const,
+  registers: [registry],
+  collect() {
+    if (!observedPool) return;
+    this.set({ state: "total" }, observedPool.totalCount);
+    this.set({ state: "idle" }, observedPool.idleCount);
+    this.set({ state: "waiting" }, observedPool.waitingCount);
+  },
+});
+
+/** Account exports by outcome (`completed`, `failed`, `aborted` by the client), with their duration. */
+export const accountExports = new client.Counter({
+  name: "motionmeet_account_exports_total",
+  help: "Account exports by outcome.",
+  labelNames: ["outcome"] as const,
+  registers: [registry],
+});
+export const accountExportDuration = new client.Histogram({
+  name: "motionmeet_account_export_seconds",
+  help: "Duration of account exports that completed.",
+  buckets: [0.1, 0.5, 1, 5, 15, 60, 300, 900],
+  registers: [registry],
+});
+
 /** `2xx`-style class, so the status label has five values instead of sixty. */
 export const statusClass = (status: number): string => `${Math.floor(status / 100)}xx`;

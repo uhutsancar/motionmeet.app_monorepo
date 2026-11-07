@@ -39,6 +39,20 @@ PostgreSQL connections = API replicas × `DATABASE_POOL_MAX` (30)
 administration. Check it against the server's `max_connections` before
 scaling any of them.
 
+| Setup | API | Worker | Scheduler | Migrate | Admin headroom | Total | Fits `max_connections` |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 API, 1 worker, 1 scheduler | 30 | 10 | 5 | 1 | 10 | 56 | 100 (PostgreSQL default) |
+| 2 API, 1 worker, 1 scheduler | 60 | 10 | 5 | 1 | 10 | 86 | 100 |
+| 3 API, 2 workers, 1 scheduler | 90 | 20 | 5 | 1 | 10 | 126 | needs ≥ 150, or a pooler |
+| 4 API, 2 workers, 1 scheduler | 120 | 20 | 5 | 1 | 10 | 156 | needs ≥ 200, or a pooler |
+
+Watch `motionmeet_db_pool_connections{state="waiting"}` per role: sustained
+waiting means the pool (or the budget) is too small; check
+`pg_stat_activity` grouped by `application_name` (`motionmeet-api`,
+`motionmeet-worker`, `motionmeet-scheduler`) for the real usage. Managed
+PostgreSQL plans often reserve some connections for themselves; subtract
+those first.
+
 ## Release procedure
 
 1. Build and tag the image once (`MOTIONMEET_IMAGE_TAG`); every service uses it.

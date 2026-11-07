@@ -18,6 +18,7 @@ import { PRIVACY_KEYS } from "@motionmeet/shared";
 import { deleteMediaOrQueue } from "../services/mediaDeletionService.js";
 import { runWithRedisLock } from "../configs/redis.js";
 import { logger, safeErrorMetadata } from "../utils/logger.js";
+import { accountExportDuration, accountExports } from "../observability/metrics.js";
 
 export const getUserData: RequestHandler = async (req, res, next) => {
   try {
@@ -79,6 +80,7 @@ export const exportAccount: RequestHandler = async (req, res, next) => {
       "Content-Type": "application/json; charset=utf-8",
     });
     let streamed = false;
+    const endTimer = accountExportDuration.startTimer();
     const acquired = await runWithRedisLock(
       `account-export:${req.userId}`,
       15 * 60,
@@ -95,8 +97,11 @@ export const exportAccount: RequestHandler = async (req, res, next) => {
     if (!streamed) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
+    endTimer();
+    accountExports.inc({ outcome: "completed" });
     return undefined;
   } catch (error) {
+    accountExports.inc({ outcome: res.destroyed ? "aborted" : "failed" });
     // Once the first byte is out the status is 200 and cannot change. Breaking
     // the connection makes the client report a failed download; ending it
     // would leave a short file that looks like a finished one.
