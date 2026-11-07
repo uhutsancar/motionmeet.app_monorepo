@@ -33,7 +33,7 @@ import { requestContext } from "./middlewares/requestContext.js";
 import { parseJsonBody, rejectUnsupportedApiContentType } from "./middlewares/browserSecurity.js";
 import { answerRetiredBilling, RETIRED_BILLING_PATHS } from "./middlewares/retiredBilling.js";
 import { handleSocketConnection } from "./realtime/socketHandlers.js";
-import { setSocketServer, type InterServerEvents, type SocketData } from "./realtime/socketRegistry.js";
+import { setSocketServer, type InterServerEvents, type SocketData, bindSocketIdentity } from "./realtime/socketRegistry.js";
 import { ensureApplicationData } from "./services/bootstrapService.js";
 import { assertDatabaseContract } from "./services/databaseMigrationService.js";
 import { detectGeometrySupport } from "./services/locationGeometry.js";
@@ -148,7 +148,7 @@ io.use(async (socket, next) => {
     const [user, sessionActive] = await Promise.all([userService.getUserById(payload.id), isSessionActive(payload.sid, payload.id)]);
     if (!user) return next(new Error("User not found"));
     if (!sessionActive) return next(new Error("Session expired"));
-    socket.data.userId = payload.id; socket.data.sessionId = payload.sid; socket.data.user = user; next();
+    bindSocketIdentity(socket, { userId: payload.id, sessionId: payload.sid }, user); next();
   } catch (error: unknown) { logger.warn("socket_authentication_failed", safeErrorMetadata(error)); next(new Error("Authentication failed")); }
 });
 io.on("connection", (socket) => { void handleSocketConnection(socket).catch((error: unknown) => { logger.error("socket_initialization_failed", safeErrorMetadata(error)); socket.disconnect(true); }); });

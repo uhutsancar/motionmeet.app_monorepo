@@ -4,7 +4,8 @@ import * as userService from "../services/userService.js";
 import { isUserId } from "../utils/validation.js";
 import { isSessionActive } from "../utils/authTokens.js";
 import { logger, safeErrorMetadata } from "../utils/logger.js";
-import { emitToUser, emitToUsers, getOnlineUserIds, isUserOnline, joinUserRoom, leaveLocalUser, type MotionSocket } from "./socketRegistry.js";
+import { emitToUser, emitToUsers, getOnlineUserIds, isUserOnline, joinUserRoom, leaveLocalUser, localSocketState, type MotionSocket } from "./socketRegistry.js";
+import type { InternalUser } from "../repositories/entities.js";
 
 export const emitPresenceToConnections = async (userId: string, eventName: "user_online" | "user_offline", payload: { userId: string }): Promise<void> => {
   const recipients = await userService.getAcceptedConnectionUserIds(userId);
@@ -26,7 +27,7 @@ const SESSION_RECHECK_MS = 10 * 60_000;
 
 export const handleSocketConnection = async (socket: MotionSocket): Promise<void> => {
   const userId = socket.data.userId; const wasOffline = !(await isUserOnline(userId)); await joinUserRoom(socket, userId);
-  const connectionIds = await userService.getAcceptedConnectionUserIds(userId); socket.data.connectionIds = connectionIds;
+  const connectionIds = await userService.getAcceptedConnectionUserIds(userId);
   socket.emit("online_users", [...await getOnlineUserIds(connectionIds)]);
   if (wasOffline) await emitPresenceToConnections(userId, "user_online", { userId });
 
@@ -41,23 +42,25 @@ export const handleSocketConnection = async (socket: MotionSocket): Promise<void
    * socket, so a role change reaches a long-lived connection.
    */
   let senderLoadedAt = Date.now();
-  const currentSender = async (): Promise<typeof socket.data.user | null> => {
-    if (Date.now() - senderLoadedAt < SENDER_REFRESH_MS) return socket.data.user;
+  const local = localSocketState(socket);
+  const currentSender = async (): Promise<InternalUser | null> => {
+    if (!local) return null;
+    if (Date.now() - senderLoadedAt < SENDER_REFRESH_MS) return local.user;
     const [refreshed, sessionActive] = await Promise.all([userService.getUserById(userId), isSessionActive(socket.data.sessionId, userId)]);
     // The room-based disconnect on logout is the fast path; this catches a
     // revocation whose broadcast was missed (an adapter outage, say).
     if (!refreshed || !sessionActive) { socket.disconnect(true); return null; }
-    socket.data.user = refreshed;
+    local.user = refreshed;
+    socket.data.role = refreshed.role;
     senderLoadedAt = Date.now();
     // A role change can flip the answer, so decisions taken under the old
     // record must not outlive it.
-    socket.data.messagePermissionCache?.clear();
+    local.messagePermissionCache.clear();
     return refreshed;
   };
 
   const mayMessage = async (recipientId: string): Promise<boolean> => {
-    const cache = socket.data.messagePermissionCache ?? new Map<string, { allowed: boolean; expiresAt: number }>();
-    socket.data.messagePermissionCache = cache;
+    const cache = local?.messagePermissionCache ?? new Map<string, { allowed: boolean; expiresAt: number }>();
     const cached = cache.get(recipientId);
     if (cached && cached.expiresAt > Date.now()) return cached.allowed;
     const sender = await currentSender();

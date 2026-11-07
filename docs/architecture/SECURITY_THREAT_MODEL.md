@@ -17,6 +17,7 @@ are unchanged and covered by `docs/security-verification/`.
 | Information disclosure: cached pages after access is withdrawn | feed/profile cache | Both members' caches dropped on removed connection/unfollow; audience epoch retires all pages when an account goes private or content is deleted |
 | Information disclosure: workout hidden from feed reappears | post create | Any post carrying a workout is stored as `workout`, so the feed filter applies |
 | Information disclosure: internals via metrics | ops port | Separate port, not routed by the proxy, low-cardinality labels with no ids |
+| Information disclosure: member records in inter-replica presence traffic | Socket.IO Redis adapter | `socket.data` holds only user id, session id and role; the full record (email included) and per-socket caches stay in the owning process, so `fetchSockets()` never ships them between replicas (NEW-14) |
 | Information disclosure: PII in events | outbox/broker | Payloads are ids and scalars; no tokens, URLs, emails, message bodies or coordinates (EVENT_CATALOG.md) |
 | Denial of service: poison message blocks a queue | consumers | Malformed or permanently failing messages go to `.dead`; delivery limit for crash loops; bounded prefetch |
 | Denial of service: decompression bomb | media worker | sharp `limitInputPixels` 100 MP; at most 256 KB read, 25 MB fallback |

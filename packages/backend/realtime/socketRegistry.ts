@@ -2,14 +2,40 @@ import type { ClientToServerEvents, ServerToClientEvents } from "@motionmeet/sha
 import type { Server, Socket } from "socket.io";
 import type { InternalUser } from "../repositories/entities.js";
 
+/**
+ * What a socket carries in `socket.data`: its identity and nothing more.
+ *
+ * With the Redis adapter, `fetchSockets()` - which every presence lookup uses
+ * - serialises `socket.data` on every replica and sends it over pub/sub. It
+ * used to hold the member's full record, email included, plus per-socket
+ * caches, so each "who is online" question shipped all of that between
+ * replicas (NEW-14 in the 2026-11 audit). The rest now lives in
+ * `LocalSocketState`, in the process that owns the socket.
+ */
 export interface SocketData {
   userId: string;
   /** The login session the socket authenticated under; revoking it disconnects the socket. */
   sessionId: string;
-  user: InternalUser;
-  connectionIds?: string[];
-  messagePermissionCache?: Map<string, { allowed: boolean; expiresAt: number }>;
+  role: InternalUser["role"];
 }
+
+/** Per-socket state that never leaves this process. */
+export interface LocalSocketState {
+  /** The sender's record, refreshed on a timer by the socket handlers. */
+  user: InternalUser;
+  messagePermissionCache: Map<string, { allowed: boolean; expiresAt: number }>;
+}
+const localSockets = new Map<string, LocalSocketState>();
+
+/** Called once the handshake has authenticated the socket. */
+export const bindSocketIdentity = (socket: MotionSocket, identity: { userId: string; sessionId: string }, user: InternalUser): void => {
+  socket.data.userId = identity.userId;
+  socket.data.sessionId = identity.sessionId;
+  socket.data.role = user.role;
+  localSockets.set(socket.id, { user, messagePermissionCache: new Map() });
+};
+
+export const localSocketState = (socket: MotionSocket): LocalSocketState | undefined => localSockets.get(socket.id);
 /** Events the API instances send each other through the adapter. */
 export interface InterServerEvents {
   /** Forget cached "may this sender message `recipientId`" answers; `senderIds` null means every sender. */
@@ -39,7 +65,7 @@ const dropLocalMessagePermissions = (recipientId: string, senderIds: string[] | 
   if (!socketServer) return;
   const senders = senderIds ? new Set(senderIds) : null;
   for (const socket of socketServer.sockets.sockets.values()) {
-    if (!senders || senders.has(socket.data.userId)) socket.data.messagePermissionCache?.delete(recipientId);
+    if (!senders || senders.has(socket.data.userId)) localSockets.get(socket.id)?.messagePermissionCache.delete(recipientId);
   }
 };
 
@@ -61,7 +87,7 @@ export const invalidateMessagePermissions = (recipientId: string, senderIds: str
   }
 };
 export const joinUserRoom = async (socket: MotionSocket, userId: string): Promise<void> => { await socket.join([roomForUser(userId), roomForSession(socket.data.sessionId)]); const sockets = userSockets.get(userId) ?? new Set<string>(); sockets.add(socket.id); userSockets.set(userId, sockets); };
-export const leaveLocalUser = (socket: MotionSocket, userId: string): void => { const sockets = userSockets.get(userId); sockets?.delete(socket.id); if (!sockets?.size) userSockets.delete(userId); };
+export const leaveLocalUser = (socket: MotionSocket, userId: string): void => { localSockets.delete(socket.id); const sockets = userSockets.get(userId); sockets?.delete(socket.id); if (!sockets?.size) userSockets.delete(userId); };
 export const isUserOnline = async (userId: string): Promise<boolean> => Boolean(socketServer && (await socketServer.in(roomForUser(userId)).fetchSockets()).length);
 export const getOnlineUserIds = async (userIds: string[]): Promise<Set<string>> => {
   if (!socketServer || !userIds.length) return new Set(); const requested = new Set(userIds);
