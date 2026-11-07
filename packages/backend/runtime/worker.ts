@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { hasFfprobe, reportVideoProbeAvailability } from "../services/mediaProbeService.js";
 import type { ChannelModel, RecoveringChannelModel } from "amqplib";
 import client from "prom-client";
 import { checkDatabaseHealth, connectDatabase, disconnectDatabase } from "../configs/database.js";
@@ -82,11 +83,16 @@ export const runWorker = async (): Promise<void> => {
     });
   }
 
+  // Video metadata needs ffprobe. Without it the worker still applies every
+  // other event, so it stays ready but reports itself degraded, and the
+  // video events fail visibly instead of being recorded as done (NEW-10).
+  void reportVideoProbeAvailability();
   const opsServer = environment.metricsPort
     ? startOpsServer(environment.metricsPort, async () => {
       const database = await checkDatabaseHealth();
       const brokerReady = environment.outboxTransport === "direct" || Boolean(currentModel && publisher);
-      return { ready: database && brokerReady, database, broker: environment.outboxTransport === "direct" ? "not-used" : brokerReady ? "connected" : "disconnected", consumers: consumers.map(({ consumer }) => consumer.name) };
+      const videoProbe = await hasFfprobe();
+      return { ready: database && brokerReady, degraded: !videoProbe, videoProbe: videoProbe ? "available" : "unavailable", database, broker: environment.outboxTransport === "direct" ? "not-used" : brokerReady ? "connected" : "disconnected", consumers: consumers.map(({ consumer }) => consumer.name) };
     })
     : null;
 

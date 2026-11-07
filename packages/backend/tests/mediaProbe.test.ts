@@ -1,8 +1,8 @@
 import "dotenv/config";
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { mock } from "node:test";
 import sharp from "sharp";
-import { imageDimensionsFromBuffer, videoFactsFromProbe } from "../services/mediaProbeService.js";
+import { classifyProbeFailure, imageDimensionsFromBuffer, probeStoredVideo, probeVideoUrl, TransientMediaError, videoFactsFromProbe } from "../services/mediaProbeService.js";
 
 const solid = (width: number, height: number) => sharp({ create: { width, height, channels: 3, background: "#7a4df5" } });
 
@@ -47,4 +47,64 @@ test("a probe without a measurable video stream gives null", () => {
     { streams: [{ codec_type: "video", width: 640, height: 480 }], format: { duration: "N/A" } }]) {
     assert.equal(videoFactsFromProbe(probe), null);
   }
+});
+
+/*
+ * MM-AUDIT-09 / NEW-10: a probe failure must not be recorded as "done" unless
+ * the file itself is at fault. Network and storage errors are transient and
+ * retried; a missing ffprobe is an error that ends up visible in `.dead`.
+ */
+const SIGNED = "https://bucket.s3.eu-north-1.amazonaws.com/posts/u/1-clip.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=deadbeef";
+const failingRunner = (stderr: string, extra: Record<string, unknown> = {}) => async (): Promise<never> => {
+  throw Object.assign(new Error(`Command failed: ffprobe ${SIGNED}\n${stderr}`), { code: 1, stderr, ...extra });
+};
+
+test("probe failures are sorted into transient (retry) and permanent (the file)", () => {
+  for (const stderr of [
+    `${SIGNED}: Server returned 5XX Server Error reply`,
+    "HTTP error 503 Service Unavailable",
+    "Server returned 403 Forbidden (access denied)",
+    "Server returned 404 Not Found",
+    "Connection to tcp://bucket.s3.amazonaws.com:443 failed: Connection timed out",
+    "Network is unreachable",
+    "Failed to resolve hostname bucket.s3.amazonaws.com: Temporary failure in name resolution",
+    "Connection reset by peer",
+  ]) assert.equal(classifyProbeFailure(stderr), "transient", stderr);
+  for (const stderr of [
+    `${SIGNED}: Invalid data found when processing input`,
+    "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x55] moov atom not found",
+  ]) assert.equal(classifyProbeFailure(stderr), "permanent", stderr);
+  assert.equal(classifyProbeFailure(""), "transient", "an unexplained failure is retried, never silently completed");
+});
+
+test("a network or storage failure throws so the event is retried; a broken file gives null", async () => {
+  await assert.rejects(probeVideoUrl(SIGNED, failingRunner("Server returned 503 Service Unavailable")), TransientMediaError);
+  await assert.rejects(probeVideoUrl(SIGNED, failingRunner("", { killed: true, signal: "SIGTERM" })), TransientMediaError);
+  assert.equal(await probeVideoUrl(SIGNED, failingRunner("moov atom not found")), null);
+  assert.equal(await probeVideoUrl(SIGNED, async () => ({ stdout: JSON.stringify({ streams: [{ codec_type: "audio" }] }), stderr: "" })), null, "no video stream is the file's fault");
+  const facts = await probeVideoUrl(SIGNED, async () => ({ stdout: JSON.stringify({ streams: [{ codec_type: "video", width: 1920, height: 1080, duration: "3.5" }] }), stderr: "" }));
+  assert.deepEqual(facts, { width: 1920, height: 1080, durationSeconds: 3.5 });
+});
+
+test("nothing logged on a probe failure carries the signed URL", async () => {
+  const lines: string[] = [];
+  const capture = (...args: unknown[]) => { lines.push(args.map(String).join(" ")); };
+  const warn = mock.method(console, "warn", capture);
+  const error = mock.method(console, "error", capture);
+  const log = mock.method(console, "log", capture);
+  try {
+    await probeVideoUrl(SIGNED, failingRunner(`${SIGNED}: Invalid data found when processing input`)).catch(() => undefined);
+    await probeVideoUrl(SIGNED, failingRunner(`${SIGNED}: Server returned 500`)).catch(() => undefined);
+  } finally {
+    warn.mock.restore(); error.mock.restore(); log.mock.restore();
+  }
+  assert.ok(lines.length > 0, "the failure is logged");
+  for (const line of lines) {
+    assert.ok(!line.includes("X-Amz-Signature"), line);
+    assert.ok(!line.includes("amazonaws.com"), line);
+  }
+});
+
+test("without ffprobe a video event fails instead of being recorded as done", async () => {
+  await assert.rejects(probeStoredVideo("posts/u/1-clip.mp4", "definitely-not-an-ffprobe-binary"), /ffprobe/);
 });

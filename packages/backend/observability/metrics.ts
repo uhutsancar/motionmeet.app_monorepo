@@ -91,5 +91,17 @@ export const mediaUrlUnresolvable = new client.Counter({
   registers: [registry],
 });
 
+/**
+ * Media metadata attempts by the media worker: `ok`, `permanent_failure` (the
+ * file cannot be read; recorded as done with no metadata) or
+ * `transient_failure` (storage/network/ffprobe trouble; the event retries).
+ */
+export const mediaMetadataResults = new client.Counter({
+  name: "motionmeet_media_metadata_total",
+  help: "Media metadata probes, by kind (image, video) and result.",
+  labelNames: ["kind", "result"] as const,
+  registers: [registry],
+});
+
 /** `2xx`-style class, so the status label has five values instead of sixty. */
 export const statusClass = (status: number): string => `${Math.floor(status / 100)}xx`;

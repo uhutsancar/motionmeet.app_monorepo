@@ -154,6 +154,19 @@ Do this only after the private media rollout steps 1-3 (DEPLOYMENT.md).
 4. Turn on "Restrict unsigned URLs" for images and videos. Verify: an
    unsigned URL → 401, a signed one → 200, a signed one after its `ik-t` → 401.
 
+## Media metadata missing or failing (`motionmeet_media_metadata_total{result="transient_failure"}` rising)
+
+- `result="transient_failure"` keeps growing and `media-metadata` events reach
+  `.dead`: check the worker's readiness (`videoProbe: "unavailable"` means the
+  worker runs without ffprobe - deploy it from the `media-runtime` image) and
+  S3 reachability from the worker. Fix, then redrive (`outbox:redrive`).
+- `result="permanent_failure"`: files ffprobe/sharp cannot read; nothing to
+  retry.
+- Posts that got no metadata before this was fixed (any failure used to be
+  recorded as done): `pnpm --filter @motionmeet/backend backfill:media-metadata --dry-run`,
+  then without `--dry-run`. It queues one `media.uploaded` per affected post;
+  the consumer fills only what is still missing.
+
 ## Restore drill
 
 Not automated here. Restore the latest PITR snapshot into a scratch instance,

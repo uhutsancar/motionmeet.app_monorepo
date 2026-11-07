@@ -89,15 +89,89 @@ export const videoFactsFromProbe = (probe: unknown): VideoFacts | null => {
 
 const FFPROBE = process.env.FFPROBE_PATH?.trim() || "ffprobe";
 const PROBE_TIMEOUT_MS = 30_000;
-let ffprobeAvailable: Promise<boolean> | null = null;
 
-/** Whether ffprobe can run here; asked once. Only the media worker image ships it. */
-const hasFfprobe = (): Promise<boolean> => {
-  ffprobeAvailable ??= runFile(FFPROBE, ["-version"], { timeout: 5_000 }).then(() => true, () => {
-    logger.warn("ffprobe_unavailable", { hint: "videos keep null duration and size; run the worker from the media-runtime image" });
-    return false;
-  });
-  return ffprobeAvailable;
+/**
+ * A failure that says nothing about the file - storage or network trouble, a
+ * timeout. The event is retried (and ends in `.dead`, visible, if it never
+ * recovers) rather than recorded as done with no metadata.
+ */
+export class TransientMediaError extends Error {
+  constructor(code: string) {
+    super(code);
+    this.name = "TransientMediaError";
+  }
+}
+
+const TRANSIENT_STDERR = /server returned (5\d\d|5xx|403|404)|http error (5\d\d|403|404)|\b(403 forbidden|404 not found)\b|connection (refused|reset|timed out)|timed out|network is unreachable|temporary failure in name resolution|failed to resolve hostname|i\/o error|end of file/i;
+const PERMANENT_STDERR = /invalid data found when processing input|moov atom not found|could not find codec parameters|no such stream|unsupported codec/i;
+
+/**
+ * Sorts an ffprobe failure by its stderr. Only failures that are the file's
+ * own fault are permanent; anything else - including an error nobody
+ * recognises - is retried, because "done" with null metadata would be
+ * silent and final. The stderr is read for this only and never stored or
+ * logged: it can contain the signed URL.
+ */
+export const classifyProbeFailure = (stderr: string): "transient" | "permanent" => {
+  if (TRANSIENT_STDERR.test(stderr)) return "transient";
+  if (PERMANENT_STDERR.test(stderr)) return "permanent";
+  return "transient";
+};
+
+/**
+ * Whether ffprobe can run here. Only the media worker image ships it. A
+ * positive answer is kept for the life of the process; a negative one only for
+ * a minute (NEW-10: it used to be kept for ever, so a worker started without
+ * ffprobe marked every video event done until it was restarted).
+ */
+const ffprobeChecks = new Map<string, { available: boolean; until: number }>();
+export const hasFfprobe = async (binary = FFPROBE): Promise<boolean> => {
+  const known = ffprobeChecks.get(binary);
+  if (known && (known.available || known.until > Date.now())) return known.available;
+  const available = await runFile(binary, ["-version"], { timeout: 5_000, windowsHide: true }).then(() => true, () => false);
+  ffprobeChecks.set(binary, { available, until: Date.now() + 60_000 });
+  return available;
+};
+
+/** Logged at start-up by processes that apply `media.uploaded` events. */
+export const reportVideoProbeAvailability = async (): Promise<boolean> => {
+  const available = await hasFfprobe();
+  if (!available) logger.error("ffprobe_unavailable", { hint: "video events will fail and retry until ffprobe is present; run the worker from the media-runtime image" });
+  return available;
+};
+
+type Runner = (file: string, args: string[], options: { timeout: number; maxBuffer: number; windowsHide: boolean }) => Promise<{ stdout: string; stderr?: string }>;
+
+/**
+ * Probes the video at `url` (a presigned URL; see `probeStoredVideo`).
+ * Returns the facts, or null when the file is not a readable video; throws
+ * `TransientMediaError` when the failure is not the file's fault.
+ *
+ * execFile puts the whole command line - the signed URL - into its error
+ * message, and ffprobe repeats it on stderr, so neither is ever logged: only
+ * the exit code and the classification are.
+ */
+export const probeVideoUrl = async (url: string, run: Runner = runFile as unknown as Runner, binary = FFPROBE): Promise<VideoFacts | null> => {
+  let stdout: string;
+  try {
+    ({ stdout } = await run(binary, [
+      "-v", "error", "-protocol_whitelist", "https,tls,tcp", "-probesize", "5000000", "-analyzeduration", "5000000",
+      "-print_format", "json", "-show_format", "-show_streams", url,
+    ], { timeout: PROBE_TIMEOUT_MS, maxBuffer: 1024 * 1024, windowsHide: true }));
+  } catch (error: unknown) {
+    const failure = error && typeof error === "object" ? error as { killed?: unknown; code?: unknown; stderr?: unknown } : {};
+    if (failure.killed) throw new TransientMediaError("video_probe_timeout");
+    const classification = classifyProbeFailure(typeof failure.stderr === "string" ? failure.stderr : "");
+    logger.warn("video_probe_failed", { exitCode: failure.code === undefined ? "unknown" : String(failure.code), classification });
+    if (classification === "transient") throw new TransientMediaError("video_probe_transient");
+    return null;
+  }
+  try {
+    return videoFactsFromProbe(JSON.parse(stdout));
+  } catch {
+    logger.warn("video_probe_failed", { exitCode: "0", classification: "permanent" });
+    return null;
+  }
 };
 
 /**
@@ -106,28 +180,16 @@ const hasFfprobe = (): Promise<boolean> => {
  * ffprobe reads the object over a five-minute presigned URL, fetching only the
  * ranges it needs (the moov atom, wherever the encoder put it) - the file is
  * never downloaded whole. It is treated as a parser of untrusted input: https
- * only, bounded probe size and time, and a hard timeout. The URL carries a
- * signature, and execFile puts the whole command line into its error message,
- * so no error from here ever includes it.
+ * only, bounded probe size and time, and a hard timeout.
  *
- * Returns null when there is no prober or the file is not a readable video;
- * throws (so the event is retried) only when the probe timed out.
+ * Returns null only when the file is not a readable video. Throws when there
+ * is no ffprobe here (the event then ends in `.dead`, visible, instead of being
+ * recorded as done) and, via `TransientMediaError`, when the failure is not
+ * the file's fault.
  */
-export const probeStoredVideo = async (key: string): Promise<VideoFacts | null> => {
-  if (!(await hasFfprobe())) return null;
+export const probeStoredVideo = async (key: string, binary = FFPROBE): Promise<VideoFacts | null> => {
+  if (!(await hasFfprobe(binary))) throw new Error("ffprobe_unavailable");
   const [{ GetObjectCommand }, { getSignedUrl }, s3Client] = await Promise.all([loadS3Commands(), loadS3Presigner(), getS3Client()]);
   const url = await getSignedUrl(s3Client, new GetObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: key }), { expiresIn: 300 });
-  try {
-    const { stdout } = await runFile(FFPROBE, [
-      "-v", "error", "-protocol_whitelist", "https,tls,tcp", "-probesize", "5000000", "-analyzeduration", "5000000",
-      "-print_format", "json", "-show_format", "-show_streams", url,
-    ], { timeout: PROBE_TIMEOUT_MS, maxBuffer: 1024 * 1024, windowsHide: true });
-    return videoFactsFromProbe(JSON.parse(stdout));
-  } catch (error: unknown) {
-    if (error && typeof error === "object" && "killed" in error && error.killed) throw new Error("ffprobe timed out");
-    // Exit code only: the message would carry the signed URL.
-    const exitCode = error && typeof error === "object" && "code" in error ? String(error.code) : "unknown";
-    logger.warn("video_probe_failed", { exitCode });
-    return null;
-  }
+  return probeVideoUrl(url, undefined, binary);
 };

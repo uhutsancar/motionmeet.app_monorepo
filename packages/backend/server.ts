@@ -43,6 +43,7 @@ import { logger, safeErrorMetadata } from "./utils/logger.js";
 import { isUserId } from "./utils/validation.js";
 import { initCronJobs } from "./workers/cronJobs.js";
 import { startDirectOutboxRelay } from "./messaging/outboxRelay.js";
+import { reportVideoProbeAvailability } from "./services/mediaProbeService.js";
 import { startOpsServer } from "./observability/opsServer.js";
 
 const environment = loadEnvironment();
@@ -157,6 +158,9 @@ io.on("connection", (socket) => { void handleSocketConnection(socket).catch((err
 // scheduler and worker entry points instead (docs/operations/DEPLOYMENT.md).
 const cron = initCronJobs();
 const outboxRelay = environment.scheduledJobsEnabled && environment.outboxTransport === "direct" ? startDirectOutboxRelay() : null;
+// This process then applies media.uploaded itself; the API image has no
+// ffprobe, so say so once rather than let video events fail unexplained.
+if (outboxRelay) void reportVideoProbeAvailability();
 const opsServer = environment.metricsPort ? startOpsServer(environment.metricsPort, readiness) : null;
 let shuttingDown = false;
 const shutdown = async (signal: string, exitCode = 0): Promise<void> => {

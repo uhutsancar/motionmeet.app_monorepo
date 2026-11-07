@@ -1,4 +1,5 @@
 import { database, withTransaction, type DatabaseTransaction } from "../configs/database.js";
+import { mediaMetadataResults } from "../observability/metrics.js";
 import type { OutboxEventType } from "../db/types.js";
 import sendEmail from "../configs/nodeMailer.js";
 import { escapeHtml } from "../utils/html.js";
@@ -107,13 +108,23 @@ const mediaMetadata: EventConsumer = {
       ]))
       .execute();
     for (const row of rows) {
-      if (row.media_type === "image") {
-        const dimensions = await probeStoredImage(row.object_key);
-        if (dimensions) await database.updateTable("post_media").set(dimensions).where("id", "=", row.id).where("width", "is", null).execute();
-        continue;
+      const kind = row.media_type;
+      try {
+        if (kind === "image") {
+          const dimensions = await probeStoredImage(row.object_key);
+          mediaMetadataResults.inc({ kind, result: dimensions ? "ok" : "permanent_failure" });
+          if (dimensions) await database.updateTable("post_media").set(dimensions).where("id", "=", row.id).where("width", "is", null).execute();
+          continue;
+        }
+        const video = await probeStoredVideo(row.object_key);
+        mediaMetadataResults.inc({ kind, result: video ? "ok" : "permanent_failure" });
+        if (video) await database.updateTable("post_media").set({ width: video.width, height: video.height, duration_seconds: String(video.durationSeconds) }).where("id", "=", row.id).where("duration_seconds", "is", null).execute();
+      } catch (error: unknown) {
+        // Storage, network, timeout or a missing ffprobe: not the file's
+        // fault, so the event is retried rather than recorded as done.
+        mediaMetadataResults.inc({ kind, result: "transient_failure" });
+        throw error;
       }
-      const video = await probeStoredVideo(row.object_key);
-      if (video) await database.updateTable("post_media").set({ width: video.width, height: video.height, duration_seconds: String(video.durationSeconds) }).where("id", "=", row.id).where("duration_seconds", "is", null).execute();
     }
   },
 };
