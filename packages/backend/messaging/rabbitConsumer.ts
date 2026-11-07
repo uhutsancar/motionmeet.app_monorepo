@@ -1,7 +1,7 @@
 import type { ChannelModel, ConfirmChannel, ConsumeMessage, MessagePropertyHeaders } from "amqplib";
 import { childContext, parseTraceparent, runWithContext } from "../observability/context.js";
 import { eventHandleDuration, eventsConsumed } from "../observability/metrics.js";
-import { logger, safeErrorMetadata } from "../utils/logger.js";
+import { errorDiagnostics, logger, safeErrorMetadata } from "../utils/logger.js";
 import { applyEventOnce, PermanentEventError, type EventConsumer } from "./consumers.js";
 import { parseDomainEvent } from "./events.js";
 import { deadQueueName, queueNameFor, retryQueueName, RETRY_DELAYS_MS } from "./rabbitmq.js";
@@ -103,7 +103,7 @@ export const startConsumer = async (model: ChannelModel, consumer: EventConsumer
       // Even forwarding failed (channel or broker trouble). Requeue after a
       // pause rather than spin; the queue's delivery limit parks a message
       // that keeps landing here.
-      logger.error("event_handling_failed", { consumer: consumer.name, ...safeErrorMetadata(error) });
+      logger.error("event_handling_failed", { consumer: consumer.name, ...errorDiagnostics(error) });
       await sleep(1_000);
       try { channel.nack(message, false, true); } catch { /* channel gone: the broker redelivers */ }
     }).finally(() => inFlight.delete(work));

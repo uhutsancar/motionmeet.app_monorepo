@@ -1,4 +1,4 @@
-import { logger, safeErrorMetadata } from "../utils/logger.js";
+import { errorDiagnostics, logger } from "../utils/logger.js";
 
 /**
  * SIGTERM/SIGINT handling shared by the worker and the scheduler: run
@@ -19,11 +19,11 @@ export const installShutdownHandlers = (role: string, shutdown: () => Promise<vo
     forceExit.unref();
     shutdown().then(
       () => { logger.info("shutdown_completed", { role }); process.exit(exitCode); },
-      (error: unknown) => { logger.error("shutdown_failed", { role, ...safeErrorMetadata(error) }); process.exit(1); },
+      (error: unknown) => { logger.error("shutdown_failed", { role, ...errorDiagnostics(error) }); process.exit(1); },
     );
   };
   process.once("SIGTERM", () => run("SIGTERM", 0));
   process.once("SIGINT", () => run("SIGINT", 0));
-  process.once("uncaughtException", (error) => { logger.error("uncaught_exception", { role, ...safeErrorMetadata(error) }); run("uncaughtException", 1); });
-  process.once("unhandledRejection", (error) => { logger.error("unhandled_rejection", { role, ...safeErrorMetadata(error) }); run("unhandledRejection", 1); });
+  process.once("uncaughtException", (error) => { logger.error("uncaught_exception", { role, ...errorDiagnostics(error) }); run("uncaughtException", 1); });
+  process.once("unhandledRejection", (error) => { logger.error("unhandled_rejection", { role, ...errorDiagnostics(error) }); run("unhandledRejection", 1); });
 };

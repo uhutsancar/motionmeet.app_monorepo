@@ -1,5 +1,5 @@
 import type { ErrorRequestHandler, RequestHandler } from "express";
-import { logger } from "../utils/logger.js";
+import { errorDiagnostics, logger, safeErrorMetadata } from "../utils/logger.js";
 interface HttpError extends Error { status?: number; statusCode?: number; code?: string; type?: string; fieldErrors?: Record<string, string>; fields?: Record<string, string> }
 const asHttpError = (value: unknown): HttpError => value instanceof Error ? value as HttpError : Object.assign(new Error("Unknown error"), { cause: value });
 
@@ -30,7 +30,13 @@ export const toPublicError = (value: unknown): PublicErrorDetails => {
 export const notFoundHandler: RequestHandler = (request, response) => { response.status(404).json({ success: false, message: "Not found", requestId: request.requestId }); };
 export const errorHandler: ErrorRequestHandler = (value, request, response, _next) => {
   const mapped = toPublicError(value); const { error, status } = mapped;
-  logger.error("request_failed", { requestId: request.requestId, method: request.method, path: request.path, status, code: error.code, ...(process.env.NODE_ENV !== "production" ? { message: error.message, stack: error.stack } : {}) });
+  // A 5xx is ours to fix, so the server log gets the cause - message and
+  // stack, masked - in every environment; the client never does. A 4xx is the
+  // caller's mistake and part of normal traffic: info, without a stack, so it
+  // does not bury the real errors or trip error-rate alerts.
+  const route = { requestId: request.requestId, method: request.method, path: request.path, status };
+  if (status >= 500) logger.error("request_failed", { ...route, ...errorDiagnostics(error) });
+  else logger.info("request_rejected", { ...route, ...safeErrorMetadata(error) });
   // A streamed response that fails part-way has already sent its status and
   // part of its body. Writing an error object now would throw, and ending the
   // stream normally would leave the client a truncated body that looks

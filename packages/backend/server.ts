@@ -39,7 +39,7 @@ import { assertDatabaseContract } from "./services/databaseMigrationService.js";
 import { detectGeometrySupport } from "./services/locationGeometry.js";
 import * as userService from "./services/userService.js";
 import { isSessionActive, verifyAccessToken } from "./utils/authTokens.js";
-import { logger, safeErrorMetadata } from "./utils/logger.js";
+import { errorDiagnostics, logger, safeErrorMetadata } from "./utils/logger.js";
 import { isUserId } from "./utils/validation.js";
 import { initCronJobs } from "./workers/cronJobs.js";
 import { startDirectOutboxRelay } from "./messaging/outboxRelay.js";
@@ -82,7 +82,7 @@ try {
   // Requires the DB contract to pass first.
   await timedPhase("application_data", ensureApplicationData);
 } catch (error: unknown) {
-  logger.error("server_startup_failed", safeErrorMetadata(error));
+  logger.error("server_startup_failed", errorDiagnostics(error));
   if (isDatabaseReady()) await disconnectDatabase().catch(() => undefined);
   process.exit(1);
 }
@@ -157,7 +157,7 @@ io.use(async (socket, next) => {
     bindSocketIdentity(socket, { userId: payload.id, sessionId: payload.sid }, user); next();
   } catch (error: unknown) { logger.warn("socket_authentication_failed", safeErrorMetadata(error)); next(new Error("Authentication failed")); }
 });
-io.on("connection", (socket) => { void handleSocketConnection(socket).catch((error: unknown) => { logger.error("socket_initialization_failed", safeErrorMetadata(error)); socket.disconnect(true); }); });
+io.on("connection", (socket) => { void handleSocketConnection(socket).catch((error: unknown) => { logger.error("socket_initialization_failed", errorDiagnostics(error)); socket.disconnect(true); }); });
 // Single-process mode (RUN_SCHEDULED_JOBS unset, the default for local
 // development) keeps the housekeeping and the outbox in this process. A
 // production deployment sets RUN_SCHEDULED_JOBS=false here and runs the
@@ -181,8 +181,8 @@ const shutdown = async (signal: string, exitCode = 0): Promise<void> => {
   clearTimeout(forceExitTimer); process.exit(exitCode);
 };
 process.once("SIGTERM", () => { void shutdown("SIGTERM"); }); process.once("SIGINT", () => { void shutdown("SIGINT"); });
-process.once("uncaughtException", (error) => { logger.error("uncaught_exception", safeErrorMetadata(error)); void shutdown("uncaughtException", 1); });
-process.once("unhandledRejection", (error) => { logger.error("unhandled_rejection", safeErrorMetadata(error)); void shutdown("unhandledRejection", 1); });
+process.once("uncaughtException", (error) => { logger.error("uncaught_exception", errorDiagnostics(error)); void shutdown("uncaughtException", 1); });
+process.once("unhandledRejection", (error) => { logger.error("unhandled_rejection", errorDiagnostics(error)); void shutdown("unhandledRejection", 1); });
 
 /**
  * Redis is optional at every call site: the rate-limit store falls back to an
@@ -208,7 +208,7 @@ try {
   });
   httpServer.on("error", (error: NodeJS.ErrnoException) => { logger.error(error.code === "EADDRINUSE" ? "http_port_in_use" : "http_server_error", { port: environment.port, ...safeErrorMetadata(error) }); void shutdown("httpServerError", 1); });
 } catch (error: unknown) {
-  logger.error("server_startup_failed", safeErrorMetadata(error));
+  logger.error("server_startup_failed", errorDiagnostics(error));
   if (isDatabaseReady()) await disconnectDatabase().catch(() => undefined);
   process.exit(1);
 }

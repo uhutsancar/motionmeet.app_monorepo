@@ -1,5 +1,5 @@
 import { dispatchOutboxDirect } from "../services/outboxService.js";
-import { logger, safeErrorMetadata } from "../utils/logger.js";
+import { errorDiagnostics, logger } from "../utils/logger.js";
 
 export interface OutboxRelay {
   /** Lets the batch in progress finish, then stops. */
@@ -36,7 +36,7 @@ export const startOutboxRelay = ({ drainOnce, batchSize, name }: { drainOnce: (l
         if (claimed < batchSize) await pause(idleMs);
       } catch (error: unknown) {
         failures += 1;
-        logger.error("outbox_relay_failed", { relay: name, failures, ...safeErrorMetadata(error) });
+        logger.error("outbox_relay_failed", { relay: name, failures, ...errorDiagnostics(error) });
         await pause(Math.min(30_000, 1_000 * 2 ** Math.min(failures, 5)));
       }
     }

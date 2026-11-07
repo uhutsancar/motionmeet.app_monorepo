@@ -1,5 +1,5 @@
 import { createServer, type Server } from "node:http";
-import { logger, safeErrorMetadata } from "../utils/logger.js";
+import { errorDiagnostics, logger, safeErrorMetadata } from "../utils/logger.js";
 import { registry } from "./metrics.js";
 
 export interface ReadinessReport {
@@ -28,7 +28,7 @@ export const startOpsServer = (port: number, readiness: () => Promise<ReadinessR
       registry.metrics().then(
         (body) => response.writeHead(200, { "Content-Type": registry.contentType }).end(body),
         (error: unknown) => {
-          logger.error("metrics_render_failed", safeErrorMetadata(error));
+          logger.error("metrics_render_failed", errorDiagnostics(error));
           response.writeHead(500).end();
         },
       );
