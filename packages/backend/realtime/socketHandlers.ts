@@ -3,15 +3,9 @@ import * as messageService from "../services/messageService.js";
 import * as userService from "../services/userService.js";
 import { isUserId } from "../utils/validation.js";
 import { isSessionActive } from "../utils/authTokens.js";
-import { logger, safeErrorMetadata } from "../utils/logger.js";
-import { emitToUser, emitToUsers, getOnlineUserIds, isUserOnline, joinUserRoom, leaveLocalUser, localSocketState, type MotionSocket } from "./socketRegistry.js";
+import { errorDiagnostics, logger } from "../utils/logger.js";
+import { emitToUser, emitToUsers, getOnlineUserIds, joinUserRoom, leaveLocalUser, localSocketState, markSocketOffline, markSocketOnline, type MotionSocket } from "./socketRegistry.js";
 import type { InternalUser } from "../repositories/entities.js";
-
-export const emitPresenceToConnections = async (userId: string, eventName: "user_online" | "user_offline", payload: { userId: string }): Promise<void> => {
-  const recipients = await userService.getAcceptedConnectionUserIds(userId);
-  if (eventName === "user_online") emitToUsers(recipients, "user_online", payload);
-  else emitToUsers(recipients, "user_offline", payload);
-};
 
 /** How long a socket may reuse the sender record it authenticated with. */
 const SENDER_REFRESH_MS = 300_000;
@@ -26,10 +20,7 @@ const PERMISSION_CACHE_MS = 30_000;
 const SESSION_RECHECK_MS = 10 * 60_000;
 
 export const handleSocketConnection = async (socket: MotionSocket): Promise<void> => {
-  const userId = socket.data.userId; const wasOffline = !(await isUserOnline(userId)); await joinUserRoom(socket, userId);
-  const connectionIds = await userService.getAcceptedConnectionUserIds(userId);
-  socket.emit("online_users", [...await getOnlineUserIds(connectionIds)]);
-  if (wasOffline) await emitPresenceToConnections(userId, "user_online", { userId });
+  const userId = socket.data.userId;
 
   /**
    * The handshake already loaded this user, and messaging permission only
@@ -79,7 +70,7 @@ export const handleSocketConnection = async (socket: MotionSocket): Promise<void
       if (!(await mayMessage(recipientId))) return fail("You cannot message this user");
       const message = await messageService.createMessage({ from_user_id: userId, to_user_id: recipientId, operationId, text, message_type: "text", media_url: "", media_key: "", seen: false });
       emitToUser(recipientId, "message_received", message); emitToUser(userId, "message_sent", message);
-    } catch (error: unknown) { logger.error("socket_message_failed", safeErrorMetadata(error)); fail("Message could not be sent"); }
+    } catch (error: unknown) { logger.error("socket_message_failed", errorDiagnostics(error)); fail("Message could not be sent"); }
   });
 
   const emitTyping = async (eventName: "typing_start" | "typing_stop", payload: { to_user_id: string }): Promise<void> => {
@@ -87,12 +78,36 @@ export const handleSocketConnection = async (socket: MotionSocket): Promise<void
     try {
       if (!(await consumeDistributedLimit(`typing:${userId}`, 60, 60))) return;
       if (await mayMessage(recipientId)) emitToUser(recipientId, eventName, { from_user_id: userId });
-    } catch (error: unknown) { logger.error("socket_typing_failed", safeErrorMetadata(error)); }
+    } catch (error: unknown) { logger.error("socket_typing_failed", errorDiagnostics(error)); }
   };
   socket.on("typing_start", (payload) => { void emitTyping("typing_start", payload); }); socket.on("typing_stop", (payload) => { void emitTyping("typing_stop", payload); });
   const sessionRecheck = setInterval(() => {
     void isSessionActive(socket.data.sessionId, userId).then((active) => { if (!active) socket.disconnect(true); }, () => undefined);
   }, SESSION_RECHECK_MS + Math.floor(Math.random() * 60_000));
   sessionRecheck.unref();
-  socket.on("disconnect", async () => { clearInterval(sessionRecheck); leaveLocalUser(socket, userId); if (!(await isUserOnline(userId))) await emitPresenceToConnections(userId, "user_offline", { userId }); });
+
+  // Every handler above is registered before anything is awaited: an event a
+  // client sends right after connecting is not dropped, and a socket that
+  // drops while it is still being set up still leaves the room map and
+  // presence (the disconnect waits for the setup it interrupted).
+  let announced: Promise<void> = Promise.resolve();
+  socket.on("disconnect", () => {
+    clearInterval(sessionRecheck);
+    void announced.catch(() => undefined).then(async () => {
+      const connectionIds = localSocketState(socket)?.connectionIds ?? [];
+      leaveLocalUser(socket, userId);
+      if (await markSocketOffline(socket, userId)) emitToUsers(connectionIds, "user_offline", { userId });
+    }).catch((error: unknown) => { logger.error("socket_disconnect_failed", errorDiagnostics(error)); });
+  });
+
+  // One query for the connection list, kept for the offline notice, and one
+  // Redis round trip each for presence and for who of them is online.
+  announced = (async () => {
+    await joinUserRoom(socket, userId);
+    const [firstSocket, connectionIds] = await Promise.all([markSocketOnline(socket, userId), userService.getAcceptedConnectionUserIds(userId)]);
+    if (local) local.connectionIds = connectionIds;
+    socket.emit("online_users", [...await getOnlineUserIds(connectionIds)]);
+    if (firstSocket) emitToUsers(connectionIds, "user_online", { userId });
+  })();
+  await announced;
 };

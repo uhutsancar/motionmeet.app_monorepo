@@ -53,6 +53,9 @@ export const SocketProvider = ({ children }: PropsWithChildren) => {
         reconnectionAttempts: Infinity,
         reconnectionDelay: 1500,
         reconnectionDelayMax: 30_000,
+        // Full jitter: when a server restarts, every tab it held reconnects
+        // somewhere between immediately and twice the delay, not in one wave.
+        randomizationFactor: 1,
       }) as MotionMeetSocket;
 
       socketRef.current = connection;

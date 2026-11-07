@@ -46,11 +46,21 @@ export const SocketProvider = ({ children }: PropsWithChildren) => {
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return undefined;
 
+    /*
+     * The handshake uses the cached access token, refreshed only when it is
+     * close to expiry - like every HTTP request. It used to force a refresh on
+     * every connect: each return to the foreground rotated the refresh token,
+     * and after a deploy every client reconnecting at once was also a refresh
+     * (a session write) at once. A forced refresh is now kept for the one case
+     * that needs it, the server refusing the token (below).
+     */
+    let refreshBeforeNextHandshake = false;
     const client = io(SOCKET_URL, {
       autoConnect: false,
       auth: async (callback) => {
         try {
-          const token = await getTokenRef.current({ skipCache: true });
+          const token = await getTokenRef.current(refreshBeforeNextHandshake ? { skipCache: true } : undefined);
+          refreshBeforeNextHandshake = false;
           callback({ token: token || '' });
         } catch (error) {
           logHandledError('refresh-socket-token', error);
@@ -67,6 +77,9 @@ export const SocketProvider = ({ children }: PropsWithChildren) => {
       reconnectionAttempts: Infinity,
       reconnectionDelay: 2000,
       reconnectionDelayMax: 30_000,
+      // Full jitter: when a server restarts, every client it held reconnects
+      // somewhere between immediately and twice the delay, not in one wave.
+      randomizationFactor: 1,
       timeout: 15000,
     }) as MotionSocket;
 
@@ -83,14 +96,25 @@ export const SocketProvider = ({ children }: PropsWithChildren) => {
      * is still visible.
      */
     let outageReported = false;
+    let authRetried = false;
 
     const onConnect = () => {
       outageReported = false;
+      authRetried = false;
       setConnected(true);
     };
     const onDisconnect = () => setConnected(false);
     const onConnectError = (error: Error) => {
       setConnected(false);
+      // The server refused the token itself (expired early by a skewed device
+      // clock, or its session ended). socket.io does not retry a refusal, so
+      // try once more with a freshly refreshed token; if the session is gone
+      // that refresh signs the member out.
+      if (!client.active && !authRetried && /authentication|session|identity/i.test(error.message)) {
+        authRetried = true;
+        refreshBeforeNextHandshake = true;
+        client.connect();
+      }
       if (outageReported) return;
       outageReported = true;
       logHandledError('connect-socket', error);

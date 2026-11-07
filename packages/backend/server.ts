@@ -25,7 +25,7 @@ import userRouter from "./routes/userRoutes.js";
 import workoutRouter from "./routes/workoutRoutes.js";
 import { checkDatabaseHealth, connectDatabase, disconnectDatabase, isDatabaseReady } from "./configs/database.js";
 import { isDevelopmentOrigin, loadEnvironment } from "./configs/environment.js";
-import { disconnectRedis, getRedisStatus, initializeRedis, onRedisReady } from "./configs/redis.js";
+import { consumeDistributedLimit, disconnectRedis, getRedisStatus, initializeRedis, onRedisReady } from "./configs/redis.js";
 import { migrateToLatest } from "./db/migrator.js";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler.js";
 import { bearerOrClientKey, createLimiter } from "./middlewares/rateLimits.js";
@@ -33,7 +33,7 @@ import { requestContext } from "./middlewares/requestContext.js";
 import { parseJsonBody, rejectUnsupportedApiContentType } from "./middlewares/browserSecurity.js";
 import { answerRetiredBilling, RETIRED_BILLING_PATHS } from "./middlewares/retiredBilling.js";
 import { handleSocketConnection } from "./realtime/socketHandlers.js";
-import { setSocketServer, type InterServerEvents, type SocketData, bindSocketIdentity } from "./realtime/socketRegistry.js";
+import { MAX_SOCKETS_PER_MEMBER, localSocketCount, setSocketServer, startPresenceHeartbeat, type InterServerEvents, type SocketData, bindSocketIdentity } from "./realtime/socketRegistry.js";
 import { ensureApplicationData } from "./services/bootstrapService.js";
 import { assertDatabaseContract } from "./services/databaseMigrationService.js";
 import { detectGeometrySupport } from "./services/locationGeometry.js";
@@ -98,7 +98,10 @@ const httpServer = createServer(app);
 // list "websocket" first, so builds that still also offer polling connect
 // the same way. Networks that block WebSockets lose realtime and fall back to
 // the REST paths (and to message sync on the next connection).
-const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(httpServer, { cors: corsOptions, transports: ["websocket"] });
+//
+// The largest thing a client sends is a 2 000-character message; the 1 MB
+// default only let a socket make the server parse and hold a megabyte per frame.
+const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(httpServer, { cors: corsOptions, transports: ["websocket"], maxHttpBufferSize: 64 * 1024 });
 setSocketServer(io);
 // Fires immediately if the connection already won the race, otherwise when it
 // lands - either way the in-memory adapter is replaced for multi-instance fan-out.
@@ -154,6 +157,11 @@ io.use(async (socket, next) => {
     const token: unknown = socket.handshake.auth?.token;
     if (typeof token !== "string" || !token || token.length > 10_000) return next(new Error("Authentication required"));
     const payload = verifyAccessToken(token); if (!isUserId(payload.id) || !isUserId(payload.sid)) return next(new Error("Invalid user identity"));
+    // Checked before any database read. A client stuck in a reconnect loop,
+    // or a script, otherwise costs two queries per attempt; the clients'
+    // own backoff stays far below this.
+    if (localSocketCount(payload.id) >= MAX_SOCKETS_PER_MEMBER) return next(new Error("Too many connections"));
+    if (!(await consumeDistributedLimit(`socket-connect:${payload.id}`, 30, 60))) return next(new Error("Too many connection attempts"));
     // A still-valid access token can outlive its session by up to fifteen
     // minutes; a socket opened in that window would then live on indefinitely.
     const [user, sessionActive] = await Promise.all([userService.getUserById(payload.id), isSessionActive(payload.sid, payload.id)]);
@@ -173,11 +181,13 @@ const outboxRelay = environment.scheduledJobsEnabled && environment.outboxTransp
 // ffprobe, so say so once rather than let video events fail unexplained.
 if (outboxRelay) void reportVideoProbeAvailability();
 const opsServer = environment.metricsPort ? startOpsServer(environment.metricsPort, readiness) : null;
+const stopPresenceHeartbeat = startPresenceHeartbeat();
 let shuttingDown = false;
 const shutdown = async (signal: string, exitCode = 0): Promise<void> => {
   if (shuttingDown) return; shuttingDown = true; logger.info("shutdown_started", { signal });
   const forceExitTimer = setTimeout(() => process.exit(1), 10_000); forceExitTimer.unref();
   // Stop taking work first, then let the work already taken finish.
+  stopPresenceHeartbeat();
   await new Promise<void>((resolve) => io.close(() => resolve()));
   if (httpServer.listening) await new Promise<void>((resolve) => httpServer.close(() => resolve()));
   await Promise.allSettled([cron.stop(), outboxRelay?.stop()]);
