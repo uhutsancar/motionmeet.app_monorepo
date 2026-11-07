@@ -23,7 +23,7 @@ Status values: `NOT_STARTED`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-ENV`
 | WP-12 | DONE | see `git log --grep WP-12` | `integration/removeFollower.test.ts` (3: private account's posts/stories/cached feed/messaging lost, counters; idempotent; pending request dropped); e2e sweep scenario added | D-08 default applied: removal for public and private accounts, no blocking. UI: web and mobile Connections → Followers → Remove (with confirmation) |
 | WP-13 | DONE | see `git log --grep WP-13` | `integration/retention.test.ts` (5: tasks scheduled; sessions; reset tokens; read notifications; stale location wipe keeps settings and drops out of nearby) | D-07 default applied (30 days). `lastActiveAt` to the hour was done in WP-03. Retention table in docs/database.md |
 | WP-14 | N/A | | | The plan has no WP-14 (numbering skips from 13 to 15). |
-| WP-15 | NOT_STARTED | | | |
+| WP-15 | DONE | see `git log --grep WP-15` | `integration/routineInsert.test.ts` (driver-level count: 60 → ≤ 2 `routine_*` inserts for 10 × 5; update path too; content read back unchanged) | — |
 | WP-16 | NOT_STARTED | | | |
 | WP-17 | NOT_STARTED | | | |
 | WP-18 | NOT_STARTED | | | |

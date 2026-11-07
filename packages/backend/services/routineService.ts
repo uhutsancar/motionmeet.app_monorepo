@@ -9,19 +9,26 @@ interface ExerciseInput { exerciseId: string; exerciseName: string; muscleGroup:
 interface RoutineInput { userId: string; operationId: string; name: string; folder: string; exercises: ExerciseInput[] }
 interface RoutineUpdate { name?: string; folder?: string; exercises?: ExerciseInput[] }
 
+/**
+ * Two statements whatever the size of the routine: one for the exercises, one
+ * for every set (MM-PERF-04 in the 2026-11 audit). The loop this replaced made
+ * a round trip per exercise and per set inside the transaction - sixty for a
+ * ten-exercise, five-set routine. Same shape as `insertWorkoutExercises`; the
+ * returned ids are matched by position, not by row order, which SQL does not
+ * promise.
+ */
 const insertExercises = async (routineId: string, exercises: ExerciseInput[], transaction: DatabaseTransaction): Promise<void> => {
-  for (const [position, exercise] of exercises.entries()) {
-    const child = await transaction.insertInto("routine_exercises").values({
-      legacy_mongo_id: null, routine_id: routineId, exercise_id: exercise.exerciseId, position,
-      exercise_name: exercise.exerciseName, muscle_group: exercise.muscleGroup, equipment: exercise.equipment,
-    }).returning("id").executeTakeFirstOrThrow();
-    for (const [setPosition, set] of (exercise.sets ?? []).entries()) {
-      await transaction.insertInto("routine_sets").values({
-        legacy_mongo_id: null, routine_exercise_id: child.id, position: setPosition,
-        set_type: set.setType ?? "normal", reps: set.reps ?? 0, weight: set.weight ?? 0, completed: set.completed ?? false,
-      }).execute();
-    }
-  }
+  if (!exercises.length) return;
+  const children = await transaction.insertInto("routine_exercises").values(exercises.map((exercise, position) => ({
+    legacy_mongo_id: null, routine_id: routineId, exercise_id: exercise.exerciseId, position,
+    exercise_name: exercise.exerciseName, muscle_group: exercise.muscleGroup, equipment: exercise.equipment,
+  }))).returning(["id", "position"]).execute();
+  const idByPosition = new Map(children.map((child) => [child.position, child.id]));
+  const sets = exercises.flatMap((exercise, position) => (exercise.sets ?? []).map((set, setPosition) => ({
+    legacy_mongo_id: null, routine_exercise_id: idByPosition.get(position)!, position: setPosition,
+    set_type: set.setType ?? "normal" as const, reps: set.reps ?? 0, weight: set.weight ?? 0, completed: set.completed ?? false,
+  })));
+  if (sets.length) await transaction.insertInto("routine_sets").values(sets).execute();
 };
 
 export const getUserRoutinesList = async (userId: string, pagination: Pagination): Promise<{ items: Routine[]; nextCursor: string | null }> => {
