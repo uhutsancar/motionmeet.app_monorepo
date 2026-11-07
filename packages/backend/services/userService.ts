@@ -2,7 +2,7 @@ import { sql } from "kysely";
 import type { PublicUser, UserProfile } from "@motionmeet/shared";
 import { database, withTransaction } from "../configs/database.js";
 import { cachedOwnerField } from "../configs/redis.js";
-import { PROFILE_CACHE_TTL_SECONDS, invalidateMember, profileCacheOwner, revokeFeedAudience } from "./feedCache.js";
+import { PROFILE_CACHE_TTL_SECONDS, invalidateMember, profileCacheOwner, retractAuthor } from "./feedCache.js";
 import type { Row } from "../db/types.js";
 import { serializeUser, toIsoString, type InternalUser } from "../repositories/entities.js";
 import { evaluateMessagePermission } from "./accessControlService.js";
@@ -88,8 +88,10 @@ export const updateUser = async (userId: string, input: UserUpdate, { reservatio
   });
   await invalidateMember(userId);
   // Hiding the account or its workouts narrows an audience that other members'
-  // cached Keşfet pages already hold, and those viewers cannot be listed.
-  if (input["privacy.publicProfile"] === false || input["privacy.showWorkoutsOnFeed"] === false) await revokeFeedAudience();
+  // cached Keşfet pages already hold, and those viewers cannot be listed: the
+  // author is retracted from every cached feed page (services/feedCache.ts).
+  if (input["privacy.publicProfile"] === false) await retractAuthor(userId, "all");
+  else if (input["privacy.showWorkoutsOnFeed"] === false) await retractAuthor(userId, "workouts");
   // Who may message this member can have just changed; sockets that cached
   // the old answer must not keep acting on it.
   if (["privacy.allowMessages", "privacy.publicProfile", "privacy.allowFollowers"].some((key) => typeof input[key as keyof UserUpdate] === "boolean")) {

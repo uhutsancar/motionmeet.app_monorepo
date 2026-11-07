@@ -1,4 +1,4 @@
-import { bumpCacheEpoch, getCacheEpoch, invalidateCacheOwners } from "../configs/redis.js";
+import { getCacheEpoch, invalidateCacheOwners, recordRetractions, retractionTimes } from "../configs/redis.js";
 
 /**
  * One place that decides what a feed cache entry is called and whose entry a
@@ -38,11 +38,26 @@ import { bumpCacheEpoch, getCacheEpoch, invalidateCacheOwners } from "../configs
  *
  * - between two members (unfollow, removed connection, declined request) both
  *   members' entries are dropped, which is still O(1);
- * - an account going private, hiding its workouts, or a post being deleted
- *   affects viewers nobody can enumerate - any Keşfet page may hold it - so
- *   those bump the audience epoch instead. The epoch is part of every feed
- *   field name, so one `INCR` retires every cached page at once. These writes
- *   are rare next to reads, which is what makes a global miss acceptable.
+ * - a post deleted, an account deleted or gone private, or workouts hidden
+ *   affect viewers nobody can enumerate - any Keşfet page may hold them - so
+ *   they are recorded as *retractions* (`retractPost`, `retractAuthor`) and
+ *   every feed page served is filtered against them (`withoutRetracted`).
+ *
+ *   These used to bump one global epoch that was part of every feed field
+ *   name: each deletion anywhere sent every member's next feed read to
+ *   PostgreSQL at once, and single-flight only merges identical misses of one
+ *   member in one process. As deletions grow with the user base that became a
+ *   periodic thundering herd. A retraction costs one `ZMSCORE` over the page's
+ *   own ids per read and retires nothing. It lives for the feed TTL plus the
+ *   longest a page can take to compute, so no page written before it outlives
+ *   it. Every page carries the time its data was read (`asOf`): an author's
+ *   retraction only hides that author's posts from pages read before it, and
+ *   only posts written before it - a member who goes private and posts right
+ *   away is still seen by their followers.
+ *
+ *   The epoch is still read into every field name, so an operator can retire
+ *   all feed pages with one `INCR motionmeet:v2:epoch:feed-audience`, and a
+ *   replica still running the previous release keeps honouring it.
  *
  * ## What "dropped" means
  *
@@ -77,9 +92,55 @@ const FEED_AUDIENCE_EPOCH = "feed-audience";
 /** The current audience epoch; part of every feed cache field name. */
 export const feedAudienceEpoch = (): Promise<number> => getCacheEpoch(FEED_AUDIENCE_EPOCH);
 
+const FEED_RETRACTIONS = "feed";
 /**
- * Retires every cached feed page at once, for a write that narrows who may see
- * content to an audience that cannot be listed. See "Writes that take access
- * away" above.
+ * The feed TTL plus the longest a page can take from its first read to its
+ * write (the statement timeout's ceiling, with room), so a page that read a
+ * post just before it was deleted has expired before the retraction does.
  */
-export const revokeFeedAudience = (): Promise<void> => bumpCacheEpoch(FEED_AUDIENCE_EPOCH);
+export const FEED_RETRACTION_TTL_SECONDS = FEED_CACHE_TTL_SECONDS + 150;
+
+/** Deleted posts: gone from every cached feed page at once. */
+export const retractPosts = (...postIds: string[]): Promise<void> =>
+  recordRetractions(FEED_RETRACTIONS, postIds.map((id) => `post:${id}`), FEED_RETRACTION_TTL_SECONDS);
+
+/**
+ * An author whose posts some viewers may no longer see: everything they posted
+ * (account deleted, or gone private), or only their workouts (hidden from feeds).
+ */
+export const retractAuthor = (authorId: string, scope: "all" | "workouts"): Promise<void> =>
+  recordRetractions(FEED_RETRACTIONS, [`${scope === "all" ? "author" : "workouts"}:${authorId}`], FEED_RETRACTION_TTL_SECONDS);
+
+interface FeedItem { id: string; post_type: string; createdAt: string; user: { id: string } | string }
+const authorOf = (item: FeedItem): string => (typeof item.user === "string" ? item.user : item.user.id);
+
+/**
+ * Replica clocks differ a little. A page read this long before a retraction
+ * was recorded is still treated as read before it.
+ */
+const CLOCK_SKEW_MS = 5_000;
+
+/**
+ * `items` of a page whose data was read at `asOf`, without anything
+ * retracted since: deleted posts always, an author's posts when the page was
+ * read before the author's retraction and the post was written before it.
+ * Null when Redis could not answer: the caller must then not serve the page.
+ */
+export const withoutRetracted = async <T extends FeedItem>(items: T[], asOf: number): Promise<T[] | null> => {
+  if (!items.length) return items;
+  const members = new Set<string>();
+  for (const item of items) {
+    members.add(`post:${item.id}`);
+    members.add(`author:${authorOf(item)}`);
+    if (item.post_type === "workout") members.add(`workouts:${authorOf(item)}`);
+  }
+  const times = await retractionTimes(FEED_RETRACTIONS, [...members], FEED_RETRACTION_TTL_SECONDS);
+  if (!times) return null;
+  if (!times.size) return items;
+  const hiddenBy = (member: string, item: T): boolean => {
+    const retractedAt = times.get(member);
+    return retractedAt !== undefined && retractedAt + CLOCK_SKEW_MS >= asOf && Date.parse(item.createdAt) < retractedAt;
+  };
+  return items.filter((item) => !times.has(`post:${item.id}`) && !hiddenBy(`author:${authorOf(item)}`, item)
+    && !(item.post_type === "workout" && hiddenBy(`workouts:${authorOf(item)}`, item)));
+};

@@ -3,7 +3,7 @@ import { sql } from "kysely";
 import { database, withTransaction } from "../configs/database.js";
 import { invalidateCacheOwners, markSessionsRevoked } from "../configs/redis.js";
 import { exerciseListOwner } from "./exerciseService.js";
-import { feedCacheOwner, profileCacheOwner, revokeFeedAudience } from "./feedCache.js";
+import { feedCacheOwner, profileCacheOwner, retractAuthor } from "./feedCache.js";
 import { queueMediaDeletions } from "./mediaDeletionService.js";
 
 /**
@@ -359,7 +359,7 @@ export const deleteAccountData = async (userId: string): Promise<boolean> => {
   // not keep appearing there, so the feed audience epoch is bumped as well.
   await Promise.all([
     invalidateCacheOwners(profileCacheOwner(userId), feedCacheOwner(userId), exerciseListOwner(userId)),
-    revokeFeedAudience(),
+    retractAuthor(userId, "all"),
     markSessionsRevoked(sessionIds),
   ]);
   return true;

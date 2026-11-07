@@ -416,6 +416,66 @@ export const bumpCacheEpoch = async (name: string): Promise<void> => {
 };
 
 /**
+ * Short-lived retractions: things (a deleted post, an author who went private)
+ * that cached pages written before the change may still hold. Readers filter
+ * them out of whatever the cache hands back instead of every cached page being
+ * retired at once - see `services/feedCache.ts`.
+ *
+ * One sorted set per name; each member's score is the time it was retracted,
+ * so lookups are `ZMSCORE` over just the ids on the page being served, and the
+ * set never holds more than one TTL's worth of retractions.
+ */
+const retractionKey = (name: string): string => `${CACHE_PREFIX}retracted:${name}`;
+
+/** Records retractions for `ttlSeconds`. Retried like an invalidation; a final failure is logged and counted. */
+export const recordRetractions = async (name: string, members: readonly string[], ttlSeconds: number): Promise<void> => {
+  if (!members.length || !loadEnvironment().redisUrl || !redisRequested) return;
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt <= INVALIDATION_RETRY_DELAYS_MS.length; attempt += 1) {
+    if (attempt > 0) await wait(INVALIDATION_RETRY_DELAYS_MS[attempt - 1]!);
+    const client = getRedisClient();
+    if (!client) { lastError = new Error("Redis client is not ready"); continue; }
+    try {
+      const now = Date.now();
+      const key = retractionKey(name);
+      await client.multi()
+        .zAdd(key, members.map((value) => ({ score: now, value })))
+        .zRemRangeByScore(key, "-inf", now - ttlSeconds * 1000)
+        .expire(key, ttlSeconds)
+        .exec();
+      return;
+    } catch (error: unknown) {
+      lastError = error;
+    }
+  }
+  cacheInvalidationFailures.inc();
+  logger.warn("cache_retraction_failed", { retraction: name, members: members.length, ...safeErrorMetadata(lastError) });
+};
+
+/**
+ * When each of `members` was retracted, for those retracted within the last
+ * `ttlSeconds`. Empty without Redis - there is no cache then to hold anything
+ * stale. Null when Redis fails to answer: the caller cannot tell what a cached
+ * page may still hold and must not serve one.
+ */
+export const retractionTimes = async (name: string, members: readonly string[], ttlSeconds: number): Promise<Map<string, number> | null> => {
+  const client = getRedisClient();
+  if (!client || !members.length) return new Map();
+  try {
+    const scores = await client.zmScore(retractionKey(name), [...members]);
+    const cutoff = Date.now() - ttlSeconds * 1000;
+    const times = new Map<string, number>();
+    members.forEach((member, index) => {
+      const score = scores[index];
+      if (score !== null && score !== undefined && Number(score) > cutoff) times.set(member, Number(score));
+    });
+    return times;
+  } catch {
+    return null;
+  }
+};
+
+/**
  * Invalidation retries synchronously, before the mutation answers (D-10 in the
  * 2026-11 audit): a first attempt and three retries 50, 150 and 400 ms apart,
  * about 0.6 s at worst. The mutation itself stays successful - it is committed
@@ -494,6 +554,88 @@ export const isSessionMarkedRevoked = async (sessionId: string): Promise<boolean
   if (!client) return null;
   try { return Boolean(await client.exists(revokedSessionKey(sessionId))); }
   catch { return null; }
+};
+
+/**
+ * Presence: which members have a socket open, on any replica.
+ *
+ * One sorted set per member holds their socket ids, each scored with the time
+ * it stops counting. Every API process re-scores its own sockets on a
+ * heartbeat (`PRESENCE_HEARTBEAT_MS`), so a replica that dies stops counting
+ * within `PRESENCE_TTL_MS` without anyone cleaning up after it.
+ *
+ * This replaces `fetchSockets()` across the Redis adapter, which asked every
+ * replica and waited for all of them (up to the adapter's 5 s timeout) on each
+ * connect and disconnect - after a deploy, once for every client reconnecting.
+ *
+ * Each helper answers null when Redis cannot, and the caller falls back to
+ * what this process knows.
+ */
+export const PRESENCE_TTL_MS = 90_000;
+export const PRESENCE_HEARTBEAT_MS = 30_000;
+const presenceKey = (userId: string): string => `${CACHE_PREFIX}presence:${userId}`;
+const PRESENCE_BATCH = 500;
+
+/** Adds a socket; returns how many other live sockets the member already had. */
+export const presenceAdd = async (userId: string, socketId: string): Promise<number | null> => {
+  const client = getRedisClient();
+  if (!client) return null;
+  try {
+    const now = Date.now();
+    const key = presenceKey(userId);
+    const replies = await client.multi().zRemRangeByScore(key, "-inf", now).zRem(key, socketId).zCard(key)
+      .zAdd(key, { score: now + PRESENCE_TTL_MS, value: socketId }).pExpire(key, PRESENCE_TTL_MS).exec();
+    return Number(replies[2]);
+  } catch {
+    return null;
+  }
+};
+
+/** Removes a socket; returns how many live sockets the member still has. */
+export const presenceRemove = async (userId: string, socketId: string): Promise<number | null> => {
+  const client = getRedisClient();
+  if (!client) return null;
+  try {
+    const key = presenceKey(userId);
+    const replies = await client.multi().zRem(key, socketId).zRemRangeByScore(key, "-inf", Date.now()).zCard(key).exec();
+    return Number(replies[2]);
+  } catch {
+    return null;
+  }
+};
+
+/** Re-scores this process's sockets; pipelined, a batch per round trip. */
+export const presenceRefresh = async (entries: ReadonlyArray<{ userId: string; socketId: string }>): Promise<void> => {
+  const client = getRedisClient();
+  if (!client) return;
+  const score = Date.now() + PRESENCE_TTL_MS;
+  for (let start = 0; start < entries.length; start += PRESENCE_BATCH) {
+    const pipeline = client.multi();
+    for (const { userId, socketId } of entries.slice(start, start + PRESENCE_BATCH)) {
+      pipeline.zAdd(presenceKey(userId), { score, value: socketId }).pExpire(presenceKey(userId), PRESENCE_TTL_MS);
+    }
+    try { await pipeline.execAsPipeline(); } catch { return; }
+  }
+};
+
+/** Which of `userIds` have a live socket anywhere. */
+export const presenceOnline = async (userIds: readonly string[]): Promise<Set<string> | null> => {
+  const client = getRedisClient();
+  if (!client) return null;
+  const online = new Set<string>();
+  const now = Date.now();
+  try {
+    for (let start = 0; start < userIds.length; start += PRESENCE_BATCH) {
+      const batch = userIds.slice(start, start + PRESENCE_BATCH);
+      const pipeline = client.multi();
+      for (const userId of batch) pipeline.zCount(presenceKey(userId), now, "+inf");
+      const counts = await pipeline.execAsPipeline();
+      batch.forEach((userId, index) => { if (Number(counts[index]) > 0) online.add(userId); });
+    }
+    return online;
+  } catch {
+    return null;
+  }
 };
 
 /**

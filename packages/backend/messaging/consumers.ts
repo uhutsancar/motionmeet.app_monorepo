@@ -1,3 +1,4 @@
+import { sql } from "kysely";
 import { database, withTransaction, type DatabaseTransaction } from "../configs/database.js";
 import { mediaMetadataResults } from "../observability/metrics.js";
 import type { OutboxEventType } from "../db/types.js";
@@ -37,23 +38,40 @@ const payloadString = (event: DomainEvent, key: string): string | null => {
   return typeof value === "string" ? value : null;
 };
 
+const PROJECTION_BATCH = 1_000;
+
 /**
- * Copies an author's current name and picture onto their posts, which carry
- * them denormalised so the feed needs no join. It re-reads the user rather
- * than trusting the payload, so two updates applied out of order still end on
- * the latest values.
+ * Copies an author's current name and picture onto their posts' `author_*`
+ * columns. Reads no longer depend on it - `hydratePosts` reads the author
+ * live - so this only keeps the stored copy (exports, ad-hoc queries) honest.
+ *
+ * It used to rewrite every one of the author's posts in one statement inside
+ * one transaction: an avatar change by a member with thousands of posts wrote
+ * thousands of row versions and held their locks, so likes and comments on
+ * those posts queued behind it. Now only rows that differ are written, a
+ * thousand per statement, each its own short transaction. It re-reads the user
+ * rather than trusting the payload, so it is idempotent and two updates
+ * applied out of order still end on the latest values - which is also why it
+ * is safe as an `external` consumer (a redelivery repeats a no-op).
  */
 const profileProjection: EventConsumer = {
   name: "profile-projection",
   eventTypes: ["user.profile.updated"],
-  kind: "transactional",
-  apply: async (event, transaction) => {
-    const user = await transaction.selectFrom("users").select(["full_name", "username", "profile_picture_url"]).where("id", "=", event.aggregateId).executeTakeFirst();
-    if (!user) return;
-    await transaction.updateTable("posts")
-      .set({ author_full_name: user.full_name, author_username: user.username, author_profile_picture: user.profile_picture_url })
-      .where("user_id", "=", event.aggregateId)
-      .execute();
+  kind: "external",
+  perform: async (event) => {
+    for (;;) {
+      const result = await sql`
+        with author as (select full_name, username, profile_picture_url from users where id = ${event.aggregateId}),
+        stale as (
+          select p.id from posts p, author a
+          where p.user_id = ${event.aggregateId}
+            and (p.author_full_name, p.author_username, p.author_profile_picture) is distinct from (a.full_name, a.username, a.profile_picture_url)
+          limit ${PROJECTION_BATCH}
+        )
+        update posts p set author_full_name = a.full_name, author_username = a.username, author_profile_picture = a.profile_picture_url
+        from author a where p.id in (select id from stale)`.execute(database);
+      if (Number(result.numAffectedRows ?? 0) < PROJECTION_BATCH) return;
+    }
   },
 };
 

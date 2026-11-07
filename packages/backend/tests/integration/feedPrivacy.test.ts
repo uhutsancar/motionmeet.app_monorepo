@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { connectDatabase, database, disconnectDatabase } from "../../configs/database.js";
-import { disconnectRedis, initializeRedis } from "../../configs/redis.js";
+import { disconnectRedis, getCacheEpoch, initializeRedis, readOwnerField } from "../../configs/redis.js";
 import { createPost, deletePostById, getFeedPostsForUser, getPostById } from "../../services/postService.js";
 import { acceptConnection, createConnection, removeConnection, updateUser } from "../../services/userService.js";
 
@@ -65,6 +65,40 @@ test("FEED-02: a removed connection takes followers-only posts out of the other 
 
   assert.equal(await removeConnection(author, viewer), true);
   assert.ok(!(await feedIds(viewer, "following")).includes(post.id), "the cached page must not keep serving it");
+});
+
+/**
+ * A deletion used to bump one global epoch that was part of every feed field
+ * name, so each deletion anywhere sent every member's next feed read to
+ * PostgreSQL. Now the deleted post is retracted and filtered out of pages as
+ * they are served; nobody else's cached page is retired.
+ */
+test("a deleted post does not retire unrelated members' cached feeds", async () => {
+  const author = await newUser("unrelated_author");
+  const reader = await newUser("unrelated_reader");
+  const elsewhere = await newUser("elsewhere");
+  await publish(author, "public");
+  const doomed = await publish(elsewhere, "public");
+  const field = `${await getCacheEpoch("feed-audience")}:discover:first:${FIRST_PAGE.limit}`;
+  await feedIds(reader, "discover");
+  assert.equal((await readOwnerField(`feed:${reader}`, field)).hit, true, "the reader's page is cached");
+
+  const access = await getPostById(doomed.id);
+  assert.ok(access);
+  await deletePostById(access);
+  assert.equal((await readOwnerField(`feed:${reader}`, field)).hit, true, "still cached after somebody else's deletion");
+  assert.ok(!(await feedIds(reader, "discover")).includes(doomed.id), "and served without the deleted post");
+});
+
+test("an account going private leaves cached pages through its retraction, not a global miss", async () => {
+  const author = await newUser("retracted_author");
+  const reader = await newUser("retracted_reader");
+  const post = await publish(author, "public");
+  const field = `${await getCacheEpoch("feed-audience")}:discover:first:${FIRST_PAGE.limit}`;
+  assert.ok((await feedIds(reader, "discover")).includes(post.id));
+  await updateUser(author, { "privacy.publicProfile": false });
+  assert.equal((await readOwnerField(`feed:${reader}`, field)).hit, true);
+  assert.ok(!(await feedIds(reader, "discover")).includes(post.id));
 });
 
 test("a deleted post leaves every member's cached feed", async () => {

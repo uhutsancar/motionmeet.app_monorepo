@@ -2,7 +2,7 @@ import type { Post, PostType, PostVisibility } from "@motionmeet/shared";
 import { sql } from "kysely";
 import { database, withTransaction } from "../configs/database.js";
 import { cachedOwnerField } from "../configs/redis.js";
-import { FEED_CACHE_TTL_SECONDS, feedAudienceEpoch, feedCacheOwner, invalidateMember, revokeFeedAudience } from "./feedCache.js";
+import { FEED_CACHE_TTL_SECONDS, feedAudienceEpoch, feedCacheOwner, invalidateMember, retractPosts, withoutRetracted } from "./feedCache.js";
 import { findHydratedPost, findPostAccessRecord, hydratePosts, type PostAccessRecord } from "../repositories/postRepository.js";
 import { canAccessPost as evaluatePostAccess } from "./accessControlService.js";
 import type { Row } from "../db/types.js";
@@ -100,8 +100,8 @@ export const getFeedPostsForUser = async (userId: string, pagination: Pagination
   // all, so keying on the decoded date collapsed every discover page onto the
   // same entry and served page one forever.
   //
-  // The audience epoch leads the field so an access-narrowing write elsewhere
-  // (an account going private, a deleted post) retires this page too.
+  // The audience epoch leads the field: an operator's switch to retire every
+  // feed page at once (services/feedCache.ts).
   const field = `${await feedAudienceEpoch()}:${feedMode}:${pagination.rawCursor ?? "first"}:${pagination.limit}`;
 
   // A miss under load must cost one query, not one per waiting request: the
@@ -110,7 +110,9 @@ export const getFeedPostsForUser = async (userId: string, pagination: Pagination
   // helper single-flights the miss and stores the page under the owner
   // generation read before the query, so a page computed across an
   // invalidation is never served.
-  return cachedOwnerField(owner, field, FEED_CACHE_TTL_SECONDS, async () => {
+  const compute = async (): Promise<{ items: Post[]; nextCursor: string | null; asOf: number }> => {
+    // When the data was read, for the retraction filter below.
+    const asOf = Date.now();
     const rows = feedMode === "following"
       ? await queryFollowingFeed(userId, pagination)
       : await queryDiscoverFeed(userId, pagination);
@@ -124,8 +126,18 @@ export const getFeedPostsForUser = async (userId: string, pagination: Pagination
         ? encodeCursor({ date: new Date(last.created_at).toISOString(), id: last.id })
         : encodeCursor({ rank: Number(last.discover_rank), id: last.id })
       : null;
-    return { items: hydrated, nextCursor };
-  });
+    return { items: hydrated, nextCursor, asOf };
+  };
+  // A page cached before a post was deleted (or its author went private) is
+  // served without it; the cursor still points past the page, so paging is
+  // unaffected. A page cached by the release before this one has no `asOf`
+  // and is filtered as if read at the epoch. If Redis cannot say what was
+  // retracted, the page is read again.
+  const page = await cachedOwnerField(owner, field, FEED_CACHE_TTL_SECONDS, compute);
+  const items = await withoutRetracted(page.items, page.asOf ?? 0);
+  if (items) return { items, nextCursor: page.nextCursor };
+  const fresh = await compute();
+  return { items: fresh.items, nextCursor: fresh.nextCursor };
 };
 
 const encodeCursor = (value: Record<string, unknown>): string =>
@@ -278,8 +290,8 @@ export const deletePostById = async (post: PostAccessRecord): Promise<void> => {
     await transaction.deleteFrom("posts").where("id", "=", post.id).where("user_id", "=", post.user).execute();
   });
   // Any member's cached page may hold the deleted post; the author expects it
-  // gone from all of them, not after the TTL. Feed pages are retired through
-  // the audience epoch, every viewer's cached view of the author's profile
-  // through the profile owner.
-  await Promise.all([invalidateMember(post.user), revokeFeedAudience()]);
+  // gone from all of them, not after the TTL. Feed pages filter it out through
+  // its retraction, every viewer's cached view of the author's profile is
+  // dropped through the profile owner.
+  await Promise.all([invalidateMember(post.user), retractPosts(post.id)]);
 };

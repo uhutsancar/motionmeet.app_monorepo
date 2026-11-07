@@ -14,10 +14,17 @@ export const hydratePosts = async (rows: Array<Row<"posts">>, executor: Executor
   if (!rows.length) return [];
   const ids = rows.map((row) => row.id);
   const workoutIds = [...new Set(rows.map((row) => row.workout_id).filter((id): id is string => Boolean(id)))];
-  const [mediaRows, workoutRows] = await Promise.all([
+  const authorIds = [...new Set(rows.map((row) => row.user_id))];
+  // The author's name and picture are read live - a primary-key lookup per
+  // author on the page, in parallel with the media. Posts still carry a copy
+  // (`author_*`), now only a fallback: keeping that copy current is what made
+  // every profile edit rewrite all of the author's posts before it showed.
+  const [mediaRows, workoutRows, authorRows] = await Promise.all([
     executor.selectFrom("post_media").selectAll().where("post_id", "in", ids).orderBy("position").execute(),
     workoutIds.length ? executor.selectFrom("workouts").selectAll().where("id", "in", workoutIds).execute() : [],
+    executor.selectFrom("users").select(["id", "full_name", "username", "profile_picture_url"]).where("id", "in", authorIds).execute(),
   ]);
+  const authorById = new Map(authorRows.map((author) => [author.id, author]));
   const workouts = await hydrateWorkouts(workoutRows, executor);
   const workoutById = new Map(workouts.map((workout) => [workout.id, workout]));
   return rows.map((row) => {
@@ -38,7 +45,12 @@ export const hydratePosts = async (rows: Array<Row<"posts">>, executor: Executor
     });
     return {
       id: row.id, _id: row.id, operationId: row.operation_id,
-      user: publicUser(row.user_id, row.author_full_name, row.author_username, row.author_profile_picture),
+      user: (() => {
+        const author = authorById.get(row.user_id);
+        return author
+          ? publicUser(row.user_id, author.full_name, author.username, author.profile_picture_url)
+          : publicUser(row.user_id, row.author_full_name, row.author_username, row.author_profile_picture);
+      })(),
       content: row.content, image_urls: media.flatMap((entry) => entry.url ? [entry.url] : []), media,
       post_type: row.post_type, visibility: row.visibility, like_count: row.like_count, comment_count: row.comment_count,
       share_count: row.share_count, download_count: row.download_count,
