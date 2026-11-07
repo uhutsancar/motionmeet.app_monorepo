@@ -45,7 +45,8 @@ scaling any of them.
 2. `docker compose -f docker-compose.prod.yml up -d` — `migrate` runs first;
    migrations are expand-only, so the previous release keeps working against
    the new schema during the rollout.
-3. Watch: `/health/ready` on each service, `motionmeet_outbox_oldest_pending_seconds`,
+3. Watch: `/health/ready` on each service's private ops port (9464, or 4000
+   inside the API container; the public web proxy answers 404 for it), `motionmeet_outbox_oldest_pending_seconds`,
    5xx ratio, `motionmeet_events_consumed_total{outcome="dead"}`.
 4. Roll back by redeploying the previous tag. The schema stays (expand-only);
    see RUNBOOKS.md for migration `014`'s down path if it is ever needed.

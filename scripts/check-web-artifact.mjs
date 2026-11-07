@@ -33,6 +33,9 @@ for (const required of ['server_tokens off', 'Content-Security-Policy', 'Strict-
   if (!nginx.includes(required)) failures.push(`nginx policy missing: ${required}`);
 }
 if (/autoindex\s+on/i.test(nginx)) failures.push('nginx autoindex must remain disabled');
+// Readiness reports dependencies and capabilities; it belongs on the private
+// ops port, never on the public proxy (NEW-15 in the 2026-11 audit).
+if (!/location\s*=\s*\/health\/ready\s*\{\s*return\s+404;\s*\}/.test(nginx)) failures.push('nginx must not proxy /health/ready');
 
 const vercel = JSON.parse(await readFile(path.join(repositoryRoot, 'packages', 'web', 'vercel.json'), 'utf8'));
 const vercelHeaders = new Set((vercel.headers ?? []).flatMap((rule) => rule.headers ?? []).map((header) => String(header.key).toLowerCase()));

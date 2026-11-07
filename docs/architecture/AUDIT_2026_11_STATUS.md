@@ -26,7 +26,7 @@ Status values: `NOT_STARTED`, `IN_PROGRESS`, `DONE`, `BLOCKED`, `BLOCKED-ENV`
 | WP-15 | DONE | see `git log --grep WP-15` | `integration/routineInsert.test.ts` (driver-level count: 60 → ≤ 2 `routine_*` inserts for 10 × 5; update path too; content read back unchanged) | — |
 | WP-16 | NOT_STARTED | | | |
 | WP-17 | NOT_STARTED | | | |
-| WP-18 | NOT_STARTED | | | |
+| WP-18 | DONE | see `git log --grep WP-18` | `scripts/check-web-artifact.mjs` now fails unless nginx answers 404 for `/health/ready` (rule red before the change, green after); `nginx -t` in `nginx-unprivileged:stable-alpine` passes; `environment.test.ts` covers the new variables | Web container health check uses `/health/live` (still proxied); backend checks use the ops/API port directly, so nothing else depended on the public readiness route |
 | WP-19 | NOT_STARTED | | | |
 | WP-20 | NOT_STARTED | | | |
 
