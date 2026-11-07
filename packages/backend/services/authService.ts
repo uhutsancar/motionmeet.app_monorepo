@@ -44,6 +44,14 @@ export const createPasswordResetToken = async (userId: string): Promise<string> 
   return rawToken;
 };
 
+/** Whether `rawToken` is an unused, unexpired reset token. Read-only; redeeming it is `resetPasswordWithToken`. */
+export const isResetTokenRedeemable = async (rawToken: unknown): Promise<boolean> => {
+  if (typeof rawToken !== "string" || rawToken.length < 32 || rawToken.length > 256) return false;
+  return Boolean(await database.selectFrom("password_reset_tokens").select("id")
+    .where("token_hash", "=", hashResetToken(rawToken)).where("consumed_at", "is", null).where("expires_at", ">", new Date())
+    .executeTakeFirst());
+};
+
 /** Sets the new password and revokes every session; returns the user's id, or null when the token is not valid. */
 export const resetPasswordWithToken = async (rawToken: unknown, hashedPassword: string): Promise<string | null> => {
   if (typeof rawToken !== "string" || rawToken.length < 32 || rawToken.length > 256) return null;

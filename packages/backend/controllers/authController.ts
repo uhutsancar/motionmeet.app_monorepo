@@ -1,4 +1,3 @@
-import bcrypt from "bcryptjs";
 import { markSessionsRevoked } from "../configs/redis.js";
 import type { Request, RequestHandler, Response } from "express";
 import type { InternalUser } from "../repositories/entities.js";
@@ -23,7 +22,8 @@ import {
 import sendEmail from "../configs/nodeMailer.js";
 import { disconnectSessionSockets, disconnectUserSockets } from "../realtime/socketRegistry.js";
 import { escapeHtml } from "../utils/html.js";
-import { logger, safeErrorMetadata } from "../utils/logger.js";
+import { errorDiagnostics, logger } from "../utils/logger.js";
+import { hashPassword, verifyPassword } from "../utils/passwordHashing.js";
 
 const publicUser = (user: InternalUser) => ({
   id: user._id,
@@ -75,8 +75,7 @@ export const registerUser: RequestHandler = async (req, res, next) => {
       });
     }
 
-    const salt = await bcrypt.genSalt(12);
-    const hashedPassword = await bcrypt.hash(normalized.password, salt);
+    const hashedPassword = await hashPassword(normalized.password);
     const user = await authService.createUser(
       normalized.email,
       hashedPassword,
@@ -104,7 +103,9 @@ export const loginUser: RequestHandler = async (req, res, next) => {
     }
 
     const user = await authService.getUserByEmailWithPassword(email);
-    if (!user?.password || !(await bcrypt.compare(password, user.password))) {
+    // Checked even when there is no such account, so the answer takes as long
+    // either way and its timing does not tell which addresses are registered.
+    if (!(await verifyPassword(password, user?.password)) || !user) {
       return res.status(401).json({ success: false, message: "Invalid credentials" });
     }
 
@@ -118,7 +119,18 @@ export const refreshSession: RequestHandler = async (req, res, next) => {
   try {
     const rawToken = getRefreshTokenFromRequest(req);
     const rotated = await rotateRefreshSession(rawToken, req);
-    if (!rotated) {
+    if (rotated.status === "reused") {
+      // A replaced token came back after its grace window: whoever holds the
+      // session's current token is cut off as well, sockets and access tokens
+      // included. The member signs in again.
+      logger.warn("refresh_token_reuse_detected", { sessionId: rotated.sessionId, userId: rotated.userId });
+      disconnectSessionSockets(rotated.sessionId);
+      await markSessionsRevoked([rotated.sessionId]);
+      clearRefreshCookie(res);
+    }
+    // An unknown token leaves the cookie alone: in a browser it is shared by
+    // every tab, and another tab may have just stored a good one in it.
+    if (rotated.status !== "rotated") {
       return res.status(401).json({ success: false, message: "Session expired" });
     }
 
@@ -183,15 +195,16 @@ export const requestPasswordReset: RequestHandler = async (req, res, next) => {
       success: true,
       message: "If the account exists, a reset link has been sent",
     };
-    if (!email || email.length > 254) return res.status(202).json(genericResponse);
+    // Answered before anything is looked up. Creating the token and talking to
+    // SMTP took long enough only for a registered address that the response
+    // time said which addresses have an account, and a slow mail server held
+    // the request open. A member whose mail is lost asks again.
+    res.status(202).json(genericResponse);
+    if (!email || email.length > 254 || process.env.EMAIL_ENABLED === "false") return undefined;
 
-    const user = await authService.getUserByEmailWithPassword(email);
-    if (!user) return res.status(202).json(genericResponse);
-    if (process.env.EMAIL_ENABLED === "false") {
-      return res.status(202).json(genericResponse);
-    }
-
-    try {
+    void (async () => {
+      const user = await authService.getUserByEmailWithPassword(email);
+      if (!user) return;
       const token = await authService.createPasswordResetToken(user._id);
       const resetUrl = new URL("/reset-password", process.env.FRONTEND_URL);
       resetUrl.searchParams.set("token", token);
@@ -205,11 +218,10 @@ export const requestPasswordReset: RequestHandler = async (req, res, next) => {
           <p>If you did not request this, you can ignore this email.</p>
         `,
       });
-    } catch (error) {
-      logger.error("password_reset_delivery_failed", safeErrorMetadata(error));
-    }
-
-    return res.status(202).json(genericResponse);
+    })().catch((error: unknown) => {
+      logger.error("password_reset_delivery_failed", errorDiagnostics(error));
+    });
+    return undefined;
   } catch (error) {
     return next(error);
   }
@@ -224,7 +236,17 @@ export const resetPassword: RequestHandler = async (req, res, next) => {
         message: "Password must be between 10 and 72 UTF-8 bytes",
       });
     }
-    const hashedPassword = await bcrypt.hash(password, 12);
+    // The token is checked before the password is hashed: hashing is the
+    // expensive part, and a request without a live token must not cost it.
+    if (!(await authService.isResetTokenRedeemable(req.body?.token))) {
+      return res.status(400).json({
+        success: false,
+        message: "Reset link is invalid or expired",
+      });
+    }
+    const hashedPassword = await hashPassword(password);
+    // Redeemed atomically here; a concurrent redemption of the same token
+    // makes this one answer as an invalid link.
     const passwordOwner = await authService.resetPasswordWithToken(
       req.body?.token,
       hashedPassword

@@ -57,28 +57,92 @@ export const createRefreshSession = async (userId: string, request: Request): Pr
   return serializeRefreshToken(session.id, secret);
 };
 
-export interface RotatedSession { userId: string; sessionId: string; refreshToken: string }
+/**
+ * How long a refresh token that has just been rotated away still yields its
+ * successor. Long enough for a mobile client to retry after the response was
+ * lost, or for a second browser tab whose refresh raced the first.
+ */
+export const REFRESH_REUSE_GRACE_MS = 60_000;
 
-export const rotateRefreshSession = async (rawToken: unknown, request: Request): Promise<RotatedSession | null> => {
-  const parsed = parseRefreshToken(rawToken);
-  if (!parsed) return null;
-  const nextSecret = createRefreshSecret();
-  const session = await database.updateTable("sessions").set({
-    token_hash: hashSecret(nextSecret), expires_at: refreshExpiry(), last_used_at: new Date(),
-    user_agent: String(request.get("user-agent") ?? "").slice(0, 512), ip_address: String(request.ip ?? "").slice(0, 128),
-  }).where("id", "=", parsed.sessionId).where("token_hash", "=", hashSecret(parsed.secret))
-    .where("revoked_at", "is", null).where("expires_at", ">", new Date())
-    .returning(["id", "user_id"]).executeTakeFirst();
-  if (!session) return null;
-  return { userId: session.user_id, sessionId: session.id, refreshToken: serializeRefreshToken(session.id, nextSecret) };
+/**
+ * The successor of a refresh secret: derived from it with a key only the
+ * server holds, instead of drawn at random. Presenting the same token twice
+ * within the grace window therefore yields the same new token, without the
+ * server ever storing a token in a form that could be handed out again.
+ */
+const successorSecret = (sessionId: string, secret: string): string => {
+  const rotationKey = crypto.createHmac("sha256", loadEnvironment().jwtSecret).update("motionmeet refresh rotation v1").digest();
+  return crypto.createHmac("sha256", rotationKey).update(`${sessionId}.${secret}`).digest("base64url");
 };
 
-/** Revokes the session the refresh token names; returns its id when one was actually revoked. */
+export type RefreshOutcome =
+  | { status: "rotated"; userId: string; sessionId: string; refreshToken: string }
+  /** A token rotated away before the grace window was presented: the session is revoked now. */
+  | { status: "reused"; userId: string; sessionId: string }
+  | { status: "invalid" };
+
+const clientDetails = (request: Request) => ({
+  user_agent: String(request.get("user-agent") ?? "").slice(0, 512),
+  ip_address: String(request.ip ?? "").slice(0, 128),
+});
+
+/**
+ * Exchanges a refresh token for its successor.
+ *
+ * 1. The session's current token: rotated. Its hash moves to
+ *    `previous_token_hash`, the successor's becomes `token_hash`.
+ * 2. The token rotated away last, within `REFRESH_REUSE_GRACE_MS`: the same
+ *    successor again, and nothing changes. A refresh whose response never
+ *    arrived, or two tabs refreshing at once, no longer sign the member out.
+ *    Concurrent requests serialise on the row in step 1; the loser finds the
+ *    committed rotation here.
+ * 3. That previous token after the window: somebody kept a token that was
+ *    already replaced - a stolen copy, or a client that lost track. The whole
+ *    session is revoked, so whoever holds the current token is cut off too.
+ *
+ * Anything older than the previous token is simply unknown (`invalid`).
+ */
+export const rotateRefreshSession = async (rawToken: unknown, request: Request): Promise<RefreshOutcome> => {
+  const parsed = parseRefreshToken(rawToken);
+  if (!parsed) return { status: "invalid" };
+  const presentedHash = hashSecret(parsed.secret);
+  const nextSecret = successorSecret(parsed.sessionId, parsed.secret);
+  const nextHash = hashSecret(nextSecret);
+  const now = new Date();
+  const rotated = await database.updateTable("sessions").set({
+    previous_token_hash: presentedHash, token_hash: nextHash, rotated_at: now,
+    expires_at: refreshExpiry(), last_used_at: now, ...clientDetails(request),
+  }).where("id", "=", parsed.sessionId).where("token_hash", "=", presentedHash)
+    .where("revoked_at", "is", null).where("expires_at", ">", now)
+    .returning(["id", "user_id"]).executeTakeFirst();
+  if (rotated) return { status: "rotated", userId: rotated.user_id, sessionId: rotated.id, refreshToken: serializeRefreshToken(rotated.id, nextSecret) };
+
+  const superseded = await database.selectFrom("sessions").select(["id", "user_id", "token_hash", "rotated_at", "revoked_at", "expires_at"])
+    .where("id", "=", parsed.sessionId).where("previous_token_hash", "=", presentedHash).executeTakeFirst();
+  if (!superseded || superseded.revoked_at || superseded.expires_at <= now) return { status: "invalid" };
+  // A successor that does not match means the rotation key changed (a new
+  // JWT_SECRET) since: the token cannot be followed, but it was not misused.
+  if (superseded.token_hash !== nextHash) return { status: "invalid" };
+  if (superseded.rotated_at && now.getTime() - superseded.rotated_at.getTime() <= REFRESH_REUSE_GRACE_MS) {
+    return { status: "rotated", userId: superseded.user_id, sessionId: superseded.id, refreshToken: serializeRefreshToken(superseded.id, nextSecret) };
+  }
+  const revoked = await database.updateTable("sessions").set({ revoked_at: now })
+    .where("id", "=", superseded.id).where("revoked_at", "is", null).returning("id").executeTakeFirst();
+  return revoked ? { status: "reused", userId: superseded.user_id, sessionId: superseded.id } : { status: "invalid" };
+};
+
+/**
+ * Revokes the session the refresh token names; returns its id when one was
+ * actually revoked. The token rotated away last counts too: a client signing
+ * out from inside the grace window still holds proof of the session.
+ */
 export const revokeRefreshSession = async (rawToken: unknown): Promise<string | null> => {
   const parsed = parseRefreshToken(rawToken);
   if (!parsed) return null;
+  const presentedHash = hashSecret(parsed.secret);
   const revoked = await database.updateTable("sessions").set({ revoked_at: new Date() }).where("id", "=", parsed.sessionId)
-    .where("token_hash", "=", hashSecret(parsed.secret)).where("revoked_at", "is", null).returning("id").executeTakeFirst();
+    .where((expression) => expression.or([expression("token_hash", "=", presentedHash), expression("previous_token_hash", "=", presentedHash)]))
+    .where("revoked_at", "is", null).returning("id").executeTakeFirst();
   return revoked?.id ?? null;
 };
 

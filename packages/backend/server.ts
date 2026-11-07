@@ -45,6 +45,7 @@ import { initCronJobs } from "./workers/cronJobs.js";
 import { startDirectOutboxRelay } from "./messaging/outboxRelay.js";
 import { reportVideoProbeAvailability } from "./services/mediaProbeService.js";
 import { startOpsServer } from "./observability/opsServer.js";
+import { closePasswordHashing } from "./utils/passwordHashing.js";
 
 const environment = loadEnvironment();
 const configuredOrigins = environment.corsOrigins;
@@ -181,7 +182,7 @@ const shutdown = async (signal: string, exitCode = 0): Promise<void> => {
   if (httpServer.listening) await new Promise<void>((resolve) => httpServer.close(() => resolve()));
   await Promise.allSettled([cron.stop(), outboxRelay?.stop()]);
   opsServer?.close();
-  await Promise.allSettled([disconnectDatabase(), disconnectRedis()]);
+  await Promise.allSettled([disconnectDatabase(), disconnectRedis(), closePasswordHashing()]);
   clearTimeout(forceExitTimer); process.exit(exitCode);
 };
 process.once("SIGTERM", () => { void shutdown("SIGTERM"); }); process.once("SIGINT", () => { void shutdown("SIGINT"); });

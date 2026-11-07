@@ -138,5 +138,35 @@ export const accountExportDuration = new client.Histogram({
   registers: [registry],
 });
 
+/**
+ * The password worker pool (utils/passwordHashing.ts): checks waiting for a
+ * worker, and checks refused because that queue was full. A queue that stays
+ * long is a login wave or a credential-stuffing run; refusals are users seeing
+ * 503 at sign-in.
+ */
+let passwordQueueDepth = (): number => 0;
+export const observePasswordQueue = (depth: () => number): void => { passwordQueueDepth = depth; };
+export const passwordHashQueue = new client.Gauge({
+  name: "motionmeet_password_hash_queue",
+  help: "Password hashes and checks waiting for a worker thread.",
+  registers: [registry],
+  collect() { this.set(passwordQueueDepth()); },
+});
+export const passwordHashRejected = new client.Counter({
+  name: "motionmeet_password_hash_rejected_total",
+  help: "Password hashes and checks refused because the worker queue was full.",
+  registers: [registry],
+});
+
+/** Sockets open on this process, sampled at scrape time. */
+let openSockets = (): number => 0;
+export const observeOpenSockets = (count: () => number): void => { openSockets = count; };
+export const socketConnections = new client.Gauge({
+  name: "motionmeet_socket_connections",
+  help: "Socket.IO connections open on this process.",
+  registers: [registry],
+  collect() { this.set(openSockets()); },
+});
+
 /** `2xx`-style class, so the status label has five values instead of sixty. */
 export const statusClass = (status: number): string => `${Math.floor(status / 100)}xx`;

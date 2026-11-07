@@ -18,6 +18,12 @@ test("every metric the alert rules rely on is registered", async () => {
     "motionmeet_account_export_seconds",
     "motionmeet_events_consumed_total",
     "motionmeet_scheduled_task_runs_total",
+    // 2026-11-07 review: API health and the password worker pool.
+    "motionmeet_http_request_duration_seconds",
+    "motionmeet_nodejs_eventloop_lag_p99_seconds",
+    "motionmeet_password_hash_queue",
+    "motionmeet_password_hash_rejected_total",
+    "motionmeet_socket_connections",
   ]) assert.ok(names.includes(name), name);
 });
 

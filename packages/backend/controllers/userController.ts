@@ -1,7 +1,6 @@
 import imagekit from "../configs/imageKit.js";
 import { disconnectUserSockets, invalidateMessagePermissions } from "../realtime/socketRegistry.js";
 import type { RequestHandler } from "express";
-import bcrypt from "bcryptjs";
 import { extractS3Key } from "../utils/s3Utils.js";
 import { isFiniteNumber, isNonEmptyString, isOptionalString, isUserId } from "../utils/validation.js";
 import { hasValidMediaSignature } from "../utils/mediaValidation.js";
@@ -17,7 +16,8 @@ import {
 import { PRIVACY_KEYS } from "@motionmeet/shared";
 import { deleteMediaOrQueue } from "../services/mediaDeletionService.js";
 import { runWithRedisLock } from "../configs/redis.js";
-import { logger, safeErrorMetadata } from "../utils/logger.js";
+import { errorDiagnostics, logger } from "../utils/logger.js";
+import { verifyPassword } from "../utils/passwordHashing.js";
 import { accountExportDuration, accountExports } from "../observability/metrics.js";
 
 export const getUserData: RequestHandler = async (req, res, next) => {
@@ -106,7 +106,7 @@ export const exportAccount: RequestHandler = async (req, res, next) => {
     // the connection makes the client report a failed download; ending it
     // would leave a short file that looks like a finished one.
     if (res.headersSent) {
-      logger.error("account_export_failed", { requestId: req.requestId, ...safeErrorMetadata(error) });
+      logger.error("account_export_failed", { requestId: req.requestId, ...errorDiagnostics(error) });
       res.destroy();
       return undefined;
     }
@@ -122,7 +122,7 @@ export const deleteAccount: RequestHandler = async (req, res, next) => {
     }
 
     const user = await userService.getUserByIdWithPassword(req.userId);
-    if (!user?.password || !(await bcrypt.compare(password, user.password))) {
+    if (!user?.password || !(await verifyPassword(password, user.password))) {
       return res.status(401).json({ success: false, message: "Password is incorrect" });
     }
 
