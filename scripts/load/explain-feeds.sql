@@ -41,3 +41,24 @@ WHERE posts.visibility = 'public'
     OR EXISTS (SELECT 1 FROM user_follows uf WHERE uf.follower_id = :'viewer' AND uf.followee_id = posts.user_id))
   AND (posts.post_type <> 'workout' OR author.privacy_show_workouts_on_feed = true)
 ORDER BY posts.discover_rank DESC, posts.id DESC LIMIT 31;
+
+-- Comment previews for one feed page (MM-PERF-01): the three newest comments
+-- of each of 30 posts. The page is the 30 posts with the most comments, which
+-- the seed gives 10 000 each.
+SELECT array_agg(id) AS hot_posts FROM (SELECT id FROM posts ORDER BY comment_count DESC LIMIT 30) hot \gset
+
+\echo '=== comment previews, row_number() over every comment of the page (before WP-16)'
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF, SUMMARY ON)
+SELECT id, post_id, user_id, content, created_at, updated_at FROM (
+  SELECT post_comments.*, row_number() OVER (PARTITION BY post_id ORDER BY created_at DESC, id DESC) AS post_rank
+  FROM post_comments WHERE post_id = ANY(:'hot_posts'::uuid[])
+) ranked_comments WHERE post_rank <= 3;
+
+\echo '=== comment previews, LATERAL three rows per post off post_comments_post_cursor_idx (current)'
+EXPLAIN (ANALYZE, BUFFERS, COSTS OFF, SUMMARY ON)
+SELECT c.id, c.post_id, c.user_id, c.content, c.created_at, c.updated_at
+FROM unnest(:'hot_posts'::uuid[]) AS page(post_id)
+CROSS JOIN LATERAL (
+  SELECT * FROM post_comments WHERE post_comments.post_id = page.post_id
+  ORDER BY created_at DESC, id DESC LIMIT 3
+) c;

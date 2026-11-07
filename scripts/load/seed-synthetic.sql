@@ -94,6 +94,19 @@ JOIN synthetic_posts sp ON sp.n = pick.post_pick
 JOIN synthetic_members m ON m.n = pick.member_pick
 ON CONFLICT DO NOTHING;
 
+-- Hot threads (MM-PERF-01): the 30 most-liked posts get 10 000 comments each,
+-- so the comment-preview query behind every feed page meets the posts that
+-- make it expensive. Commenters are spread over the members.
+INSERT INTO post_comments (post_id, user_id, content, created_at)
+SELECT hot.id, m.id, 'synthetic comment ' || g, now() - (g || ' seconds')::interval
+FROM (SELECT p.id FROM posts p JOIN synthetic_posts sp ON sp.id = p.id
+      ORDER BY (SELECT count(*) FROM post_likes pl WHERE pl.post_id = p.id) DESC LIMIT 30) hot
+CROSS JOIN generate_series(1, 10000) g
+JOIN synthetic_members m ON m.n = 1 + (g % :members);
+UPDATE posts p SET comment_count = c.total
+FROM (SELECT post_id, count(*)::int AS total FROM post_comments GROUP BY post_id) c, synthetic_posts sp
+WHERE p.id = c.post_id AND p.id = sp.id;
+
 -- Denormalised counters, as the application would have maintained them.
 UPDATE posts p SET like_count = c.likes
 FROM (SELECT post_id, count(*)::int AS likes FROM post_likes GROUP BY post_id) c, synthetic_posts sp
@@ -112,9 +125,11 @@ ANALYZE user_follows;
 ANALYZE connections;
 ANALYZE posts;
 ANALYZE post_likes;
+ANALYZE post_comments;
 
 SELECT (SELECT count(*) FROM users WHERE email LIKE '%@synthetic.test') AS members,
        (SELECT count(*) FROM user_follows) AS follows,
        (SELECT count(*) FROM connections) AS connections,
        (SELECT count(*) FROM posts) AS posts,
-       (SELECT count(*) FROM post_likes) AS likes;
+       (SELECT count(*) FROM post_likes) AS likes,
+       (SELECT count(*) FROM post_comments) AS comments;

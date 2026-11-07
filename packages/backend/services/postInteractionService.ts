@@ -19,17 +19,37 @@ import { createCursor, type Pagination } from "../utils/pagination.js";
  */
 const COMMENT_PREVIEW_LIMIT = 3;
 
+interface PreviewRow { id: string; post_id: string; user_id: string; content: string; created_at: Date; updated_at: Date }
+
+/**
+ * The newest `limit` comments of each post, read per post straight off
+ * `post_comments_post_cursor_idx`: a few index rows per post however long
+ * its thread (MM-PERF-01 in the 2026-11 audit). The query this replaced
+ * ranked every comment of every post on the page with `row_number()` and
+ * kept three; one page of popular posts meant sorting hundreds of thousands
+ * of rows to return ninety (scripts/load/explain-feeds.sql has both plans).
+ */
+const commentPreviews = async (postIds: string[], limit: number): Promise<PreviewRow[]> => {
+  const { rows } = await sql<PreviewRow>`
+    select c.id, c.post_id, c.user_id, c.content, c.created_at, c.updated_at
+    from unnest(${postIds}::uuid[]) as page(post_id)
+    cross join lateral (
+      select id, post_id, user_id, content, created_at, updated_at from post_comments
+      where post_comments.post_id = page.post_id
+      order by created_at desc, id desc
+      limit ${limit}
+    ) c`.execute(database);
+  return rows;
+};
+
 export const hydratePostInteractions = async (posts: Post[], requesterId: string | undefined, previewLimit = COMMENT_PREVIEW_LIMIT): Promise<Post[]> => {
   const postIds = posts.map((post) => post.id);
   if (!postIds.length) return posts;
   const authorIds = [...new Set(posts.map((post) => typeof post.user === "string" ? post.user : post.user.id))];
-  const rankedComments = database.selectFrom("post_comments").selectAll()
-    .select(sql<number>`row_number() over (partition by post_id order by created_at desc, id desc)`.as("post_rank"))
-    .where("post_id", "in", postIds).as("ranked_comments");
   const [likes, relationships, commentRows] = await Promise.all([
     requesterId ? database.selectFrom("post_likes").select("post_id").where("post_id", "in", postIds).where("user_id", "=", requesterId).execute() : [],
     requesterId && authorIds.length ? getRelationshipMap(requesterId, authorIds) : new Map(),
-    database.selectFrom(rankedComments).select(["id", "post_id", "user_id", "content", "created_at", "updated_at"]).where("post_rank", "<=", previewLimit).execute(),
+    commentPreviews(postIds, previewLimit),
   ]);
   const userIds = [...new Set(commentRows.map((comment) => comment.user_id))];
   const users = userIds.length ? await database.selectFrom("users").select(["id", "full_name", "username", "profile_picture_url"]).where("id", "in", userIds).execute() : [];
@@ -41,7 +61,12 @@ export const hydratePostInteractions = async (posts: Post[], requesterId: string
   }
   const liked = new Set(likes.map((entry) => entry.post_id));
   return posts.map((post) => {
-    const comments = (commentsByPost.get(post.id) ?? []).sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime());
+    // Oldest first, ties broken by id: the first entry must be the smallest
+    // (created_at, id) of the preview, because the "older comments" cursor
+    // starts from it. Without the tie-break, comments posted in the same
+    // instant came back in whatever order the query produced them.
+    const comments = (commentsByPost.get(post.id) ?? []).sort((left, right) =>
+      new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime() || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
     const authorId = typeof post.user === "string" ? post.user : post.user.id;
     const relationship = relationships.get(authorId);
     return {

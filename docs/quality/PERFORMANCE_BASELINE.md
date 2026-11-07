@@ -83,3 +83,12 @@ requests miss the 30-second per-member feed cache, through nginx:
 → the media worker's ffprobe read the object over a presigned URL and stored
 2.000 s and 320×240 within 2.6 s of the post; the API returns
 `durationSeconds: 2`. The test object was deleted afterwards.
+
+## 2026-11 audit measurements (test database, rolled back)
+
+| What | Before | After | How |
+|---|---|---|---|
+| Comment previews for one feed page of 30 posts with 10 000 comments each (MM-PERF-01, WP-16) | 640.8 ms, 4 286 shared buffers + 3 305 temp blocks (window function sorts all 300 000 comments) | 0.92 ms, 150 shared buffers (LATERAL, three index rows per post) | `EXPLAIN (ANALYZE, BUFFERS)` in a rolled-back transaction on the PostgreSQL 18 test container; the same pair is in `scripts/load/explain-feeds.sql` for the synthetic data set |
+| Routine save, 10 exercises × 5 sets (MM-PERF-04, WP-15) | 60 `routine_*` inserts | 2 | driver-level statement count, `tests/integration/routineInsert.test.ts` |
+| Nearby presentation lookup per request (WP-03) | — (new) | 50 + 30 primary-key index scans, ~240 buffers for 50 candidates | `EXPLAIN (ANALYZE, BUFFERS)` on 20 000 synthetic members, rolled back |
+
