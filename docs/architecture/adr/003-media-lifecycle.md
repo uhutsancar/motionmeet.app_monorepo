@@ -99,8 +99,9 @@ on every object, the S3 address in the path bypasses ImageKit altogether
   `profiles/`, `covers/`) must not be anonymously readable; public read only
   for `exercises/*`, or user media in a bucket of its own. Example policy:
   `infra/s3/user-media-bucket-policy.example.json` (Ek B-1).
-- **Order.** Code first, then `backfill:media-keys`, then clients with the
-  placeholder, then ImageKit "Restrict unsigned URLs" (Ek B-2). After that
+- **Order.** Clients first (older builds add a width to the URL, which breaks
+  a signature), then the backend, then `backfill:media-keys`, then ImageKit
+  "Restrict unsigned URLs" (Ek B-2); DEPLOYMENT.md has the details. After that
   last step old unsigned links stop working and `MEDIA_SIGNED_DELIVERY=false`
   would break every image. Exercise artwork is served from S3 directly, not
   through ImageKit, so the restriction does not affect it — re-check if that

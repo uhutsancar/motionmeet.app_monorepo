@@ -87,14 +87,22 @@ the Redis key prefix from `motionmeet:v1:` to `motionmeet:v2:`:
 
 Order matters; each step is safe to stop after.
 
+0. **Clients first.** Builds from before this release resize post images by
+   adding `w-…` to the ImageKit URL's `tr` parameter. Done to a signed URL,
+   that invalidates the signature. Ship web and mobile from this release
+   (they use the server's signed `variants` and never touch a signed URL)
+   and let the mobile update reach most users before step 1. Until then,
+   either keep `MEDIA_SIGNED_DELIVERY=false` on the new backend or confirm
+   on the ImageKit account (Ek B-2) whether a URL with an invalid `ik-s` is
+   refused while unsigned URLs are still allowed.
 1. Deploy the backend (signed delivery on by default). ImageKit still accepts
    unsigned URLs, so links already in clients keep working.
 2. `pnpm --filter @motionmeet/backend backfill:media-keys --dry-run`, then
    without `--dry-run`. Watch `motionmeet_media_url_unresolvable_total`; the
    script lists unresolvable rows by id. Get it to (near) zero.
-3. Ship web and mobile with the "media unavailable" placeholder and the
-   variant-aware image helpers. Old store builds render a missing image where
-   the new ones show the placeholder; do not go on while a large share of
+3. Check that the clients from step 0 are what most members run. Old store
+   builds render a missing image where the new ones show the placeholder, and
+   resize signed URLs into invalid ones; do not go on while a large share of
    users is on builds older than this release.
 4. Infrastructure (RUNBOOKS.md, "Media access hardening"): close anonymous
    read on the user-media prefixes in S3 (Ek B-1), connect ImageKit to S3 with
