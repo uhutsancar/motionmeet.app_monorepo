@@ -21,6 +21,7 @@ import {
 // than flashing an empty box on every cell that comes back into the window.
 import { Image } from 'expo-image';
 import { VideoView, useVideoPlayer } from 'expo-video';
+import { useIsFocused } from '@react-navigation/native';
 import { useAuthContext } from "../context/AuthProvider";
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { likePostIdempotent, unlikePostIdempotent, addComment, getPostComments } from '../api/endpoints';
@@ -59,6 +60,8 @@ const normalizeUri = (value: unknown): string => (
 interface PostVideoProps {
   source: string;
   style: StyleProp<ViewStyle>;
+  /** Spoken label of the play button. */
+  label: string;
 }
 
 interface PostCardProps {
@@ -79,10 +82,27 @@ type CarouselItem =
   | { type: 'unavailable' }
   | { type: 'workout'; data: Workout };
 
-const PostVideo = ({ source, style }: PostVideoProps) => {
+const videoStyles = StyleSheet.create({
+  poster: { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
+});
+
+/**
+ * The player itself, mounted only once the member asks for the video.
+ *
+ * It pauses when its screen loses focus: the feed stays mounted under a
+ * pushed profile or post, and a clip that kept playing there was sound from
+ * nowhere and a decoder nobody was watching.
+ */
+const PostVideoPlayer = ({ source, style }: Omit<PostVideoProps, 'label'>) => {
+  const focused = useIsFocused();
   const player = useVideoPlayer(source, (instance) => {
     instance.loop = false;
+    instance.play();
   });
+
+  useEffect(() => {
+    if (!focused) player.pause();
+  }, [focused, player]);
 
   return (
     <VideoView
@@ -92,6 +112,31 @@ const PostVideo = ({ source, style }: PostVideoProps) => {
       nativeControls
       accessibilityLabel="Video"
     />
+  );
+};
+
+/**
+ * A video in the feed starts as a still surface with a play button.
+ *
+ * `useVideoPlayer` builds a native player as soon as it mounts - a hardware
+ * decoder, a surface and a network buffer - whether or not anyone presses
+ * play. The feed keeps a few screens of cards mounted around the visible one,
+ * so a run of videos held several decoders and downloaded clips that were
+ * never watched: memory, GPU, battery and data spent on scrolling past.
+ * Nothing is built now until the tap, and the tap plays at once.
+ */
+const PostVideo = ({ source, style, label }: PostVideoProps) => {
+  const [requested, setRequested] = useState(false);
+  if (requested) return <PostVideoPlayer source={source} style={style} />;
+  return (
+    <Pressable
+      onPress={() => setRequested(true)}
+      style={[style, videoStyles.poster]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Ionicons name="play-circle" size={64} color="rgba(255,255,255,0.92)" />
+    </Pressable>
   );
 };
 
@@ -781,7 +826,7 @@ const PostCard = ({ post, onComment: _onComment, onShare, onUserPress, navigatio
     if (item.type === 'video') {
       return (
         <Surface elevation={0} style={s.videoContainer}>
-          <PostVideo source={item.url} style={s.carouselSlide} />
+          <PostVideo source={item.url} style={s.carouselSlide} label={t('feed.play_video', 'Videoyu oynat')} />
         </Surface>
       );
     } else if (item.type === 'image') {

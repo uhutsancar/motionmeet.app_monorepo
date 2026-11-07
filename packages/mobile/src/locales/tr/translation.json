@@ -121,6 +121,7 @@
         "load_failed": "Rutinler yüklenemedi."
     },
     "feed": {
+        "play_video": "Videoyu oynat",
         "discover": "Keşfet",
         "following": "Takip",
         "no_posts": "Henüz gönderi yok.",

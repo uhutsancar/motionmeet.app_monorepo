@@ -121,6 +121,7 @@
         "load_failed": "Couldn't load routines."
     },
     "feed": {
+        "play_video": "Play video",
         "discover": "Discover",
         "following": "Following",
         "your_story": "Your Story",
